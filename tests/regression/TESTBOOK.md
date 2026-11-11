@@ -16156,4 +16156,102 @@ after the last scenario.
 - **Expected:** Steps 1–3: the whole name is shown, wrapping onto as many lines as it needs, with the
   pencil beside it; no "…" and no movement. In landscape the cartridge above it gets smaller to make
   room. Step 4: the options sheet's title shows the whole name too.
+
+## Android — Library zoom on a phone upright
+
+The library's stepped zoom (issue 868): on a phone held upright, a two-finger pinch moves the grid one
+step at a time, 1 to 5 columns in the cartridge and cover views and four row sizes in the list view, and
+a "Size" button before the view toggle offers the same steps. The pinch needs two real fingers, so these
+are `MANUAL`: a person runs them on a phone (or on an emulator with its multi-touch control).
+
+### RT-999 — Pinching the cartridge and cover views steps the columns from 1 to 5
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page with at least 15 games, the cartridge view at
+  its default (2 columns).
+- **Steps:**
+  1. Pinch in (fingers closing) over the games, lift, and repeat four more times.
+  2. Pinch out (fingers spreading) five times.
+  3. Tap the cover view in the view toggle and repeat steps 1 and 2 (it starts at 3 columns).
+- **Expected:** Each pinch moves exactly one step, decided while the fingers move, with a short glide
+  and a pill naming the step ("3 columns") for about a second. Step 1: 3, 4, 5 columns, and the last
+  pinches at 5 do nothing. Step 2: back down to 1 column, one cartridge per row as wide as the screen.
+  At 4 columns the caption under each tile is one smaller line; at 5 there is none. Step 3: the same
+  from 3 columns, one box art per row at 1 column.
+- **Check:** human only.
+
+### RT-1000 — Pinching the list view steps the row size
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page, the list view at its default ("Normal").
+- **Steps:**
+  1. Pinch out three times.
+  2. Pinch in three times.
+- **Expected:** Step 1: "Large" (bigger art, titles up to two lines), then "Extra large" (128 dp art,
+  larger titles), then nothing more. Step 2: "Large", "Normal" (64 dp art, today's row), "Compact"
+  (40 dp art). The second line always shows the console's name.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml` shows
+  `library_zoom_list`).
+
+### RT-1001 — The Size button offers the same steps, by touch, gamepad and TalkBack
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page; a gamepad; TalkBack for step 4.
+- **Steps:**
+  1. In the cartridge view tap "Size" (the button before the view toggle), then "4 columns".
+  2. Switch to the list view and open "Size".
+  3. With the gamepad, move to "Size", press A, move down to another step and press A; open it again
+     and press B.
+  4. With TalkBack on, open "Size" and move through the items; set 5 columns and touch a tile.
+- **Expected:** Step 1: the menu is headed "SIZE" and lists "1 column" to "5 columns" with the current
+  one checked and highlighted; picking one changes the grid at once and closes the menu. Step 2: it
+  lists "Compact", "Normal", "Large", "Extra large". Step 3: focus starts in the menu, A picks, B closes
+  without changing anything, and focus returns to the button. Step 4: each item is read with its
+  selected state; a 5-column tile (no caption) still reads its game's name.
+- **Check:** human only.
+
+### RT-1002 — Each view keeps its step across screens and restarts
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, games on two consoles.
+- **Steps:**
+  1. Set the cartridge view to 4 columns, the cover view to 1 column and the list to "Large".
+  2. Go back to the shelf, open the other console, then "All games"; switch between the three views.
+  3. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it and return to the
+     library.
+- **Expected:** In steps 2 and 3 each view shows its own step on every page: 4 cartridge columns,
+  1 cover column, large list rows. On "All games" a console without cartridge art shown inside the
+  cartridge view follows the cartridge view's step.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml`:
+  `library_zoom_carts` 4, `library_zoom_covers` 1, `library_zoom_list` Large).
+
+### RT-1003 — A pinch never scrolls, opens a game or starts a selection
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page with enough games to scroll.
+- **Steps:**
+  1. Scroll down to the middle, put both fingers around a game in the middle of the screen and pinch.
+  2. Scroll with one finger, tap a game (then come back), and long-press a game.
+  3. With the selection active (two games selected), pinch; then press Back.
+  4. Start a pinch with one finger on a game, add the second finger and pinch.
+- **Expected:** Step 1: after the step the game that was under the fingers is still on screen near
+  where it was. Step 2: scrolling, opening and starting a selection work as before. Step 3: the step
+  changes and the two games stay selected; Back clears the selection. Step 4: the game under the first
+  finger does not open, the grid does not scroll and no selection starts.
+- **Check:** human only.
+
+### RT-1004 — Landscape, tablets, folds and tabletop keep their columns
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** The cartridge view set to 4 columns upright; a tablet or an emulator with
+  `adb shell wm size 1600x2560` and `adb shell wm density 320` (restore with `wm size reset` and
+  `wm density reset`); a fold if available.
+- **Steps:**
+  1. Turn the phone to landscape and pinch over the games.
+  2. On the tablet size, upright and on its side, look at the header and pinch.
+  3. On a fold opened flat and in tabletop, do the same.
+  4. Turn the phone back upright.
+- **Expected:** Steps 1 to 3: no "Size" button, the pinch does nothing and the layout is the one the
+  library had before (the sideways row in landscape, automatic columns elsewhere). Step 4: 4 columns
+  again.
 - **Check:** human only.
