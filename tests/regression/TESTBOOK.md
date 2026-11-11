@@ -11300,14 +11300,17 @@ image) and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at
 The Android app's in-game skin with a gamepad connected, and the hide / show key for the app
 controls (issue 637; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`). With a pad, the skin switches to a gamepad layout: the app controls only
-(menu, save, load, turbo, fast forward, plus the screens key on NDS), on two side rails in landscape,
-a strip along the foot in portrait and a row under the fold in tabletop; the virtual game buttons
-are gone. A hide key (an eye with a slash) beside the menu key collapses every app control to a
+(menu, save, load, the touch controls key, turbo, fast forward, plus the screens key on NDS), on two
+side rails in landscape, a strip along the foot in portrait and a row under the fold in tabletop; the
+virtual game buttons are gone. The touch controls key (a gamepad glyph) and the pause sheet's "Touch
+controls" tile bring the on-screen controls back over a detected controller, kept per controller
+(issue 865). A hide key (an eye with a slash) beside the menu key collapses every app control to a
 faint show key (an eye) where the menu key was. `MANUAL`, like the other Android sections: a phone
 or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad
 with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true` ("connect"
 below), `--ez connected false` ("disconnect") and `--ez clear true` (back to the real devices); a
-release APK needs a real controller (USB or Bluetooth).
+release APK needs a real controller (USB or Bluetooth). `--es pads fake` names the simulated pads,
+and `--es pads fake,real` stands for a second controller connected next to the first (issue 865).
 
 ### RT-564 — A gamepad connected at launch opens on the gamepad layout
 - **Area:** Android — In-game controls with a gamepad
@@ -11318,8 +11321,9 @@ release APK needs a real controller (USB or Bluetooth).
   1. Launch the Atari 2600 game, phone in landscape.
   2. Repeat with the Mega Drive game (a bundled skin, in OpenEmux's format since issue 806).
 - **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
-  from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
-  the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
+  from the top and nothing near the foot: menu, save, load and the touch controls key (a gamepad glyph)
+  down the left rail; the hide key at the top of the right rail, then turbo, slow motion and fast
+  forward. The keys are faint (a dim white glyph on a
   barely visible disc), not a grey band. The picture fits between the rails at full height. The
   bundled skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
@@ -11332,8 +11336,8 @@ release APK needs a real controller (USB or Bluetooth).
   1. In portrait, play a few seconds, then connect the pad.
   2. Disconnect it.
   3. Repeat steps 1-2 in landscape.
-- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load,
-  turbo, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
+- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load, the
+  touch controls key, turbo, slow motion, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
   back. In landscape, the rails of RT-564 and back. The game keeps running throughout: no
   restart, the play position is kept.
 - **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: portrait -> pad-portrait` (debug APK).
@@ -11419,10 +11423,68 @@ release APK needs a real controller (USB or Bluetooth).
   3. Launch the NDS game in portrait and tap the screens key a few times.
   4. Launch a game on the tablet in landscape.
 - **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
-  Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
-  stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
+  Step 2: the show key sits exactly where the hide key was. Step 3: the strip holds nine keys on two
+  lines (menu, save, load, touch controls, turbo; then slow motion, fast forward, screens, hide, centred),
+  none overlapping; the screens key cycles the layouts and stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
   RT-564, scaled to the tablet.
 - **Check:** human only.
+
+### RT-988 — The touch controls key brings the on-screen controls back over a gamepad
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Super Nintendo game (debug APK), phone in landscape, "connect" with
+  `--es pads fake`.
+- **Steps:**
+  1. Look at the left rail; turn to portrait and look at the strip; back to landscape.
+  2. Tap the touch controls key (the gamepad glyph, last on the left rail).
+  3. Play a few seconds with the on-screen D-pad and buttons.
+- **Expected:** Step 1: the key is the fourth on the left rail, under load (four keys a side), and the
+  fourth in the portrait strip, after load; nothing overlaps. Step 2: the console's touch skin comes back
+  (D-pad, buttons, the quick-action strip, the menu key) and a toast says "Touch controls on. Turn them
+  off in the pause menu."; the game kept running. Step 3: the game answers the touch controls. Collapsed
+  (the hide key) the key is gone with the other app controls.
+- **Check:** human only; `adb shell run-as com.openemux.mobile cat files/touch_controls` prints `fake`.
+
+### RT-989 — The pause sheet's "Touch controls" tile turns them off and on
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** RT-988 done (touch controls on over the `fake` pad).
+- **Steps:**
+  1. Open the pause sheet.
+  2. Tap "Touch controls", then "Continue".
+  3. Open the sheet from the rail's menu key, tap "Touch controls", then "Continue".
+  4. "Disconnect" and open the sheet.
+- **Expected:** Step 1: a "Touch controls" tile between "Edit skin" and "RetroArch menu", lit like
+  "Fast forward" while on. Step 2: the gamepad layout is back. Step 3: the touch skin again. Step 4: no
+  "Touch controls" tile; the touch skin, as without a controller.
+- **Check:** human only; after step 2 `files/touch_controls` is empty, after step 3 it holds `fake`.
+
+### RT-990 — The choice is kept per controller; a new controller still gets the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-988 done (touch controls on for `fake`).
+- **Steps:**
+  1. Quit the game and launch it again; "connect" with `--es pads fake`.
+  2. Connect a second controller: `--es pads fake,real`.
+  3. Back to only the first: `--es pads fake`.
+  4. With `--es pads fake,real`, tap the touch controls key, then open the sheet.
+- **Expected:** Step 1: the game opens on the touch skin and stays there. Step 2: the gamepad layout
+  at once (a new controller wins). Step 3: the touch skin at once (the first pad's choice holds). Step 4:
+  the touch skin; the tile is lit, and `files/touch_controls` holds both `fake` and `real`.
+- **Check:** human only.
+
+### RT-991 — With no override, connecting and disconnecting mid-game still switch at once
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running on the touch skin, no controller, `files/touch_controls` empty (or
+  the app freshly installed).
+- **Steps:**
+  1. Connect a controller (or "connect" with `--es pads fake`).
+  2. Disconnect it.
+- **Expected:** Step 1: the on-screen controls hide at once and the gamepad layout shows, without
+  leaving the game. Step 2: the touch skin is back at once. On a real phone,
+  `adb logcat -d | grep "counted as a gamepad"` names each device the app counted as a controller.
+- **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: landscape -> pad-landscape` then `gamepad false`.
 
 
 ## Android — RetroArch menu
@@ -15942,7 +16004,8 @@ toggles (fast forward, slow motion, mute) ever light up.
   "1 saved" under "Save states". Step 4 opens the skin page; afterwards the tile names the new skin.
   Step 5 opens the skin editor on the skin in use and closing it returns to the menu. Step 6 opens
   RetroArch's menu. Step 7: only "Fast forward" lights up; "Save states", "Change skin", "Edit skin"
-  and "RetroArch menu" never show the lit state. Step 8: the focus reaches every tile in reading
+  and "RetroArch menu" never show the lit state. Step 8: with the gamepad connected a "Touch controls" tile
+  sits between "Edit skin" and "RetroArch menu" (RT-989); the focus reaches every tile in reading
   order, then "Quit game". Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
   left and the tiles, five to a row, and "Quit game" are on the right; the tablet panel shows the
   tiles in five columns with a "Restart game" row under them; the fold shows "Save states" and
