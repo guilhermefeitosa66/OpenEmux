@@ -7778,8 +7778,9 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
 
 The quick-action strip of the Android app's on-screen skin
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
-save, load, turbo, slow motion and fast forward (plus the screen layout on NDS). Turbo, slow motion
-and fast forward show whether they are on: an accent pill behind the icon, the icon in white (#554).
+save, load, turbo, slow motion, fast forward and anchor (plus the screen layout on NDS). Turbo, slow
+motion, fast forward and anchor show whether they are on: an accent pill behind the icon, the icon in
+white (#554). Anchor mode is its own section below (issue 841).
 Slow motion (a play triangle in a dashed ring) runs the game at a third of its speed, and slow motion
 and fast forward never run together: turning one on turns the other off (issue 638). The runner has no
 Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
@@ -7887,7 +7888,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   and not clipped.
 - **Check:** human only.
 
-### RT-574 — NDS: six strip slots, and the pause sheet's tiles wrap on a narrow window
+### RT-574 — NDS: seven strip slots, and the pause sheet's tiles wrap on a narrow window
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** An NDS game in the library; a phone (or emulator) whose portrait window is about
@@ -7898,8 +7899,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   2. Turn slow motion on from the strip, then open the pause sheet.
   3. Connect the gamepad and move with the D-pad through every tile.
   4. Turn the phone to landscape, close and reopen the pause sheet.
-- **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
-  and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
+- **Expected:** In step 1 the strip has seven slots: save, load, turbo, slow motion, fast forward,
+  anchor and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
   sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
   into two rows of three, each tile full size with its full label; "Screens" has the layout in use under
   its label (at most two lines, as narrow as the tile; issue 709). In step 3 the D-pad reaches all
@@ -7922,8 +7923,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   3. Tap both again.
   4. Turn fast forward on, open the pause sheet, then resume.
   5. Repeat steps 2-3 in landscape, then on the other console's game.
-- **Expected:** The chin has five keys, evenly spaced: save, load, turbo, slow motion (RT-577) and
-  fast forward. After step 2 each button sits on the purple pill with a light ring, the skin's own
+- **Expected:** The chin has six keys, evenly spaced: save, load, turbo, slow motion (RT-577), fast
+  forward and anchor (RT-953). After step 2 each button sits on the purple pill with a light ring, the skin's own
   glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
   look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
   active. Landscape and the drawn skin show the same pill.
@@ -7944,13 +7945,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Repeat steps 1-3 in landscape, on the GBA game, and on a tablet-size device
      (`adb shell wm size 1600x2560` with `adb shell wm density 320`; restore with `reset`).
   5. With RetroAchievements hardcore on (an account signed in), launch the SNES game again.
-- **Expected:** In step 1 the chin holds five keys in the same span the four used to take, evenly
-  spaced: save, load, turbo, slow motion, fast forward, every glyph in the skin's own colour, none
+- **Expected:** In step 1 the chin holds six keys in the same span the four used to take, evenly
+  spaced: save, load, turbo, slow motion, fast forward, anchor, every glyph in the skin's own colour, none
   clipped, nothing over the picture or the buttons around the chin. After step 2 slow motion sits on
   the purple pill with the glyph in white and the game runs about three times slower. In step 3 fast
   forward going on takes slow motion's pill off (and the reverse), and the last tap leaves both off at
-  normal speed. Every layout of step 4 shows the same five keys. In step 5 slow motion and fast forward
-  are drawn faded, do nothing when tapped and never show the pill.
+  normal speed. Every layout of step 4 shows the same six keys. In step 5 slow motion and fast forward
+  are drawn faded, do nothing when tapped and never show the pill; anchor is not faded.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 ## Android — On-screen analog stick
@@ -11366,7 +11367,8 @@ release APK needs a real controller (USB or Bluetooth).
   1. Tap turbo, then slow motion, then fast forward, on the rail (landscape) or the strip (portrait).
   2. Open the pause sheet.
   3. In the hardcore game, tap slow motion and fast forward.
-- **Expected:** Slow motion sits right before fast forward. Each lit key shows the purple pill with a
+- **Expected:** Slow motion sits right before fast forward, and there is no anchor key (anchor mode is for
+  the touch pad, RT-955). Each lit key shows the purple pill with a
   light ring and a white icon, as on the touch strip (RT-376), but translucent so it does not pull the
   eye off the game; turning fast forward on turns slow motion off (RT-377), and the sheet's speed
   tiles agree. In hardcore, slow motion and fast forward are dimmed and do nothing.
@@ -11596,8 +11598,8 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
   (about twice the size of one screen in "One above the other"), SELECT under the D-pad and START under
   the face buttons, at the foot of the side columns. "One above the other": the two screens stacked in
   the middle, as before. "Side by side": the two screens in a row in the middle, no key covered. In
-  every layout the bar under the screens has save, load, turbo, slow motion, fast forward and the
-  Screens key (two stacked rectangles), nothing clipped.
+  every layout the bar under the screens has save, load, turbo, slow motion, fast forward, anchor and
+  the Screens key (two stacked rectangles), nothing clipped.
 - **Check:** human only (a screenshot per layout).
 
 ### RT-655 — Touch, portrait: the picture takes the room its layout needs
@@ -11609,7 +11611,7 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
 - **Expected:** "Top screen only" and "Bottom screen only": one screen across the full width, larger
   than each screen of "One above the other", the controls moved up under it. "One above the other": as
   before. "Side by side": both screens in a row across the full width. The bar under the screens has its
-  six keys in every layout, and no control overlaps the picture.
+  seven keys in every layout, and no control overlaps the picture.
 - **Check:** human only (a screenshot per layout).
 
 ### RT-656 — The Screens key in the bar steps through the touch cycle
@@ -14109,7 +14111,7 @@ packages of the twelve consoles that moved (`NDS.deltaskin` included).
   2. Turn the phone sideways and do the same.
   3. Quit; use the imported package under "Imported"; launch the game again, both ways, and compare.
 - **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
-  motion before fast forward. Every control presses what it does on the package (the screens
+  motion before fast forward and anchor after it. Every control presses what it does on the package (the screens
   key aside, RT-795); turbo, slow motion and fast forward light (an accent tile behind the key) while
   on.
 - **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
@@ -14991,6 +14993,107 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
   focus is back on "Restart game". Step 4 returns to the game exactly where it was. Step 5 starts
   the game from the beginning, as it always has.
+- **Check:** human only.
+
+## Android — Anchor mode
+
+Anchor mode for the Android app's touch pad (issue 841,
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+A key with an anchor glyph comes right after fast forward in the quick actions on every touch layout:
+the drawn skin's strip, OpenEmux-format skins (every bundled skin) and imported Delta/Manic packages.
+The app adds the key when it draws the skin; skin files never carry it, so the skin editor does not
+show it. While the mode is on, the first face, shoulder or trigger button a finger presses stays held
+until that finger leaves the screen. Any other button counts only while the finger is over it. The
+D-pad, the sticks and the quick actions never stay held. The mode is off by default and is
+remembered per console. The runner has no Android device, so these are `MANUAL`.
+
+### RT-951 — The anchor key sits after fast forward on every touch layout
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game (bundled skin), an Atari 5200 game (drawn skin), an NDS game and a
+  ColecoVision game (keypad page) in the library; for step 4, the `SFC.deltaskin` of an earlier release imported and in use (RT-577); no
+  gamepad connected.
+- **Steps:**
+  1. Launch the SNES game, phone in portrait, and look at the quick actions.
+  2. Turn the phone to landscape.
+  3. Repeat steps 1-2 on the Atari 5200 game and on the NDS game.
+  4. Repeat steps 1-2 with the imported package skin.
+  5. Repeat steps 1-2 on a tablet-size window (`adb shell wm size 1600x2560` with
+     `adb shell wm density 320`; restore with `reset`) and, if there is one, on a foldable half open.
+  6. Launch a ColecoVision game, turn anchor on, then open the keypad with its toggle key and close it.
+- **Expected:** In step 6 the anchor key stays in the same place, still lit, while the keypad page is
+  open, and turns the mode off from there too. Each time, right after fast forward there is a key with an anchor glyph (a ring on
+  top, a shaft with a crossbar and two curved arms), drawn like the keys around it and not lit. On
+  the NDS the screen-layout key stays last. The keys are evenly spaced in the strip's span, nothing
+  is clipped or covers the picture or the buttons, and each key responds only inside its own slot.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per layout).
+
+### RT-952 — Tapping the anchor key turns the mode on and off
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game that has never had anchor mode turned on; no gamepad connected.
+- **Steps:**
+  1. Launch the game.
+  2. Tap the anchor key.
+  3. Tap it again.
+- **Expected:** In step 1 the key is not lit and no message shows. After step 2 the key sits on the
+  purple pill with the glyph in white, and "Anchor on: the first button you press stays held" shows
+  briefly. After step 3 the pill is gone and "Anchor off" shows.
+- **Check:** human only.
+
+### RT-953 — With anchor on, the first button stays held while the thumb slides
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World (SNES) past the title screen, Mario on the ground in a level;
+  anchor mode on (RT-952).
+- **Steps:**
+  1. Put the thumb on Y and hold it to run.
+  2. Without lifting, slide the thumb onto B, then back off it toward Y, several times.
+  3. Lift the thumb.
+  4. Put a finger on the D-pad, slide it off the D-pad and onto Y, and keep it there.
+  5. Put a finger on the save key, slide it onto B, then off B.
+- **Expected:** In steps 1-2 Mario keeps running the whole time and jumps each time the thumb reaches
+  B; B releases as soon as the thumb leaves it. Step 3 releases everything: Mario stops running. In
+  step 4 the D-pad releases when the finger leaves it, and Y counts only while the finger is on it.
+  In step 5 nothing stays held: the finger started on a quick action.
+- **Check:** human only.
+
+### RT-954 — With anchor off, the pad behaves as before
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World running; anchor mode off.
+- **Steps:**
+  1. Hold Y to run, then slide the thumb off Y onto B and on into empty space.
+  2. Turn anchor on, hold Y, then turn anchor off with another finger while the thumb is off Y.
+- **Expected:** In step 1 Mario stops running as soon as the thumb leaves Y, as without the feature.
+  In step 2 Y releases as soon as anchor goes off.
+- **Check:** human only.
+
+### RT-955 — A controller hides the anchor key, and the mode is kept for when it leaves
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game with anchor mode on; a gamepad to connect.
+- **Steps:**
+  1. Connect the gamepad while the game runs.
+  2. Look at the side rails (landscape) or the strip (portrait).
+  3. Disconnect the gamepad.
+- **Expected:** In step 2 the rails and strip show the gamepad layout's keys (RT-570) and no anchor
+  key. After step 3 the touch pad is back with the anchor key still lit, and holding Y then sliding
+  onto B behaves as in RT-953.
+- **Check:** human only.
+
+### RT-956 — Anchor mode is remembered per console and works in hardcore
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES and a GBA game; RetroAchievements signed in for step 4 (RT-351).
+- **Steps:**
+  1. Turn anchor on in the SNES game, then leave the game.
+  2. Launch another SNES game, or the same one again.
+  3. Launch the GBA game.
+  4. Launch an SNES game with RetroAchievements hardcore on and tap the anchor key.
+- **Expected:** In step 2 the anchor key is lit from the start and holding still works (RT-953). In
+  step 3 it is not lit: the GBA has its own setting. In step 4 the anchor key is drawn normally, not
+  faded like slow motion and fast forward, and turns the mode on and off as in RT-952.
 - **Check:** human only.
 
 ## Android — Save states
