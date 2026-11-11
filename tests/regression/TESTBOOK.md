@@ -7881,7 +7881,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Switch the app's language to Português (Brasil) and to one more language, and open the pause
      sheet.
 - **Expected:** In step 1 the tiles read "Fast forward", "Slow motion", "Screenshot", "Shader",
-  "Audio", and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
+  "Mute" (issue 861), and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
   speed"; after resuming the strip has no slow-motion pill and the game runs at normal speed. Step
   3 shows "Slow motion on resume"; after resuming slow motion has its pill and the game runs slow.
   In step 4 the tile label and the toast are translated ("Câmera lenta", "Câmera lenta ao voltar")
@@ -7901,11 +7901,11 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Turn the phone to landscape, close and reopen the pause sheet.
 - **Expected:** In step 1 the strip has seven slots: save, load, turbo, slow motion, fast forward,
   anchor and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
-  sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
+  sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Mute") wrap
   into four columns, 4 + 2, the second row from the left (issue 858), each tile full size with its full
   label; "Screens" has the layout in use under its label (at most two lines, as narrow as the tile;
   issue 709). In step 3 the D-pad reaches all six tiles, across both rows. In step 4 the tiles are in
-  five columns: five on the first row and "Audio" alone on the second, from the left.
+  five columns: five on the first row and "Mute" alone on the second, from the left.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the package skins
@@ -15523,6 +15523,50 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: `<rom>.state5` appears or changes in
   step 1 and `<rom>.state` does not).
 
+## Android — Pause sheet mute tile
+
+The pause sheet's sound tile is a toggle that names what a tap does: "Mute" while the game has sound,
+"Unmute" while it is muted, with a crossed-out speaker on a red tile (issue 861). It shows the
+engine's mute state, whatever muted the game.
+
+### RT-985 — The mute tile turns red at once, and keeps its state when the sheet reopens
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A game running with sound, on a phone; a gamepad for step 5.
+- **Steps:**
+  1. Open the pause sheet and look at the sound tile.
+  2. Tap it, without closing the sheet.
+  3. Close the sheet (Back to game), play a few seconds and open it again.
+  4. Tap the tile again, close the sheet and open it again.
+  5. With the gamepad, move the focus to the tile and press A, twice.
+  6. Repeat steps 1-4 in landscape, on a tablet (the side panel), in the light theme and in
+     Português (Brasil).
+- **Expected:** Step 1: a speaker icon on a neutral tile labelled "Mute". Step 2: the game goes
+  silent, the toast "Sound off" shows, and the tile at once shows a crossed-out speaker, the label
+  "Unmute" and a red background with a red border and a red icon. Step 3: the game is still silent
+  and the tile still shows "Unmute" in red. Step 4: sound comes back with the toast "Sound on"; the
+  reopened sheet shows the speaker, "Mute" and the neutral tile. Step 5: each press flips the tile
+  and the sound as a tap does, the focus ring staying on the tile. Step 6: the same in every layout;
+  the red tile and its label are legible in both themes; in Português the labels read "Silenciar" and
+  "Ativar som", not clipped.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+### RT-986 — A game muted with the gamepad hotkey shows as muted in the pause sheet
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A game running with sound and a gamepad connected; in RetroArch's menu (pause
+  sheet, "RetroArch menu"), Settings > Input > Hotkeys > "Audio Mute Toggle" bound to a gamepad
+  button.
+- **Steps:**
+  1. Back in the game, press the bound mute button.
+  2. Open the pause sheet.
+  3. Close it, press the mute button again and open the sheet again.
+  4. Quit the game and start it again; open the pause sheet.
+- **Expected:** Step 1 silences the game. Step 2 shows the sound tile as "Unmute", crossed-out
+  speaker, red. Step 3: sound is back and the tile shows "Mute" on the neutral tile. Step 4: the game
+  starts with sound and the tile shows "Mute".
+- **Check:** human only.
+
 ## Retired
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
@@ -15682,7 +15726,7 @@ has no Android device, so this is `MANUAL`.
      each time.
   5. Upright, with the gamepad, move from the tiles' first row to the second and along each row.
 - **Expected:** Step 1: four columns; "Fast forward", "Slow motion", "Screenshot" and "Shader" on
-  the first row, "Audio" alone on the second row under "Fast forward"; the tiles close together (about
+  the first row, "Mute" alone on the second row under "Fast forward"; the tiles close together (about
   the same spacing as in landscape), the row lined up with the buttons above and the list below,
   every label whole. Step 2: the five tiles on one row, as before. Step 3: five columns, nothing cut
   or overlapping. Step 4: every label is complete and centred, on at most two lines, no word broken
@@ -15690,7 +15734,7 @@ has no Android device, so this is `MANUAL`.
   overlaps. Step 5: the focus goes through the tiles in reading order, left to right, then the
   second row from the left.
 - **Check:** human only (`adb shell uiautomator dump` gives each tile's bounds: four distinct left
-  edges upright, "Audio" at the first one).
+  edges upright, "Mute" at the first one).
 
 ### RT-772 — A blank name or Cancel creates nothing
 - **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
