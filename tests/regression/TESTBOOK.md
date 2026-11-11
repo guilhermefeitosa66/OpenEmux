@@ -15148,7 +15148,8 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
 Combo buttons in the Android app's skin editor (issue 842,
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
 In the editor of a skin of the player's own (an editable copy), the Combo tool adds a round, neutral
-grey button with a light ring that presses two or three buttons together: face buttons, shoulders,
+grey button with a light ring (a pill or a triangle pointing at a corner, by the Shape tool, in each
+layout) that presses two or three buttons together: face buttons, shoulders,
 triggers, C buttons, Select and Start, never the D-pad, sticks or quick actions. The buttons are
 held together for one second on the skin or on a controller, or picked by tapping. The combo is
 added to every layout of the skin at a free spot near the buttons it presses, and each layout keeps
@@ -15293,6 +15294,54 @@ no Android device, so these are `MANUAL`.
 - **Expected:** Step 1 shows "Your unsaved changes are back." with the combo where it was. In step 2
   each tablet layout has the combo, over nothing.
 - **Check:** human only.
+
+### RT-969 — The Shape tool makes a combo a pill or a triangle, per layout
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable SNES skin with a "Y+B" combo, open in the editor in portrait.
+- **Steps:**
+  1. Tap the combo. Look at the actions bar.
+  2. Tap "Shape". Tap the pill, then each of the four triangles, then the circle.
+  3. Tap Undo, then Redo.
+  4. Choose the triangle pointing bottom-left, rotate the phone (or open the landscape layout from
+     "Layouts") and look at the combo there.
+- **Expected:** Step 1 shows "Buttons", "Shape", "Colour", "Size", "Nudge" and "Delete". In step 2 the
+  row offers a circle, a pill and four triangles, the current one marked; the combo becomes each one
+  about the same centre: the pill wider and lower (about 1.6 times as wide, 0.8 times as tall as the
+  circle), each triangle as large as the circle with its square corner at the chosen corner and its
+  "Y+B" label inside it, near that corner. Size still reads 100 % after each change. Step 3 undoes and
+  redoes one shape at a time. In step 4 the landscape layout still has a circle.
+- **Check:** human only.
+
+### RT-970 — A triangle in the gap between Y and B presses only inside the triangle
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** RT-969 done: the portrait layout's combo is the triangle pointing bottom-left.
+- **Steps:**
+  1. In the editor, drag the triangle into the gap between Y and B (below Y, left of B) so that its
+     long edge faces the two buttons. Save.
+  2. Play Super Mario World in portrait. Hold the triangle.
+  3. Touch Y alone, then B alone, each near the edge that faces the triangle.
+  4. Touch the empty corner of the triangle's box (the part beyond its long edge).
+- **Expected:** Step 2 runs and jumps (Y+B). Step 3 presses only Y, then only B: the combo is never
+  pressed over their circles. Step 4 presses nothing from the combo.
+- **Check:** human only. The skin's overlay has the triangle:
+  `adb shell run-as com.openemux.mobile sh -c 'grep _triangle files/launch/current/skin-*/skin.cfg'`
+  prints a `_desc<N>_triangle = "bottom-left"` line.
+
+### RT-971 — A combo's shape survives save, export and Share nearby; unknown shapes read as a circle
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** RT-970 done; a second Android device with OpenEmux for step 2.
+- **Steps:**
+  1. Export the skin as a zip, delete it, import the zip and open it in the editor.
+  2. Send it with Share nearby and open it in the editor on the other device.
+  3. In the exported `skin.json`, change the portrait combo's `"shape"` to `"star"`, zip it again and
+     import it.
+- **Expected:** In steps 1 and 2 the portrait combo is the bottom-left triangle where it was saved,
+  the other layouts' combos are circles. In step 3 the skin opens, with that combo drawn as a circle.
+- **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["layouts"]["phone-portrait"]["combos"][0].get("shape"), d["layouts"]["phone-portrait"]["combos"][0].get("corner"))'`
+  prints `triangle bottom-left`.
 
 ## Android — Save states
 
