@@ -12850,7 +12850,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
 - **Preconditions:** The Android app installed, first-run setup done, a Super Nintendo game in the
   library named with tags (e.g. "Super Mario World (USA).sfc") that has a cover, is a favorite, has
   its own shader picked on the detail screen, a manual save state, an auto state (played, then left
-  with Home) and some playtime; RetroAchievements hardcore off.
+  with Home), slot 3 chosen in the in-game menu and some playtime; RetroAchievements hardcore off.
 - **Steps:**
   1. Open the game's detail screen and tap the pencil at the end of the game's name.
   2. Check the sheet: the name without ".sfc" is selected, ".sfc" is shown after the field.
@@ -12860,9 +12860,11 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
 - **Expected:** Step 2 shows "Rename game", the "File name" field with the old name selected and
   ".sfc" fixed. After step 3 the detail screen shows "Mario World" with the same cover, the star
   filled, the same shader, the same playtime and the same save states. In step 4 the game sits in its
-  new alphabetical place in the library. Step 5 resumes the game where the auto state left it.
+  new alphabetical place in the library. Step 5 resumes the game where the auto state left it, and its
+  in-game menu opens on slot 3.
 - **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/" "/sdcard/Android/data/$PKG/files/states/SFC/" "/sdcard/Android/data/$PKG/files/playtime/"`
-  lists "Mario World.sfc", "Mario World.state*" and "SFC_Mario World.txt", and none of the old names.
+  lists "Mario World.sfc", "Mario World.state*", "Mario World.slot" and "SFC_Mario World.txt", and
+  none of the old names.
 
 ### RT-750 — A name that cannot be used is refused and nothing changes
 - **Area:** Android — Renaming a game
@@ -15391,7 +15393,9 @@ Listing, deleting and saving states in the Android app (`pkg/android/openemux` o
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android)). The states of a game
 are `<rom>.state`, `<rom>.state<N>` and `<rom>.state.auto` under the app's save-state folder
 (`/sdcard/Android/data/com.openemux.mobile/files/states/<system>/`), each with a `.png` picture
-beside it. Slot numbers run from 0 to 99. The runner has no Android device, so these are `MANUAL`.
+beside it. Slot numbers run from 0 to 99. Each game also has a current slot, the one the in-game
+menu opens on and every Save and Load uses, kept in `<rom>.slot` in the same folder (slot 0 when the
+file is missing). The runner has no Android device, so these are `MANUAL`.
 
 ### RT-938 — A save state's thumbnail shows the whole picture
 - **Area:** Android — Save states
@@ -15438,7 +15442,96 @@ beside it. Slot numbers run from 0 to 99. The runner has no Android device, so t
   "Continue". After step 5 "See all" closes.
 - **Check:** human only (`adb shell ls '<save-state folder>'` after each step).
 
+### RT-979 — The menu opens on the game's current slot and keeps it
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game never played with this version (no `<rom>.slot` in its folder), with
+  states in slots 1 and 2; a second game; a gamepad for step 6.
+- **Steps:**
+  1. Start the game and open the in-game menu.
+  2. Step the slot to 3 with the right arrow, close the menu with its ×, and open it again.
+  3. Close it in turn with "Continue", by swiping it down and with the back gesture, opening it again
+     after each.
+  4. Quit the game, start it again and open the menu.
+  5. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it, start the game and
+     open the menu.
+  6. Start the second game and open its menu; quit and go back to the first game.
+  7. Repeat steps 2 and 3 with the gamepad, on a phone in portrait, in landscape and on a half-open
+     foldable in tabletop posture.
+- **Expected:** Step 1: the button reads "Slot 0 · Empty" (slot 0, not the next free one). Steps 2 to
+  5: the menu opens on "Slot 3 · Empty" every time. Step 6: the second game's menu opens on slot 0
+  and the first game's still on slot 3. Step 7: the same, with the arrows and "Save state" separate
+  focus stops and nothing cut off; "Save state" is focused first in tabletop, "Continue" on a phone
+  upright or in landscape (RT-972, RT-978). The number wraps from 0 to 99 and
+  from 99 to 0.
+- **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 3 after step 2).
+
+### RT-980 — Save and Load in the menu act on the current slot, overwriting it
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 2.
+- **Steps:**
+  1. Open the in-game menu, step the slot to 1 and press "Save state".
+  2. Play a few seconds, open the menu and press "Load".
+  3. Delete the slot 1 state in the menu's "Save states" page, go back and read the save row.
+- **Expected:** Step 1: no prompt; the toast says "State saved to slot 1", the slot 1 state and its
+  picture are replaced and no new state appears. Step 2: the menu opened on slot 1 and the game is
+  back at the moment of step 1. Step 3: the row still shows slot 1, now "Slot 1 · Empty".
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes in
+  step 1 and no other file appears).
+
+### RT-981 — A numbered state opened from the game's screen becomes the current slot; AUTO does not
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 0 and 2 and an auto state; its current slot set to
+  2 in the in-game menu; a second game with an auto state and no `<rom>.slot`; hardcore off.
+- **Steps:**
+  1. On the first game's screen, tap the slot 0 picture; once the game is on, open the menu.
+  2. Press "Save state", then "Load".
+  3. Quit, tap the AUTO picture on the game's screen and open the menu once the game is on.
+  4. On the second game's screen, tap AUTO and open the menu.
+- **Expected:** Step 1: the slot 0 state loads and the menu opens on "Slot 0 · In use". Step 2: the
+  toast says "State saved to slot 0" and "Load" brings back that moment. Step 3: the auto state
+  loads and the menu still opens on slot 0 (AUTO is not a slot and does not change it). Step 4: the
+  auto state loads and the menu opens on slot 0.
+- **Check:** human only.
+
+### RT-982 — Loading a numbered state from the menu's list makes it the current slot
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 4 and an auto state; its current slot 1.
+- **Steps:**
+  1. Open the in-game menu, open "Save states" and load the slot 4 state; open the menu again.
+  2. Open "Save states" again and load the auto state; open the menu again.
+- **Expected:** Step 1: the game jumps to the slot 4 state and the menu opens on "Slot 4 · In use".
+  Step 2: the auto state loads and the menu still opens on slot 4.
+- **Check:** human only.
+
+### RT-983 — The strip and a controller save and load the current slot
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game whose skin has the save and load keys on its strip; its current slot 0;
+  a gamepad with save/load state shortcuts for step 3.
+- **Steps:**
+  1. Open the in-game menu, step the slot to 5 and close it; press the strip's save key.
+  2. Play a few seconds and press the strip's load key.
+  3. Do the same with the gamepad's save and load shortcuts.
+  4. Quit the game, start it again and press the strip's load key.
+- **Expected:** Step 1 writes the slot 5 state (`<rom>.state5`), not slot 0. Steps 2 and 4 bring
+  back the slot 5 state. Step 3 behaves like steps 1 and 2.
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: `<rom>.state5` appears or changes in
+  step 1 and `<rom>.state` does not).
+
+## Retired
+
+Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
+the date.
+
 ### RT-941 — The in-game menu saves to the slot it shows
+- **Retired:** 2026-11-11 (issue 857).
+- **Reason:** The menu no longer opens on the next free slot: it opens on the game's current slot,
+  which only the player changes (RT-979, RT-980). The id was also shared with the pause-menu skin
+  editing scenario of the same number, which keeps it.
 - **Area:** Android — Save states
 - **Mode:** MANUAL
 - **Preconditions:** A game with states in slots 1 and 2, no state in slot 3; a gamepad connected for
@@ -15494,7 +15587,7 @@ foldable keep their own layouts. The runner has no Android device, so these are 
 - **Steps:**
   1. Open the in-game menu and read the save row.
   2. Press "Save", then play a few seconds and open the menu again.
-  3. Step the slot back with the arrows to the slot just saved, and press "Load".
+  3. The menu opens on the slot just saved: press "Load".
   4. Open the menu, step the slot to 1 and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads left arrow, "Save" with "Slot N · Empty" under it, right arrow,
@@ -15572,11 +15665,6 @@ has no Android device, so this is `MANUAL`.
   Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
   without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
 - **Check:** human only.
-
-## Retired
-
-Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
-the date.
 
 ### RT-772 — A blank name or Cancel creates nothing
 - **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
