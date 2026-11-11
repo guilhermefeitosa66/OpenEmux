@@ -6004,8 +6004,8 @@ real RetroAchievements account say so; without one they are handed to the mainta
 - **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
   hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
   notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load"
-  (beside "Save" on a phone, upright or in landscape), the "Save states" tile and "Fast forward" are faded and do
-  nothing (also with a gamepad), "Save state" ("Save" on a phone) still works; the skin's load button is refused by RetroArch, and its fast-forward button
+  (beside "Save"), "See all", the "Save states" tile and "Fast forward" are faded and do
+  nothing (also with a gamepad), "Save" and the slot slider still work; the skin's load button is refused by RetroArch, and its fast-forward button
   is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
   it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
 - **Check:** human only. With hardcore on, `retroarch.cfg` has
@@ -6469,14 +6469,15 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   key events (`adb shell input keyevent KEYCODE_DPAD_DOWN`).
 - **Steps:**
   1. Tap the menu key.
-  2. Move the focus through every control with the D-pad; press A on "Saved states", then B.
+  2. Move the focus through every control with the D-pad; press A on "See all", then B.
   3. Tap the band, then the game's card on the top half.
   4. Open the menu again and press START.
   5. Switch the app to the light theme and open the menu again.
 - **Expected:** The top half shows the dimmed, paused game with a "PAUSED" chip and a card (cart,
-  title, time played). The bottom half starts under the fold: "Save state" (focused first),
-  "Load state" and "Back to game"; the action tiles; "Save states · <count>", "Restart game" and
-  "Quit game"; the hint bar. The focus never leaves the bottom half. "Saved states" opens inside
+  title, time played). The bottom half starts under the fold: "Save" (focused first) beside "Load",
+  with "See all" and the slot slider under them, and "Back to game" beside that block (under it on
+  a narrow fold); the action tiles; "Restart game" and "Quit game"; the hint bar. The focus never
+  leaves the bottom half. "See all" opens the save states inside
   the bottom half and B comes back. Tapping the band does nothing; tapping the card resumes the
   game. START closes the menu. The light theme has the same layout.
 - **Check:** human only (screenshots in both themes, compared with the DobFoldPausa board).
@@ -8479,19 +8480,20 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   (`adb shell input gamepad keyevent …` works too).
 - **Steps:**
   1. Open the pause menu with the skin's menu key.
-  2. Look at both halves of the screen; tap "Save state", then "Load" and come back with
-     "Back".
+  2. Look at both halves of the screen; tap "Save", then "Load"; open the menu again, tap "See all"
+     and come back with "Back".
   3. Move with the gamepad's D-pad over every control of the panel; press B, open the menu again
      and press START.
   4. Quit the game, set portrait (`wm size 1600x2560`), start it again and repeat steps 1 and 2;
      then repeat them with the system theme light and dark (`adb shell cmd uimode night yes|no`).
   5. Tap one of the saved-state pictures on the left.
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
-  left corners: the game's title and play time, "Save state" and "Load", the action tiles (with
+  left corners: the game's title and play time, "Save" beside "Load", "See all" and the slot slider
+  (RT-996), the action tiles (with
   "Save states", the skin tiles and "RetroArch menu" among them, RT-987), a "Restart game" row, and
   "Quit game" at the foot. On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
-  The save states and shader pages open inside the panel. The focus ring shows on every control;
+  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
   440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
   both themes. Tapping a saved state on the left loads it and resumes.
@@ -15511,21 +15513,21 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   states in slots 1 and 2; a second game; a gamepad for step 6.
 - **Steps:**
   1. Start the game and open the in-game menu.
-  2. Step the slot to 3 with the right arrow, close the menu with its ×, and open it again.
+  2. Tap stop 3 on the slot slider, close the menu with its ×, and open it again.
   3. Close it in turn with "Continue", by swiping it down and with the back gesture, opening it again
      after each.
   4. Quit the game, start it again and open the menu.
   5. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it, start the game and
      open the menu.
   6. Start the second game and open its menu; quit and go back to the first game.
-  7. Repeat steps 2 and 3 with the gamepad, on a phone in portrait, in landscape and on a half-open
-     foldable in tabletop posture.
-- **Expected:** Step 1: the button reads "Slot 0 · Empty" (slot 0, not the next free one). Steps 2 to
-  5: the menu opens on "Slot 3 · Empty" every time. Step 6: the second game's menu opens on slot 0
-  and the first game's still on slot 3. Step 7: the same, with the arrows and "Save state" separate
-  focus stops and nothing cut off; "Save state" is focused first in tabletop, "Continue" on a phone
-  upright or in landscape (RT-972, RT-978). The number wraps from 0 to 99 and
-  from 99 to 0.
+  7. Repeat steps 2 and 3 with the gamepad (focus the slider, left/right to stop 3), on a phone in
+     portrait, in landscape and on a half-open foldable in tabletop posture.
+- **Expected:** Step 1: the button reads "Slot 0 · Empty" (slot 0, not the next free one) and the
+  slider's thumb is on 0. Steps 2 to 5: the menu opens on "Slot 3 · Empty", thumb on 3, every time. Step 6: the second game's menu opens on slot 0
+  and the first game's still on slot 3. Step 7: the same, with "Save" and the slider separate focus
+  stops and nothing cut off; "Save" is focused first in tabletop, "Continue" on a phone upright or in
+  landscape (RT-972, RT-978). The slider stops at 0 and at 9 (no wrap; slots past 9 come from
+  "See all", RT-997).
 - **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 3 after step 2).
 
 ### RT-980 — Save and Load in the menu act on the current slot, overwriting it
@@ -15533,12 +15535,13 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
 - **Mode:** MANUAL
 - **Preconditions:** A game with states in slots 1 and 2.
 - **Steps:**
-  1. Open the in-game menu, step the slot to 1 and press "Save state".
+  1. Open the in-game menu, tap stop 1 on the slot slider and press "Save".
   2. Play a few seconds, open the menu and press "Load".
-  3. Delete the slot 1 state in the menu's "Save states" page, go back and read the save row.
+  3. Delete the slot 1 state in the menu's "Save states" page, go back and read the save row and stop 1.
 - **Expected:** Step 1: no prompt; the toast says "State saved to slot 1", the slot 1 state and its
   picture are replaced and no new state appears. Step 2: the menu opened on slot 1 and the game is
-  back at the moment of step 1. Step 3: the row still shows slot 1, now "Slot 1 · Empty".
+  back at the moment of step 1. Step 3: the row still shows slot 1, now "Slot 1 · Empty", and the
+  thumb on 1 is outlined and dimmed again.
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes in
   step 1 and no other file appears).
 
@@ -15549,7 +15552,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   2 in the in-game menu; a second game with an auto state and no `<rom>.slot`; hardcore off.
 - **Steps:**
   1. On the first game's screen, tap the slot 0 picture; once the game is on, open the menu.
-  2. Press "Save state", then "Load".
+  2. Press "Save", then "Load".
   3. Quit, tap the AUTO picture on the game's screen and open the menu once the game is on.
   4. On the second game's screen, tap AUTO and open the menu.
 - **Expected:** Step 1: the slot 0 state loads and the menu opens on "Slot 0 · In use". Step 2: the
@@ -15575,7 +15578,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
 - **Preconditions:** A game whose skin has the save and load keys on its strip; its current slot 0;
   a gamepad with save/load state shortcuts for step 3.
 - **Steps:**
-  1. Open the in-game menu, step the slot to 5 and close it; press the strip's save key.
+  1. Open the in-game menu, tap stop 5 on the slot slider and close it; press the strip's save key.
   2. Play a few seconds and press the strip's load key.
   3. Do the same with the gamepad's save and load shortcuts.
   4. Quit the game, start it again and press the strip's load key.
@@ -15583,6 +15586,66 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   back the slot 5 state. Step 3 behaves like steps 1 and 2.
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: `<rom>.state5` appears or changes in
   step 1 and `<rom>.state` does not).
+
+### RT-996 — The slot slider picks the current slot and shows which slots hold a state
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game with no states and no `<rom>.slot`.
+- **Steps:**
+  1. Start the game and open the in-game menu; look under "Save" and "Load".
+  2. Tap stop 4 on the slider.
+  3. Press "Save".
+  4. Open the menu again and drag the thumb slowly from 4 to 8, then let go.
+  5. Tap stop 4, close the menu with its ×, open it again; then quit, start the game again and open
+     the menu.
+- **Expected:** Step 1: no ‹ › arrows; "See all ›" is on the right under "Load"; under it a slider
+  with ten round stops, 0 to 9, all outlined and dimmed; the thumb, bigger and with a halo, is on 0
+  with "0" inside, also outlined; "Save" reads "Slot 0 · Empty" and "Load" is faded. Step 2: the
+  thumb jumps to 4 ("4" inside) and "Save" reads "Slot 4 · Empty" at once. Step 3: "State saved to
+  slot 4"; the thumb and stop 4 turn filled purple with a white number; "Save" reads "Slot 4 · In use"
+  and "Load" is enabled. Step 4: the thumb snaps from stop to stop under the finger, its number and
+  the "Save" line changing as it passes (5, 6, 7, 8), outlined on the empty ones; it stays on 8.
+  Step 5: the menu opens with the thumb on 4, filled, both times.
+- **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 4 after step 5).
+
+### RT-997 — "See all" opens the states page, and a slot past 9 gets its own stop
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with a state in slot 4 and one in slot 12 (`<rom>.state12`, made with a
+  gamepad's save shortcut or copied from another state file), current slot 4.
+- **Steps:**
+  1. Open the in-game menu and tap "See all".
+  2. Tap the slot 12 picture; once the game is on, open the menu.
+  3. Press "Save", then "Load".
+  4. Tap stop 3 on the slider.
+- **Expected:** Step 1: the "Save states" page with the pictures (tap to load), the same page the
+  "Save states" tile opens. Step 2: the slot 12 state loads; the slider shows an eleventh stop "12" at
+  its end, filled, as the thumb; stops 0 to 9 keep their look (4 filled); "Save" reads
+  "Slot 12 · In use". Step 3: "State saved to slot 12" and "Load" brings back that moment. Step 4:
+  the "12" stop goes away, the thumb is on 3 and "Save" reads "Slot 3 · Empty".
+- **Check:** human only.
+
+### RT-998 — The slot slider with a gamepad, in every form of the menu, and in hardcore
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 0 and 3, current slot 3; a gamepad; a phone, a
+  tablet (or `wm size 1600x2560`) and a foldable (or its tabletop emulation); a Nintendo DS game.
+- **Steps:**
+  1. Phone upright: open the menu with the touch key, then press down on the pad until the focus
+     reaches the slider; press right twice and left once; press up.
+  2. Repeat step 1 on a menu opened with the pad's menu shortcut.
+  3. Turn the phone to landscape, then use the tablet, the tabletop posture and the NDS game; open
+     the menu each time.
+  4. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
+- **Expected:** Steps 1 and 2: the first press lands on "Continue"; then "Save", then the slider
+  (focus ring around the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
+  press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. At an end
+  (0 with left, 9 with right) the press moves the focus on instead, as a seek bar does. Step 3: the
+  same block ("Save" + "Load", "See all", the slider) sits in the left column in landscape, at the
+  top of the tablet panel and in the bottom half of the fold; nothing covers the game, and on a phone
+  upright the sheet's first stop still shows "Continue", the save row and the slider. Step 4: "Save"
+  and the slider work; "Load" and "See all" are faded and the pad skips them.
+- **Check:** human only (screenshots of each form).
 
 ## Android — Pause sheet mute tile
 
@@ -15694,13 +15757,14 @@ foldable keep their own layouts. The runner has no Android device, so these are 
   1. Open the in-game menu and read the save row.
   2. Press "Save", then play a few seconds and open the menu again.
   3. The menu opens on the slot just saved: press "Load".
-  4. Open the menu, step the slot to 1 and press "Load".
+  4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
-- **Expected:** Step 1: the row reads left arrow, "Save" with "Slot N · Empty" under it, right arrow,
-  and "Load", which is faded and does nothing on the empty slot. Step 2 says "State saved to slot N"
+- **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
+  and does nothing on the empty slot; there are no slot arrows (the slot slider and "See all" sit
+  under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
-  was saved. Step 4 loads the slot 1 state. Step 5: the four buttons and "Continue"/"Restart" are
-  translated and no button text is cut off.
+  was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
+  "Restart" are translated and no text is cut off.
 - **Check:** human only.
 
 ### RT-974 — The menu opens under the game and stretches up by its handle
@@ -15743,7 +15807,8 @@ foldable keep their own layouts. The runner has no Android device, so these are 
 On a phone lying on its side, the Android app's in-game menu (`game/PauseSheet.kt` in the
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 855) still covers
 the whole screen in two columns. Its left column starts with the same rows as upright (RT-972,
-RT-973): "Continue" beside "Restart", then "Save" between the slot arrows beside "Load". The runner
+RT-973): "Continue" beside "Restart", then "Save" beside "Load", with "See all" and the slot slider
+under them (RT-996). The runner
 has no Android device, so this is `MANUAL`.
 
 ### RT-978 — In landscape, "Continue" and "Restart" head the left column, "Load" sits beside "Save"
@@ -15755,18 +15820,19 @@ has no Android device, so this is `MANUAL`.
   1. Open the in-game menu and look at both columns.
   2. Press "Continue".
   3. Open the menu, press "Restart", then "Cancel".
-  4. Press "Save", step the slot arrows away and back to that slot, and press "Load".
+  4. Press "Save", tap another stop on the slot slider and back on that slot's stop, and press "Load".
   5. With the gamepad, open the menu and press A.
   6. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
   7. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
   8. Turn the phone upright and open the menu.
 - **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
-  purple and the widest button, with "Restart" on its right; under them the left arrow, "Save" with
-  "Slot N · Empty", the right arrow and "Load", faded. The right column holds the action tiles
+  purple and the widest button, with "Restart" on its right; under them "Save" with "Slot N · Empty"
+  and "Load", faded, then "See all" on the right and the slot slider, the whole width of the two
+  buttons (RT-996). The right column holds the action tiles
   (RT-987), five to a row, then "Quit game"; there is no list and no "Restart game" row. Step 2 closes
   the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
-  the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", and "Load"
-  brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
+  the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", that slot's
+  stop turns filled, and "Load" brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
   resumes. Step 6: the hardcore warning sits under the two rows; "Load" and the "Save states" tile are faded.
   Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
   without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
