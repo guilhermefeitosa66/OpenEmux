@@ -15639,7 +15639,8 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   4. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
 - **Expected:** Steps 1 and 2: the first press lands on "Continue"; then "Save", then the slider
   (focus ring around the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
-  press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. Step 3: the
+  press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. At an end
+  (0 with left, 9 with right) the press moves the focus on instead, as a seek bar does. Step 3: the
   same block ("Save" + "Load", "See all", the slider) sits in the left column in landscape, at the
   top of the tablet panel and in the bottom half of the fold; nothing covers the game, and on a phone
   upright the sheet's first stop still shows "Continue", the save row and the slider. Step 4: "Save"
