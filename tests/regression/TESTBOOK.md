@@ -15037,8 +15037,9 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   2. Tap the anchor key.
   3. Tap it again.
 - **Expected:** In step 1 the key is not lit and no message shows. After step 2 the key sits on the
-  purple pill with the glyph in white, and the "Anchor on" card shows over the game and stays
-  (RT-968). After step 3 the pill and the card are gone and "Anchor off" shows briefly.
+  purple pill with the glyph in white, and the "Anchor on" card slides up at the bottom of the
+  screen and stays (RT-968). After step 3 the pill and the card are gone and "Anchor off" shows
+  briefly.
 - **Check:** human only.
 
 ### RT-953 — With anchor on, the first button stays held while the thumb slides
@@ -15118,7 +15119,7 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   bundled package skin and on an imported skin.
 - **Check:** human only.
 
-### RT-968 — The "Anchor on" card stays until swiped down, clear of the controls
+### RT-968 — The "Anchor on" card stays at the bottom of the screen until swiped down
 - **Area:** Android — Anchor mode
 - **Mode:** MANUAL
 - **Preconditions:** An SNES game running; anchor mode off; no gamepad connected.
@@ -15130,14 +15131,16 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   5. Tap the anchor key twice (off, then on), then once more (off) while the card shows.
   6. Leave the game and launch it again (anchor still on).
   7. Rotate to landscape and turn anchor off and on again.
-- **Expected:** In step 1 a card shows over the game screen, above the strip, with a drag handle,
-  an anchor icon, "Anchor on", "The first button you press stays held until you lift that finger.
-  Slide onto another button to press it too." and "Swipe down to close"; it is still there after
-  30 seconds and the game keeps running. In step 2 the pad works under it as in RT-953. In step 3
-  it follows the finger down, fades, and springs back. In step 4 it slides out and is gone. In step
-  5 the card shows after the second tap and goes with the third, and "Anchor off" shows briefly.
-  In step 6 no card shows (only turning it on shows one). In step 7 the card sits over the game
-  again, centred on it, and covers neither the pad nor the strip.
+- **Expected:** In step 1 a card slides up from the bottom edge of the screen and stays there,
+  centred and at most about 360 dp wide (not over the game image), with a drag handle, an anchor
+  icon, "Anchor on", "The first button you press stays held until you lift that finger. Slide onto
+  another button to press it too." and "Swipe down to close"; it is still there after 30 seconds and
+  the game keeps running. In step 2 the pad works around it as in RT-953 (touches on the card itself
+  belong to the card). In step 3 it follows the finger down, fades, and springs back. In step 4 it
+  slides out through the bottom edge and is gone. In step 5 the card shows after the second tap and
+  goes with the third, and "Anchor off" shows briefly. In step 6 no card shows (only turning it on
+  shows one). In step 7 the card sits at the bottom of the screen again, centred on the screen and
+  at most about 360 dp wide, and the pad and the strip around it keep working.
 - **Check:** human only.
 
 ## Android — Combo buttons
