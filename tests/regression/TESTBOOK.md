@@ -6004,8 +6004,8 @@ real RetroAchievements account say so; without one they are handed to the mainta
 - **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
   hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
   notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load"
-  (beside "Save" on a phone in portrait), the "Save states" row and "Fast forward" are faded and do
-  nothing (also with a gamepad), "Save state" ("Save" in portrait) still works; the skin's load button is refused by RetroArch, and its fast-forward button
+  (beside "Save" on a phone, upright or in landscape), the "Save states" row and "Fast forward" are faded and do
+  nothing (also with a gamepad), "Save state" ("Save" on a phone) still works; the skin's load button is refused by RetroArch, and its fast-forward button
   is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
   it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
 - **Check:** human only. With hardcore on, `retroarch.cfg` has
@@ -11457,8 +11457,8 @@ Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-windo
      `KEYCODE_SLEEP` then `KEYCODE_WAKEUP`).
   8. Turn on RetroAchievements hardcore (RT-351), launch the game, open "RetroArch menu" and look at
      "Quick Menu".
-- **Expected:** In step 1 "RetroArch menu" sits after "Restart game" (on a phone in portrait, where
-  "Restart" moved beside "Continue", it is the last row of the list) and above "Quit game", with
+- **Expected:** In step 1 "RetroArch menu" sits after "Restart game" (on a phone, upright or in
+  landscape, where "Restart" moved beside "Continue", it is the last row of the list) and above "Quit game", with
   "Advanced settings, for this session only" under it (in the tablet side panel too; under the bottom
   row on a half-open foldable). In step 2 the sheet closes, RetroArch's menu opens over the game and
   the skin is hidden. In step 3 the game continues from where it was (the picture moves, sound
@@ -15001,8 +15001,8 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Preconditions:** The app past the first-run setup, a game started and played past its title
   screen; a gamepad connected for step 4; a foldable for step 5, if there is one.
 - **Steps:**
-  1. Open the in-game menu and press "Restart game" (on a phone in portrait, the "Restart" button
-     beside "Continue").
+  1. Open the in-game menu and press "Restart game" (on a phone, upright or in landscape, the
+     "Restart" button beside "Continue").
   2. In the dialog, press "Restart".
   3. Repeat steps 1 and 2 in landscape.
   4. With the gamepad, open the menu, select "Restart game" and press A, then move to "Restart" and
@@ -15025,7 +15025,7 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
   4. Press "Back to game".
   5. Leave the game, and on its screen press "Restart".
 - **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
-  focus is back on "Restart game" ("Restart" beside "Continue" on a phone in portrait). Step 4 returns to the game exactly where it was. Step 5 starts
+  focus is back on "Restart game" ("Restart" beside "Continue" on a phone, upright or in landscape). Step 4 returns to the game exactly where it was. Step 5 starts
   the game from the beginning, as it always has.
 - **Check:** human only.
 
@@ -15445,7 +15445,7 @@ beside it. Slot numbers run from 0 to 99. The runner has no Android device, so t
   step 5.
 - **Steps:**
   1. Start the game and open the in-game menu.
-  2. Press "Save state" ("Save" on a phone in portrait).
+  2. Press "Save state" ("Save" on a phone, upright or in landscape).
   3. Press the left arrow until the slot reads 1, and press "Save state" again.
   4. Press the left arrow past 0, then the right arrow past 99.
   5. Repeat the arrows and "Save state" with the gamepad, on a phone in portrait, in landscape and
@@ -15455,7 +15455,8 @@ beside it. Slot numbers run from 0 to 99. The runner has no Android device, so t
   Step 3: while on slot 1 the button reads "Slot 1 · In use"; saving replaces that state and its
   picture and adds no new one. Step 4: the number wraps from 0 to 99 and from 99 to 0. Step 5: the
   arrows and "Save state" are separate focus stops and nothing is cut off in any of the three
-  layouts; "Save state" is focused first in landscape and tabletop, "Continue" in portrait (RT-972).
+  layouts; "Save state" is focused first in tabletop, "Continue" on a phone upright or in landscape (RT-972,
+  RT-978).
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes and
   no new file appears).
 
@@ -15465,8 +15466,8 @@ On a phone held upright, the Android app's in-game menu (`game/PauseSheet.kt` in
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 849) starts with
 "Continue" and "Restart", has "Load" beside "Save", and opens with its top under the game's picture.
 It is dragged by the pill at its top (or its header) up to a taller stop and down to close.
-Landscape, tablets and a half-open foldable keep their own layouts. The runner has no Android
-device, so these are `MANUAL`.
+A phone in landscape has the same first rows (issue 855, next section); tablets and a half-open
+foldable keep their own layouts. The runner has no Android device, so these are `MANUAL`.
 
 ### RT-972 — "Continue" heads the menu and resumes, "Restart" sits beside it
 - **Area:** Android — Pause sheet on a phone in portrait
@@ -15534,8 +15535,42 @@ device, so these are `MANUAL`.
   5. Turn the phone to landscape and open the menu.
 - **Expected:** Step 1: the menu follows the finger and springs back. Step 2: it slides away and the
   game goes on. Step 3: the content scrolls back to its top first, then the menu follows the finger
-  and closes. Step 4: each way closes the menu and the game goes on. Step 5: the landscape menu is
-  as before (full height, two columns, no drag).
+  and closes. Step 4: each way closes the menu and the game goes on. Step 5: the landscape menu covers the
+  whole screen in two columns and does not drag; its rows are RT-978's.
+- **Check:** human only.
+
+## Android — Pause sheet on a phone in landscape
+
+On a phone lying on its side, the Android app's in-game menu (`game/PauseSheet.kt` in the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 855) still covers
+the whole screen in two columns. Its left column starts with the same rows as upright (RT-972,
+RT-973): "Continue" beside "Restart", then "Save" between the slot arrows beside "Load". The runner
+has no Android device, so this is `MANUAL`.
+
+### RT-978 — In landscape, "Continue" and "Restart" head the left column, "Load" sits beside "Save"
+- **Area:** Android — Pause sheet on a phone in landscape
+- **Mode:** MANUAL
+- **Preconditions:** A phone in landscape, a game started and played past its title screen, no state
+  in the slot the menu opens on; a gamepad connected for step 5.
+- **Steps:**
+  1. Open the in-game menu and look at both columns.
+  2. Press "Continue".
+  3. Open the menu, press "Restart", then "Cancel".
+  4. Press "Save", step the slot arrows away and back to that slot, and press "Load".
+  5. With the gamepad, open the menu and press A.
+  6. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
+  7. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
+  8. Turn the phone upright and open the menu.
+- **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
+  purple and the widest button, with "Restart" on its right; under them the left arrow, "Save" with
+  "Slot N · Empty", the right arrow and "Load", faded; then the tiles. The right column lists "Save
+  states", the skin rows, "RetroArch menu" and "Quit game", with no "Restart game" row. Step 2 closes
+  the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
+  the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", and "Load"
+  brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
+  resumes. Step 6: the hardcore warning sits under the two rows; "Load" and "Save states" are faded.
+  Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
+  without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
 - **Check:** human only.
 
 ## Retired
