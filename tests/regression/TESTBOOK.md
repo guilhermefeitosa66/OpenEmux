@@ -15096,6 +15096,157 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   faded like slow motion and fast forward, and turns the mode on and off as in RT-952.
 - **Check:** human only.
 
+## Android — Combo buttons
+
+Combo buttons in the Android app's skin editor (issue 842,
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+In the editor of a skin of the player's own (an editable copy), the Combo tool adds a round, neutral
+grey button with a light ring that presses two or three buttons together: face buttons, shoulders,
+triggers, C buttons, Select and Start, never the D-pad, sticks or quick actions. The buttons are
+held together for one second on the skin or on a controller, or picked by tapping. The combo is
+added to every layout of the skin at a free spot near the buttons it presses, and each layout keeps
+its own place. Its label is the console's names joined with "+" ("Y+B"). skin.json keeps combos
+under new `combos` keys, so an app from before combos opens the skin without them. The runner has
+no Android device, so these are `MANUAL`.
+
+### RT-957 — No bundled skin has a combo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World (SNES) in the library; the SNES bundled skin in use.
+- **Steps:**
+  1. Launch the game and look at the touch pad, in portrait and in landscape.
+  2. Open "Edit skin" from the pause menu and look at the controls.
+- **Expected:** Neither the game nor the editor shows a combo button: only the console's own
+  controls and the quick actions.
+- **Check:** human only.
+
+### RT-958 — The Combo tool is in the bar of an editable skin
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable copy of the SNES skin open in the editor (RT-941), nothing selected.
+- **Steps:**
+  1. Look at the bottom bar.
+  2. Tap a control, then tap the console's body to let go of it.
+- **Expected:** With nothing selected the bar reads "Grid", "Try", "Combo" and the more button, in
+  that order. With a control selected, Combo is not there. It comes back when the selection is let go.
+- **Check:** human only.
+
+### RT-959 — Holding two buttons for a second adds a combo to every layout
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958, the phone in portrait.
+- **Steps:**
+  1. Tap "Combo".
+  2. Put one finger on Y and one on B and hold them.
+  3. Look at the editor after the ring fills.
+  4. Turn the phone to landscape, then open the Layouts panel and look at the other forms the skin has.
+- **Expected:** Step 1 opens the "New combo" panel: an empty ring, "Press the buttons together and
+  hold", "Up to 3 buttons", "Cancel" and "Pick by tapping". The D-pad, the quick actions and the menu
+  key are dimmed. In step 2, Y and B light up, chips "Y" + "B" show with "Keep holding…", and the ring
+  fills in about a second. In step 3 the panel closes and a round grey "Y+B" button with a light ring
+  sits near Y and B, covering nothing and off the game screen. It is selected, and the note says
+  "Combo Y+B added to every layout". In step 4 the combo is in the landscape layout too, at a free
+  spot of its own.
+- **Check:** human only.
+
+### RT-960 — The hold restarts, never takes four buttons, and Cancel changes nothing
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958.
+- **Steps:**
+  1. Tap "Combo". Hold Y and B for half a second, then lift B and press A instead.
+  2. Lift everything. Hold Y, B, A and X together for two seconds.
+  3. Lift everything and tap "Cancel".
+- **Expected:** In step 1 the ring starts over when the buttons change, and fills for Y+A only after a
+  full second of Y and A. That adds "Y+A"; undo it, then go on. In step 2 the panel says "A combo has
+  up to 3 buttons" and the ring stays empty. Step 3 closes the panel and leaves the skin as it was:
+  Undo is not lit by it, and Save stays as it was.
+- **Check:** human only.
+
+### RT-961 — Pick by tapping builds a combo and refuses a fourth button and non-buttons
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958.
+- **Steps:**
+  1. Tap "Combo", then "Pick by tapping".
+  2. Tap the D-pad, then a quick action.
+  3. Tap L, R and A, then tap B.
+  4. Tap R again, then tap R once more, then tap "Add".
+- **Expected:** Step 1 shows "Tap the buttons one by one" and an "Add" button that is off. Step 2
+  shows "Only buttons can be in a combo" and picks nothing. In step 3, L, R and A light up and their
+  chips show. Tapping B shows "A combo has up to 3 buttons" and does not pick it. In step 4 the first
+  tap takes R out and the second puts it back. "Add" makes an "L+R+A" combo, with its label legible
+  inside the circle.
+- **Check:** human only.
+
+### RT-962 — A controller records a combo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958, with a gamepad connected.
+- **Steps:**
+  1. Tap "Combo" on the screen.
+  2. On the gamepad, hold the bottom and left face buttons together for a second.
+- **Expected:** The skin's B and Y light up while held, the ring fills, and a "Y+B" combo is added as
+  in RT-959. Holding the buttons does not move the focus or trigger the editor's gamepad shortcuts.
+- **Check:** human only.
+
+### RT-963 — A combo is moved, resized, recoloured, recorded again and deleted, with undo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** A "Y+B" combo added (RT-959) and selected.
+- **Steps:**
+  1. Look at the bottom bar.
+  2. Drag the combo elsewhere. Use Size to make it larger, then Nudge to move it a step.
+  3. Open Colour and paint its button another colour.
+  4. Tap "Buttons", hold L and R for a second.
+  5. Tap "Delete".
+  6. Press Undo after each step from 5 back to 2, then Redo them.
+- **Expected:** Step 1 shows "Buttons", "Colour", "Size", "Nudge" and "Delete" (no Texture, no
+  Reset), with Delete in red. Steps 2 and 3 work as for any button, and the colour also shows in the
+  other layouts. After step 4 the panel title reads "Combo buttons" and the combo reads "L+R" in place.
+  Step 5 removes it from every layout. Each Undo brings back the state before that step, and each
+  Redo repeats it.
+- **Check:** human only.
+
+### RT-964 — In game, the combo presses all its buttons
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** A "Y+B" combo saved in the SNES skin in use; Super Mario World in a level.
+- **Steps:**
+  1. Hold the combo button.
+  2. Release it.
+  3. Connect a gamepad, then disconnect it.
+- **Expected:** In step 1 Mario runs and jumps at once. Step 2 releases both buttons. In step 3 the
+  touch pad hides with the gamepad, combo included, and comes back with it after.
+- **Check:** human only.
+
+### RT-965 — Export, import and Share nearby keep the combos
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An SNES skin of your own with a combo saved; a second Android device with
+  OpenEmux for step 3.
+- **Steps:**
+  1. Export the skin as a zip (skin list › its menu).
+  2. Delete the skin, import the zip and use it in Super Mario World.
+  3. Send the skin with Share nearby and use it on the other device.
+- **Expected:** After steps 2 and 3 the combo is in every layout, where it was saved, and works as in
+  RT-964. The exported `skin.json` has a root `combos` entry and a `combos` key in each layout, and
+  none of its `elements` binds anything with `|`.
+- **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["combos"]); print(all("|" not in e.get("bind","") for l in d["layouts"].values() for e in l.get("elements",[])))'`
+  prints the combos and `True`.
+
+### RT-966 — Unsaved combos come back, and a form switched on gets them
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable SNES skin with phone layouts only, open in the editor.
+- **Steps:**
+  1. Add a "Y+B" combo and drag it. Without saving, close the app
+     (`adb shell am force-stop com.openemux.mobile`), then open the editor again.
+  2. Open the Layouts panel and switch Tablets on. Look at the tablet layouts.
+- **Expected:** Step 1 shows "Your unsaved changes are back." with the combo where it was. In step 2
+  each tablet layout has the combo, over nothing.
+- **Check:** human only.
+
 ## Android — Save states
 
 Listing, deleting and saving states in the Android app (`pkg/android/openemux` of the
