@@ -16066,7 +16066,7 @@ after the last scenario.
 - **Area:** Android — Long game names
 - **Mode:** MANUAL
 - **Preconditions:** The shared preconditions plus a second long-named game on the same console;
-  a gamepad connected (or Settings → "Controller layout" set to always).
+  a gamepad connected (or Settings → "Controller layout" set to "Always").
 - **Steps:**
   1. Open the console's shelf in the "Cartridges" view and move the focus with the D-pad onto a short
      name.
@@ -16081,12 +16081,12 @@ after the last scenario.
 - **Area:** Android — Long game names
 - **Mode:** MANUAL
 - **Preconditions:** The shared preconditions; a foldable (or an emulator of one) for step 3, if
-  available.
+  available; a gamepad for step 4.
 - **Steps:**
   1. Open the long-named game's page upright.
   2. Turn the phone to landscape.
   3. On a fold, half-open it flat on a table (tabletop).
-  4. Back in the library, focus the game with a gamepad and press Y (or long-press for its options).
+  4. Back in the library, focus the game with a gamepad and press Y (its options).
 - **Expected:** Steps 1–3: the whole name is shown, wrapping onto as many lines as it needs, with the
   pencil beside it; no "…" and no movement. In landscape the cartridge above it gets smaller to make
   room. Step 4: the options sheet's title shows the whole name too.
