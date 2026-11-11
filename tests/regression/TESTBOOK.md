@@ -7902,9 +7902,10 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
 - **Expected:** In step 1 the strip has seven slots: save, load, turbo, slow motion, fast forward,
   anchor and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
   sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
-  into two rows of three, each tile full size with its full label; "Screens" has the layout in use under
-  its label (at most two lines, as narrow as the tile; issue 709). In step 3 the D-pad reaches all
-  six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
+  into four columns, 4 + 2, the second row from the left (issue 858), each tile full size with its full
+  label; "Screens" has the layout in use under its label (at most two lines, as narrow as the tile;
+  issue 709). In step 3 the D-pad reaches all six tiles, across both rows. In step 4 the tiles are in
+  five columns: five on the first row and "Audio" alone on the second, from the left.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the package skins
@@ -15665,6 +15666,31 @@ has no Android device, so this is `MANUAL`.
   Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
   without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
 - **Check:** human only.
+
+### RT-984 — The pause sheet's tiles sit in a grid: 4 columns upright, 5 elsewhere
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone about 412 dp wide (or an emulator at 1080x2400, density 420), a game
+  other than NDS started; for step 4 the same phone at about 360 dp (`adb shell wm size 1080x2400`
+  with `adb shell wm density 480`; restore with `adb shell wm size reset` and
+  `adb shell wm density reset`); a gamepad for step 5.
+- **Steps:**
+  1. Hold the phone upright, open the in-game menu and look at the action tiles.
+  2. Turn the phone to landscape and open the menu.
+  3. On a tablet (side panel) or a half-open fold (tabletop), if available, open the menu.
+  4. At 360 dp, upright, set the app language to Deutsch, then தமிழ், then Français, and open the menu
+     each time.
+  5. Upright, with the gamepad, move from the tiles' first row to the second and along each row.
+- **Expected:** Step 1: four columns; "Fast forward", "Slow motion", "Screenshot" and "Shader" on
+  the first row, "Audio" alone on the second row under "Fast forward"; the tiles close together (about
+  the same spacing as in landscape), the row lined up with the buttons above and the list below,
+  every label whole. Step 2: the five tiles on one row, as before. Step 3: five columns, nothing cut
+  or overlapping. Step 4: every label is complete and centred, on at most two lines, no word broken
+  in the middle (a long word such as "Bildschirmfoto" shows a little smaller instead); nothing
+  overlaps. Step 5: the focus goes through the tiles in reading order, left to right, then the
+  second row from the left.
+- **Check:** human only (`adb shell uiautomator dump` gives each tile's bounds: four distinct left
+  edges upright, "Audio" at the first one).
 
 ### RT-772 — A blank name or Cancel creates nothing
 - **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
