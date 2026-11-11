@@ -15037,8 +15037,8 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   2. Tap the anchor key.
   3. Tap it again.
 - **Expected:** In step 1 the key is not lit and no message shows. After step 2 the key sits on the
-  purple pill with the glyph in white, and "Anchor on: the first button you press stays held" shows
-  briefly. After step 3 the pill is gone and "Anchor off" shows.
+  purple pill with the glyph in white, and the "Anchor on" card shows over the game and stays
+  (RT-968). After step 3 the pill and the card are gone and "Anchor off" shows briefly.
 - **Check:** human only.
 
 ### RT-953 — With anchor on, the first button stays held while the thumb slides
@@ -15094,6 +15094,50 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
 - **Expected:** In step 2 the anchor key is lit from the start and holding still works (RT-953). In
   step 3 it is not lit: the GBA has its own setting. In step 4 the anchor key is drawn normally, not
   faded like slow motion and fast forward, and turns the mode on and off as in RT-952.
+- **Check:** human only.
+
+### RT-967 — An anchored button is ringed, with a line to the finger that holds it
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World running on a phone in portrait; anchor mode on (RT-952), the
+  "Anchor on" card swiped away.
+- **Steps:**
+  1. Put the thumb on Y and keep it there.
+  2. Without lifting, slide the thumb onto B, move it around over B and the space next to it, then
+     back to Y.
+  3. Lift the thumb.
+  4. Hold Y with one thumb and A with the other, then slide each thumb off its button.
+  5. Turn anchor off (RT-952) and hold Y, then slide onto B.
+  6. Turn anchor on, hold Y, and connect a gamepad (RT-955).
+- **Expected:** In step 1 an amber dashed ring sits just outside Y, over its pressed look; no line
+  while the thumb is on Y. In step 2, as soon as the thumb leaves Y, a white dashed line runs from
+  Y's centre to the thumb and follows it; B shows its usual pressed look and gets no ring. Back on
+  Y, the line goes and the ring stays. Step 3 removes ring and line at once. In step 4 Y and A each
+  have their own ring, and each thumb its own line. In step 5 no ring and no line are drawn. In step
+  6 the ring and line go with the touch pad. Ring and line sit on the buttons in landscape too, on a
+  bundled package skin and on an imported skin.
+- **Check:** human only.
+
+### RT-968 — The "Anchor on" card stays until swiped down, clear of the controls
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game running; anchor mode off; no gamepad connected.
+- **Steps:**
+  1. Tap the anchor key and wait 30 seconds.
+  2. While the card shows, hold Y and slide onto B (RT-953).
+  3. Drag the card down a little by its handle and let go.
+  4. Swipe it down all the way.
+  5. Tap the anchor key twice (off, then on), then once more (off) while the card shows.
+  6. Leave the game and launch it again (anchor still on).
+  7. Rotate to landscape and turn anchor off and on again.
+- **Expected:** In step 1 a card shows over the game screen, above the strip, with a drag handle,
+  an anchor icon, "Anchor on", "The first button you press stays held until you lift that finger.
+  Slide onto another button to press it too." and "Swipe down to close"; it is still there after
+  30 seconds and the game keeps running. In step 2 the pad works under it as in RT-953. In step 3
+  it follows the finger down, fades, and springs back. In step 4 it slides out and is gone. In step
+  5 the card shows after the second tap and goes with the third, and "Anchor off" shows briefly.
+  In step 6 no card shows (only turning it on shows one). In step 7 the card sits over the game
+  again, centred on it, and covers neither the pad nor the strip.
 - **Check:** human only.
 
 ## Android — Combo buttons
