@@ -8489,7 +8489,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   5. Tap one of the saved-state pictures on the left.
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
   left corners: the game's title and play time, "Save" beside "Load", "See all" and the slot slider
-  (RT-992), the action tiles (with
+  (RT-996), the action tiles (with
   "Save states", the skin tiles and "RetroArch menu" among them, RT-987), a "Restart game" row, and
   "Quit game" at the foot. On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
@@ -15527,7 +15527,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   and the first game's still on slot 3. Step 7: the same, with "Save" and the slider separate focus
   stops and nothing cut off; "Save" is focused first in tabletop, "Continue" on a phone upright or in
   landscape (RT-972, RT-978). The slider stops at 0 and at 9 (no wrap; slots past 9 come from
-  "See all", RT-993).
+  "See all", RT-997).
 - **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 3 after step 2).
 
 ### RT-980 — Save and Load in the menu act on the current slot, overwriting it
@@ -15587,7 +15587,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: `<rom>.state5` appears or changes in
   step 1 and `<rom>.state` does not).
 
-### RT-992 — The slot slider picks the current slot and shows which slots hold a state
+### RT-996 — The slot slider picks the current slot and shows which slots hold a state
 - **Area:** Android — Save states
 - **Mode:** MANUAL
 - **Preconditions:** A phone in portrait, a game with no states and no `<rom>.slot`.
@@ -15608,7 +15608,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   Step 5: the menu opens with the thumb on 4, filled, both times.
 - **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 4 after step 5).
 
-### RT-993 — "See all" opens the states page, and a slot past 9 gets its own stop
+### RT-997 — "See all" opens the states page, and a slot past 9 gets its own stop
 - **Area:** Android — Save states
 - **Mode:** MANUAL
 - **Preconditions:** A game with a state in slot 4 and one in slot 12 (`<rom>.state12`, made with a
@@ -15625,7 +15625,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   the "12" stop goes away, the thumb is on 3 and "Save" reads "Slot 3 · Empty".
 - **Check:** human only.
 
-### RT-994 — The slot slider with a gamepad, in every form of the menu, and in hardcore
+### RT-998 — The slot slider with a gamepad, in every form of the menu, and in hardcore
 - **Area:** Android — Save states
 - **Mode:** MANUAL
 - **Preconditions:** A game with states in slots 0 and 3, current slot 3; a gamepad; a phone, a
@@ -15760,7 +15760,7 @@ foldable keep their own layouts. The runner has no Android device, so these are 
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
   and does nothing on the empty slot; there are no slot arrows (the slot slider and "See all" sit
-  under the row, RT-992). Step 2 says "State saved to slot N"
+  under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
   was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
   "Restart" are translated and no text is cut off.
@@ -15807,7 +15807,7 @@ On a phone lying on its side, the Android app's in-game menu (`game/PauseSheet.k
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 855) still covers
 the whole screen in two columns. Its left column starts with the same rows as upright (RT-972,
 RT-973): "Continue" beside "Restart", then "Save" beside "Load", with "See all" and the slot slider
-under them (RT-992). The runner
+under them (RT-996). The runner
 has no Android device, so this is `MANUAL`.
 
 ### RT-978 — In landscape, "Continue" and "Restart" head the left column, "Load" sits beside "Save"
@@ -15827,7 +15827,7 @@ has no Android device, so this is `MANUAL`.
 - **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
   purple and the widest button, with "Restart" on its right; under them "Save" with "Slot N · Empty"
   and "Load", faded, then "See all" on the right and the slot slider, the whole width of the two
-  buttons (RT-992). The right column holds the action tiles
+  buttons (RT-996). The right column holds the action tiles
   (RT-987), five to a row, then "Quit game"; there is no list and no "Restart game" row. Step 2 closes
   the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
   the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", that slot's
