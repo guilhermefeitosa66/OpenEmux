@@ -16013,3 +16013,81 @@ toggles (fast forward, slow motion, mute) ever light up.
   Step 10: "Save states" is faded and does nothing, also with the gamepad. With a skin that cannot be
   edited, "Edit skin" is faded and does nothing.
 - **Check:** human only.
+
+## Android — Long game names
+
+In the Android app's library (`ui/LibraryScreens.kt` and `ui/GameName.kt` in the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 869), a game's
+name that does not fit its space scrolls right to left after a short pause, shows the whole name and
+loops, instead of ending in "…". A name that fits stays still. The game's own page shows the whole
+name on as many lines as it needs. The runner has no Android device, so these are `MANUAL`.
+
+Shared preconditions: one game renamed to "The Legend of the Very Long Cartridge Name - Director's
+Cut Edition" (its detail page, the pencil beside the name) and another game with a short name
+("Mario" or similar) on the same console. **Restore:** rename the game back to its original name
+after the last scenario.
+
+### RT-992 — A long name scrolls in every library view; a short one stays still
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; the long-named game played once (so it is in
+  "Continue" and in "Recent"); a tablet or a phone in landscape for step 4.
+- **Steps:**
+  1. Open the console's shelf in the "Cartridges" view and watch the two names under the cartridges
+     for ten seconds.
+  2. Switch to the covers view, then to the list view, and watch the same two names.
+  3. Open "Home" (its "Continue" card and the recently added row), then "Recent", then search for
+     "legend" in the library.
+  4. Turn the phone to landscape (the row of three) and, on a tablet, open the wide list (table).
+  5. Scroll the library up and down quickly with the long name on screen.
+- **Expected:** Steps 1–4: the long name holds still for about a second and a half, then moves right
+  to left at a steady reading speed, shows its end, leaves a gap and starts again, over and over; it
+  never goes past the edges of its cell. The short name never moves and stays centred under its
+  cartridge (left-aligned in lists). "Recent" shows the long name on one line. Step 5: scrolling is as
+  smooth as with short names.
+- **Check:** human only.
+
+### RT-993 — With "Remove animations" on, names keep the ellipsis
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; the app open on the console's "Cartridges" view.
+- **Steps:**
+  1. In the system settings, turn on Accessibility → "Remove animations" (or set every animation
+     scale to off in Developer options), and go back to the app without closing it.
+  2. Watch the long name for ten seconds, in the cartridge, covers and list views.
+  3. Turn "Remove animations" off again and go back to the app.
+- **Expected:** Step 2: the long name ends in "…" and does not move, in every view. Step 3: it starts
+  scrolling again, without restarting the app.
+- **Check:** human only (`adb shell settings put global animator_duration_scale 0` stands in for
+  step 1, and `... 1` for step 3).
+- **Restore:** "Remove animations" back off (step 3).
+
+### RT-994 — With a gamepad, only the focused game's name scrolls
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions plus a second long-named game on the same console;
+  a gamepad connected (or Settings → "Controller layout" set to "Always").
+- **Steps:**
+  1. Open the console's shelf in the "Cartridges" view and move the focus with the D-pad onto a short
+     name.
+  2. Move the focus onto the first long-named game, then onto the second.
+  3. Switch to the list view and repeat step 2.
+- **Expected:** Step 1: both long names end in "…" and do not move. Step 2: the focused long name
+  starts scrolling after the short pause; when the focus moves on, it goes back to "…" and the newly
+  focused one starts. Step 3: the same in the list.
+- **Check:** human only.
+
+### RT-995 — The game's page shows the whole name, on several lines, without moving
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; a foldable (or an emulator of one) for step 3, if
+  available; a gamepad for step 4.
+- **Steps:**
+  1. Open the long-named game's page upright.
+  2. Turn the phone to landscape.
+  3. On a fold, half-open it flat on a table (tabletop).
+  4. Back in the library, focus the game with a gamepad and press Y (its options).
+- **Expected:** Steps 1–3: the whole name is shown, wrapping onto as many lines as it needs, with the
+  pencil beside it; no "…" and no movement. In landscape the cartridge above it gets smaller to make
+  room. Step 4: the options sheet's title shows the whole name too.
+- **Check:** human only.
