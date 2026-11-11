@@ -7888,7 +7888,7 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   and not clipped.
 - **Check:** human only.
 
-### RT-574 — NDS: six strip slots, and the pause sheet's tiles wrap on a narrow window
+### RT-574 — NDS: seven strip slots, and the pause sheet's tiles wrap on a narrow window
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** An NDS game in the library; a phone (or emulator) whose portrait window is about
