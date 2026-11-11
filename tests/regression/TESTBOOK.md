@@ -15010,8 +15010,8 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
 ### RT-951 — The anchor key sits after fast forward on every touch layout
 - **Area:** Android — Anchor mode
 - **Mode:** MANUAL
-- **Preconditions:** An SNES game (bundled skin), an Atari 5200 game (drawn skin) and an NDS game in
-  the library; for step 4, the `SFC.deltaskin` of an earlier release imported and in use (RT-577); no
+- **Preconditions:** An SNES game (bundled skin), an Atari 5200 game (drawn skin), an NDS game and a
+  ColecoVision game (keypad page) in the library; for step 4, the `SFC.deltaskin` of an earlier release imported and in use (RT-577); no
   gamepad connected.
 - **Steps:**
   1. Launch the SNES game, phone in portrait, and look at the quick actions.
@@ -15020,7 +15020,9 @@ remembered per console. The runner has no Android device, so these are `MANUAL`.
   4. Repeat steps 1-2 with the imported package skin.
   5. Repeat steps 1-2 on a tablet-size window (`adb shell wm size 1600x2560` with
      `adb shell wm density 320`; restore with `reset`) and, if there is one, on a foldable half open.
-- **Expected:** Each time, right after fast forward there is a key with an anchor glyph (a ring on
+  6. Launch a ColecoVision game, turn anchor on, then open the keypad with its toggle key and close it.
+- **Expected:** In step 6 the anchor key stays in the same place, still lit, while the keypad page is
+  open, and turns the mode off from there too. Each time, right after fast forward there is a key with an anchor glyph (a ring on
   top, a shaft with a crossbar and two curved arms), drawn like the keys around it and not lit. On
   the NDS the screen-layout key stays last. The keys are evenly spaced in the strip's span, nothing
   is clipped or covers the picture or the buttons, and each key responds only inside its own slot.
