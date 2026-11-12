@@ -16229,10 +16229,29 @@ are `MANUAL`: a person runs them on a phone (or on an emulator with its multi-to
   3. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it and return to the
      library.
 - **Expected:** In steps 2 and 3 each view shows its own step on every page: 4 cartridge columns,
-  1 cover column, large list rows. On "All games" a console without cartridge art shown inside the
-  cartridge view follows the cartridge view's step.
+  1 cover column, large list rows. Covers always take the cover view's step, even inside the
+  cartridge view (see RT-1008).
 - **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml`:
   `library_zoom_carts` 4, `library_zoom_covers` 1, `library_zoom_list` Large).
+
+### RT-1008 — Covers shown in the cartridge view zoom with the cover view
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; games on a console with cartridge art (e.g. Super
+  Nintendo) and on one without it (e.g. Sony PlayStation); the cartridge view at 2 columns and the
+  cover view at 3 (the defaults).
+- **Steps:**
+  1. Open the PlayStation page in the cartridge view (it shows covers) and pinch out once; open the
+     "Size" button.
+  2. Open the Super Nintendo page in the cartridge view.
+  3. Open "All games" in the cartridge view; pinch in over the PlayStation group, then pinch out over
+     the Super Nintendo group.
+- **Expected:** Step 1: the covers go to 2 columns and the "Size" menu has "2 columns" checked.
+  Step 2: the cartridges are still at 2 columns. Step 3: the pinch over the PlayStation group moves
+  only the covers (3 columns, and every console without cartridge art with them); the pinch over the
+  Super Nintendo group moves only the cartridges (1 column). The cover view shows the covers' step.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml`: after
+  step 1 `library_zoom_covers` 2 and `library_zoom_carts` absent or 2).
 
 ### RT-1003 — A pinch never scrolls, opens a game or starts a selection
 - **Area:** Android — Library zoom
