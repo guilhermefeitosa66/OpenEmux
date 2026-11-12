@@ -16419,9 +16419,9 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
 - **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
   key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
   focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
-  layout keeps its touch sizes. 3: the tap hides the
-  ring and the hint bar again; the app is back to touch navigation. 4: the
-  press switches tab (R1) and the ring and the hint bar come back, with no controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
+  layout keeps its touch sizes. 3: the tap hides the ring and the hint bar again; the app is back to
+  touch navigation. 4: the press switches tab (R1) and the ring and the hint bar come back, with no
+  controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
   press never changes the setting.
 - **Check:** human only (`adb exec-out screencap -p`).
 
