@@ -180,13 +180,13 @@ class TheNarrativeTests(unittest.TestCase):
         english = set(alts(build_site.render("en")))
         for locale in build_site.ORDER:
             text = build_site.render(locale)
-            # The logo beside the "OpenEmux" name in the header is decorative;
-            # the wall's cartridges are built by the script and labelled as a whole.
+            # The logo beside the "OpenEmux" name, in the header and above the
+            # headline, is decorative; the wall's cartridges are built by the script and labelled as a whole.
             images = re.findall(r"<img\s[^>]*>", text.split("</header>", 1)[1])
             with self.subTest(locale=locale):
                 self.assertGreater(len(images), 10)
                 for tag in images:
-                    if 'id="lightboxImg"' in tag:
+                    if 'id="lightboxImg"' in tag or "logo-240.png" in tag:
                         continue
                     alt = re.search(r'alt="([^"]*)"', tag)
                     self.assertTrue(alt and alt.group(1).strip(), tag)
