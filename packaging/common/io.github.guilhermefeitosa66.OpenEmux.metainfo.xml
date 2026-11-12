@@ -87,6 +87,16 @@
   </keywords>
 
   <releases>
+    <release version="1.23.3" date="2026-11-12">
+      <description>
+        <p>An Android release about the on-screen buttons. The desktop app has no changes.</p>
+        <ul>
+          <li>Android: choose the shape of each on-screen button: circle, pill, rounded square, triangle or the skin's own</li>
+          <li>Android: triangles have rounded corners</li>
+          <li>Android: a button changes colour while it is held, so screen recordings show what is pressed</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.23.0" date="2026-11-12">
       <description>
         <p>An Android release about the on-screen controls, the pause menu and the library. The desktop app has no changes.</p>
