@@ -15498,10 +15498,12 @@ no Android device, so these are `MANUAL`.
 - **Steps:**
   1. Export the skin as a zip, delete it, import the zip and open it in the editor.
   2. Send it with Share nearby and open it in the editor on the other device.
-  3. In the exported `skin.json`, change the portrait combo's `"shape"` to `"star"`, zip it again and
-     import it.
-- **Expected:** In steps 1 and 2 the portrait combo is the bottom-left triangle where it was saved,
-  the other layouts' combos are circles. In step 3 the skin opens, with that combo drawn as a circle.
+  3. In the exported `skin.json`, change the combo's `"shape"` to `"star"` on every layout (each
+     layout's `combos` entry), zip it again and import it.
+  4. Do step 3 again changing only the portrait combo's `"shape"` to `"star"`.
+- **Expected:** In steps 1 and 2 the combo is the bottom-left triangle on every layout (issue 891),
+  the portrait one where it was saved. In step 3 the skin opens, with the combo drawn as a circle on
+  every layout. In step 4 the portrait combo takes the triangle the other layouts give it.
 - **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["layouts"]["phone-portrait"]["combos"][0].get("shape"), d["layouts"]["phone-portrait"]["combos"][0].get("corner"))'`
   prints `triangle bottom-left`.
 
