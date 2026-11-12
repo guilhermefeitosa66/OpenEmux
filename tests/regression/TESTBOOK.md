@@ -7089,15 +7089,16 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 - **Expected:** "Interface mode" is the first section of the Controllers screen, with the lead
   "Whether the app is used with a controller or by touch. Controller mode shows the focus ring and the
   button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
-  mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Always touch: no
-  focus ring or button hints until a controller button is pressed, and games open with the on-screen
-  controls. Pick this if the app thinks a controller is connected and there is none.") and
+  mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Touch navigation,
+  as if no controller were connected. Pressing a controller button switches to controller navigation
+  until you touch the screen again. Games open with the on-screen controls. Pick this if the app thinks
+  a controller is connected and there is none.") and
   "Controller" ("Always controller mode, even before a controller is detected. For handhelds with
   built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
   controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
   controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
-  with the ring and the hint bar showing, the tap hides them again, and the chips keep their touch
-  size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
+  with the ring and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
+  touch size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
   `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
   (Controller), `never` (Touch screen) or `auto`.
 - **Check:** human only.
@@ -16398,6 +16399,30 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
   has the "Touch controls" tile (issue 865). 2: the game opens with the full on-screen controls although
   a controller is detected, and the pause sheet has no "Touch controls" tile. 3: with no controller the
   game opens with the on-screen controls (Controller mode changes the app's navigation, not the skin).
+- **Check:** human only (`adb exec-out screencap -p`).
+
+### RT-1014 — "Touch screen": a controller button brings controller navigation back
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; "Settings" → "Controllers" → "Interface mode" on
+  "Touch screen".
+- **Steps:**
+  1. Fake a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected
+     true`), open the "Library" tab and press volume up from it
+     (`adb shell input gamepad keyevent KEYCODE_VOLUME_UP`).
+  2. Press DOWN on the controller (`adb shell input gamepad keyevent KEYCODE_DPAD_DOWN`).
+  3. Tap an empty spot of the screen (the "Shelf" title).
+  4. Disconnect the fake controller (`--ez connected false`) and press A from a device that reports
+     itself only as a joystick (`adb shell input joystick keyevent KEYCODE_BUTTON_A`).
+  5. Tap the screen.
+  6. Open "Settings" → "Controllers".
+- **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
+  key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
+  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
+  layout keeps its touch sizes. 3: the tap hides the ring and the hint bar again; the app is back to
+  touch navigation. 4: the press lands the ring on a card and the hint bar comes back, with no
+  controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
+  press never changes the setting.
 - **Check:** human only (`adb exec-out screencap -p`).
 
 ## Android — Zebra stripes in the library list
