@@ -11313,8 +11313,10 @@ controls (issue 637; [openemux-android](https://github.com/guilhermefeitosa66/op
 `pkg/android/openemux`). With a pad, the skin switches to a gamepad layout: the app controls only
 (menu, save, load, the touch controls key, turbo, fast forward, plus the screens key on NDS), on two
 side rails in landscape, a strip along the foot in portrait and a row under the fold in tabletop; the
-virtual game buttons are gone. The touch controls key (a gamepad glyph) and the pause sheet's "Touch
-controls" tile bring the on-screen controls back over a detected controller, kept per controller
+virtual game buttons are gone. The pause sheet's "Touch controls" tile is always there, with or
+without a controller: turning it off shows the gamepad layout even with no pad, and the touch controls
+key (a gamepad glyph) on that layout brings the on-screen controls back. The hand-made choice holds until
+the next connect or disconnect; it is kept per controller over a detected pad, and per console with none
 (issue 865). A hide key (an eye with a slash) beside the menu key collapses every app control to a
 faint show key (an eye) where the menu key was. `MANUAL`, like the other Android sections: a phone
 or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad
@@ -11453,7 +11455,8 @@ and `--es pads fake,real` stands for a second controller connected next to the f
   fourth in the portrait strip, after load; nothing overlaps. Step 2: the console's touch skin comes back
   (D-pad, buttons, the quick-action strip, the menu key) and a toast says "Touch controls on. Turn them
   off in the pause menu."; the game kept running. Step 3: the game answers the touch controls. Collapsed
-  (the hide key) the key is gone with the other app controls.
+  (the hide key) the key is gone with the other app controls. The key works the same with no controller,
+  on the gamepad layout the tile turned on (RT-1016).
 - **Check:** human only; `adb shell run-as com.openemux.mobile cat files/touch_controls` prints `fake`.
 
 ### RT-989 — The pause sheet's "Touch controls" tile turns them off and on
@@ -11466,8 +11469,9 @@ and `--es pads fake,real` stands for a second controller connected next to the f
   3. Open the sheet from the rail's menu key, tap "Touch controls", then "Continue".
   4. "Disconnect" and open the sheet.
 - **Expected:** Step 1: a "Touch controls" tile between "Edit skin" and "RetroArch", lit like
-  "Fast forward" while on. Step 2: the gamepad layout is back. Step 3: the touch skin again. Step 4: no
-  "Touch controls" tile; the touch skin, as without a controller.
+  "Fast forward" while on. Step 2: the gamepad layout is back. Step 3: the touch skin again. Step 4: the
+  touch skin, as without a controller; the "Touch controls" tile is still there, lit (RT-1016 turns it off
+  with no controller).
 - **Check:** human only; after step 2 `files/touch_controls` is empty, after step 3 it holds `fake`.
 
 ### RT-990 — The choice is kept per controller; a new controller still gets the gamepad layout
@@ -11487,8 +11491,8 @@ and `--es pads fake,real` stands for a second controller connected next to the f
 ### RT-991 — With no override, connecting and disconnecting mid-game still switch at once
 - **Area:** Android — In-game controls with a gamepad
 - **Mode:** MANUAL
-- **Preconditions:** A game running on the touch skin, no controller, `files/touch_controls` empty (or
-  the app freshly installed).
+- **Preconditions:** A game running on the touch skin, no controller, `files/touch_controls` and
+  `files/gamepad_layout_consoles` empty (or the app freshly installed).
 - **Steps:**
   1. Connect a controller (or "connect" with `--es pads fake`).
   2. Disconnect it.
@@ -11497,6 +11501,43 @@ and `--es pads fake,real` stands for a second controller connected next to the f
   `adb logcat -d | grep "counted as a gamepad"` names each device the app counted as a controller.
 - **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: landscape -> pad-landscape` then `gamepad false`.
 
+
+### RT-1016 — With no controller, the "Touch controls" tile shows the gamepad layout and the key brings the skin back
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Super Nintendo game (debug APK), no controller (`--ez clear true` or a fresh
+  launch), `files/touch_controls` and `files/gamepad_layout_consoles` empty, phone in landscape.
+- **Steps:**
+  1. Open the pause sheet.
+  2. Tap "Touch controls", then "Continue".
+  3. Tap the touch controls key (the gamepad glyph, last on the left rail).
+  4. Open the pause sheet, tap "Touch controls", "Continue"; turn to portrait.
+  5. Quit the game and launch it again; then launch a Game Boy Advance game.
+- **Expected:** Step 1: the "Touch controls" tile is there, lit, between "Edit skin" and "RetroArch". Step 2: every on-screen control hides and only the quick-action keys stay, on the side rails,
+  exactly as with a controller connected (RT-564); the game kept running. Step 3: the skin's D-pad and
+  buttons are back and play the game; a toast says how to turn them off; the tile is lit again in the
+  sheet. Step 4: the gamepad layout again, the portrait strip with the key after load; nothing
+  overlaps, and no screen ever shows the game with no control at all. Step 5: the Super Nintendo game
+  opens on the gamepad layout (kept for the console); the Game Boy Advance game opens with its
+  on-screen controls.
+- **Check:** human only; after step 2 `adb shell run-as com.openemux.mobile cat files/gamepad_layout_consoles`
+  prints `SFC`, after step 3 it prints nothing, after step 4 `SFC` again; `files/touch_controls` stays empty.
+
+### RT-1017 — A controller connected or gone puts the automatic switching back over the choice made by hand
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-1016 done (the Super Nintendo game on the gamepad layout with no controller, `SFC`
+  kept).
+- **Steps:**
+  1. "Connect" with `--es pads fake`.
+  2. "Disconnect".
+  3. Quit the game and launch it again.
+  4. Open the pause sheet, turn "Touch controls" off, "Continue"; then "connect" and "disconnect".
+- **Expected:** Step 1: the gamepad layout stays (the automatic rule for a pad). Step 2: the on-screen
+  controls are back at once, without leaving the game: the hand-made choice gave way to the automatic
+  switching. Step 3: the game opens with its on-screen controls. Step 4: off shows the gamepad layout;
+  "connect" keeps it, "disconnect" brings the on-screen controls back.
+- **Check:** human only; after step 2 `files/gamepad_layout_consoles` is empty.
 
 ## Android — RetroArch menu
 
@@ -16108,8 +16149,8 @@ gone (issue 867): "See all" under the slot slider opens the same list.
   slider, and there is still no "Save states" tile. Step 4 opens the skin page; afterwards the game shows the new skin and the tile still reads only "Change skin".
   Step 5 opens the skin editor on the skin in use and closing it returns to the menu. Step 6 opens
   RetroArch's menu. Step 7: only "Fast forward" lights up; "Change skin", "Edit skin"
-  and "RetroArch" never show the lit state. Step 8: with the gamepad connected a "Touch controls" tile
-  sits between "Edit skin" and "RetroArch" (RT-989); the focus reaches every tile in reading
+  and "RetroArch" never show the lit state. Step 8: the "Touch controls" tile (there with or without a
+  controller) sits between "Edit skin" and "RetroArch" (RT-989); the focus reaches every tile in reading
   order, "Quit" last. Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
   left and the tiles, five to a row, "Quit" last, are on the right; the tablet panel shows the
   tiles in five columns, "Quit" last, and nothing under them; the fold shows "RetroArch" and
@@ -16397,7 +16438,8 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
   3. Pick "Controller", disconnect the controller (`--ez connected false`) and start the game.
 - **Expected:** 1: the game opens on the gamepad skin with the touch-controls key, and the pause sheet
   has the "Touch controls" tile (issue 865). 2: the game opens with the full on-screen controls although
-  a controller is detected, and the pause sheet has no "Touch controls" tile. 3: with no controller the
+  a controller is detected; the pause sheet's "Touch controls" tile is lit, and turning it off still shows
+  the gamepad layout, kept for the console as with no controller (RT-1016). 3: with no controller the
   game opens with the on-screen controls (Controller mode changes the app's navigation, not the skin).
 - **Check:** human only (`adb exec-out screencap -p`).
 
