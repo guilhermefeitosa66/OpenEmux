@@ -7097,7 +7097,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
   controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
   controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
-  with the ring and the hint bar showing (controller mode, RT-1014), and the tap hides them again. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
+  with the ring and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
+  touch size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
   `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
   (Controller), `never` (Touch screen) or `auto`.
 - **Check:** human only.
@@ -16407,19 +16408,20 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
   "Touch screen".
 - **Steps:**
   1. Fake a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected
-     true`) and open the "Library" tab.
+     true`), open the "Library" tab and press volume up from it
+     (`adb shell input gamepad keyevent KEYCODE_VOLUME_UP`).
   2. Press DOWN on the controller (`adb shell input gamepad keyevent KEYCODE_DPAD_DOWN`).
   3. Tap an empty spot of the screen (the "Shelf" title).
   4. Disconnect the fake controller (`--ez connected false`) and press R1 from a device that reports
      itself only as a joystick (`adb shell input joystick keyevent KEYCODE_BUTTON_R1`).
   5. Tap the screen.
   6. Open "Settings" → "Controllers".
-- **Expected:** 1: no focus ring and no hint bar, although a controller is detected. 2: at once, the
-  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"), and
-  the tab chips and links take their controller-mode size, as in "Controller" mode. 3: the tap hides the
+- **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
+  key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
+  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
+  layout keeps its touch sizes. 3: the tap hides the
   ring and the hint bar again; the app is back to touch navigation. 4: the
-  press switches tab (R1) and controller navigation comes back with the ring and the hint bar, with no
-  controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
+  press switches tab (R1) and the ring and the hint bar come back, with no controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
   press never changes the setting.
 - **Check:** human only (`adb exec-out screencap -p`).
 
