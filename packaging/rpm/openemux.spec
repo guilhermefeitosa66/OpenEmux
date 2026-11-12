@@ -186,6 +186,10 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Thu Nov 12 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.3-1
+- Android: choose the shape of each on-screen button (circle, pill, rounded square, triangle or the skin's own)
+- Android: rounded triangles and a pressed look on every on-screen button
+
 * Thu Nov 12 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.0-1
 - Android: anchor mode and user-made combo buttons for the on-screen controls
 - Android: a redesigned pause menu with tiles, a slot slider and Quit at the end
