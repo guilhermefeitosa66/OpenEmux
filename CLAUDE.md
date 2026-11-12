@@ -285,7 +285,8 @@ When the user asks for a new release, run the whole sequence — no confirmation
    - `packaging/rpm/openemux.spec` → a new `%changelog` entry (the `Version:` field itself is templated)
    - `packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` → a new `<release>` entry at the top of `<releases>` (AppStream shows it in software centers)
 3. Write `release/RELEASE_NOTES_v<X.Y.Z>.md`, following the previous file in that folder. Only the English notes are committed.
-4. Commit as `[no-issue] chore: release <X.Y.Z>`.
+   Then update the site's "What's new" section from those notes: the `news.*` strings in all eight `site/strings/*.json` (headline, four highlights, the three earlier releases), and the CSS animation in `site/page.html` when the headline feature changed. The download links follow the bumped `__version__` by themselves. Rebuild with `tools/build_site.py` and run `tests.test_site`; the `release` skill (phase 3.5) has the details. The site goes live with the merge to `main` in step 6.
+4. Commit as `[no-issue] chore: release <X.Y.Z>` (the bump, the notes and the rebuilt `site/` and `docs/`).
 5. Build every artifact into `dist/`: `make packages-clean && make packages` (or `make appimage` / `make deb` / `make rpm` / `make flatpak` individually). Clean first — `dist/` keeps the previous version's artifacts, and step 7 uploads everything in there. Builds run in Docker containers and need an x86_64 host; see `docs/DEVELOPMENT.md`.
    `make packages` ends with `make checksums`, which writes **`dist/SHA256SUMS`** over every artifact so users can run `sha256sum -c SHA256SUMS`. Never ship a release without it, and never swap it for per-file `.md5`: MD5 collisions are practical, so an MD5 proves nothing against a tampered download.
 6. Open the PR from the release branch **to `main`**: `gh pr create --base main`, then merge it (squash, delete branch).
