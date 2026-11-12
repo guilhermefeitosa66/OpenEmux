@@ -16383,3 +16383,76 @@ and title to the favourite star at the far right. The look is judged by eye on a
   the focus ring is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
   way, and the column names stay over their columns. Step 7: no stripes; the tiles are where they were.
 - **Check:** human only.
+
+## Android — Even cover grid
+
+In the cover view every console has one cover shape, the shape most of its covers have (the wide SNES
+box, the square GBA and PlayStation boxes, the tall Mega Drive and PSP boxes), and every cover is drawn
+in it, filling it and cropped from the centre (issue 882). Every cell of a console's covers is then the
+same size and the rows line up, as in the cartridge view. The detail screen and the list view keep the
+whole cover. Judged by eye on a device, so these are `MANUAL`.
+
+### RT-1009 — A console's covers are all the same size and the rows line up
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; a Game Boy Advance library and a Super Nintendo library of
+  eight or more games each, the SNES one with at least one Japanese game (a tall Super Famicom box) and
+  one game with no cover at all.
+- **Steps:**
+  1. Open the Game Boy Advance page in the cover view and scroll to the bottom.
+  2. Open the Super Nintendo page in the cover view and scroll to the bottom.
+- **Expected:** Step 1: every cover is the same square-ish box; the tops and bottoms of each row are
+  level all the way down, and the games read in order left to right, row by row. Step 2: every cover is
+  the wide SNES box; the Japanese game's tall cover is shown cropped to that shape (its middle, no bars,
+  not stretched), and the game with no cover shows its title on a box of the same size. Every row is
+  level.
+- **Check:** human only.
+
+### RT-1010 — PlayStation and PSP covers look as before
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright with PlayStation and PSP games that have covers.
+- **Steps:**
+  1. Open the PlayStation page in the cover view, then the PSP page.
+  2. Open the PlayStation page in the cartridge view.
+- **Expected:** Step 1: the PlayStation covers are the square jewel case and the PSP ones the tall
+  PSP box, as before, with nothing visibly cut; the rows line up. Step 2: PlayStation has no cartridge,
+  so its covers show in the same square shape, in level rows.
+- **Check:** human only.
+
+### RT-1011 — Pages with several consoles keep each group even, each in its own shape
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** Games from Super Nintendo, Game Boy Advance and Mega Drive, a few of each marked as
+  favourites.
+- **Steps:**
+  1. Open "All" in the cover view and scroll through every group.
+  2. Open "Favorites" in the cover view.
+  3. Search for a word several consoles' games share.
+- **Expected:** In every step each console's group is even, with its own shape: wide boxes under
+  "Super Nintendo", square under "Game Boy Advance", tall under "Mega Drive". Inside a group every cell
+  is the same size and the rows are level; each group starts on a new row under its header.
+- **Check:** human only.
+
+### RT-1012 — Every zoom step and the landscape row keep the console's shape
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone, the Super Nintendo page with eight or more games, the cover view.
+- **Steps:**
+  1. Held upright, pinch (or use "Size") through every step from 1 to 5 columns.
+  2. Turn the phone to landscape.
+- **Expected:** Step 1: at every step the covers keep the wide SNES shape and the rows stay level; only
+  their size changes, with the usual glide and step pill. Step 2: the row of games shows every cover in
+  the same wide shape at the row's height, and the focus ring is not cut.
+- **Check:** human only.
+
+### RT-1013 — The detail screen and the list view still show the whole cover
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A Super Nintendo game with a Japanese (tall) cover.
+- **Steps:**
+  1. Open the game's page.
+  2. Back in the library, switch to the list view and find the game.
+- **Expected:** Both show the cover whole, at its own tall shape, with nothing cropped; only the cover
+  view crops it.
+- **Check:** human only.
