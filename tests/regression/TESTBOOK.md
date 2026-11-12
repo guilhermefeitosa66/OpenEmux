@@ -16306,3 +16306,32 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
   a controller is detected, and the pause sheet has no "Touch controls" tile. 3: with no controller the
   game opens with the on-screen controls (Controller mode changes the app's navigation, not the skin).
 - **Check:** human only (`adb exec-out screencap -p`).
+
+## Android — Zebra stripes in the library list
+
+The library's list view tints every second row very lightly (issue 874), so a row reads from its art
+and title to the favourite star at the far right. The look is judged by eye on a device, so this is
+`MANUAL`.
+
+### RT-1007 — The list view's rows alternate with a very light stripe, under selection and focus
+- **Area:** Android — Library list view
+- **Mode:** MANUAL
+- **Preconditions:** A phone with games from at least two consoles (one with four or more games) and at
+  least one favourite; a gamepad for step 5; a tablet (or an emulator about 1280 dp wide) for step 6.
+- **Steps:**
+  1. In the dark theme, open "All" in the list view and look down the rows, then at the first rows
+     under each console header.
+  2. Switch to the light theme (Settings → Appearance → "Light") and look again.
+  3. Back on "All", pinch (or use "Size") through every list size.
+  4. Long-press a game to start selecting, then tick one tinted row and one plain row.
+  5. Leave selection and move the gamepad focus down several rows.
+  6. On the tablet, open "All" in the list view (the table of time played and last played).
+  7. Switch to the cartridge view, then the cover view.
+- **Expected:** Step 1: rows alternate plain and tinted; the tint is barely visible (a few percent
+  lighter than the page), spans the whole row with rounded corners, and the first row under every
+  console header is plain. Following a tinted row from its title to its star is easy. Step 2: the same,
+  with a barely darker tint. Step 3: the stripes are there at every size. Step 4: both ticked rows show
+  the accent background, clearly stronger than any stripe; the other rows keep their stripes. Step 5:
+  the focus ring is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
+  way, and the column names stay over their columns. Step 7: no stripes; the tiles are where they were.
+- **Check:** human only.
