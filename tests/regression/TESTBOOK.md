@@ -6003,9 +6003,9 @@ real RetroAchievements account say so; without one they are handed to the mainta
   5. Turn "Hardcore mode" off again and reopen the game page.
 - **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
   hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
-  notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load",
-  the "Save states" row and "Fast forward" are faded and do nothing (also with a gamepad), "Save
-  state" still works; the skin's load button is refused by RetroArch, and its fast-forward button
+  notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load"
+  (beside "Save"), "See all" and "Fast forward" are faded and do
+  nothing (also with a gamepad), "Save" and the slot slider still work; the skin's load button is refused by RetroArch, and its fast-forward button
   is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
   it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
 - **Check:** human only. With hardcore on, `retroarch.cfg` has
@@ -6262,7 +6262,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   1. Open the "Settings" tab and, under "General", tap "Back up and restore".
   2. Switch the theme to "Light" and turn the phone to landscape; come back to the screen.
 - **Expected:** The row reads "Back up and restore" with "Keep your saves and settings when you
-  reinstall" under it, between "Controls" and "Check for updates". The screen shows the "Export"
+  reinstall" under it, between "Controllers" and "Check for updates". The screen shows the "Export"
   section ("Saves and states", "Settings and artwork", each with a size, and "Include ROMs" switched on
   with "<n> games · <size>"), "Export data · <total>", the note about cores, covers and
   RetroAchievements, the "Import" section with "Import data", and the "Uninstalling to update?"
@@ -6469,14 +6469,16 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   key events (`adb shell input keyevent KEYCODE_DPAD_DOWN`).
 - **Steps:**
   1. Tap the menu key.
-  2. Move the focus through every control with the D-pad; press A on "Saved states", then B.
+  2. Move the focus through every control with the D-pad; press A on "See all", then B.
   3. Tap the band, then the game's card on the top half.
   4. Open the menu again and press START.
   5. Switch the app to the light theme and open the menu again.
 - **Expected:** The top half shows the dimmed, paused game with a "PAUSED" chip and a card (cart,
-  title, time played). The bottom half starts under the fold: "Save state" (focused first),
-  "Load state" and "Back to game"; the action tiles; "Save states · <count>", "Restart game" and
-  "Quit game"; the hint bar. The focus never leaves the bottom half. "Saved states" opens inside
+  title, time played). The bottom half starts under the fold with the grid of RT-1009: "Continue"
+  (focused first, purple) beside "Restart", "Save" beside "Load", with "See all" and the slot slider
+  under them; then the action tiles, ending with the red "Quit" tile (RT-1008); the hint bar. There
+  is no "Back to game" button and no "Restart game" row (issue 881). The focus never
+  leaves the bottom half. "See all" opens the save states inside
   the bottom half and B comes back. Tapping the band does nothing; tapping the card resumes the
   game. START closes the menu. The light theme has the same layout.
 - **Check:** human only (screenshots in both themes, compared with the DobFoldPausa board).
@@ -6657,7 +6659,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Mode:** MANUAL
 - **Preconditions:** As RT-857, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
 - **Steps:**
-  1. Set Settings → "Button labels" to "Xbox", open "All games" and press
+  1. Set Settings → "Controllers" → "Button labels" to "Xbox", open "All games" and press
      `KEYCODE_BUTTON_R1` twice, then `KEYCODE_BUTTON_L1` once.
   2. Repeat step 1 with "Nintendo", then "PlayStation".
   3. From a focused game press UP, then LEFT/RIGHT along the row; press A on the filter name, move in
@@ -6870,7 +6872,9 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
 Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
 focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
-"Settings → General → Controller layout" ("Automatic", "Always", "Never"). The emulator has no real
+"Settings → General → Controllers → Interface mode" ("Automatic", "Touch screen", "Controller"; issue 873
+renamed it from "Controller layout" with "Automatic", "Never" and "Always", and stores the same `auto`,
+`never` and `always`). The emulator has no real
 controller, and `adb shell input` is a virtual device that never counts as one: on a debug build a
 controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`
 (`false` disconnects it, `--ez clear true` goes back to the real devices).
@@ -6935,8 +6939,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 ### RT-437 — Touch still works as before next to the gamepad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** RT-434's library; no controller connected (or "Controller layout" set to
-  "Never"); gamepad mode on with a game focused.
+- **Preconditions:** RT-434's library; no controller connected (or "Interface mode" set to
+  "Touch screen"); gamepad mode on with a game focused.
 - **Steps:**
   1. Tap the screen, then scroll and fling the grid with a finger.
   2. Open the search and type a few letters.
@@ -7037,7 +7041,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 ### RT-578 — Connecting a controller shows the gamepad layout, disconnecting hides it
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** A debug build; RT-434's library; "Controller layout" on "Automatic"; no
+- **Preconditions:** A debug build; RT-434's library; "Interface mode" on "Automatic"; no
   controller connected; the app open on a console's shelf in landscape, nothing touched since.
 - **Steps:**
   1. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`)
@@ -7070,29 +7074,33 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   Back on the shelf the ring is on the game that was tapped.
 - **Check:** human only.
 
-### RT-580 — The "Controller layout" setting
+### RT-580 — The "Interface mode" setting
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** A debug build; RT-434's library; no controller connected.
 - **Steps:**
-  1. Open "Settings" → "General" → "Controller layout" and look at the choices.
-  2. Pick "Always" and close the sheet.
+  1. Open "Settings" → "General" → "Controllers" and look at the "Interface mode" choices.
+  2. Pick "Controller" and go back to the library.
   3. Force-stop and relaunch (`adb shell am force-stop $PKG`, then open the app).
-  4. Pick "Never", connect a controller (the broadcast with `true`), press DOWN, then tap the screen.
+  4. Pick "Touch screen", connect a controller (the broadcast with `true`), open the library, press
+     DOWN, then tap the screen.
   5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
      connect the controller.
-  6. On a tablet-size window (`adb shell wm size 1600x2560`, `adb shell wm size reset` after), open
-     the setting.
-- **Expected:** The row sits right after "Controls" and shows the current choice; the default is
-  "Automatic". The sheet lists "Automatic" ("The controller layout while a controller is
-  connected."), "Always" ("For handhelds with built-in controls.") and "Never" ("The touch layout,
-  even with a controller connected."). "Always" shows the gamepad layout with no controller, a tap
-  does not hide it, and it is still on after the relaunch. "Never" with a controller shows the touch
-  layout: DOWN still moves the focus with the ring and the hint bar showing, the tap hides them
-  again, and the chips keep their touch size. "Never" survives the relaunch. "Automatic" follows the
-  controller again. In split view the setting opens as a pane with the same three choices.
-  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`,
-  `never` or `auto`.
+- **Expected:** "Interface mode" is the first section of the Controllers screen, with the lead
+  "Whether the app is used with a controller or by touch. Controller mode shows the focus ring and the
+  button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
+  mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Touch navigation,
+  as if no controller were connected. Pressing a controller button switches to controller navigation
+  until you touch the screen again. Games open with the on-screen controls. Pick this if the app thinks
+  a controller is connected and there is none.") and
+  "Controller" ("Always controller mode, even before a controller is detected. For handhelds with
+  built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
+  controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
+  controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
+  with the ring and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
+  touch size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
+  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
+  (Controller), `never` (Touch screen) or `auto`.
 - **Check:** human only.
 
 ### RT-581 — Gamepad layout targets and shoulders
@@ -7168,7 +7176,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   3. On the sort button and the view toggle, read the hint bar.
   4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
      arrow, star and share button with a finger.
-  5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
+  5. Disconnect the gamepad (or set "Interface mode" to "Touch screen") and repeat 4.
 - **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
   back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: from "Play"
   focus reaches the pencil after the game's name (and "Search artwork…" when the game has no art);
@@ -7778,8 +7786,9 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
 
 The quick-action strip of the Android app's on-screen skin
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
-save, load, turbo, slow motion and fast forward (plus the screen layout on NDS). Turbo, slow motion
-and fast forward show whether they are on: an accent pill behind the icon, the icon in white (#554).
+save, load, turbo, slow motion, fast forward and anchor (plus the screen layout on NDS). Turbo, slow
+motion, fast forward and anchor show whether they are on: an accent pill behind the icon, the icon in
+white (#554). Anchor mode is its own section below (issue 841).
 Slow motion (a play triangle in a dashed ring) runs the game at a third of its speed, and slow motion
 and fast forward never run together: turning one on turns the other off (issue 638). The runner has no
 Android device, so these are `MANUAL`: a person runs them on a phone or a headless emulator
@@ -7880,14 +7889,14 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Switch the app's language to Português (Brasil) and to one more language, and open the pause
      sheet.
 - **Expected:** In step 1 the tiles read "Fast forward", "Slow motion", "Screenshot", "Shader",
-  "Audio", and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
+  "Mute" (issue 861), and "Slow motion" is active while "Fast forward" is not. Step 2 shows the toast "Normal
   speed"; after resuming the strip has no slow-motion pill and the game runs at normal speed. Step
   3 shows "Slow motion on resume"; after resuming slow motion has its pill and the game runs slow.
   In step 4 the tile label and the toast are translated ("Câmera lenta", "Câmera lenta ao voltar")
   and not clipped.
 - **Check:** human only.
 
-### RT-574 — NDS: six strip slots, and the pause sheet's tiles wrap on a narrow window
+### RT-574 — NDS: seven strip slots, and the pause sheet's tiles wrap on a narrow window
 - **Area:** Android — Skin quick actions
 - **Mode:** MANUAL
 - **Preconditions:** An NDS game in the library; a phone (or emulator) whose portrait window is about
@@ -7898,12 +7907,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   2. Turn slow motion on from the strip, then open the pause sheet.
   3. Connect the gamepad and move with the D-pad through every tile.
   4. Turn the phone to landscape, close and reopen the pause sheet.
-- **Expected:** In step 1 the strip has six slots: save, load, turbo, slow motion, fast forward
-  and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
-  sheet's six tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Audio") wrap
-  into two rows of three, each tile full size with its full label; "Screens" has the layout in use under
-  its label (at most two lines, as narrow as the tile; issue 709). In step 3 the D-pad reaches all
-  six tiles, across both rows. In step 4, with room for all of them, the tiles sit on one row.
+- **Expected:** In step 1 the strip has seven slots: save, load, turbo, slow motion, fast forward,
+  anchor and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
+  sheet's nine tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Mute",
+  "Change skin", "Edit skin", "RetroArch") wrap into four columns, 4 + 4 + 1, the last
+  row from the left (issues 858, 862 and 867), each tile full size with its full label and nothing
+  under it ("Screens" no longer names the layout; issue 875), the rows evenly spaced. In step 3 the
+  D-pad reaches every tile, across all three rows. In step 4 the tiles are in five columns, 5 + 4.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the package skins
@@ -7922,8 +7932,8 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   3. Tap both again.
   4. Turn fast forward on, open the pause sheet, then resume.
   5. Repeat steps 2-3 in landscape, then on the other console's game.
-- **Expected:** The chin has five keys, evenly spaced: save, load, turbo, slow motion (RT-577) and
-  fast forward. After step 2 each button sits on the purple pill with a light ring, the skin's own
+- **Expected:** The chin has six keys, evenly spaced: save, load, turbo, slow motion (RT-577), fast
+  forward and anchor (RT-953). After step 2 each button sits on the purple pill with a light ring, the skin's own
   glyph drawn in white on it, centred in its slot of the chin; save and load keep their normal
   look. After step 3 both are back to the skin's art, no pill. In step 4 the "Fast forward" tile is
   active. Landscape and the drawn skin show the same pill.
@@ -7944,13 +7954,13 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Repeat steps 1-3 in landscape, on the GBA game, and on a tablet-size device
      (`adb shell wm size 1600x2560` with `adb shell wm density 320`; restore with `reset`).
   5. With RetroAchievements hardcore on (an account signed in), launch the SNES game again.
-- **Expected:** In step 1 the chin holds five keys in the same span the four used to take, evenly
-  spaced: save, load, turbo, slow motion, fast forward, every glyph in the skin's own colour, none
+- **Expected:** In step 1 the chin holds six keys in the same span the four used to take, evenly
+  spaced: save, load, turbo, slow motion, fast forward, anchor, every glyph in the skin's own colour, none
   clipped, nothing over the picture or the buttons around the chin. After step 2 slow motion sits on
   the purple pill with the glyph in white and the game runs about three times slower. In step 3 fast
   forward going on takes slow motion's pill off (and the reverse), and the last tap leaves both off at
-  normal speed. Every layout of step 4 shows the same five keys. In step 5 slow motion and fast forward
-  are drawn faded, do nothing when tapped and never show the pill.
+  normal speed. Every layout of step 4 shows the same six keys. In step 5 slow motion and fast forward
+  are drawn faded, do nothing when tapped and never show the pill; anchor is not faded.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
 
 ## Android — On-screen analog stick
@@ -8477,18 +8487,22 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   (`adb shell input gamepad keyevent …` works too).
 - **Steps:**
   1. Open the pause menu with the skin's menu key.
-  2. Look at both halves of the screen; tap "Save state", then "Load" and come back with
-     "Back".
+  2. Look at both halves of the screen; tap "Save", then "Load"; open the menu again, tap "See all"
+     and come back with "Back".
   3. Move with the gamepad's D-pad over every control of the panel; press B, open the menu again
      and press START.
   4. Quit the game, set portrait (`wm size 1600x2560`), start it again and repeat steps 1 and 2;
      then repeat them with the system theme light and dark (`adb shell cmd uimode night yes|no`).
   5. Tap one of the saved-state pictures on the left.
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
-  left corners: the game's title and play time, "Save state" and "Load", the action tiles,
-  "Save states" and "Restart game", and "Quit game" at the foot. On the left the game stays visible,
+  left corners: the game's title and play time, then the grid of RT-1009 ("Continue", purple, beside
+  "Restart"; "Save" beside "Load"), "See all" and the slot slider
+  (RT-996), the action tiles (with
+  the skin tiles and "RetroArch" among them, no "Save states" tile, RT-987, and the red "Quit"
+  tile last, RT-1008); there is no "Restart game" row (issue 881) and nothing is pinned at the foot.
+  The focus starts on "Continue". On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
-  The save states and shader pages open inside the panel. The focus ring shows on every control;
+  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
   440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
   both themes. Tapping a saved state on the left loads it and resumes.
@@ -11178,19 +11192,22 @@ NAT, so discovery itself is checked only on hardware.
   each step. Suite: `ShareBiosTest` (an older peer skipping the `bios` kind and still taking the
   game is `PlacementTest`'s unknown-kind case).
 
-## Android — System bars
+## Android — Full screen
 
 The Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
-`pkg/android/openemux`) keeping the status and navigation bars on screen everywhere outside a game,
-with its content padded away from them, instead of opening with the bars over its header and then
-hiding them a moment later (issue 607). Only a running game is full screen. `MANUAL`, like the
-other Android sections: a phone or a headless emulator with a camera cutout (e.g. a Pixel 7 image)
-and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a start is
+`pkg/android/openemux`) running full screen on every screen, like the game: no status bar and no
+navigation bar, a swipe from an edge shows them over the app for a moment without moving anything,
+and they leave on their own (issue 850, which brought this back after issue 607 had kept the bars).
+On Android 12 and later the system splash before the app still shows the bars, which the app cannot
+reach; the app keeps the splash on screen until they are gone, so the shelf never shows under them.
+Split screen and freeform windows keep the bars, with the content laid out around them. `MANUAL`,
+like the other Android sections: a phone or a headless emulator with a camera cutout (e.g. a Pixel 7
+image) and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a start is
 `adb shell screenrecord /sdcard/start.mp4` running while the app opens, then
-`ffmpeg -i start.mp4 -vf fps=10 f%03d.png`.
+`ffmpeg -i start.mp4 -vsync 0 f%03d.png` (screenrecord writes a frame only when the screen changes).
 
-### RT-541 — A cold start keeps the bars from the splash to the shelf, nothing under them
-- **Area:** Android — System bars
+### RT-541 — A cold start shows the shelf only once the bars are gone, already full screen
+- **Area:** Android — Full screen
 - **Mode:** MANUAL
 - **Preconditions:** The Android app installed, first-run setup done, a few ROMs imported.
 - **Steps:**
@@ -11198,42 +11215,45 @@ and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a star
   2. Start recording the screen and open the app from the launcher.
   3. Switch the device to 3-button navigation (Settings > System > Gestures > System navigation) and
      repeat steps 1 and 2.
-- **Expected:** The clock, Wi-Fi and battery icons and the navigation bar (buttons or gesture
-  handle) are visible in every frame, from the system splash (the app icon on the dark background)
-  to the settled shelf; they never disappear or fade. The "OpenEmux" header sits below the status
-  icons and the bottom tabs ("Library", "Recent", "Import", "Settings") sit above the navigation
-  bar, never under them, and the shelf does not jump or move when it takes over from the splash.
+- **Expected:** The system splash (the app icon on the dark background) may show the clock, Wi-Fi
+  and battery icons and the navigation bar; they fade away while the splash is still on screen. The
+  shelf appears only after that, with no status or navigation bar in any of its frames, the
+  "OpenEmux" header and the bottom tabs ("Library", "Recent", "Import", "Settings") at the screen's
+  edges (clear of the camera cutout), and it does not jump or move when it takes over.
 - **Check:** human only (step through each recording frame by frame).
 
-### RT-542 — A warm start and the way back from a game keep the bars, and the game is full screen
-- **Area:** Android — System bars
+### RT-542 — A warm start and the way back from a game stay full screen, and the game is unchanged
+- **Area:** Android — Full screen
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541.
 - **Steps:**
   1. With the app on the shelf, press Home, start recording and reopen the app from the launcher.
   2. Open a game and take a screenshot while it runs.
-  3. Leave the game from the pause menu (or with Back) while recording.
-- **Expected:** Step 1: the bars are visible throughout and the shelf does not move. Step 2: the game
-  fills the screen with no status or navigation bar. Step 3: back on the library the bars are
-  visible again, the header and the bottom tabs are clear of them, and the layout does not jump.
+  3. Leave the game with the "Quit" tile in the pause menu while recording.
+- **Expected:** Step 1: the shelf is full screen and does not move; at most the launcher's own
+  opening animation may carry its bars over the shelf for a few frames (about 0.1 s) while they
+  fade, which the app cannot reach, and nothing is pushed by them. Step 2: the game fills the screen
+  with no status or navigation bar, as before. Step 3: the game's detail page comes back full
+  screen, with no bar and no jump.
 - **Check:** human only (the recordings and the screenshot).
 
-### RT-543 — Sheets and dialogs leave the bars alone
-- **Area:** Android — System bars
+### RT-543 — Sheets and dialogs stay full screen
+- **Area:** Android — Full screen
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541, the app on the shelf.
 - **Steps:**
   1. `adb exec-out screencap -p > before.png`.
   2. Long-press a console card to open its sheet, `adb exec-out screencap -p > sheet.png`, close it.
   3. In "Settings", tap "Theme", take a screenshot, close it.
-  4. `adb exec-out screencap -p > after.png`.
-- **Expected:** The status and navigation bars stay visible while each sheet is open and after it
-  closes; the sheet's last row is above the navigation bar. `after.png` matches `before.png`:
-  nothing moved.
+  4. On a game's detail page, choose "Remove from library" to open its confirmation, take a
+     screenshot, tap "Cancel".
+  5. `adb exec-out screencap -p > after.png`.
+- **Expected:** No status or navigation bar while each sheet or dialog is open, nor after it
+  closes. `after.png` matches `before.png`: nothing moved.
 - **Check:** human only (compare the screenshots).
 
-### RT-544 — Portrait and landscape keep the content clear of the cutout and the bars
-- **Area:** Android — System bars
+### RT-544 — Portrait and landscape keep the content clear of the cutout
+- **Area:** Android — Full screen
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541, on a device or emulator with a camera cutout.
 - **Steps:**
@@ -11243,36 +11263,67 @@ and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at a star
   3. `adb shell settings put system user_rotation 0`, then a screenshot; restore with
      `adb shell settings put system accelerometer_rotation 1`.
 - **Expected:** In both orientations the app's background reaches every edge, with no black band by
-  the camera; no button, title or cover sits under the cutout, the status bar or the navigation bar;
-  the bars stay visible, as in RT-541.
+  the camera and no bar; no button, title or cover sits under the cutout. The landscape start
+  behaves as RT-541.
 - **Check:** human only (the screenshots and the recording).
 
 ### RT-545 — Split screen and the keyboard still lay out around the bars
-- **Area:** Android — System bars
+- **Area:** Android — Full screen
 - **Mode:** MANUAL
 - **Preconditions:** As RT-541.
 - **Steps:**
   1. Open the app, then from the recent apps put it in split screen with Settings.
   2. Take a screenshot; open search and type a few letters, close the keyboard; take another.
   3. Leave split screen and repeat the search step full size.
-- **Expected:** The OpenEmux header and bottom tabs are laid out below and above the visible bars,
-  never covered by them. The search field stays above the keyboard; once it closes, the layout is
-  back where it was.
+- **Expected:** In split screen the bars stay (the system does not hide them there) and the
+  OpenEmux header and bottom tabs are laid out below and above them, never covered. The search
+  field stays above the keyboard; once it closes, the layout is back where it was and, full size,
+  the app is full screen again.
 - **Check:** human only (the screenshots).
+
+### RT-976 — Every app screen is full screen
+- **Area:** Android — Full screen
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541.
+- **Steps:**
+  1. Visit, taking a screenshot of each: the shelf, "All games", a game's detail page, "Settings",
+     a console's settings, "Back up and restore" (Settings), the skin editor (a game's "Controller
+     skin", then "Edit skin"), "Share Nearby" and "Connect by Address" (Settings), "About".
+- **Expected:** None of the screenshots shows the status bar or the navigation bar. Headers and
+  bottom bars sit at the screen edges, clear of the camera cutout, and nothing is cut off.
+- **Check:** human only (the screenshots).
+
+### RT-977 — Bars swiped in sit over the app and leave on their own
+- **Area:** Android — Full screen
+- **Mode:** MANUAL
+- **Preconditions:** As RT-541, the app on the shelf.
+- **Steps:**
+  1. Take a screenshot, then swipe down from the top edge and take another while the bars show.
+  2. Swipe up from the bottom edge (gesture navigation) or in from it (3-button), screenshot.
+  3. Wait five seconds and take a last screenshot. Repeat on a game's detail page and in "Settings".
+- **Expected:** The bars appear over the app (a translucent band over the header or the tabs);
+  the header, the cards and the bottom tabs are exactly where they were in the first screenshot.
+  After a few seconds the bars are gone again on their own.
+- **Check:** human only (compare the screenshots).
 
 ## Android — In-game controls with a gamepad
 
 The Android app's in-game skin with a gamepad connected, and the hide / show key for the app
 controls (issue 637; [openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
 `pkg/android/openemux`). With a pad, the skin switches to a gamepad layout: the app controls only
-(menu, save, load, turbo, fast forward, plus the screens key on NDS), on two side rails in landscape,
-a strip along the foot in portrait and a row under the fold in tabletop; the virtual game buttons
-are gone. A hide key (an eye with a slash) beside the menu key collapses every app control to a
+(menu, save, load, the touch controls key, turbo, fast forward, plus the screens key on NDS), on two
+side rails in landscape, a strip along the foot in portrait and a row under the fold in tabletop; the
+virtual game buttons are gone. The pause sheet's "Touch controls" tile is always there, with or
+without a controller: turning it off shows the gamepad layout even with no pad, and the touch controls
+key (a gamepad glyph) on that layout brings the on-screen controls back. The hand-made choice holds until
+the next connect or disconnect; it is kept per controller over a detected pad, and per console with none
+(issue 865). A hide key (an eye with a slash) beside the menu key collapses every app control to a
 faint show key (an eye) where the menu key was. `MANUAL`, like the other Android sections: a phone
 or a headless emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK simulates a pad
 with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true` ("connect"
 below), `--ez connected false` ("disconnect") and `--ez clear true` (back to the real devices); a
-release APK needs a real controller (USB or Bluetooth).
+release APK needs a real controller (USB or Bluetooth). `--es pads fake` names the simulated pads,
+and `--es pads fake,real` stands for a second controller connected next to the first (issue 865).
 
 ### RT-564 — A gamepad connected at launch opens on the gamepad layout
 - **Area:** Android — In-game controls with a gamepad
@@ -11283,8 +11334,9 @@ release APK needs a real controller (USB or Bluetooth).
   1. Launch the Atari 2600 game, phone in landscape.
   2. Repeat with the Mega Drive game (a bundled skin, in OpenEmux's format since issue 806).
 - **Expected:** No D-pad, face buttons or shoulders. A black rail down each side, every key stacked
-  from the top and nothing near the foot: menu, save and load down the left rail; the hide key at
-  the top of the right rail, then turbo, slow motion and fast forward. The keys are faint (a dim white glyph on a
+  from the top and nothing near the foot: menu, save, load and the touch controls key (a gamepad glyph)
+  down the left rail; the hide key at the top of the right rail, then turbo, slow motion and fast
+  forward. The keys are faint (a dim white glyph on a
   barely visible disc), not a grey band. The picture fits between the rails at full height. The
   bundled skin shows the same drawn layout.
 - **Check:** human only (`adb exec-out screencap -p > shot.png`).
@@ -11297,20 +11349,20 @@ release APK needs a real controller (USB or Bluetooth).
   1. In portrait, play a few seconds, then connect the pad.
   2. Disconnect it.
   3. Repeat steps 1-2 in landscape.
-- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load,
-  turbo, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
+- **Expected:** Step 1 replaces the touch skin with a strip along the foot (menu, save, load, the
+  touch controls key, turbo, slow motion, fast forward, hide) and the picture full width above it; step 2 brings the touch skin
   back. In landscape, the rails of RT-564 and back. The game keeps running throughout: no
   restart, the play position is kept.
 - **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: portrait -> pad-portrait` (debug APK).
 
-### RT-566 — With a pad, the menu key opens the pause sheet and "Quit game" works
+### RT-566 — With a pad, the menu key opens the pause sheet and "Quit" works
 - **Area:** Android — In-game controls with a gamepad
 - **Mode:** MANUAL
 - **Preconditions:** A game running in the gamepad layout (RT-564).
 - **Steps:**
   1. Tap the menu key.
-  2. Tap "Quit game".
-- **Expected:** The pause sheet opens over the game; "Quit game" returns to the library. The pad
+  2. Tap the "Quit" tile.
+- **Expected:** The pause sheet opens over the game; "Quit" returns to the library. The pad
   never has to be disconnected.
 - **Check:** human only.
 
@@ -11366,7 +11418,8 @@ release APK needs a real controller (USB or Bluetooth).
   1. Tap turbo, then slow motion, then fast forward, on the rail (landscape) or the strip (portrait).
   2. Open the pause sheet.
   3. In the hardcore game, tap slow motion and fast forward.
-- **Expected:** Slow motion sits right before fast forward. Each lit key shows the purple pill with a
+- **Expected:** Slow motion sits right before fast forward, and there is no anchor key (anchor mode is for
+  the touch pad, RT-955). Each lit key shows the purple pill with a
   light ring and a white icon, as on the touch strip (RT-376), but translucent so it does not pull the
   eye off the game; turning fast forward on turns slow motion off (RT-377), and the sheet's speed
   tiles agree. In hardcore, slow motion and fast forward are dimmed and do nothing.
@@ -11383,21 +11436,119 @@ release APK needs a real controller (USB or Bluetooth).
   3. Launch the NDS game in portrait and tap the screens key a few times.
   4. Launch a game on the tablet in landscape.
 - **Expected:** Step 1: the picture in the top half, the keys in one centred row under the fold.
-  Step 2: the show key sits exactly where the hide key was. Step 3: the screens key cycles the layouts and
-  stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
+  Step 2: the show key sits exactly where the hide key was. Step 3: the strip holds nine keys on two
+  lines (menu, save, load, touch controls, turbo; then slow motion, fast forward, screens, hide, centred),
+  none overlapping; the screens key cycles the layouts and stays in the gamepad layout; a toast names each layout it lands on (issue 709). Step 4: the rails of
   RT-564, scaled to the tablet.
 - **Check:** human only.
 
+### RT-988 — The touch controls key brings the on-screen controls back over a gamepad
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Super Nintendo game (debug APK), phone in landscape, "connect" with
+  `--es pads fake`.
+- **Steps:**
+  1. Look at the left rail; turn to portrait and look at the strip; back to landscape.
+  2. Tap the touch controls key (the gamepad glyph, last on the left rail).
+  3. Play a few seconds with the on-screen D-pad and buttons.
+- **Expected:** Step 1: the key is the fourth on the left rail, under load (four keys a side), and the
+  fourth in the portrait strip, after load; nothing overlaps. Step 2: the console's touch skin comes back
+  (D-pad, buttons, the quick-action strip, the menu key) and a toast says "Touch controls on. Turn them
+  off in the pause menu."; the game kept running. Step 3: the game answers the touch controls. Collapsed
+  (the hide key) the key is gone with the other app controls. The key works the same with no controller,
+  on the gamepad layout the tile turned on (RT-1016).
+- **Check:** human only; `adb shell run-as com.openemux.mobile cat files/touch_controls` prints `fake`.
+
+### RT-989 — The pause sheet's "Touch controls" tile turns them off and on
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** RT-988 done (touch controls on over the `fake` pad).
+- **Steps:**
+  1. Open the pause sheet.
+  2. Tap "Touch controls", then "Continue".
+  3. Open the sheet from the rail's menu key, tap "Touch controls", then "Continue".
+  4. "Disconnect" and open the sheet.
+- **Expected:** Step 1: a "Touch controls" tile between "Edit skin" and "RetroArch", lit like
+  "Fast forward" while on. Step 2: the gamepad layout is back. Step 3: the touch skin again. Step 4: the
+  touch skin, as without a controller; the "Touch controls" tile is still there, lit (RT-1016 turns it off
+  with no controller).
+- **Check:** human only; after step 2 `files/touch_controls` is empty, after step 3 it holds `fake`.
+
+### RT-990 — The choice is kept per controller; a new controller still gets the gamepad layout
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-988 done (touch controls on for `fake`).
+- **Steps:**
+  1. Quit the game and launch it again; "connect" with `--es pads fake`.
+  2. Connect a second controller: `--es pads fake,real`.
+  3. Back to only the first: `--es pads fake`.
+  4. With `--es pads fake,real`, tap the touch controls key, then open the sheet.
+- **Expected:** Step 1: the game opens on the touch skin and stays there. Step 2: the gamepad layout
+  at once (a new controller wins). Step 3: the touch skin at once (the first pad's choice holds). Step 4:
+  the touch skin; the tile is lit, and `files/touch_controls` holds both `fake` and `real`.
+- **Check:** human only.
+
+### RT-991 — With no override, connecting and disconnecting mid-game still switch at once
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** A game running on the touch skin, no controller, `files/touch_controls` and
+  `files/gamepad_layout_consoles` empty (or the app freshly installed).
+- **Steps:**
+  1. Connect a controller (or "connect" with `--es pads fake`).
+  2. Disconnect it.
+- **Expected:** Step 1: the on-screen controls hide at once and the gamepad layout shows, without
+  leaving the game. Step 2: the touch skin is back at once. On a real phone,
+  `adb logcat -d | grep "counted as a gamepad"` names each device the app counted as a controller.
+- **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: landscape -> pad-landscape` then `gamepad false`.
+
+
+### RT-1016 — With no controller, the "Touch controls" tile shows the gamepad layout and the key brings the skin back
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-564's Super Nintendo game (debug APK), no controller (`--ez clear true` or a fresh
+  launch), `files/touch_controls` and `files/gamepad_layout_consoles` empty, phone in landscape.
+- **Steps:**
+  1. Open the pause sheet.
+  2. Tap "Touch controls", then "Continue".
+  3. Tap the touch controls key (the gamepad glyph, last on the left rail).
+  4. Open the pause sheet, tap "Touch controls", "Continue"; turn to portrait.
+  5. Quit the game and launch it again; then launch a Game Boy Advance game.
+- **Expected:** Step 1: the "Touch controls" tile is there, lit, between "Edit skin" and "RetroArch". Step 2: every on-screen control hides and only the quick-action keys stay, on the side rails,
+  exactly as with a controller connected (RT-564); the game kept running. Step 3: the skin's D-pad and
+  buttons are back and play the game; a toast says how to turn them off; the tile is lit again in the
+  sheet. Step 4: the gamepad layout again, the portrait strip with the key after load; nothing
+  overlaps, and no screen ever shows the game with no control at all. Step 5: the Super Nintendo game
+  opens on the gamepad layout (kept for the console); the Game Boy Advance game opens with its
+  on-screen controls.
+- **Check:** human only; after step 2 `adb shell run-as com.openemux.mobile cat files/gamepad_layout_consoles`
+  prints `SFC`, after step 3 it prints nothing, after step 4 `SFC` again; `files/touch_controls` stays empty.
+
+### RT-1017 — A controller connected or gone puts the automatic switching back over the choice made by hand
+- **Area:** Android — In-game controls with a gamepad
+- **Mode:** MANUAL
+- **Preconditions:** RT-1016 done (the Super Nintendo game on the gamepad layout with no controller, `SFC`
+  kept).
+- **Steps:**
+  1. "Connect" with `--es pads fake`.
+  2. "Disconnect".
+  3. Quit the game and launch it again.
+  4. Open the pause sheet, turn "Touch controls" off, "Continue"; then "connect" and "disconnect".
+- **Expected:** Step 1: the gamepad layout stays (the automatic rule for a pad). Step 2: the on-screen
+  controls are back at once, without leaving the game: the hand-made choice gave way to the automatic
+  switching. Step 3: the game opens with its on-screen controls. Step 4: off shows the gamepad layout;
+  "connect" keeps it, "disconnect" brings the on-screen controls back.
+- **Check:** human only; after step 2 `files/gamepad_layout_consoles` is empty.
 
 ## Android — RetroArch menu
 
 The pause sheet of the Android app ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android),
-`pkg/android/openemux`) has an advanced row, "RetroArch menu" ("Advanced settings, for this session
-only"), after "Restart game" (a full-width row under the bottom row in tabletop). It closes the sheet
+`pkg/android/openemux`) has an advanced tile, "RetroArch" (named "RetroArch menu" until issue 875, which also dropped the
+"This session only" caption under it),
+the last of the action tiles (RT-987), in every layout. It closes the sheet
 and opens RetroArch's own menu (MaterialUI) over the running game, for settings the app does not
 expose (issue 639). Leaving it returns to the game, and the next menu request opens the pause sheet
 again. Everything changed there lasts for the session only: the app writes its own config at every
-launch. "Close Content" and "Quit RetroArch" leave the game like "Quit game", and the entries that
+launch. "Close Content" and "Quit RetroArch" leave the game like the pause sheet's "Quit", and the entries that
 would load other content or cores (Load Core, Load Content, the updaters, Restart RetroArch,
 Configuration File, History, Favorites, Playlists, Explore) are hidden. `MANUAL`, like the other
 Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with
@@ -11410,47 +11561,46 @@ Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-windo
   its touch skin, RetroAchievements hardcore off.
 - **Steps:**
   1. Open the pause sheet (the menu button on the skin).
-  2. Tap "RetroArch menu".
+  2. Tap "RetroArch".
   3. Open "Quick Menu" and tap "Resume Content" (or "Resume").
-  4. Open the pause sheet and tap "RetroArch menu" again; at the menu's top level press BACK
+  4. Open the pause sheet and tap "RetroArch" again; at the menu's top level press BACK
      (`adb shell input keyevent KEYCODE_BACK`).
   5. Open the pause sheet the normal way (the skin's menu button).
   6. Close the sheet. Connect a gamepad (or send `adb shell input keyevent KEYCODE_BUTTON_START`
      and the D-pad/`KEYCODE_BUTTON_A`/`KEYCODE_BUTTON_B` key events), open the sheet, move to
-     "RetroArch menu" with the D-pad, press A, move through RetroArch's menu with the D-pad and A,
+     the "RetroArch" tile with the D-pad, press A, move through RetroArch's menu with the D-pad and A,
      and leave it with B.
   7. With RetroArch's menu open, press Home, wait a few seconds and come back to the game (or send
      `KEYCODE_SLEEP` then `KEYCODE_WAKEUP`).
-  8. Turn on RetroAchievements hardcore (RT-351), launch the game, open "RetroArch menu" and look at
+  8. Turn on RetroAchievements hardcore (RT-351), launch the game, tap "RetroArch" and look at
      "Quick Menu".
-- **Expected:** In step 1 "RetroArch menu" sits after "Restart game" and above "Quit game", with
-  "Advanced settings, for this session only" under it (in the tablet side panel too; under the bottom
-  row on a half-open foldable). In step 2 the sheet closes, RetroArch's menu opens over the game and
+- **Expected:** In step 1 "RetroArch" is the action tile just before "Quit", with nothing
+  under its name (upright, in landscape, in the tablet side panel and on a half-open foldable). In step 2 the sheet closes, RetroArch's menu opens over the game and
   the skin is hidden. In step 3 the game continues from where it was (the picture moves, sound
   plays) and the skin is back. In step 4 BACK also returns to the running game. In step 5 the app's
-  pause sheet opens, not RetroArch's menu. In step 6 the gamepad reaches the row, drives RetroArch's
+  pause sheet opens, not RetroArch's menu. In step 6 the gamepad reaches the tile, drives RetroArch's
   menu, and B leaves it with the game running. In step 7 RetroArch's menu is still shown on return,
   with no pause sheet on top, and leaving it resumes the game (not left paused). In step 8 RetroArch
   refuses "Load State", rewind and cheats while hardcore is on, and leaving the menu returns to the
   game.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
-### RT-576 — Leaving through RetroArch's menu quits like "Quit game", and its settings do not stay
+### RT-576 — Leaving through RetroArch's menu quits like the pause sheet's "Quit", and its settings do not stay
 - **Area:** Android — RetroArch menu
 - **Mode:** MANUAL
 - **Preconditions:** RT-575's game running, hardcore off, played for a minute.
 - **Steps:**
-  1. Open "RetroArch menu" from the pause sheet and look at RetroArch's main menu.
+  1. Tap "RetroArch" in the pause sheet and look at RetroArch's main menu.
   2. In "Quick Menu" > "Core Options", change any option; in "Settings" > "Video", change something
      visible (for example "Integer Scale"). Go back to the game.
-  3. Open "RetroArch menu" again and choose "Close Content".
+  3. Tap "RetroArch" in the pause sheet again and choose "Close Content".
   4. Note the auto state's time in the game's details, launch the game again and open "RetroArch
      menu".
   5. Choose "Quit RetroArch".
 - **Expected:** In step 1 the main menu has no "Load Core", "Load Content", "Online Updater",
   "Restart RetroArch", "Configuration File", History, Favorites, Playlists or Explore; "Quit
   RetroArch" is there. In step 2 both changes take effect at once in the running game. In step 3 the
-  game closes and the app is back on the library, as with "Quit game": the auto state is written
+  game closes and the app is back on the library, as with the pause sheet's "Quit": the auto state is written
   (its time moved) and the playtime grew. In step 4 the core option and the video setting are back
   to the app's values. In step 5 the game also closes back to the library, with the auto state
   written.
@@ -11465,8 +11615,8 @@ right one goes back. Only the face drawn in each hint badge follows the pad fami
 LB RB, the Menu and View icons) for Microsoft pads and any pad the app does not know, Nintendo style
 (B A Y X, L R, + and −) and PlayStation style (drawn cross, circle, square and triangle outlines,
 L1 R1, OPTIONS, SHARE, or CREATE on a DualSense). The purple badge is always the bottom button, so on a
-Nintendo pad it reads B. Settings → General → "Button labels" (Automatic / Xbox / Nintendo /
-PlayStation) overrides the detection. `MANUAL`, like the other Android sections: a phone or a headless
+Nintendo pad it reads B. Settings → General → "Controllers" → "Button labels" (Automatic / Xbox /
+Nintendo / PlayStation) overrides the detection. `MANUAL`, like the other Android sections: a phone or a headless
 emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK fakes the pad in use with
 `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ei vendor <id>` ("pad <id>" below;
 `--ei product <id>` and `--es name <text>` are optional, `--ez clear true` goes back to the real
@@ -11503,21 +11653,22 @@ keyevent` comes from a virtual device and never changes the family. A release AP
 - **Mode:** MANUAL
 - **Preconditions:** A debug APK; pad `1356` (Sony) said to be in use.
 - **Steps:**
-  1. Settings → General → "Button labels" (right after "Controller layout"). On a phone it opens a
-     sheet; in a tablet-size window (`adb shell wm size 1600x2560`, reset after) it opens in the pane.
+  1. Settings → General → "Controllers", section "Button labels" (after "Interface mode"). On a phone
+     the Controllers screen is a screen of its own; in a tablet-size window
+     (`adb shell wm size 1600x2560` and `adb shell wm density 240`, both reset after) it opens in the pane.
   2. Pick "Nintendo", then "Xbox", then "PlayStation", then "Automatic", looking at the hint bar after
      each.
   3. Pick "PlayStation", run `adb shell am force-stop $PKG` and `--ez clear true`, relaunch and press
      the D-pad once.
-  4. Switch the app to Português (Brasil), then 日本語, and open the row again.
-- **Expected:** The sheet (or pane) has the title, the line "How the button hints name each button. The
-  bottom button always confirms and the right one goes back." and four cards, each with a small diamond
+  4. Switch the app to Português (Brasil), then 日本語, and open the screen again.
+- **Expected:** The section has the title and the line "The button style shown in the hints while you
+  navigate with a controller (for example, A to confirm and B to go back). The bottom button always
+  confirms and the right one goes back." and four cards, each with a small diamond
   of that family's faces with the bottom one purple (Automatic's diamond shows the detected pad's faces);
-  the current choice is selected and the row shows its name. With the pad in use the sheet shows its
-  own hint bar (A "Choose", B "Back"). Each forced family wins over the Sony pad, the sheet's own A/B
-  hints change with it, and
-  Automatic goes back to PlayStation faces. After the restart, with no pad, the row still reads
-  "PlayStation" and the hints show PlayStation faces. In each language the row, sheet, lead and
+  the current choice is selected. With the pad in use the screen shows its hint bar (A "Choose", B "Back"). Each forced family
+  wins over the Sony pad, the A/B hints change with it at once, and
+  Automatic goes back to PlayStation faces. After the restart, with no pad, "PlayStation" is still
+  selected and the hints show PlayStation faces. In each language the row, screen, lead and
   descriptions are translated, while "Xbox", "Nintendo", "PlayStation" and the faces stay as they are.
 - **Check:** human only (`adb exec-out screencap -p`).
 
@@ -11541,8 +11692,8 @@ How a Nintendo DS game's two screens are shown, in the Android app
 ([openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`;
 issue 709). The layouts are "Top screen only", "Bottom screen only", "One above the other" and "Side by
 side", in every orientation; half open (tabletop) "One per half" takes the place of "One above the
-other". The pause sheet's "Screens" tile names the layout in use and opens a "Screens" page with every
-layout; each orientation remembers its own, in `files/nds-layout`. The bundled DS skin has one art per
+other". The pause sheet's "Screens" tile opens a "Screens" page with every layout, the one in use tagged
+"Current" (the tile itself has no caption since issue 875); each orientation remembers its own, in `files/nds-layout`. The bundled DS skin has one art per
 layout, so the picture always takes the room the layout needs, and a **Screens key** in its quick
 actions: the fifth key of the bar under the screens (virtual buttons) and a key on the right rail after
 fast forward (gamepad layout). The key steps through the layouts that fit right now, and a toast names
@@ -11564,7 +11715,7 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
   1. Launch the NDS game in portrait and open the pause sheet.
   2. Tap "Screens".
   3. Go back to the game, turn the phone to landscape, open the pause sheet and "Screens".
-- **Expected:** Step 1: the "Screens" tile has, under its label, "One above the other". Steps 2 and 3:
+- **Expected:** Step 1: the "Screens" tile shows only its label, nothing under it. Steps 2 and 3:
   a "Screens" page, subtitle "Remembered for portrait" (then "Remembered for landscape"), listing "Top
   screen only", "Bottom screen only", "One above the other" and "Side by side" in both orientations,
   each with a small drawing of the layout; the one in use is checked, tinted and tagged "Current".
@@ -11596,8 +11747,8 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
   (about twice the size of one screen in "One above the other"), SELECT under the D-pad and START under
   the face buttons, at the foot of the side columns. "One above the other": the two screens stacked in
   the middle, as before. "Side by side": the two screens in a row in the middle, no key covered. In
-  every layout the bar under the screens has save, load, turbo, slow motion, fast forward and the
-  Screens key (two stacked rectangles), nothing clipped.
+  every layout the bar under the screens has save, load, turbo, slow motion, fast forward, anchor and
+  the Screens key (two stacked rectangles), nothing clipped.
 - **Check:** human only (a screenshot per layout).
 
 ### RT-655 — Touch, portrait: the picture takes the room its layout needs
@@ -11609,7 +11760,7 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
 - **Expected:** "Top screen only" and "Bottom screen only": one screen across the full width, larger
   than each screen of "One above the other", the controls moved up under it. "One above the other": as
   before. "Side by side": both screens in a row across the full width. The bar under the screens has its
-  six keys in every layout, and no control overlaps the picture.
+  seven keys in every layout, and no control overlaps the picture.
 - **Check:** human only (a screenshot per layout).
 
 ### RT-656 — The Screens key in the bar steps through the touch cycle
@@ -11688,7 +11839,7 @@ KEYCODE_BUTTON_THUMBR` (a real pad is the reference: the emulator's keyevent may
   3. Open the pause sheet and press R3.
 - **Expected:** Step 1: the gamepad cycle of RT-657, a toast naming each layout; the game itself never
   reacts to R3. Holding R3 steps once. Step 2: the portrait cycle. Step 3: the layout steps, the
-  sheet's banner names it, the "Screens" tile shows the new name; no toast over the sheet.
+  sheet's banner names it; no toast over the sheet.
 - **Check:** human only.
 
 ### RT-662 — Tabletop: the layout key, the list and back to flat
@@ -12815,7 +12966,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
 - **Preconditions:** The Android app installed, first-run setup done, a Super Nintendo game in the
   library named with tags (e.g. "Super Mario World (USA).sfc") that has a cover, is a favorite, has
   its own shader picked on the detail screen, a manual save state, an auto state (played, then left
-  with Home) and some playtime; RetroAchievements hardcore off.
+  with Home), slot 3 chosen in the in-game menu and some playtime; RetroAchievements hardcore off.
 - **Steps:**
   1. Open the game's detail screen and tap the pencil at the end of the game's name.
   2. Check the sheet: the name without ".sfc" is selected, ".sfc" is shown after the field.
@@ -12825,9 +12976,11 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
 - **Expected:** Step 2 shows "Rename game", the "File name" field with the old name selected and
   ".sfc" fixed. After step 3 the detail screen shows "Mario World" with the same cover, the star
   filled, the same shader, the same playtime and the same save states. In step 4 the game sits in its
-  new alphabetical place in the library. Step 5 resumes the game where the auto state left it.
+  new alphabetical place in the library. Step 5 resumes the game where the auto state left it, and its
+  in-game menu opens on slot 3.
 - **Check:** `adb shell ls "/sdcard/Android/data/$PKG/files/roms/SFC/" "/sdcard/Android/data/$PKG/files/states/SFC/" "/sdcard/Android/data/$PKG/files/playtime/"`
-  lists "Mario World.sfc", "Mario World.state*" and "SFC_Mario World.txt", and none of the old names.
+  lists "Mario World.sfc", "Mario World.state*", "Mario World.slot" and "SFC_Mario World.txt", and
+  none of the old names.
 
 ### RT-750 — A name that cannot be used is refused and nothing changes
 - **Area:** Android — Renaming a game
@@ -14109,7 +14262,7 @@ packages of the twelve consoles that moved (`NDS.deltaskin` included).
   2. Turn the phone sideways and do the same.
   3. Quit; use the imported package under "Imported"; launch the game again, both ways, and compare.
 - **Expected:** Steps 1–2 look like step 3: the same art, the same positions, the strip with slow
-  motion before fast forward. Every control presses what it does on the package (the screens
+  motion before fast forward and anchor after it. Every control presses what it does on the package (the screens
   key aside, RT-795); turbo, slow motion and fast forward light (an accent tile behind the key) while
   on.
 - **Check:** `MANUAL`: screenshots of both skins, both ways. JVM suite
@@ -14956,7 +15109,7 @@ logcat's `OpenEmuxSkin` lines.
 
 ## Android — Restart from the in-game menu
 
-"Restart game" in the Android app's in-game menu (`pkg/android/openemux` of the
+"Restart" in the Android app's in-game menu, beside "Continue" (`pkg/android/openemux` of the
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android)) asks first and then
 restarts in one go. The runner has no Android device, so these are `MANUAL`.
 
@@ -14966,11 +15119,11 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Preconditions:** The app past the first-run setup, a game started and played past its title
   screen; a gamepad connected for step 4; a foldable for step 5, if there is one.
 - **Steps:**
-  1. Open the in-game menu and press "Restart game".
-  2. Press "Restart".
+  1. Open the in-game menu and press "Restart", beside "Continue" in every form (issue 881).
+  2. In the dialog, press "Restart".
   3. Repeat steps 1 and 2 in landscape.
-  4. With the gamepad, open the menu, select "Restart game" and press A, then move to "Restart" and
-     press A.
+  4. With the gamepad, open the menu, select the menu's "Restart" and press A, then move to the
+     dialog's "Restart" and press A.
   5. Half open the foldable and repeat steps 1 and 2.
 - **Expected:** Step 1 shows a dialog titled "Restart game?" with "Restart" and "Cancel". Step 2
   closes the dialog and the menu and the game is back at its beginning, on that one press, with no
@@ -14983,15 +15136,371 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Mode:** MANUAL
 - **Preconditions:** A game started and played past its title screen; a gamepad connected for step 3.
 - **Steps:**
-  1. Open the in-game menu, press "Restart game" and press "Cancel".
-  2. Press "Restart game" again and tap outside the dialog.
+  1. Open the in-game menu, press "Restart" and press "Cancel".
+  2. Press "Restart" again and tap outside the dialog.
   3. With the gamepad, open the dialog and press B.
-  4. Press "Back to game".
+  4. Press "Continue".
   5. Leave the game, and on its screen press "Restart".
 - **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
-  focus is back on "Restart game". Step 4 returns to the game exactly where it was. Step 5 starts
+  focus is back on "Restart", beside "Continue". Step 4 returns to the game exactly where it was. Step 5 starts
   the game from the beginning, as it always has.
 - **Check:** human only.
+
+## Android — Anchor mode
+
+Anchor mode for the Android app's touch pad (issue 841,
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+A key with an anchor glyph comes right after fast forward in the quick actions on every touch layout:
+the drawn skin's strip, OpenEmux-format skins (every bundled skin) and imported Delta/Manic packages.
+The app adds the key when it draws the skin; skin files never carry it, so the skin editor does not
+show it. While the mode is on, the first face, shoulder or trigger button a finger presses stays held
+until that finger leaves the screen. Any other button counts only while the finger is over it. The
+D-pad, the sticks and the quick actions never stay held. The mode is off by default and is
+remembered per console. The runner has no Android device, so these are `MANUAL`.
+
+### RT-951 — The anchor key sits after fast forward on every touch layout
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game (bundled skin), an Atari 5200 game (drawn skin), an NDS game and a
+  ColecoVision game (keypad page) in the library; for step 4, the `SFC.deltaskin` of an earlier release imported and in use (RT-577); no
+  gamepad connected.
+- **Steps:**
+  1. Launch the SNES game, phone in portrait, and look at the quick actions.
+  2. Turn the phone to landscape.
+  3. Repeat steps 1-2 on the Atari 5200 game and on the NDS game.
+  4. Repeat steps 1-2 with the imported package skin.
+  5. Repeat steps 1-2 on a tablet-size window (`adb shell wm size 1600x2560` with
+     `adb shell wm density 320`; restore with `reset`) and, if there is one, on a foldable half open.
+  6. Launch a ColecoVision game, turn anchor on, then open the keypad with its toggle key and close it.
+- **Expected:** In step 6 the anchor key stays in the same place, still lit, while the keypad page is
+  open, and turns the mode off from there too. Each time, right after fast forward there is a key with an anchor glyph (a ring on
+  top, a shaft with a crossbar and two curved arms), drawn like the keys around it and not lit. On
+  the NDS the screen-layout key stays last. The keys are evenly spaced in the strip's span, nothing
+  is clipped or covers the picture or the buttons, and each key responds only inside its own slot.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per layout).
+
+### RT-952 — Tapping the anchor key turns the mode on and off
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game that has never had anchor mode turned on; no gamepad connected.
+- **Steps:**
+  1. Launch the game.
+  2. Tap the anchor key.
+  3. Tap it again.
+- **Expected:** In step 1 the key is not lit and no message shows. After step 2 the key sits on the
+  purple pill with the glyph in white, and the "Anchor on" card slides up at the bottom of the
+  screen (RT-968). After step 3 the pill and the card are gone and "Anchor off" shows
+  briefly.
+- **Check:** human only.
+
+### RT-953 — With anchor on, the first button stays held while the thumb slides
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World (SNES) past the title screen, Mario on the ground in a level;
+  anchor mode on (RT-952).
+- **Steps:**
+  1. Put the thumb on Y and hold it to run.
+  2. Without lifting, slide the thumb onto B, then back off it toward Y, several times.
+  3. Lift the thumb.
+  4. Put a finger on the D-pad, slide it off the D-pad and onto Y, and keep it there.
+  5. Put a finger on the save key, slide it onto B, then off B.
+- **Expected:** In steps 1-2 Mario keeps running the whole time and jumps each time the thumb reaches
+  B; B releases as soon as the thumb leaves it. Step 3 releases everything: Mario stops running. In
+  step 4 the D-pad releases when the finger leaves it, and Y counts only while the finger is on it.
+  In step 5 nothing stays held: the finger started on a quick action.
+- **Check:** human only.
+
+### RT-954 — With anchor off, the pad behaves as before
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World running; anchor mode off.
+- **Steps:**
+  1. Hold Y to run, then slide the thumb off Y onto B and on into empty space.
+  2. Turn anchor on, hold Y, then turn anchor off with another finger while the thumb is off Y.
+- **Expected:** In step 1 Mario stops running as soon as the thumb leaves Y, as without the feature.
+  In step 2 Y releases as soon as anchor goes off.
+- **Check:** human only.
+
+### RT-955 — A controller hides the anchor key, and the mode is kept for when it leaves
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game with anchor mode on; a gamepad to connect.
+- **Steps:**
+  1. Connect the gamepad while the game runs.
+  2. Look at the side rails (landscape) or the strip (portrait).
+  3. Disconnect the gamepad.
+- **Expected:** In step 2 the rails and strip show the gamepad layout's keys (RT-570) and no anchor
+  key. After step 3 the touch pad is back with the anchor key still lit, and holding Y then sliding
+  onto B behaves as in RT-953.
+- **Check:** human only.
+
+### RT-956 — Anchor mode is remembered per console and works in hardcore
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES and a GBA game; RetroAchievements signed in for step 4 (RT-351).
+- **Steps:**
+  1. Turn anchor on in the SNES game, then leave the game.
+  2. Launch another SNES game, or the same one again.
+  3. Launch the GBA game.
+  4. Launch an SNES game with RetroAchievements hardcore on and tap the anchor key.
+- **Expected:** In step 2 the anchor key is lit from the start and holding still works (RT-953). In
+  step 3 it is not lit: the GBA has its own setting. In step 4 the anchor key is drawn normally, not
+  faded like slow motion and fast forward, and turns the mode on and off as in RT-952.
+- **Check:** human only.
+
+### RT-967 — An anchored button is ringed, with a line to the finger that holds it
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World running on a phone in portrait; anchor mode on (RT-952), the
+  "Anchor on" card swiped away.
+- **Steps:**
+  1. Put the thumb on Y and keep it there.
+  2. Without lifting, slide the thumb onto B, move it around over B and the space next to it, then
+     back to Y.
+  3. Lift the thumb.
+  4. Hold Y with one thumb and A with the other, then slide each thumb off its button.
+  5. Turn anchor off (RT-952) and hold Y, then slide onto B.
+  6. Turn anchor on, hold Y, and connect a gamepad (RT-955).
+- **Expected:** In step 1 an amber dashed ring sits just outside Y, over its pressed look; no line
+  while the thumb is on Y. In step 2, as soon as the thumb leaves Y, a white dashed line runs from
+  Y's centre to the thumb and follows it; B shows its usual pressed look and gets no ring. Back on
+  Y, the line goes and the ring stays. Step 3 removes ring and line at once. In step 4 Y and A each
+  have their own ring, and each thumb its own line. In step 5 no ring and no line are drawn. In step
+  6 the ring and line go with the touch pad. Ring and line sit on the buttons in landscape too, on a
+  bundled package skin and on an imported skin.
+- **Check:** human only.
+
+### RT-968 — The "Anchor on" card shows at the bottom of the screen and closes by swipe or by itself
+- **Area:** Android — Anchor mode
+- **Mode:** MANUAL
+- **Preconditions:** An SNES game running; anchor mode off; no gamepad connected; Android's
+  accessibility "Time to take action" setting at its default.
+- **Steps:**
+  1. Tap the anchor key and leave the card alone, timing it.
+  2. Turn anchor off and on again. While the card shows, hold Y and slide onto B (RT-953).
+  3. Turn anchor off and on again. Rest a finger on the card for 15 seconds, then lift it.
+  4. Turn anchor off and on again. After about 6 seconds, drag the card down a little by its handle
+     and let go.
+  5. Turn anchor off and on again and swipe the card down all the way at once.
+  6. Tap the anchor key twice (off, then on), then once more (off) while the card shows.
+  7. Leave the game and launch it again (anchor still on).
+  8. Rotate to landscape and turn anchor off and on again.
+  9. In Android's accessibility settings set "Time to take action" to 1 minute, go back to the game
+     and turn anchor off and on again. Afterwards set the setting back to its default.
+- **Expected:** In step 1 a card slides up from the bottom edge of the screen, centred and at most
+  about 360 dp wide (not over the game image), with a drag handle, an anchor icon, "Anchor on", "The
+  first button you press stays held until you lift that finger. Slide onto another button to press
+  it too." and "Swipe down to close"; the game keeps running, and about 8 seconds after it showed the
+  card slides down out of sight by itself. In step 2 the pad works around it as in RT-953 (touches on
+  the card itself belong to the card). In step 3 the card stays up while the finger rests on it and
+  closes by itself a few seconds after the finger lifts (what was left of the 8 seconds). In step 4
+  it follows the finger down, fades, springs back, and then stays a full 8 seconds more before it
+  closes by itself. In step 5 it slides out through the bottom edge at once. In step 6 the card shows
+  after the second tap and goes with the third, and "Anchor off" shows briefly. In step 7 no card
+  shows (only turning it on shows one). In step 8 the card sits at the bottom of the screen again,
+  centred and at most about 360 dp wide, and the pad and the strip around it keep working. In step 9
+  the card stays up for about a minute before it closes by itself.
+- **Check:** human only.
+
+## Android — Combo buttons
+
+Combo buttons in the Android app's skin editor (issue 842,
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`).
+In the editor of a skin of the player's own (an editable copy), the Combo tool adds a round, neutral
+grey button with a light ring (a pill or a triangle pointing at a corner, by the Shape tool, in each
+layout) that presses two or three buttons together: face buttons, shoulders,
+triggers, C buttons, Select and Start, never the D-pad, sticks or quick actions. The buttons are
+held together for one second on the skin or on a controller, or picked by tapping. The combo is
+added to every layout of the skin at a free spot near the buttons it presses, and each layout keeps
+its own place. Its label is the console's names joined with "+" ("Y+B"). skin.json keeps combos
+under new `combos` keys, so an app from before combos opens the skin without them. The runner has
+no Android device, so these are `MANUAL`.
+
+### RT-957 — No bundled skin has a combo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** Super Mario World (SNES) in the library; the SNES bundled skin in use.
+- **Steps:**
+  1. Launch the game and look at the touch pad, in portrait and in landscape.
+  2. Open "Edit skin" from the pause menu and look at the controls.
+- **Expected:** Neither the game nor the editor shows a combo button: only the console's own
+  controls and the quick actions.
+- **Check:** human only.
+
+### RT-958 — The Combo tool is in the bar of an editable skin
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable copy of the SNES skin open in the editor (RT-941), nothing selected.
+- **Steps:**
+  1. Look at the bottom bar.
+  2. Tap a control, then tap the console's body to let go of it.
+- **Expected:** With nothing selected the bar reads "Grid", "Try", "Combo" and the more button, in
+  that order. With a control selected, Combo is not there. It comes back when the selection is let go.
+- **Check:** human only.
+
+### RT-959 — Holding two buttons for a second adds a combo to every layout
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958, the phone in portrait.
+- **Steps:**
+  1. Tap "Combo".
+  2. Put one finger on Y and one on B and hold them.
+  3. Look at the editor after the ring fills.
+  4. Turn the phone to landscape, then open the Layouts panel and look at the other forms the skin has.
+- **Expected:** Step 1 opens the "New combo" panel: an empty ring, "Press the buttons together and
+  hold", "Up to 3 buttons", "Cancel" and "Pick by tapping". The D-pad, the quick actions and the menu
+  key are dimmed. In step 2, Y and B light up, chips "Y" + "B" show with "Keep holding…", and the ring
+  fills in about a second. In step 3 the panel closes and a round grey "Y+B" button with a light ring
+  sits near Y and B, covering nothing and off the game screen. It is selected, and the note says
+  "Combo Y+B added to every layout". In step 4 the combo is in the landscape layout too, at a free
+  spot of its own.
+- **Check:** human only.
+
+### RT-960 — The hold restarts, never takes four buttons, and Cancel changes nothing
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958.
+- **Steps:**
+  1. Tap "Combo". Hold Y and B for half a second, then lift B and press A instead.
+  2. Lift everything. Hold Y, B, A and X together for two seconds.
+  3. Lift everything and tap "Cancel".
+- **Expected:** In step 1 the ring starts over when the buttons change, and fills for Y+A only after a
+  full second of Y and A. That adds "Y+A"; undo it, then go on. In step 2 the panel says "A combo has
+  up to 3 buttons" and the ring stays empty. Step 3 closes the panel and leaves the skin as it was:
+  Undo is not lit by it, and Save stays as it was.
+- **Check:** human only.
+
+### RT-961 — Pick by tapping builds a combo and refuses a fourth button and non-buttons
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958.
+- **Steps:**
+  1. Tap "Combo", then "Pick by tapping".
+  2. Tap the D-pad, then a quick action.
+  3. Tap L, R and A, then tap B.
+  4. Tap R again, then tap R once more, then tap "Add".
+- **Expected:** Step 1 shows "Tap the buttons one by one" and an "Add" button that is off. Step 2
+  shows "Only buttons can be in a combo" and picks nothing. In step 3, L, R and A light up and their
+  chips show. Tapping B shows "A combo has up to 3 buttons" and does not pick it. In step 4 the first
+  tap takes R out and the second puts it back. "Add" makes an "L+R+A" combo, with its label legible
+  inside the circle.
+- **Check:** human only.
+
+### RT-962 — A controller records a combo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** As RT-958, with a gamepad connected.
+- **Steps:**
+  1. Tap "Combo" on the screen.
+  2. On the gamepad, hold the bottom and left face buttons together for a second.
+- **Expected:** The skin's B and Y light up while held, the ring fills, and a "Y+B" combo is added as
+  in RT-959. Holding the buttons does not move the focus or trigger the editor's gamepad shortcuts.
+- **Check:** human only.
+
+### RT-963 — A combo is moved, resized, recoloured, recorded again and deleted, with undo
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** A "Y+B" combo added (RT-959) and selected.
+- **Steps:**
+  1. Look at the bottom bar.
+  2. Drag the combo elsewhere. Use Size to make it larger, then Nudge to move it a step.
+  3. Open Colour and paint its button another colour.
+  4. Tap "Buttons", hold L and R for a second.
+  5. Tap "Delete".
+  6. Press Undo after each step from 5 back to 2, then Redo them.
+- **Expected:** Step 1 shows "Buttons", "Colour", "Size", "Nudge" and "Delete" (no Texture, no
+  Reset), with Delete in red. Steps 2 and 3 work as for any button, and the colour also shows in the
+  other layouts. After step 4 the panel title reads "Combo buttons" and the combo reads "L+R" in place.
+  Step 5 removes it from every layout. Each Undo brings back the state before that step, and each
+  Redo repeats it.
+- **Check:** human only.
+
+### RT-964 — In game, the combo presses all its buttons
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** A "Y+B" combo saved in the SNES skin in use; Super Mario World in a level.
+- **Steps:**
+  1. Hold the combo button.
+  2. Release it.
+  3. Connect a gamepad, then disconnect it.
+- **Expected:** In step 1 Mario runs and jumps at once. Step 2 releases both buttons. In step 3 the
+  touch pad hides with the gamepad, combo included, and comes back with it after.
+- **Check:** human only.
+
+### RT-965 — Export, import and Share nearby keep the combos
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An SNES skin of your own with a combo saved; a second Android device with
+  OpenEmux for step 3.
+- **Steps:**
+  1. Export the skin as a zip (skin list › its menu).
+  2. Delete the skin, import the zip and use it in Super Mario World.
+  3. Send the skin with Share nearby and use it on the other device.
+- **Expected:** After steps 2 and 3 the combo is in every layout, where it was saved, and works as in
+  RT-964. The exported `skin.json` has a root `combos` entry and a `combos` key in each layout, and
+  none of its `elements` binds anything with `|`.
+- **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["combos"]); print(all("|" not in e.get("bind","") for l in d["layouts"].values() for e in l.get("elements",[])))'`
+  prints the combos and `True`.
+
+### RT-966 — Unsaved combos come back, and a form switched on gets them
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable SNES skin with phone layouts only, open in the editor.
+- **Steps:**
+  1. Add a "Y+B" combo and drag it. Without saving, close the app
+     (`adb shell am force-stop com.openemux.mobile`), then open the editor again.
+  2. Open the Layouts panel and switch Tablets on. Look at the tablet layouts.
+- **Expected:** Step 1 shows "Your unsaved changes are back." with the combo where it was. In step 2
+  each tablet layout has the combo, over nothing.
+- **Check:** human only.
+
+### RT-969 — The Shape tool makes a combo a pill or a triangle, per layout
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** An editable SNES skin with a "Y+B" combo, open in the editor in portrait.
+- **Steps:**
+  1. Tap the combo. Look at the actions bar.
+  2. Tap "Shape". Tap the pill, then each of the four triangles, then the circle.
+  3. Tap Undo, then Redo.
+  4. Choose the triangle pointing bottom-left, rotate the phone (or open the landscape layout from
+     "Layouts") and look at the combo there.
+- **Expected:** Step 1 shows "Buttons", "Shape", "Colour", "Size", "Nudge" and "Delete". In step 2 the
+  row offers a circle, a pill and four triangles, the current one marked; the combo becomes each one
+  about the same centre: the pill wider and lower (about 1.6 times as wide, 0.8 times as tall as the
+  circle), each triangle as large as the circle with its square corner at the chosen corner and its
+  "Y+B" label inside it, near that corner. Size still reads 100 % after each change. Step 3 undoes and
+  redoes one shape at a time. In step 4 the landscape layout still has a circle.
+- **Check:** human only.
+
+### RT-970 — A triangle in the gap between Y and B presses only inside the triangle
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** RT-969 done: the portrait layout's combo is the triangle pointing bottom-left.
+- **Steps:**
+  1. In the editor, drag the triangle into the gap between Y and B (below Y, left of B) so that its
+     long edge faces the two buttons. Save.
+  2. Play Super Mario World in portrait. Hold the triangle.
+  3. Touch Y alone, then B alone, each near the edge that faces the triangle.
+  4. Touch the empty corner of the triangle's box (the part beyond its long edge).
+- **Expected:** Step 2 runs and jumps (Y+B). Step 3 presses only Y, then only B: the combo is never
+  pressed over their circles. Step 4 presses nothing from the combo.
+- **Check:** human only. The skin's overlay has the triangle:
+  `adb shell run-as com.openemux.mobile sh -c 'grep _triangle files/launch/current/skin-*/skin.cfg'`
+  prints a `_desc<N>_triangle = "bottom-left"` line.
+
+### RT-971 — A combo's shape survives save, export and Share nearby; unknown shapes read as a circle
+- **Area:** Android — Combo buttons
+- **Mode:** MANUAL
+- **Preconditions:** RT-970 done; a second Android device with OpenEmux for step 2.
+- **Steps:**
+  1. Export the skin as a zip, delete it, import the zip and open it in the editor.
+  2. Send it with Share nearby and open it in the editor on the other device.
+  3. In the exported `skin.json`, change the portrait combo's `"shape"` to `"star"`, zip it again and
+     import it.
+- **Expected:** In steps 1 and 2 the portrait combo is the bottom-left triangle where it was saved,
+  the other layouts' combos are circles. In step 3 the skin opens, with that combo drawn as a circle.
+- **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["layouts"]["phone-portrait"]["combos"][0].get("shape"), d["layouts"]["phone-portrait"]["combos"][0].get("corner"))'`
+  prints `triangle bottom-left`.
 
 ## Android — Save states
 
@@ -14999,7 +15508,9 @@ Listing, deleting and saving states in the Android app (`pkg/android/openemux` o
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android)). The states of a game
 are `<rom>.state`, `<rom>.state<N>` and `<rom>.state.auto` under the app's save-state folder
 (`/sdcard/Android/data/com.openemux.mobile/files/states/<system>/`), each with a `.png` picture
-beside it. Slot numbers run from 0 to 99. The runner has no Android device, so these are `MANUAL`.
+beside it. Slot numbers run from 0 to 99. Each game also has a current slot, the one the in-game
+menu opens on and every Save and Load uses, kept in `<rom>.slot` in the same folder (slot 0 when the
+file is missing). The runner has no Android device, so these are `MANUAL`.
 
 ### RT-938 — A save state's thumbnail shows the whole picture
 - **Area:** Android — Save states
@@ -15046,15 +15557,210 @@ beside it. Slot numbers run from 0 to 99. The runner has no Android device, so t
   "Continue". After step 5 "See all" closes.
 - **Check:** human only (`adb shell ls '<save-state folder>'` after each step).
 
+### RT-979 — The menu opens on the game's current slot and keeps it
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game never played with this version (no `<rom>.slot` in its folder), with
+  states in slots 1 and 2; a second game; a gamepad for step 6.
+- **Steps:**
+  1. Start the game and open the in-game menu.
+  2. Tap stop 3 on the slot slider, close the menu with its ×, and open it again.
+  3. Close it in turn with "Continue", by swiping it down and with the back gesture, opening it again
+     after each.
+  4. Quit the game, start it again and open the menu.
+  5. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it, start the game and
+     open the menu.
+  6. Start the second game and open its menu; quit and go back to the first game.
+  7. Repeat steps 2 and 3 with the gamepad (focus the slider, left/right to stop 3), on a phone in
+     portrait, in landscape and on a half-open foldable in tabletop posture.
+- **Expected:** Step 1: the button reads "Slot 0 · Empty" (slot 0, not the next free one) and the
+  slider's thumb is on 0. Steps 2 to 5: the menu opens on "Slot 3 · Empty", thumb on 3, every time. Step 6: the second game's menu opens on slot 0
+  and the first game's still on slot 3. Step 7: the same, with "Save" and the slider separate focus
+  stops and nothing cut off; "Save" is focused first in tabletop, "Continue" on a phone upright or in
+  landscape (RT-972, RT-978). The slider stops at 0 and at 9 (no wrap; slots past 9 come from
+  "See all", RT-997).
+- **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 3 after step 2).
+
+### RT-980 — Save and Load in the menu act on the current slot, overwriting it
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 2.
+- **Steps:**
+  1. Open the in-game menu, tap stop 1 on the slot slider and press "Save".
+  2. Play a few seconds, open the menu and press "Load".
+  3. Delete the slot 1 state in the menu's "Save states" page, go back and read the save row and stop 1.
+- **Expected:** Step 1: no prompt; the toast says "State saved to slot 1", the slot 1 state and its
+  picture are replaced and no new state appears. Step 2: the menu opened on slot 1 and the game is
+  back at the moment of step 1. Step 3: the row still shows slot 1, now "Slot 1 · Empty", and the
+  thumb on 1 is outlined and dimmed again.
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes in
+  step 1 and no other file appears).
+
+### RT-981 — A numbered state opened from the game's screen becomes the current slot; AUTO does not
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 0 and 2 and an auto state; its current slot set to
+  2 in the in-game menu; a second game with an auto state and no `<rom>.slot`; hardcore off.
+- **Steps:**
+  1. On the first game's screen, tap the slot 0 picture; once the game is on, open the menu.
+  2. Press "Save", then "Load".
+  3. Quit, tap the AUTO picture on the game's screen and open the menu once the game is on.
+  4. On the second game's screen, tap AUTO and open the menu.
+- **Expected:** Step 1: the slot 0 state loads and the menu opens on "Slot 0 · In use". Step 2: the
+  toast says "State saved to slot 0" and "Load" brings back that moment. Step 3: the auto state
+  loads and the menu still opens on slot 0 (AUTO is not a slot and does not change it). Step 4: the
+  auto state loads and the menu opens on slot 0.
+- **Check:** human only.
+
+### RT-982 — Loading a numbered state from the menu's list makes it the current slot
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 1 and 4 and an auto state; its current slot 1.
+- **Steps:**
+  1. Open the in-game menu, open "Save states" and load the slot 4 state; open the menu again.
+  2. Open "Save states" again and load the auto state; open the menu again.
+- **Expected:** Step 1: the game jumps to the slot 4 state and the menu opens on "Slot 4 · In use".
+  Step 2: the auto state loads and the menu still opens on slot 4.
+- **Check:** human only.
+
+### RT-983 — The strip and a controller save and load the current slot
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game whose skin has the save and load keys on its strip; its current slot 0;
+  a gamepad with save/load state shortcuts for step 3.
+- **Steps:**
+  1. Open the in-game menu, tap stop 5 on the slot slider and close it; press the strip's save key.
+  2. Play a few seconds and press the strip's load key.
+  3. Do the same with the gamepad's save and load shortcuts.
+  4. Quit the game, start it again and press the strip's load key.
+- **Expected:** Step 1 writes the slot 5 state (`<rom>.state5`), not slot 0. Steps 2 and 4 bring
+  back the slot 5 state. Step 3 behaves like steps 1 and 2.
+- **Check:** human only (`adb shell ls -l '<save-state folder>'`: `<rom>.state5` appears or changes in
+  step 1 and `<rom>.state` does not).
+
+### RT-996 — The slot slider picks the current slot and shows which slots hold a state
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game with no states and no `<rom>.slot`.
+- **Steps:**
+  1. Start the game and open the in-game menu; look under "Save" and "Load".
+  2. Tap stop 4 on the slider.
+  3. Press "Save".
+  4. Open the menu again and drag the thumb slowly from 4 to 8, then let go.
+  5. Tap stop 4, close the menu with its ×, open it again; then quit, start the game again and open
+     the menu.
+- **Expected:** Step 1: no ‹ › arrows; under "Save" and "Load" a line with the caption "Save slot" on
+  the left (pt-BR "Slot do save") and "See all ›" on the right, under "Load"; under that line a slider
+  with ten round stops, 0 to 9, all outlined and dimmed; the thumb, bigger and with a halo, is on 0
+  with "0" inside, also outlined; "Save" reads "Slot 0 · Empty" and "Load" is faded. Step 2: the
+  thumb jumps to 4 ("4" inside) and "Save" reads "Slot 4 · Empty" at once. Step 3: "State saved to
+  slot 4"; the thumb and stop 4 turn filled purple with a white number; "Save" reads "Slot 4 · In use"
+  and "Load" is enabled. Step 4: the thumb snaps from stop to stop under the finger, its number and
+  the "Save" line changing as it passes (5, 6, 7, 8), outlined on the empty ones; it stays on 8.
+  Step 5: the menu opens with the thumb on 4, filled, both times.
+- **Check:** human only (`adb shell cat '<save-state folder>/<rom>.slot'` prints 4 after step 5).
+
+### RT-997 — "See all" opens the states page, and a slot past 9 gets its own stop
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with a state in slot 4 and one in slot 12 (`<rom>.state12`, made with a
+  gamepad's save shortcut or copied from another state file), current slot 4.
+- **Steps:**
+  1. Open the in-game menu and tap "See all".
+  2. Tap the slot 12 picture; once the game is on, open the menu.
+  3. Press "Save", then "Load".
+  4. Tap stop 3 on the slider.
+- **Expected:** Step 1: the "Save states" page with the pictures (tap to load), the only way to it from
+  the menu (there is no "Save states" tile, RT-987). Step 2: the slot 12 state loads; the slider shows an eleventh stop "12" at
+  its end, filled, as the thumb; stops 0 to 9 keep their look (4 filled); "Save" reads
+  "Slot 12 · In use". Step 3: "State saved to slot 12" and "Load" brings back that moment. Step 4:
+  the "12" stop goes away, the thumb is on 3 and "Save" reads "Slot 3 · Empty".
+- **Check:** human only.
+
+### RT-998 — The slot slider with a gamepad, in every form of the menu, and in hardcore
+- **Area:** Android — Save states
+- **Mode:** MANUAL
+- **Preconditions:** A game with states in slots 0 and 3, current slot 3; a gamepad; a phone, a
+  tablet (or `wm size 1600x2560`) and a foldable (or its tabletop emulation); a Nintendo DS game.
+- **Steps:**
+  1. Phone upright: open the menu with the touch key, then press down on the pad until the focus
+     reaches the slider; press right twice and left once; press up.
+  2. Repeat step 1 on a menu opened with the pad's menu shortcut.
+  3. Turn the phone to landscape, then use the tablet, the tabletop posture and the NDS game; open
+     the menu each time.
+  4. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
+- **Expected:** Steps 1 and 2: the first press lands on "Continue"; then "Save", then the slider
+  (focus ring around the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
+  press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. At an end
+  (0 with left, 9 with right) the press moves the focus on instead, as a seek bar does. Step 3: the
+  same block ("Save" + "Load", "See all", the slider) sits in the left column in landscape, at the
+  top of the tablet panel and in the bottom half of the fold; nothing covers the game, and on a phone
+  upright the sheet's first stop still shows "Continue", the save row and the slider. Step 4: "Save"
+  and the slider work; "Load" and "See all" are faded and the pad skips them.
+- **Check:** human only (screenshots of each form).
+
+## Android — Pause sheet mute tile
+
+The pause sheet's sound tile is a toggle that names what a tap does: "Mute" while the game has sound,
+"Unmute" while it is muted, with a crossed-out speaker on a red tile (issue 861). It shows the
+engine's mute state, whatever muted the game.
+
+### RT-985 — The mute tile turns red at once, and keeps its state when the sheet reopens
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A game running with sound, on a phone; a gamepad for step 5.
+- **Steps:**
+  1. Open the pause sheet and look at the sound tile.
+  2. Tap it, without closing the sheet.
+  3. Close the sheet (Back to game), play a few seconds and open it again.
+  4. Tap the tile again, close the sheet and open it again.
+  5. With the gamepad, move the focus to the tile and press A, twice.
+  6. Repeat steps 1-4 in landscape, on a tablet (the side panel), in the light theme and in
+     Português (Brasil).
+- **Expected:** Step 1: a speaker icon on a neutral tile labelled "Mute". Step 2: the game goes
+  silent, the toast "Sound off" shows, and the tile at once shows a crossed-out speaker, the label
+  "Unmute" and a red background with a red border and a red icon. Step 3: the game is still silent
+  and the tile still shows "Unmute" in red. Step 4: sound comes back with the toast "Sound on"; the
+  reopened sheet shows the speaker, "Mute" and the neutral tile. Step 5: each press flips the tile
+  and the sound as a tap does, the focus ring staying on the tile. Step 6: the same in every layout;
+  the red tile and its label are legible in both themes; in Português the labels read "Silenciar" and
+  "Ativar som", not clipped.
+- **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
+
+### RT-986 — A game muted with the gamepad hotkey shows as muted in the pause sheet
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A game running with sound and a gamepad connected; in RetroArch's menu (pause
+  sheet, "RetroArch"), Settings > Input > Hotkeys > "Audio Mute Toggle" bound to a gamepad
+  button.
+- **Steps:**
+  1. Back in the game, press the bound mute button.
+  2. Open the pause sheet.
+  3. Close it, press the mute button again and open the sheet again.
+  4. Quit the game and start it again; open the pause sheet.
+- **Expected:** Step 1 silences the game. Step 2 shows the sound tile as "Unmute", crossed-out
+  speaker, red. Step 3: sound is back and the tile shows "Mute" on the neutral tile. Step 4: the game
+  starts with sound and the tile shows "Mute".
+- **Check:** human only.
+
+## Retired
+
+Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
+the date.
+
 ### RT-941 — The in-game menu saves to the slot it shows
+- **Retired:** 2026-11-11 (issue 857).
+- **Reason:** The menu no longer opens on the next free slot: it opens on the game's current slot,
+  which only the player changes (RT-979, RT-980). The id was also shared with the pause-menu skin
+  editing scenario of the same number, which keeps it.
 - **Area:** Android — Save states
 - **Mode:** MANUAL
 - **Preconditions:** A game with states in slots 1 and 2, no state in slot 3; a gamepad connected for
   step 5.
 - **Steps:**
   1. Start the game and open the in-game menu.
-  2. Press "Save state".
-  3. Press the left arrow until the slot reads 1, and press "Save state".
+  2. Press "Save state" ("Save" on a phone, upright or in landscape).
+  3. Press the left arrow until the slot reads 1, and press "Save state" again.
   4. Press the left arrow past 0, then the right arrow past 99.
   5. Repeat the arrows and "Save state" with the gamepad, on a phone in portrait, in landscape and
      on a half-open foldable in tabletop posture.
@@ -15062,15 +15768,178 @@ beside it. Slot numbers run from 0 to 99. The runner has no Android device, so t
   slot 3", the button stays on slot 3 and reads "Slot 3 · In use", and the state is in the list.
   Step 3: while on slot 1 the button reads "Slot 1 · In use"; saving replaces that state and its
   picture and adds no new one. Step 4: the number wraps from 0 to 99 and from 99 to 0. Step 5: the
-  arrows and "Save state" are separate focus stops, "Save state" focused first, and nothing is cut
-  off in any of the three layouts.
+  arrows and "Save state" are separate focus stops and nothing is cut off in any of the three
+  layouts; "Save state" is focused first in tabletop, "Continue" on a phone upright or in landscape (RT-972,
+  RT-978).
 - **Check:** human only (`adb shell ls -l '<save-state folder>'`: the slot 1 file's time changes and
   no new file appears).
 
-## Retired
+## Android — Pause sheet on a phone in portrait
 
-Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
-the date.
+On a phone held upright, the Android app's in-game menu (`game/PauseSheet.kt` in the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 849) starts with
+a 2-column grid (issue 881): "Continue" beside "Restart", "Save" beside "Load", four buttons of the
+same size, and opens with its top under the game's picture.
+It is dragged by the pill at its top (or its header) up to a taller stop and down to close.
+A phone in landscape, a tablet's side panel and a half-open foldable start with the same grid
+(issues 855 and 881). The runner has no Android device, so these are `MANUAL`.
+
+### RT-972 — "Continue" heads the menu and resumes, "Restart" sits beside it
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game started and played past its title screen; a gamepad
+  connected for step 4.
+- **Steps:**
+  1. Open the in-game menu and look at its first row.
+  2. Press "Continue".
+  3. Open the menu, press "Restart", then "Cancel".
+  4. With the gamepad, open the menu (Start) and press A.
+- **Expected:** Step 1: the first row under the game's name is "Continue", purple, with "Restart" on
+  its right, the two the same width; under them "Save" and "Load", the same width again, so the
+  four buttons' left and right edges line up (issue 881); the sheet has no "Restart game" row.
+  Step 2 closes the menu and the game goes on from where it was. Step 3 asks "Restart game?" and
+  "Cancel" leaves the game as it was. Step 4: "Continue" is the focused button when the menu opens,
+  and A resumes the game.
+- **Check:** human only.
+
+### RT-973 — "Load" beside "Save" loads the slot shown
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game with a state in slot 1 and none in the slot the menu
+  opens on.
+- **Steps:**
+  1. Open the in-game menu and read the save row.
+  2. Press "Save", then play a few seconds and open the menu again.
+  3. The menu opens on the slot just saved: press "Load".
+  4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
+  5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
+- **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
+  and does nothing on the empty slot; both carry the down and up arrow icons of the save and load
+  keys under the game (issue 881); there are no slot arrows (the slot slider and "See all" sit
+  under the row, RT-996). Step 2 says "State saved to slot N"
+  and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
+  was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
+  "Restart" are translated, "Save" and "Load" keep their icons, and no text is cut off.
+- **Check:** human only.
+
+### RT-1009 — Continue, Restart, Save and Load are four equal buttons with the strip's icons
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone at about 360 dp wide (`adb shell wm size 1080x2400` with
+  `adb shell wm density 480`; restore with `adb shell wm size reset` and
+  `adb shell wm density reset`), a game started with its touch skin, no state in the slot the menu
+  opens on.
+- **Steps:**
+  1. Look at the save and load keys on the strip under the game, then open the in-game menu.
+  2. Set the app language to Deutsch, Français and தமிழ், opening the menu each time.
+  3. Switch the app to the light theme and open the menu.
+  4. Turn the phone to landscape and open the menu.
+- **Expected:** Step 1: under the header, two rows of two: "Continue" (purple) and "Restart", then
+  "Save" with "Slot N · Empty" and "Load" (faded). The four buttons are the same width and height,
+  with the same gap between the columns in both rows, so their left and right edges line up. "Save"
+  and "Load" show the same down and up arrow icons as the strip's save and load keys. Step 2: every
+  label is whole except, where it does not fit, the slot line under "Save", which ends in "…"; "Save"
+  and "Load" always keep their icons ("Restart" may drop its icon in Tamil so the word fits). Step 3:
+  the same layout in light. Step 4: the left column starts with the same grid.
+- **Check:** human only (`adb shell uiautomator dump`: the four buttons share two left edges and
+  two right edges).
+
+### RT-974 — The menu opens under the game and stretches up by its handle
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game started with its touch skin.
+- **Steps:**
+  1. Open the in-game menu.
+  2. Scroll the menu's content up and down.
+  3. Drag the pill at the top of the menu up, near the top of the screen, and let go.
+  4. Drag it down a little and let go, then drag it down to about the middle and let go.
+  5. Start a Nintendo DS game and open the menu.
+- **Expected:** Step 1: the menu's top sits just under the game's picture, which stays whole and
+  uncovered. Step 2 scrolls inside the menu; the menu itself does not move. Step 3: the menu
+  stretches to a stop near the top of the screen, over the game, and shows more of its rows. Step 4:
+  a short drag springs back to that stop; the longer one returns to the first stop under the game.
+  Step 5: when the two DS screens leave little room, the menu still shows at least its header,
+  "Continue" and the save row, and the rest scrolls.
+- **Check:** human only.
+
+### RT-975 — Swiping the menu down resumes the game, and a short swipe springs back
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone in portrait, a game started and played past its title screen.
+- **Steps:**
+  1. Open the in-game menu and drag its pill down a short way, then let go.
+  2. Drag it down past about a third of its height and let go.
+  3. Open the menu, scroll its content to the bottom, swipe it back to its top, and keep swiping down.
+  4. Open the menu and close it with the × button; again with a tap on the dimmed area above it;
+     again with the system back gesture.
+  5. Turn the phone to landscape and open the menu.
+- **Expected:** Step 1: the menu follows the finger and springs back. Step 2: it slides away and the
+  game goes on. Step 3: the content scrolls back to its top first, then the menu follows the finger
+  and closes. Step 4: each way closes the menu and the game goes on. Step 5: the landscape menu covers the
+  whole screen in two columns and does not drag; its rows are RT-978's.
+- **Check:** human only.
+
+## Android — Pause sheet on a phone in landscape
+
+On a phone lying on its side, the Android app's in-game menu (`game/PauseSheet.kt` in the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 855) still covers
+the whole screen in two columns. Its left column starts with the same grid as upright (RT-972,
+RT-973): "Continue" beside "Restart", then "Save" beside "Load", four buttons of one size, with "See all" and the slot slider
+under them (RT-996). The runner
+has no Android device, so this is `MANUAL`.
+
+### RT-978 — In landscape, "Continue" and "Restart" head the left column, "Load" sits beside "Save"
+- **Area:** Android — Pause sheet on a phone in landscape
+- **Mode:** MANUAL
+- **Preconditions:** A phone in landscape, a game started and played past its title screen, no state
+  in the slot the menu opens on; a gamepad connected for step 5.
+- **Steps:**
+  1. Open the in-game menu and look at both columns.
+  2. Press "Continue".
+  3. Open the menu, press "Restart", then "Cancel".
+  4. Press "Save", tap another stop on the slot slider and back on that slot's stop, and press "Load".
+  5. With the gamepad, open the menu and press A.
+  6. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
+  7. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
+  8. Turn the phone upright and open the menu.
+- **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
+  purple, with "Restart" on its right; under them "Save" with "Slot N · Empty" and its icon and
+  "Load", faded, with its icon, the four the same width with their edges lined up (issue 881), then the "Save slot" caption on the left, "See all" on the right and the slot slider, the whole width of the two
+  buttons (RT-996). The right column holds the action tiles
+  (RT-987), five to a row, the red "Quit" tile last (RT-1008); there is no list and no "Restart game" row. Step 2 closes
+  the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
+  the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", that slot's
+  stop turns filled, and "Load" brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
+  resumes. Step 6: the hardcore warning sits under the two rows; "Load" and "See all" are faded.
+  Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
+  without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
+- **Check:** human only.
+
+### RT-984 — The pause sheet's tiles sit in a grid: 4 columns upright, 5 elsewhere
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone about 412 dp wide (or an emulator at 1080x2400, density 420), a game
+  other than NDS started; for step 4 the same phone at about 360 dp (`adb shell wm size 1080x2400`
+  with `adb shell wm density 480`; restore with `adb shell wm size reset` and
+  `adb shell wm density reset`); a gamepad for step 5.
+- **Steps:**
+  1. Hold the phone upright, open the in-game menu and look at the action tiles.
+  2. Turn the phone to landscape and open the menu.
+  3. On a tablet (side panel) or a half-open fold (tabletop), if available, open the menu.
+  4. At 360 dp, upright, set the app language to Deutsch, then தமிழ், then Français, and open the menu
+     each time.
+  5. Upright, with the gamepad, move from the tiles' first row to the second and along each row.
+- **Expected:** Step 1: four columns; "Fast forward", "Slow motion", "Screenshot" and "Shader" on
+  the first row, "Mute", "Change skin", "Edit skin" and "RetroArch" on the second, and "Quit"
+  alone at the left of a third row (issue 875; issues 862 and 867: there is no "Save states" tile); the tiles close together (about the same
+  spacing as in landscape), the rows lined up with the buttons above, every label whole. Step 2: five
+  tiles to a row, 5 + 4. Step 3: five columns, nothing cut
+  or overlapping. Step 4: every label is complete and centred, on at most two lines, no word broken
+  in the middle (a long word such as "Bildschirmfoto" shows a little smaller instead); nothing
+  overlaps. Step 5: the focus goes through the tiles in reading order, left to right, then the
+  second row from the left.
+- **Check:** human only (`adb shell uiautomator dump` gives each tile's bounds: four distinct left
+  edges upright, "Mute" at the first one).
 
 ### RT-772 — A blank name or Cancel creates nothing
 - **Retired:** 2026-11-06 (skin list: "Edit" and "Duplicate" on a bundled skin, no issue).
@@ -15245,3 +16114,486 @@ the date.
 - **Retired:** 2026-10-27 (issue 609).
 - **Reason:** The Android shelf card no longer shows a fan of cartridges: the console icon is the
   card's hero instead. The recently played games are still one tap away, in the console's game list.
+
+## Android — Pause sheet action tiles
+
+Every action of the Android pause sheet is a tile in one grid (issues 858 and 862): the former list
+rows "Change skin", "Edit skin" and "RetroArch menu" (now just "RetroArch") follow the other tiles. Only the
+toggles (fast forward, slow motion, mute) ever light up, and no tile has a caption under its name
+(issue 875). The "Save states" tile issue 862 added is
+gone (issue 867): "See all" under the slot slider opens the same list.
+
+### RT-987 — Change skin, Edit skin and RetroArch menu are tiles, not rows; no Save states tile
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone, a Super Nintendo game started with a skin of its console, RetroAchievements
+  hardcore off, no save state for the game at first; a gamepad for step 8; a tablet or a half-open fold
+  for step 9 if available.
+- **Steps:**
+  1. Hold the phone upright and open the in-game menu.
+  2. Tap "See all" (under "Load"), then the back arrow at the top of the page.
+  3. Close the menu, save a state from the skin or the menu, and open the menu again.
+  4. Tap "Change skin", pick another skin, and open the menu again.
+  5. Tap "Edit skin", close the editor without changes.
+  6. Tap "RetroArch", then leave RetroArch's menu (RT-575).
+  7. Turn fast forward on from its tile and look at the tiles; turn it off.
+  8. With the gamepad, open the menu and move through every tile with the D-pad, down to the last
+     one, "Quit".
+  9. Turn the phone to landscape and open the menu; then, if available, open it on a tablet and on a
+     half-open fold.
+  10. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
+- **Expected:** Step 1: no list under the tiles; after "Mute" come the tiles "Change skin", "Edit
+  skin" and "RetroArch", nothing under their names (RT-1009), same size and style as "Fast forward", in the grid of RT-984; the red
+  "Quit" tile is the last one (RT-1008). There is no "Save states" tile (issue 867). Step 2 opens the save states
+  page and the arrow returns to the main menu. Step 3: the slot just saved is filled on the slot
+  slider, and there is still no "Save states" tile. Step 4 opens the skin page; afterwards the game shows the new skin and the tile still reads only "Change skin".
+  Step 5 opens the skin editor on the skin in use and closing it returns to the menu. Step 6 opens
+  RetroArch's menu. Step 7: only "Fast forward" lights up; "Change skin", "Edit skin"
+  and "RetroArch" never show the lit state. Step 8: the "Touch controls" tile (there with or without a
+  controller) sits between "Edit skin" and "RetroArch" (RT-989); the focus reaches every tile in reading
+  order, "Quit" last. Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
+  left and the tiles, five to a row, "Quit" last, are on the right; the tablet panel shows the
+  tiles in five columns, "Quit" last, and nothing under them; the fold shows "RetroArch" and
+  "Quit" among its tiles (no skin tiles) and nothing under them ("Restart" is in the grid at the
+  top, issue 881).
+  Step 10: "See all" is faded and does nothing, also with the gamepad. With a skin that cannot be
+  edited, "Edit skin" is faded and does nothing.
+- **Check:** human only.
+
+### RT-1008 — Quit is the pause sheet's last tile, in the muted tile's red
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone, a Super Nintendo game started with a skin of its console and played
+  for a minute; a Nintendo DS game for step 5; a gamepad for step 6; a tablet or a half-open fold
+  for step 4 if available.
+- **Steps:**
+  1. Hold the phone upright, open the in-game menu and scroll to the end of the tiles.
+  2. Tap "Mute" and compare the two red tiles; tap it again.
+  3. Tap "Quit".
+  4. Start the game again; open the menu in landscape, then, if available, on a tablet (side panel)
+     and on a half-open fold.
+  5. Start the Nintendo DS game upright and open the menu.
+  6. With the gamepad, open the menu, move through the tiles with the D-pad to the last one and
+     press A.
+  7. Set the app language to Português (Brasil) and open the menu.
+- **Expected:** Step 1: the last tile is "Quit", with an exit icon (a door frame with an arrow going
+  out), on a light red square with a red border and a red icon; there is no "Quit game" button
+  under the tiles. Step 2: the muted "Unmute" tile has exactly the same red background, border and
+  icon colour as "Quit"; "Quit" does not change when the sound does. Step 3: the game closes and the
+  app is back on the library; the game's AUTO state is written ("just now") and the play time grew,
+  as before. Step 4: "Quit" is the last tile in every form; nothing is pinned at the tablet panel's
+  foot or under the fold's tiles ("Restart" is in the grid at the top, RT-1009). Step 5: the grid, with "Screens", wraps
+  from the left with "Quit" last. Step 6: the focus reaches "Quit" last and A quits the game. Step 7:
+  the tile reads "Sair".
+- **Check:** human only (`adb shell dumpsys activity activities | grep topResumedActivity` names
+  `MainActivity` after step 3).
+
+### RT-1009 — No tile has a caption under its name; the rows are evenly spaced
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone, a Super Nintendo game started with a skin of its console; a Nintendo DS
+  game for step 3.
+- **Steps:**
+  1. Hold the phone upright, open the in-game menu and scroll to the end of the tiles.
+  2. Turn the phone to landscape and open the menu.
+  3. Start the Nintendo DS game upright and open the menu; tap "Screens".
+  4. Set the app language to Português (Brasil), then Deutsch, and open the menu each time.
+- **Expected:** Step 1: the tile once called "RetroArch menu" reads just "RetroArch", with no "This
+  session only" under it; "Change skin" has no skin name under it; no tile has a second, smaller grey
+  line. The gap from one row of tiles to the next is the same for every row. Step 2: the same in the
+  five-column grid. Step 3: "Screens" has no layout name under it; its page still tags the layout in
+  use "Current". Step 4: the tile reads "RetroArch" in every language.
+- **Check:** human only.
+
+## Android — Long game names
+
+In the Android app's library (`ui/LibraryScreens.kt` and `ui/GameName.kt` in the
+[Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 869), a game's
+name that does not fit its space scrolls right to left after a short pause, shows the whole name and
+loops, instead of ending in "…". A name that fits stays still. The game's own page shows the whole
+name on as many lines as it needs. The runner has no Android device, so these are `MANUAL`.
+
+Shared preconditions: one game renamed to "The Legend of the Very Long Cartridge Name - Director's
+Cut Edition" (its detail page, the pencil beside the name) and another game with a short name
+("Mario" or similar) on the same console. **Restore:** rename the game back to its original name
+after the last scenario.
+
+### RT-992 — A long name scrolls in every library view; a short one stays still
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; the long-named game played once (so it is in
+  "Continue" and in "Recent"); a tablet or a phone in landscape for step 4.
+- **Steps:**
+  1. Open the console's shelf in the "Cartridges" view and watch the two names under the cartridges
+     for ten seconds.
+  2. Switch to the covers view, then to the list view, and watch the same two names.
+  3. Open "Home" (its "Continue" card and the recently added row), then "Recent", then search for
+     "legend" in the library.
+  4. Turn the phone to landscape (the row of three) and, on a tablet, open the wide list (table).
+  5. Scroll the library up and down quickly with the long name on screen.
+- **Expected:** Steps 1–4: the long name holds still for about a second and a half, then moves right
+  to left at a steady reading speed, shows its end, leaves a gap and starts again, over and over; it
+  never goes past the edges of its cell. The short name never moves and stays centred under its
+  cartridge (left-aligned in lists). "Recent" shows the long name on one line. Step 5: scrolling is as
+  smooth as with short names.
+- **Check:** human only.
+
+### RT-993 — With "Remove animations" on, names keep the ellipsis
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; the app open on the console's "Cartridges" view.
+- **Steps:**
+  1. In the system settings, turn on Accessibility → "Remove animations" (or set every animation
+     scale to off in Developer options), and go back to the app without closing it.
+  2. Watch the long name for ten seconds, in the cartridge, covers and list views.
+  3. Turn "Remove animations" off again and go back to the app.
+- **Expected:** Step 2: the long name ends in "…" and does not move, in every view. Step 3: it starts
+  scrolling again, without restarting the app.
+- **Check:** human only (`adb shell settings put global animator_duration_scale 0` stands in for
+  step 1, and `... 1` for step 3).
+- **Restore:** "Remove animations" back off (step 3).
+
+### RT-994 — With a gamepad, only the focused game's name scrolls
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions plus a second long-named game on the same console;
+  a gamepad connected (or Settings → "Controllers" → "Interface mode" set to "Controller").
+- **Steps:**
+  1. Open the console's shelf in the "Cartridges" view and move the focus with the D-pad onto a short
+     name.
+  2. Move the focus onto the first long-named game, then onto the second.
+  3. Switch to the list view and repeat step 2.
+- **Expected:** Step 1: both long names end in "…" and do not move. Step 2: the focused long name
+  starts scrolling after the short pause; when the focus moves on, it goes back to "…" and the newly
+  focused one starts. Step 3: the same in the list.
+- **Check:** human only.
+
+### RT-995 — The game's page shows the whole name, on several lines, without moving
+- **Area:** Android — Long game names
+- **Mode:** MANUAL
+- **Preconditions:** The shared preconditions; a foldable (or an emulator of one) for step 3, if
+  available; a gamepad for step 4.
+- **Steps:**
+  1. Open the long-named game's page upright.
+  2. Turn the phone to landscape.
+  3. On a fold, half-open it flat on a table (tabletop).
+  4. Back in the library, focus the game with a gamepad and press Y (its options).
+- **Expected:** Steps 1–3: the whole name is shown, wrapping onto as many lines as it needs, with the
+  pencil beside it; no "…" and no movement. In landscape the cartridge above it gets smaller to make
+  room. Step 4: the options sheet's title shows the whole name too.
+
+## Android — Library zoom on a phone upright
+
+The library's stepped zoom (issue 868): on a phone held upright, a two-finger pinch moves the grid one
+step at a time, 1 to 5 columns in the cartridge and cover views and four row sizes in the list view, and
+a "Size" button before the view toggle offers the same steps. The pinch needs two real fingers, so these
+are `MANUAL`: a person runs them on a phone (or on an emulator with its multi-touch control).
+
+### RT-999 — Pinching the cartridge and cover views steps the columns from 1 to 5
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page with at least 15 games, the cartridge view at
+  its default (2 columns).
+- **Steps:**
+  1. Pinch in (fingers closing) over the games, lift, and repeat four more times.
+  2. Pinch out (fingers spreading) five times.
+  3. Tap the cover view in the view toggle and repeat steps 1 and 2 (it starts at 3 columns).
+- **Expected:** Each pinch moves exactly one step, decided while the fingers move, with a short glide
+  and a pill naming the step ("3 columns") for about a second. Step 1: 3, 4, 5 columns, and the last
+  pinches at 5 do nothing. Step 2: back down to 1 column, one cartridge per row as wide as the screen.
+  At 4 columns the caption under each tile is one smaller line; at 5 there is none. Step 3: the same
+  from 3 columns, one box art per row at 1 column.
+- **Check:** human only.
+
+### RT-1000 — Pinching the list view steps the row size
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page, the list view at its default ("Normal").
+- **Steps:**
+  1. Pinch out three times.
+  2. Pinch in three times.
+- **Expected:** Step 1: "Large" (bigger art, titles up to two lines), then "Extra large" (128 dp art,
+  larger titles), then nothing more. Step 2: "Large", "Normal" (64 dp art, today's row), "Compact"
+  (40 dp art). The second line always shows the console's name.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml` shows
+  `library_zoom_list`).
+
+### RT-1001 — The Size button offers the same steps, by touch, gamepad and TalkBack
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page; a gamepad; TalkBack for step 4.
+- **Steps:**
+  1. In the cartridge view tap "Size" (the button before the view toggle), then "4 columns".
+  2. Switch to the list view and open "Size".
+  3. With the gamepad, move to "Size", press A, move down to another step and press A; open it again
+     and press B.
+  4. With TalkBack on, open "Size" and move through the items; set 5 columns and touch a tile.
+- **Expected:** Step 1: the menu is headed "SIZE" and lists "1 column" to "5 columns" with the current
+  one checked and highlighted; picking one changes the grid at once and closes the menu. Step 2: it
+  lists "Compact", "Normal", "Large", "Extra large". Step 3: focus starts in the menu, A picks, B closes
+  without changing anything, and focus returns to the button. Step 4: each item is read with its
+  selected state; a 5-column tile (no caption) still reads its game's name.
+- **Check:** human only.
+
+### RT-1002 — Each view keeps its step across screens and restarts
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, games on two consoles.
+- **Steps:**
+  1. Set the cartridge view to 4 columns, the cover view to 1 column and the list to "Large".
+  2. Go back to the shelf, open the other console, then "All games"; switch between the three views.
+  3. Force-stop the app (`adb shell am force-stop com.openemux.mobile`), open it and return to the
+     library.
+- **Expected:** In steps 2 and 3 each view shows its own step on every page: 4 cartridge columns,
+  1 cover column, large list rows. Covers always take the cover view's step, even inside the
+  cartridge view (see RT-1008).
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml`:
+  `library_zoom_carts` 4, `library_zoom_covers` 1, `library_zoom_list` Large).
+
+### RT-1008 — Covers shown in the cartridge view zoom with the cover view
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; games on a console with cartridge art (e.g. Super
+  Nintendo) and on one without it (e.g. Sony PlayStation); the cartridge view at 2 columns and the
+  cover view at 3 (the defaults).
+- **Steps:**
+  1. Open the PlayStation page in the cartridge view (it shows covers) and pinch out once; open the
+     "Size" button.
+  2. Open the Super Nintendo page in the cartridge view.
+  3. Open "All games" in the cartridge view; pinch in over the PlayStation group, then pinch out over
+     the Super Nintendo group.
+- **Expected:** Step 1: the covers go to 2 columns and the "Size" menu has "2 columns" checked.
+  Step 2: the cartridges are still at 2 columns. Step 3: the pinch over the PlayStation group moves
+  only the covers (3 columns, and every console without cartridge art with them); the pinch over the
+  Super Nintendo group moves only the cartridges (1 column). The cover view shows the covers' step.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat shared_prefs/openemux.xml`: after
+  step 1 `library_zoom_covers` 2 and `library_zoom_carts` absent or 2).
+
+### RT-1003 — A pinch never scrolls, opens a game or starts a selection
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright, a console page with enough games to scroll.
+- **Steps:**
+  1. Scroll down to the middle, put both fingers around a game in the middle of the screen and pinch.
+  2. Scroll with one finger, tap a game (then come back), and long-press a game.
+  3. With the selection active (two games selected), pinch; then press Back.
+  4. Start a pinch with one finger on a game, add the second finger and pinch.
+- **Expected:** Step 1: after the step the game that was under the fingers is still on screen near
+  where it was. Step 2: scrolling, opening and starting a selection work as before. Step 3: the step
+  changes and the two games stay selected; Back clears the selection. Step 4: the game under the first
+  finger does not open, the grid does not scroll and no selection starts.
+- **Check:** human only.
+
+### RT-1004 — Landscape, tablets, folds and tabletop keep their columns
+- **Area:** Android — Library zoom
+- **Mode:** MANUAL
+- **Preconditions:** The cartridge view set to 4 columns upright; a tablet or an emulator with
+  `adb shell wm size 1600x2560` and `adb shell wm density 320` (restore with `wm size reset` and
+  `wm density reset`); a fold if available.
+- **Steps:**
+  1. Turn the phone to landscape and pinch over the games.
+  2. On the tablet size, upright and on its side, look at the header and pinch.
+  3. On a fold opened flat and in tabletop, do the same.
+  4. Turn the phone back upright.
+- **Expected:** Steps 1 to 3: no "Size" button, the pinch does nothing and the layout is the one the
+  library had before (the sideways row in landscape, automatic columns elsewhere). Step 4: 4 columns
+  again.
+- **Check:** human only.
+
+## Android — Controllers settings
+
+Since issue 873 every setting about physical controllers sits on one Settings screen,
+"Controllers": the interface mode (formerly "Controller layout") and the button labels. `$PKG` is
+`com.openemux.mobile`; the debug broadcasts are the ones in the gamepad navigation section.
+
+### RT-1005 — One "Controllers" entry holds the controller settings
+- **Area:** Android — Settings
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done.
+- **Steps:**
+  1. Open the "Settings" tab and scroll to "General".
+  2. Tap "Controllers", look at the screen, then go back with the "Settings" link.
+  3. In a tablet-size window (`adb shell wm size 1600x2560` and `adb shell wm density 240`, both reset
+     after), open "Settings" → "Controllers".
+  4. Switch the app to Português (Brasil) and open the screen again.
+- **Expected:** "General" lists "ROM folder", "Controllers", "Back up and restore", "Check for
+  updates" and "About"; there is no "Controls", "Controller layout" or "Button labels" row. The
+  "Controllers" row's subtitle reads the interface mode picked ("Automatic" by default, "Touch
+  screen" or "Controller" after a change). The screen is titled "Controllers" with the lead "Settings for
+  physical controllers: gamepads and the built-in controls of handhelds." and two sections, "Interface
+  mode" (RT-580) and "Button labels" (RT-583). On the phone it is a screen of its own and the link goes
+  back to Settings; on the tablet it opens in the pane beside the list, with the row highlighted. In
+  Portuguese the entry reads "Controles" and every text on the screen is translated.
+- **Check:** human only (`adb exec-out screencap -p`).
+
+### RT-1006 — "Touch screen" opens games with the on-screen controls
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; a game installed; a controller faked with the debug broadcast
+  (`--ez connected true`).
+- **Steps:**
+  1. Settings → "Controllers" → "Interface mode" on "Automatic"; start the game and open the pause
+     sheet.
+  2. Back in the library, pick "Touch screen", start the game again and open the pause sheet.
+  3. Pick "Controller", disconnect the controller (`--ez connected false`) and start the game.
+- **Expected:** 1: the game opens on the gamepad skin with the touch-controls key, and the pause sheet
+  has the "Touch controls" tile (issue 865). 2: the game opens with the full on-screen controls although
+  a controller is detected; the pause sheet's "Touch controls" tile is lit, and turning it off still shows
+  the gamepad layout, kept for the console as with no controller (RT-1016). 3: with no controller the
+  game opens with the on-screen controls (Controller mode changes the app's navigation, not the skin).
+- **Check:** human only (`adb exec-out screencap -p`).
+
+### RT-1014 — "Touch screen": a controller button brings controller navigation back
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; RT-434's library; "Settings" → "Controllers" → "Interface mode" on
+  "Touch screen".
+- **Steps:**
+  1. Fake a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected
+     true`), open the "Library" tab and press volume up from it
+     (`adb shell input gamepad keyevent KEYCODE_VOLUME_UP`).
+  2. Press DOWN on the controller (`adb shell input gamepad keyevent KEYCODE_DPAD_DOWN`).
+  3. Tap an empty spot of the screen (the "Shelf" title).
+  4. Disconnect the fake controller (`--ez connected false`) and press A from a device that reports
+     itself only as a joystick (`adb shell input joystick keyevent KEYCODE_BUTTON_A`).
+  5. Tap the screen.
+  6. Open "Settings" → "Controllers".
+- **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
+  key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
+  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
+  layout keeps its touch sizes. 3: the tap hides the ring and the hint bar again; the app is back to
+  touch navigation. 4: the press lands the ring on a card and the hint bar comes back, with no
+  controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
+  press never changes the setting.
+- **Check:** human only (`adb exec-out screencap -p`).
+
+## Android — Zebra stripes in the library list
+
+The library's list view tints every second row very lightly (issue 874), so a row reads from its art
+and title to the favourite star at the far right. The look is judged by eye on a device, so this is
+`MANUAL`.
+
+### RT-1007 — The list view's rows alternate with a very light stripe, under selection and focus
+- **Area:** Android — Library list view
+- **Mode:** MANUAL
+- **Preconditions:** A phone with games from at least two consoles (one with four or more games) and at
+  least one favourite; a gamepad for step 5; a tablet (or an emulator about 1280 dp wide) for step 6.
+- **Steps:**
+  1. In the dark theme, open "All" in the list view and look down the rows, then at the first rows
+     under each console header.
+  2. Switch to the light theme (Settings → Appearance → "Light") and look again.
+  3. Back on "All", pinch (or use "Size") through every list size.
+  4. Long-press a game to start selecting, then tick one tinted row and one plain row.
+  5. Leave selection and move the gamepad focus down several rows.
+  6. On the tablet, open "All" in the list view (the table of time played and last played).
+  7. Switch to the cartridge view, then the cover view.
+- **Expected:** Step 1: rows alternate plain and tinted; the tint is barely visible (a few percent
+  lighter than the page), spans the whole row with rounded corners, and the first row under every
+  console header is plain. Following a tinted row from its title to its star is easy. Step 2: the same,
+  with a barely darker tint. Step 3: the stripes are there at every size. Step 4: both ticked rows show
+  the accent background, clearly stronger than any stripe; the other rows keep their stripes. Step 5:
+  the focus ring is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
+  way, and the column names stay over their columns. Step 7: no stripes; the tiles are where they were.
+- **Check:** human only.
+
+## Android — Even cover grid
+
+In the cover view every console has one cover shape, the shape most of its covers have (the wide SNES
+box, the square GBA and PlayStation boxes, the tall Mega Drive and PSP boxes), and every cover is drawn
+in it, filling it and cropped from the centre (issue 882). Every cell of a console's covers is then the
+same size and the rows line up, as in the cartridge view. The detail screen and the list view keep the
+whole cover. Judged by eye on a device, so these are `MANUAL`.
+
+### RT-1009 — A console's covers are all the same size and the rows line up
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; a Game Boy Advance library and a Super Nintendo library of
+  eight or more games each, the SNES one with at least one Japanese game (a tall Super Famicom box) and
+  one game with no cover at all.
+- **Steps:**
+  1. Open the Game Boy Advance page in the cover view and scroll to the bottom.
+  2. Open the Super Nintendo page in the cover view and scroll to the bottom.
+- **Expected:** Step 1: every cover is the same square-ish box; the tops and bottoms of each row are
+  level all the way down, and the games read in order left to right, row by row. Step 2: every cover is
+  the wide SNES box; the Japanese game's tall cover is shown cropped to that shape (its middle, no bars,
+  not stretched), and the game with no cover shows its title on a box of the same size. Every row is
+  level.
+- **Check:** human only.
+
+### RT-1010 — PlayStation and PSP covers look as before
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright with PlayStation and PSP games that have covers.
+- **Steps:**
+  1. Open the PlayStation page in the cover view, then the PSP page.
+  2. Open the PlayStation page in the cartridge view.
+- **Expected:** Step 1: the PlayStation covers are the square jewel case and the PSP ones the tall
+  PSP box, as before, with nothing visibly cut; the rows line up. Step 2: PlayStation has no cartridge,
+  so its covers show in the same square shape, in level rows.
+- **Check:** human only.
+
+### RT-1011 — Pages with several consoles keep each group even, each in its own shape
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** Games from Super Nintendo, Game Boy Advance and Mega Drive, a few of each marked as
+  favourites.
+- **Steps:**
+  1. Open "All" in the cover view and scroll through every group.
+  2. Open "Favorites" in the cover view.
+  3. Search for a word several consoles' games share.
+- **Expected:** In every step each console's group is even, with its own shape: wide boxes under
+  "Super Nintendo", square under "Game Boy Advance", tall under "Mega Drive". Inside a group every cell
+  is the same size and the rows are level; each group starts on a new row under its header.
+- **Check:** human only.
+
+### RT-1012 — Every zoom step and the landscape row keep the console's shape
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A phone, the Super Nintendo page with eight or more games, the cover view.
+- **Steps:**
+  1. Held upright, pinch (or use "Size") through every step from 1 to 5 columns.
+  2. Turn the phone to landscape.
+- **Expected:** Step 1: at every step the covers keep the wide SNES shape and the rows stay level; only
+  their size changes, with the usual glide and step pill. Step 2: the row of games shows every cover in
+  the same wide shape at the row's height, and the focus ring is not cut.
+- **Check:** human only.
+
+### RT-1013 — The detail screen and the list view still show the whole cover
+- **Area:** Android — Library cover view
+- **Mode:** MANUAL
+- **Preconditions:** A Super Nintendo game with a Japanese (tall) cover.
+- **Steps:**
+  1. Open the game's page.
+  2. Back in the library, switch to the list view and find the game.
+- **Expected:** Both show the cover whole, at its own tall shape, with nothing cropped; only the cover
+  view crops it.
+- **Check:** human only.
+
+## Android — Controller hint bar on a phone upright
+
+With a controller in use on a phone held upright, the hint bar sits directly on the bottom tab bar, as
+one opaque block (issue 884). It used to float above the tabs, with the list showing through the gap,
+because it was placed at a fixed height instead of the tab bar's real one, which changes with the
+system navigation. These need a person looking at a phone, so they are `MANUAL`.
+
+### RT-1005 — The hint bar sits flush on the tab bar on every tab, and lists still reach their end
+- **Area:** Android — Controller hint bar
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; Settings → Controllers → Interface mode set to "Controller"
+  (or a pad / D-pad key pressed, so the hint bar shows).
+- **Steps:**
+  1. Open the Settings tab.
+  2. Open the Library tab (the shelf and a console's page), then Recent and Import.
+  3. On each of those, press D-pad down until the last row is focused.
+  4. In the phone's system settings switch between gesture navigation and three-button navigation,
+     and repeat step 1.
+  5. Open a game's page and Settings → Controllers.
+  6. Turn the phone to landscape on the Settings tab.
+  7. Set Interface mode back to "Touch screen".
+- **Expected:** Steps 1, 2 and 4: the hint bar ("A Open · B Back · LB RB Tabs") touches the top of the
+  tab bar (Library / Recent / Import / Settings), the same full width, with no gap; no list row shows
+  between or behind the two bars. Step 3: the last row scrolls fully into view above the hint bar.
+  Step 5: no tab bar; the hint bar sits at the bottom edge, above the system navigation. Step 6: the
+  tabs are a rail on the left and the hint bar runs along the bottom edge, as before. Step 7: no hint
+  bar; the tab bar looks as it always did.
+- **Check:** human only.
