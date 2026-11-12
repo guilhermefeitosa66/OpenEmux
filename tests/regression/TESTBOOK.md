@@ -16474,3 +16474,32 @@ whole cover. Judged by eye on a device, so these are `MANUAL`.
 - **Expected:** Both show the cover whole, at its own tall shape, with nothing cropped; only the cover
   view crops it.
 - **Check:** human only.
+
+## Android — Controller hint bar on a phone upright
+
+With a controller in use on a phone held upright, the hint bar sits directly on the bottom tab bar, as
+one opaque block (issue 884). It used to float above the tabs, with the list showing through the gap,
+because it was placed at a fixed height instead of the tab bar's real one, which changes with the
+system navigation. These need a person looking at a phone, so they are `MANUAL`.
+
+### RT-1005 — The hint bar sits flush on the tab bar on every tab, and lists still reach their end
+- **Area:** Android — Controller hint bar
+- **Mode:** MANUAL
+- **Preconditions:** A phone held upright; Settings → Controllers → Interface mode set to "Controller"
+  (or a pad / D-pad key pressed, so the hint bar shows).
+- **Steps:**
+  1. Open the Settings tab.
+  2. Open the Library tab (the shelf and a console's page), then Recent and Import.
+  3. On each of those, press D-pad down until the last row is focused.
+  4. In the phone's system settings switch between gesture navigation and three-button navigation,
+     and repeat step 1.
+  5. Open a game's page and Settings → Controllers.
+  6. Turn the phone to landscape on the Settings tab.
+  7. Set Interface mode back to "Touch screen".
+- **Expected:** Steps 1, 2 and 4: the hint bar ("A Open · B Back · LB RB Tabs") touches the top of the
+  tab bar (Library / Recent / Import / Settings), the same full width, with no gap; no list row shows
+  between or behind the two bars. Step 3: the last row scrolls fully into view above the hint bar.
+  Step 5: no tab bar; the hint bar sits at the bottom edge, above the system navigation. Step 6: the
+  tabs are a rail on the left and the hint bar runs along the bottom edge, as before. Step 7: no hint
+  bar; the tab bar looks as it always did.
+- **Check:** human only.
