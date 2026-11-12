@@ -6474,10 +6474,10 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
   4. Open the menu again and press START.
   5. Switch the app to the light theme and open the menu again.
 - **Expected:** The top half shows the dimmed, paused game with a "PAUSED" chip and a card (cart,
-  title, time played). The bottom half starts under the fold: "Save" (focused first) beside "Load",
-  with "See all" and the slot slider under them, and "Back to game" beside that block (under it on
-  a narrow fold); the action tiles, ending with the red "Quit" tile (RT-1008); "Restart game"
-  alone on its row; the hint bar. The focus never
+  title, time played). The bottom half starts under the fold with the grid of RT-1009: "Continue"
+  (focused first, purple) beside "Restart", "Save" beside "Load", with "See all" and the slot slider
+  under them; then the action tiles, ending with the red "Quit" tile (RT-1008); the hint bar. There
+  is no "Back to game" button and no "Restart game" row (issue 881). The focus never
   leaves the bottom half. "See all" opens the save states inside
   the bottom half and B comes back. Tapping the band does nothing; tapping the card resumes the
   game. START closes the menu. The light theme has the same layout.
@@ -8494,10 +8494,12 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
      then repeat them with the system theme light and dark (`adb shell cmd uimode night yes|no`).
   5. Tap one of the saved-state pictures on the left.
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
-  left corners: the game's title and play time, "Save" beside "Load", "See all" and the slot slider
+  left corners: the game's title and play time, then the grid of RT-1009 ("Continue", purple, beside
+  "Restart"; "Save" beside "Load"), "See all" and the slot slider
   (RT-996), the action tiles (with
   the skin tiles and "RetroArch" among them, no "Save states" tile, RT-987, and the red "Quit"
-  tile last, RT-1008) and a "Restart game" row; nothing is pinned at the foot. On the left the game stays visible,
+  tile last, RT-1008); there is no "Restart game" row (issue 881) and nothing is pinned at the foot.
+  The focus starts on "Continue". On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
   "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
@@ -15065,7 +15067,7 @@ logcat's `OpenEmuxSkin` lines.
 
 ## Android — Restart from the in-game menu
 
-"Restart game" in the Android app's in-game menu (`pkg/android/openemux` of the
+"Restart" in the Android app's in-game menu, beside "Continue" (`pkg/android/openemux` of the
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android)) asks first and then
 restarts in one go. The runner has no Android device, so these are `MANUAL`.
 
@@ -15075,12 +15077,11 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Preconditions:** The app past the first-run setup, a game started and played past its title
   screen; a gamepad connected for step 4; a foldable for step 5, if there is one.
 - **Steps:**
-  1. Open the in-game menu and press "Restart game" (on a phone, upright or in landscape, the
-     "Restart" button beside "Continue").
+  1. Open the in-game menu and press "Restart", beside "Continue" in every form (issue 881).
   2. In the dialog, press "Restart".
   3. Repeat steps 1 and 2 in landscape.
-  4. With the gamepad, open the menu, select "Restart game" and press A, then move to "Restart" and
-     press A.
+  4. With the gamepad, open the menu, select the menu's "Restart" and press A, then move to the
+     dialog's "Restart" and press A.
   5. Half open the foldable and repeat steps 1 and 2.
 - **Expected:** Step 1 shows a dialog titled "Restart game?" with "Restart" and "Cancel". Step 2
   closes the dialog and the menu and the game is back at its beginning, on that one press, with no
@@ -15093,13 +15094,13 @@ restarts in one go. The runner has no Android device, so these are `MANUAL`.
 - **Mode:** MANUAL
 - **Preconditions:** A game started and played past its title screen; a gamepad connected for step 3.
 - **Steps:**
-  1. Open the in-game menu, press "Restart game" and press "Cancel".
-  2. Press "Restart game" again and tap outside the dialog.
+  1. Open the in-game menu, press "Restart" and press "Cancel".
+  2. Press "Restart" again and tap outside the dialog.
   3. With the gamepad, open the dialog and press B.
-  4. Press "Back to game".
+  4. Press "Continue".
   5. Leave the game, and on its screen press "Restart".
 - **Expected:** Steps 1 to 3 close only the dialog: the in-game menu stays open, and with the gamepad
-  focus is back on "Restart game" ("Restart" beside "Continue" on a phone, upright or in landscape). Step 4 returns to the game exactly where it was. Step 5 starts
+  focus is back on "Restart", beside "Continue". Step 4 returns to the game exactly where it was. Step 5 starts
   the game from the beginning, as it always has.
 - **Check:** human only.
 
@@ -15735,10 +15736,11 @@ the date.
 
 On a phone held upright, the Android app's in-game menu (`game/PauseSheet.kt` in the
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 849) starts with
-"Continue" and "Restart", has "Load" beside "Save", and opens with its top under the game's picture.
+a 2-column grid (issue 881): "Continue" beside "Restart", "Save" beside "Load", four buttons of the
+same size, and opens with its top under the game's picture.
 It is dragged by the pill at its top (or its header) up to a taller stop and down to close.
-A phone in landscape has the same first rows (issue 855, next section); tablets and a half-open
-foldable keep their own layouts. The runner has no Android device, so these are `MANUAL`.
+A phone in landscape, a tablet's side panel and a half-open foldable start with the same grid
+(issues 855 and 881). The runner has no Android device, so these are `MANUAL`.
 
 ### RT-972 — "Continue" heads the menu and resumes, "Restart" sits beside it
 - **Area:** Android — Pause sheet on a phone in portrait
@@ -15750,8 +15752,9 @@ foldable keep their own layouts. The runner has no Android device, so these are 
   2. Press "Continue".
   3. Open the menu, press "Restart", then "Cancel".
   4. With the gamepad, open the menu (Start) and press A.
-- **Expected:** Step 1: the first row under the game's name is "Continue", purple and the widest
-  button, with a smaller "Restart" on its right; the list further down has no "Restart game" row.
+- **Expected:** Step 1: the first row under the game's name is "Continue", purple, with "Restart" on
+  its right, the two the same width; under them "Save" and "Load", the same width again, so the
+  four buttons' left and right edges line up (issue 881); the sheet has no "Restart game" row.
   Step 2 closes the menu and the game goes on from where it was. Step 3 asks "Restart game?" and
   "Cancel" leaves the game as it was. Step 4: "Continue" is the focused button when the menu opens,
   and A resumes the game.
@@ -15769,12 +15772,35 @@ foldable keep their own layouts. The runner has no Android device, so these are 
   4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
-  and does nothing on the empty slot; there are no slot arrows (the slot slider and "See all" sit
+  and does nothing on the empty slot; both carry the down and up arrow icons of the save and load
+  keys under the game (issue 881); there are no slot arrows (the slot slider and "See all" sit
   under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
   was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
-  "Restart" are translated and no text is cut off.
+  "Restart" are translated, "Save" and "Load" keep their icons, and no text is cut off.
 - **Check:** human only.
+
+### RT-1009 — Continue, Restart, Save and Load are four equal buttons with the strip's icons
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone at about 360 dp wide (`adb shell wm size 1080x2400` with
+  `adb shell wm density 480`; restore with `adb shell wm size reset` and
+  `adb shell wm density reset`), a game started with its touch skin, no state in the slot the menu
+  opens on.
+- **Steps:**
+  1. Look at the save and load keys on the strip under the game, then open the in-game menu.
+  2. Set the app language to Deutsch, Français and தமிழ், opening the menu each time.
+  3. Switch the app to the light theme and open the menu.
+  4. Turn the phone to landscape and open the menu.
+- **Expected:** Step 1: under the header, two rows of two: "Continue" (purple) and "Restart", then
+  "Save" with "Slot N · Empty" and "Load" (faded). The four buttons are the same width and height,
+  with the same gap between the columns in both rows, so their left and right edges line up. "Save"
+  and "Load" show the same down and up arrow icons as the strip's save and load keys. Step 2: every
+  label is whole except, where it does not fit, the slot line under "Save", which ends in "…"; "Save"
+  and "Load" always keep their icons ("Restart" may drop its icon in Tamil so the word fits). Step 3:
+  the same layout in light. Step 4: the left column starts with the same grid.
+- **Check:** human only (`adb shell uiautomator dump`: the four buttons share two left edges and
+  two right edges).
 
 ### RT-974 — The menu opens under the game and stretches up by its handle
 - **Area:** Android — Pause sheet on a phone in portrait
@@ -15815,8 +15841,8 @@ foldable keep their own layouts. The runner has no Android device, so these are 
 
 On a phone lying on its side, the Android app's in-game menu (`game/PauseSheet.kt` in the
 [Android repository](https://github.com/guilhermefeitosa66/openemux-android), issue 855) still covers
-the whole screen in two columns. Its left column starts with the same rows as upright (RT-972,
-RT-973): "Continue" beside "Restart", then "Save" beside "Load", with "See all" and the slot slider
+the whole screen in two columns. Its left column starts with the same grid as upright (RT-972,
+RT-973): "Continue" beside "Restart", then "Save" beside "Load", four buttons of one size, with "See all" and the slot slider
 under them (RT-996). The runner
 has no Android device, so this is `MANUAL`.
 
@@ -15835,8 +15861,8 @@ has no Android device, so this is `MANUAL`.
   7. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
   8. Turn the phone upright and open the menu.
 - **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
-  purple and the widest button, with "Restart" on its right; under them "Save" with "Slot N · Empty"
-  and "Load", faded, then the "Save slot" caption on the left, "See all" on the right and the slot slider, the whole width of the two
+  purple, with "Restart" on its right; under them "Save" with "Slot N · Empty" and its icon and
+  "Load", faded, with its icon, the four the same width with their edges lined up (issue 881), then the "Save slot" caption on the left, "See all" on the right and the slot slider, the whole width of the two
   buttons (RT-996). The right column holds the action tiles
   (RT-987), five to a row, the red "Quit" tile last (RT-1008); there is no list and no "Restart game" row. Step 2 closes
   the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
@@ -16085,8 +16111,9 @@ gone (issue 867): "See all" under the slot slider opens the same list.
   sits between "Edit skin" and "RetroArch" (RT-989); the focus reaches every tile in reading
   order, "Quit" last. Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
   left and the tiles, five to a row, "Quit" last, are on the right; the tablet panel shows the
-  tiles in five columns, "Quit" last, with a "Restart game" row under them; the fold shows
-  "RetroArch" and "Quit" among its tiles (no skin tiles) and "Restart game" alone under them.
+  tiles in five columns, "Quit" last, and nothing under them; the fold shows "RetroArch" and
+  "Quit" among its tiles (no skin tiles) and nothing under them ("Restart" is in the grid at the
+  top, issue 881).
   Step 10: "See all" is faded and does nothing, also with the gamepad. With a skin that cannot be
   edited, "Edit skin" is faded and does nothing.
 - **Check:** human only.
@@ -16113,7 +16140,7 @@ gone (issue 867): "See all" under the slot slider opens the same list.
   icon colour as "Quit"; "Quit" does not change when the sound does. Step 3: the game closes and the
   app is back on the library; the game's AUTO state is written ("just now") and the play time grew,
   as before. Step 4: "Quit" is the last tile in every form; nothing is pinned at the tablet panel's
-  foot, and the fold's bottom row holds only "Restart game". Step 5: the grid, with "Screens", wraps
+  foot or under the fold's tiles ("Restart" is in the grid at the top, RT-1009). Step 5: the grid, with "Screens", wraps
   from the left with "Quit" last. Step 6: the focus reaches "Quit" last and A quits the game. Step 7:
   the tile reads "Sair".
 - **Check:** human only (`adb shell dumpsys activity activities | grep topResumedActivity` names
