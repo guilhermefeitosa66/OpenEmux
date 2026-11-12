@@ -264,85 +264,21 @@
       font-size: .87rem
     }
 
-    /* ---------- scroll stages ----------
-       A stage is a tall section (`data-stage`, height `--stage-len`) whose
-       `.stage-sticky` box holds still in the viewport while the section
-       scrolls past. The progress through it, 0 -> 1, plays the @keyframes of
-       its `data-stage-layer` elements. Each layer's keyframes span the whole
-       stage, so its own timing lives in the stops, and one set of keyframes
-       serves both drivers: CSS scroll-driven animations where the browser has
-       them, the script at the end of the page (which writes `--p`) elsewhere.
-       Scrolling itself is never touched: no page snap, no wheel or touch handler.
-       Without a driver the CSS below IS the final composition, which is what
-       reduced motion, no JavaScript, older browsers and screens too short for
-       the stage get, at the section's natural height. Only transform and opacity animate. */
+    /* The sticky header's height, for whatever must sit just under it. */
     :root {
       --nav-h: 65px
     }
 
-    /* Motion needs the stage to fit while it holds still: 560px of height
-       at phone width (only the devices hold), 640px in the wide layout
-       (copy and devices together). Below that the final composition. */
-    @media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),
-    (prefers-reduced-motion: no-preference) and (min-height: 640px) {
-      @supports (animation-timeline: view()) {
-        [data-stage] {
-          view-timeline: --stage block;
-          view-timeline-inset: var(--nav-h) 0;
-          min-height: var(--stage-len, 260vh)
-        }
-
-        [data-stage] .stage-sticky {
-          position: sticky;
-          top: var(--nav-h)
-        }
-
-        [data-stage] [data-stage-layer] {
-          animation-timeline: --stage;
-          animation-range: contain 0% contain 100%;
-          animation-duration: auto;
-          animation-timing-function: linear;
-          animation-fill-mode: both
-        }
-      }
-
-      [data-stage].stage-js {
-        min-height: var(--stage-len, 260vh)
-      }
-
-      .stage-js .stage-sticky {
-        position: sticky;
-        top: var(--nav-h)
-      }
-
-      .stage-js [data-stage-layer] {
-        animation-duration: 1s;
-        animation-timing-function: linear;
-        animation-fill-mode: both;
-        animation-play-state: paused;
-        animation-delay: calc(var(--p, 0) * -1s)
-      }
-
-      [data-stage].is-active [data-stage-layer] {
-        will-change: transform, opacity
-      }
-    }
-
-    /* ---------- hero (the opening stage) ---------- */
+    /* ---------- hero (the opening) ---------- */
     .hero {
-      --stage-len: 260vh;
       position: relative;
       border-top: 0;
       padding: 0;
     }
 
-    /* Positioned for the stars; a driver makes it sticky, so this stays a
-       single-class rule the driver's selectors win over. */
-    .stage-sticky {
-      position: relative
-    }
-
-    .hero .stage-sticky {
+    /* The opening's background box, positioned for the stars. */
+    .hero-box {
+      position: relative;
       overflow: clip;
       min-height: calc(100vh - var(--nav-h));
       display: flex;
@@ -459,98 +395,10 @@
       font-weight: 600
     }
 
-    /* The desktop window with the phone over its lower right corner, so both
-       read as one product. Frames are CSS, not baked into the screenshots:
-       the desktop capture already has the app's own header bar and window
-       buttons, so its frame is the border, the corners and the shadow. */
-    .stage-devices {
-      position: relative;
-      width: min(100%, 960px, calc((100vh - var(--nav-h) - 72px) * 1.42));
-      margin: 0 auto;
-      padding: 0 0 48px;
-      perspective: 1600px
-    }
-
-    /* The capture is the app's own window (libadwaita header bar and
-       buttons included): rounded corners and a shadow, never a fake title
-       bar around it. */
-    .device-desktop {
-      width: 88%;
-      border-radius: 12px;
-      overflow: hidden;
-      background: var(--panel);
-      box-shadow: 0 50px 120px rgba(0, 0, 0, .75), 0 0 0 1px rgba(139, 92, 246, .16);
-      transform-origin: 50% 100%;
-      animation-name: stage-desktop-in
-    }
-
-    .device-desktop img,
-    .device-phone img {
-      width: 100%;
-      cursor: zoom-in
-    }
-
-    /* The screen sits exactly in the middle of the body: the same bezel on
-       all four sides (padding; the <img> is a block, so no line gap below
-       it) and concentric corners, the screen's radius being the body's
-       minus its border and the bezel. */
-    .device-phone {
-      --phone-r: 24px;
-      --bezel: 6px;
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      width: 23%;
-      padding: var(--bezel);
-      box-sizing: border-box;
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, .16);
-      border-radius: var(--phone-r);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, .7);
-      animation-name: stage-phone-in
-    }
-
-    .device-phone img {
-      border-radius: calc(var(--phone-r) - var(--bezel) - 1px)
-    }
-
-    /* The window flattens into place over the first 40% of the stage; the
-       phone arrives from 30% to 75%; the rest holds the composition. */
-    @keyframes stage-desktop-in {
-      0% {
-        transform: translateY(7%) rotateX(16deg) scale(.9);
-        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
-      }
-
-      40%,
-      100% {
-        transform: translateY(0) rotateX(0) scale(1)
-      }
-    }
-
-    @keyframes stage-phone-in {
-      0%,
-      30% {
-        opacity: 0;
-        transform: translate(18%, 60%) rotate(7deg);
-        animation-timing-function: cubic-bezier(.33, 1, .68, 1)
-      }
-
-      48% {
-        opacity: 1
-      }
-
-      75%,
-      100% {
-        opacity: 1;
-        transform: translate(0, 0) rotate(0)
-      }
-    }
-
-    /* Wide: the whole stage, copy included, has to fit one screen while it
-       holds still, so the copy column is set tighter than a normal section. */
+    /* Wide: the copy column is set a little tighter than a normal section,
+       so the opening fits one screen next to the download card. */
     @media(min-width:900px) {
-      .hero .stage-sticky {
+      .hero-box {
         padding: 40px 0 28px
       }
 
@@ -574,14 +422,9 @@
       }
     }
 
-    /* Phone width: copy on top, the window and then the phone stacked under
-       it (nothing overlaps). The devices block is what holds still. */
+    /* Phone width: the copy on top, the download card under it. */
     @media(max-width:899px) {
-      .hero {
-        --stage-len: 240vh
-      }
-
-      .hero .stage-sticky {
+      .hero-box {
         display: block;
         padding: 40px 0 32px
       }
@@ -608,65 +451,6 @@
       .hero p.lede {
         margin-left: auto;
         margin-right: auto
-      }
-
-      .stage-devices {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 18px;
-        padding: 0
-      }
-
-      .device-desktop {
-        width: 100%
-      }
-
-      .device-phone {
-        --phone-r: 18px;
-        --bezel: 4px;
-        position: relative;
-        width: 34%
-      }
-    }
-
-    /* With a driver the box that holds still is the devices block, so the
-       copy and the download card above it scroll away first. Its containing
-       block has to be as tall as the stage for it to travel. */
-    @media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),
-    (prefers-reduced-motion: no-preference) and (min-height: 640px) {
-      @supports (animation-timeline: view()) {
-        [data-stage].hero .stage-sticky {
-          position: relative;
-          top: auto;
-          min-height: var(--stage-len)
-        }
-
-        [data-stage].hero .hero-inner {
-          display: block;
-          min-height: calc(var(--stage-len) - 72px)
-        }
-
-        [data-stage].hero .stage-devices {
-          position: sticky;
-          top: calc(var(--nav-h) + 12px)
-        }
-      }
-
-      .hero.stage-js .stage-sticky {
-        position: relative;
-        top: auto;
-        min-height: var(--stage-len)
-      }
-
-      .hero.stage-js .hero-inner {
-        display: block;
-        min-height: calc(var(--stage-len) - 72px)
-      }
-
-      .hero.stage-js .stage-devices {
-        position: sticky;
-        top: calc(var(--nav-h) + 12px)
       }
     }
 
@@ -2259,7 +2043,6 @@
     }
 
     /* Zoomable screenshots -> lightbox */
-    .stage-devices img,
     .gal-carts img {
       cursor: zoom-in;
       transition: transform .15s ease
@@ -3377,7 +3160,6 @@
     }
   </style>
   <script src="../lang.js"></script>
-  <link rel="preload" as="image" type="image/avif" imagesrcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" fetchpriority="high" />
 </head>
 
 <body>
@@ -3415,13 +3197,10 @@
   </header>
 
   <main>
-  <!-- OPENING: the copy and the download card side by side, then the
-       desktop library with the phone in front of it. A scroll stage (see
-       "scroll stages" in the CSS): the copy and the card scroll away, the
-       window settles into place, then the phone lands over its lower right
-       corner. -->
-  <section class="hero" id="top" data-stage>
-    <div class="stage-sticky">
+  <!-- OPENING: the copy and the download card side by side; What's new
+       follows straight after. -->
+  <section class="hero" id="top">
+    <div class="hero-box">
       <div class="stars"></div>
       <div class="wrap hero-inner">
         <div class="hero-top">
@@ -3531,14 +3310,6 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <a href="#install">So installierst du es ↓</a>
           </div>
         </aside>
-        </div>
-        <div class="stage-devices">
-          <div class="device-desktop" data-stage-layer>
-            <picture><source type="image/avif" srcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><source type="image/webp" srcset="../assets/desktop/grid-sfc-640.webp 640w, ../assets/desktop/grid-sfc-1280.webp 1280w, ../assets/desktop/grid-sfc-1920.webp 1920w, ../assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><img src="../assets/desktop/grid-sfc.png" alt="OpenEmux auf dem Computer, die Super-Nintendo-Bibliothek mit ihren Covern" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="../assets/desktop/grid-sfc-2640.webp" /></picture>
-          </div>
-          <div class="device-phone" data-stage-layer>
-            <picture><source type="image/avif" srcset="../assets/android/library-snes-640.avif 640w, ../assets/android/library-snes-1280.avif 1280w, ../assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><source type="image/webp" srcset="../assets/android/library-snes-640.webp 640w, ../assets/android/library-snes-1280.webp 1280w, ../assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><img src="../assets/android/library-snes.png" alt="OpenEmux auf Android, die Super-Nintendo-Bibliothek" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="../assets/android/library-snes-1440.webp" /></picture>
-          </div>
         </div>
       </div>
     </div>
@@ -4259,7 +4030,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         img.src = '';
       }
 
-      document.querySelectorAll('.stage-devices img, .gal-carts img').forEach(function (el) {
+      document.querySelectorAll('.gal-carts img').forEach(function (el) {
         el.addEventListener('click', function () {
           var fig = el.closest('figure');
           var caption = fig ? (fig.querySelector('figcaption') || {}).textContent : '';
@@ -4770,78 +4541,6 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     })();
   </script>
 
-  <!-- Scroll stages: the fallback driver (see "scroll stages" in the CSS).
-       Browsers with scroll-driven animations need nothing from here but the
-       will-change switch; elsewhere this writes each on-screen stage's
-       progress into --p. It only reads the scroll position: one passive
-       listener, one requestAnimationFrame, nothing that moves the page. -->
-  <script>
-    (function () {
-      var stages = [].slice.call(document.querySelectorAll("[data-stage]"));
-      if (!stages.length) return;
-      var motion = window.matchMedia(
-        "(prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px), " +
-        "(prefers-reduced-motion: no-preference) and (min-height: 640px)");
-      var native = window.CSS && CSS.supports && CSS.supports("animation-timeline: view()");
-      var visible = [];
-      var ticking = false;
-      var js = false;
-      var header = document.querySelector("header");
-
-      function navHeight() {
-        return header ? header.getBoundingClientRect().height : 0;
-      }
-
-      // 0 when the section's top reaches the bottom of the header, 1 when
-      // its bottom reaches the bottom of the viewport: the same range as
-      // the CSS driver's `contain`.
-      function update() {
-        ticking = false;
-        var top = navHeight();
-        var vh = window.innerHeight;
-        visible.forEach(function (stage) {
-          var r = stage.getBoundingClientRect();
-          var travel = r.height - (vh - top);
-          var p = travel > 0 ? (top - r.top) / travel : 1;
-          stage.style.setProperty("--p", Math.max(0, Math.min(1, p)).toFixed(4));
-        });
-      }
-
-      function request() {
-        if (js && !ticking) { ticking = true; requestAnimationFrame(update); }
-      }
-
-      function apply() {
-        js = motion.matches && !native;
-        stages.forEach(function (stage) { stage.classList.toggle("stage-js", js); });
-        if (js) update();
-      }
-
-      if ("IntersectionObserver" in window) {
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            entry.target.classList.toggle("is-active", entry.isIntersecting);
-            var i = visible.indexOf(entry.target);
-            if (entry.isIntersecting && i < 0) visible.push(entry.target);
-            if (!entry.isIntersecting && i >= 0) visible.splice(i, 1);
-          });
-          request();
-        });
-        stages.forEach(function (stage) { io.observe(stage); });
-      } else {
-        // No observer: every stage counts as on screen.
-        visible = stages.slice();
-        stages.forEach(function (stage) { stage.classList.add("is-active"); });
-      }
-
-      if (!native) {
-        window.addEventListener("scroll", function () { if (motion.matches) request(); }, { passive: true });
-        window.addEventListener("resize", function () { if (motion.matches) request(); });
-      }
-      if (motion.addEventListener) motion.addEventListener("change", apply);
-      apply();
-    })();
-  </script>
 </body>
 
 </html>

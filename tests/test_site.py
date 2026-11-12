@@ -395,8 +395,11 @@ def _blocks(css, opener):
         start = k
 
 
-class TheOpeningStageTests(unittest.TestCase):
-    """The opening as a scroll stage: the desktop, then the phone (issue 686)."""
+class TheOpeningTests(unittest.TestCase):
+    """The opening: the copy and the download card, then straight to What's new.
+
+    It used to be a scroll stage with the desktop and the phone (issue 686);
+    the maintainer cut that, and with it the page's only stage."""
 
     FIRST_SCREEN_BUDGET = 600 * 1024
     PAGE_BUDGET = 6 * 1024 * 1024
@@ -405,87 +408,33 @@ class TheOpeningStageTests(unittest.TestCase):
         self.en = (REPO / "docs" / "index.html").read_text(encoding="utf-8")
         self.css = _css(self.en)
 
-    def test_the_opening_is_a_stage_with_the_desktop_and_the_phone(self):
+    def test_the_opening_is_the_copy_and_the_card_then_whats_new(self):
         for locale in build_site.ORDER:
             text = build_site.render(locale)
-            hero = re.search(r'<section class="hero" id="top" data-stage>(.*?)</section>', text, re.S)
             with self.subTest(locale=locale):
+                hero = re.search(r'<section class="hero" id="top">(.*?)</section>', text, re.S)
                 self.assertIsNotNone(hero)
-                hero = hero.group(1)
-                self.assertIn('class="stage-sticky"', hero)
-                layers = re.findall(r'<div class="(device-[a-z]+)" data-stage-layer>\s*<picture>(.*?)</picture>',
-                                    hero, re.S)
-                self.assertEqual([name for name, _ in layers], ["device-desktop", "device-phone"])
-                self.assertIn("assets/desktop/grid-sfc.png", layers[0][1])
-                self.assertIn("assets/android/library-snes.png", layers[1][1])
-                for _, pic in layers:
-                    self.assertIn('fetchpriority="high"', pic)
+                self.assertIn('<p class="hero-brand"><img src="', hero.group(1))
+                self.assertNotIn("<picture>", hero.group(1))
+                self.assertNotIn("device-", hero.group(1))
+                after = text[hero.end():]
+                self.assertRegex(after, r'(?s)^\s*(<!--.*?-->\s*)?<section class="news" id="news">')
 
-    def test_the_frames_are_css_only(self):
-        # The desktop capture is the app's own window (header bar and window
-        # buttons included): no second, fake title bar around it.
-        hero = re.search(r'<section class="hero".*?</section>', self.en, re.S).group(0)
-        self.assertNotIn("window-bar", hero)
-        self.assertNotIn("window-bar", self.css)
-
-    def test_the_phone_screen_is_centred_with_concentric_corners(self):
-        phone = _blocks(self.css, ".device-phone {")[0]
-        self.assertIn("padding: var(--bezel)", phone)
-        self.assertIn("border-radius: var(--phone-r)", phone)
-        self.assertIn("border: 1px solid", phone)
-        screen = _blocks(self.css, ".device-phone img {")[-1]
-        self.assertIn("border-radius: calc(var(--phone-r) - var(--bezel) - 1px)", screen)
-
-    def test_only_transform_and_opacity_animate(self):
-        frames = re.findall(r"@keyframes (stage-[a-z-]+)", self.css)
-        self.assertEqual(sorted(frames), ["stage-desktop-in", "stage-phone-in"])
-        for name in frames:
-            body = _blocks(self.css, f"@keyframes {name}")[0]
-            props = set(re.findall(r"([a-z-]+)\s*:", body))
-            with self.subTest(keyframes=name):
-                self.assertLessEqual(props, {"transform", "opacity", "animation-timing-function"})
-
-    def test_motion_only_with_a_driver_and_never_under_reduced_motion(self):
-        # Without a driver the CSS is the final composition: the tall height
-        # and the sticky box appear only inside the motion query, under the
-        # CSS driver's @supports or the script's .stage-js.
-        outside = self.css
-        for block in _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),") + _blocks(
-                self.css, "@media (max-width: 899px) and (prefers-reduced-motion: no-preference)"):
-            outside = outside.replace(block, "")
-        self.assertNotIn("var(--stage-len", outside)
-        self.assertNotIn("position: sticky;\n      top: var(--nav-h)", outside)
-        motion = _blocks(self.css, "@media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),")[0]
-        self.assertIn("@supports (animation-timeline: view())", motion)
-        self.assertIn(".stage-js [data-stage-layer]", motion)
-        self.assertIn("animation-play-state: paused", motion)
-        self.assertIn("calc(var(--p, 0) * -1s)", motion)
-        # The script's query is the stylesheet's, so both drivers agree on when to move.
-        self.assertIn('"(prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px), " +\n'
-                      '        "(prefers-reduced-motion: no-preference) and (min-height: 640px)"', self.en)
-        self.assertIn("(prefers-reduced-motion: no-preference) and (min-height: 640px) {", self.css)
+    def test_no_scroll_stage_is_left(self):
+        for needle in ("data-stage", "--stage-len", "stage-js", "animation-timeline", "stage-sticky",
+                       "stage-devices", "@keyframes stage-"):
+            with self.subTest(needle=needle):
+                self.assertNotIn(needle, self.en)
 
     def test_scrolling_is_never_taken_over(self):
         # The page never snaps; the only snap is the galleries' own sideways
         # track (issue 688), which moves the gallery, not the page.
         self.assertEqual(re.findall(r"scroll-snap-type:[^;}]*", self.css), ["scroll-snap-type: x mandatory"])
         self.assertIn("scroll-snap-type: x mandatory", _blocks(self.css, ".gal-track {")[0])
-        engine = re.search(r"<!-- Scroll stages: the fallback driver.*?</script>", self.en, re.S).group(0)
-        for needle in ("wheel", "touchmove", "touchstart", "keydown", "preventDefault", "scrollTo(",
-                       "scrollBy(", "scrollIntoView"):
-            with self.subTest(needle=needle):
-                self.assertNotIn(needle, engine)
-        self.assertIn('addEventListener("scroll", function () { if (motion.matches) request(); }, '
-                      '{ passive: true })', engine)
 
-    def test_the_first_screen_image_is_preloaded(self):
-        head = self.en.split("</head>")[0]
-        links = re.findall(r'<link rel="preload" as="image" type="image/avif" imagesrcset="([^"]*)" '
-                           r'imagesizes="([^"]*)" fetchpriority="high" />', head)
-        self.assertEqual(len(links), 1)
-        source = re.search(r'<source type="image/avif" srcset="([^"]*)" sizes="([^"]*)" />', self.en)
-        self.assertEqual(links[0], source.groups())
-        self.assertIn("desktop/grid-sfc-", links[0][0])
+    def test_the_brand_logo_is_a_reduced_copy(self):
+        self.assertIn('<img src="assets/logo-240.png" width="120" height="126" alt="" />', self.en)
+        self.assertEqual(_png_size(REPO / "docs" / "assets" / "logo-240.png"), (240, 253))
 
     def test_the_link_preview_is_the_opening(self):
         self.assertIn('<meta property="og:image" content="https://guilhermefeitosa66.github.io/OpenEmux/'
@@ -507,7 +456,7 @@ class TheOpeningStageTests(unittest.TestCase):
         pictures = re.findall(r"<picture><source.*?</picture>", text, re.S)
         if first_screen:
             pictures = [p for p in pictures if 'fetchpriority="high"' in p]
-            plain = ["assets/logo-128.png"]
+            plain = ["assets/logo-128.png", "assets/logo-240.png"]
         else:
             # Every <img> outside a <picture>, the video's poster excluded.
             rest = re.sub(r"<picture><source.*?</picture>", "", text, flags=re.S)
@@ -952,13 +901,12 @@ class TheDownloadCardTests(unittest.TestCase):
         start = hero.index('<aside class="get" id="downloads"')
         return hero[start:hero.index("</aside>", start)]
 
-    def test_it_sits_beside_the_copy_above_the_devices(self):
+    def test_it_sits_beside_the_copy(self):
         text = build_site.render("en")
         hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', text, re.S).group(1)
         top = hero.index('<div class="hero-top">')
         self.assertLess(top, hero.index('<div class="hero-copy">'))
         self.assertLess(hero.index('<div class="hero-copy">'), hero.index('id="downloads"'))
-        self.assertLess(hero.index("</aside>"), hero.index('<div class="stage-devices">'))
 
     def test_a_tab_and_a_panel_per_platform(self):
         card = self._card()

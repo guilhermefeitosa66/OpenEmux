@@ -14,8 +14,6 @@
   "hero.lede": "<p class=\"lede\">添加你拥有的游戏。OpenEmux 会按主机整理，并配上封面，支持 Linux、Windows 和 Android。</p>",
   "hero.install_link": "如何安装 ↓",
   "hero.watch": "▶ 观看视频（44 秒）",
-  "hero.shot_desktop": "桌面版 OpenEmux，带封面的超级任天堂游戏库",
-  "hero.shot_phone": "安卓版 OpenEmux，超级任天堂游戏库",
   "hero.note": "<p class=\"cta-note\">免费开源 · MIT 许可 · Linux 提供 AppImage、.deb、.rpm &amp; Flatpak ·\n        Windows 提供安装程序 &amp; 便携版 ZIP · Android 提供 APK（GPLv3）</p>",
   "hero.relation": "<p class=\"cta-note\">受 macOS 上的 <a href=\"https://openemu.org/\">OpenEmu</a> 启发，但并非分支（fork）：这是一套独立的代码，以 RetroArch 作为模拟后端。<a href=\"#thanks\">了解更多</a>。</p>",
   "hero.video_label": "44 秒了解 OpenEmux：桌面版的游戏库、卡带视图和游戏运行，然后是 Android 应用的货架、屏幕手柄、竖屏与横屏以及 Nintendo DS",
