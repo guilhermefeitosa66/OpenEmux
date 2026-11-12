@@ -6004,7 +6004,7 @@ real RetroAchievements account say so; without one they are handed to the mainta
 - **Expected:** Step 2 offers "Play", not "Continue". Step 3 shows "Loading states is off in
   hardcore mode" and does not launch. Step 4: the game starts from the beginning; the engine's
   notification mentions hardcore; the pause sheet shows a "HARDCORE" tag and a warning, "Load"
-  (beside "Save"), "See all", the "Save states" tile and "Fast forward" are faded and do
+  (beside "Save"), "See all" and "Fast forward" are faded and do
   nothing (also with a gamepad), "Save" and the slot slider still work; the skin's load button is refused by RetroArch, and its fast-forward button
   is faded and does nothing (RetroArch itself allows fast forward in hardcore, so the app leaves
   it out). Step 5: "Continue" is back, and so is the skin's fast forward. Same in landscape.
@@ -7902,11 +7902,11 @@ Android device, so these are `MANUAL`: a person runs them on a phone or a headle
   4. Turn the phone to landscape, close and reopen the pause sheet.
 - **Expected:** In step 1 the strip has seven slots: save, load, turbo, slow motion, fast forward,
   anchor and the screen layout last, nothing clipped. In step 2 the slow-motion pill fits its slot, and the
-  sheet's ten tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Mute", "Save
-  states", "Change skin", "Edit skin", "RetroArch menu") wrap into four columns, 4 + 4 + 2, the last
-  row from the left (issues 858 and 862), each tile full size with its full label; "Screens" has the
+  sheet's nine tiles ("Fast forward", "Slow motion", "Screenshot", "Shader", "Screens", "Mute",
+  "Change skin", "Edit skin", "RetroArch menu") wrap into four columns, 4 + 4 + 1, the last
+  row from the left (issues 858, 862 and 867), each tile full size with its full label; "Screens" has the
   layout in use under its label (at most two lines, as narrow as the tile; issue 709). In step 3 the
-  D-pad reaches every tile, across all three rows. In step 4 the tiles are in five columns, 5 + 5.
+  D-pad reaches every tile, across all three rows. In step 4 the tiles are in five columns, 5 + 4.
 - **Check:** human only.
 
 ### RT-462 — Turbo and fast forward light up on the package skins
@@ -8490,7 +8490,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
   left corners: the game's title and play time, "Save" beside "Load", "See all" and the slot slider
   (RT-996), the action tiles (with
-  "Save states", the skin tiles and "RetroArch menu" among them, RT-987), a "Restart game" row, and
+  the skin tiles and "RetroArch menu" among them, no "Save states" tile, RT-987), a "Restart game" row, and
   "Quit game" at the foot. On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
   "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
@@ -15598,7 +15598,8 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   4. Open the menu again and drag the thumb slowly from 4 to 8, then let go.
   5. Tap stop 4, close the menu with its ×, open it again; then quit, start the game again and open
      the menu.
-- **Expected:** Step 1: no ‹ › arrows; "See all ›" is on the right under "Load"; under it a slider
+- **Expected:** Step 1: no ‹ › arrows; under "Save" and "Load" a line with the caption "Save slot" on
+  the left (pt-BR "Slot do save") and "See all ›" on the right, under "Load"; under that line a slider
   with ten round stops, 0 to 9, all outlined and dimmed; the thumb, bigger and with a halo, is on 0
   with "0" inside, also outlined; "Save" reads "Slot 0 · Empty" and "Load" is faded. Step 2: the
   thumb jumps to 4 ("4" inside) and "Save" reads "Slot 4 · Empty" at once. Step 3: "State saved to
@@ -15618,8 +15619,8 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
   2. Tap the slot 12 picture; once the game is on, open the menu.
   3. Press "Save", then "Load".
   4. Tap stop 3 on the slider.
-- **Expected:** Step 1: the "Save states" page with the pictures (tap to load), the same page the
-  "Save states" tile opens. Step 2: the slot 12 state loads; the slider shows an eleventh stop "12" at
+- **Expected:** Step 1: the "Save states" page with the pictures (tap to load), the only way to it from
+  the menu (there is no "Save states" tile, RT-987). Step 2: the slot 12 state loads; the slider shows an eleventh stop "12" at
   its end, filled, as the thumb; stops 0 to 9 keep their look (4 filled); "Save" reads
   "Slot 12 · In use". Step 3: "State saved to slot 12" and "Load" brings back that moment. Step 4:
   the "12" stop goes away, the thumb is on 3 and "Save" reads "Slot 3 · Empty".
@@ -15827,13 +15828,13 @@ has no Android device, so this is `MANUAL`.
   8. Turn the phone upright and open the menu.
 - **Expected:** Step 1: the menu covers the whole screen; the left column starts with "Continue",
   purple and the widest button, with "Restart" on its right; under them "Save" with "Slot N · Empty"
-  and "Load", faded, then "See all" on the right and the slot slider, the whole width of the two
+  and "Load", faded, then the "Save slot" caption on the left, "See all" on the right and the slot slider, the whole width of the two
   buttons (RT-996). The right column holds the action tiles
   (RT-987), five to a row, then "Quit game"; there is no list and no "Restart game" row. Step 2 closes
   the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
   the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", that slot's
   stop turns filled, and "Load" brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
-  resumes. Step 6: the hardcore warning sits under the two rows; "Load" and the "Save states" tile are faded.
+  resumes. Step 6: the hardcore warning sits under the two rows; "Load" and "See all" are faded.
   Step 7: every button is translated and no button text is cut off (in Tamil "Restart" may show
   without its icon so the word fits). Step 8: the upright menu is RT-972's, unchanged.
 - **Check:** human only.
@@ -15853,10 +15854,10 @@ has no Android device, so this is `MANUAL`.
      each time.
   5. Upright, with the gamepad, move from the tiles' first row to the second and along each row.
 - **Expected:** Step 1: four columns; "Fast forward", "Slow motion", "Screenshot" and "Shader" on
-  the first row, "Mute", "Save states", "Change skin" and "Edit skin" on the second, "RetroArch menu"
-  alone on the third under "Fast forward" (issue 862); the tiles close together (about the same
+  the first row, "Mute", "Change skin", "Edit skin" and "RetroArch menu" on the second, and no third
+  row (issues 862 and 867: there is no "Save states" tile); the tiles close together (about the same
   spacing as in landscape), the rows lined up with the buttons above, every label whole. Step 2: five
-  tiles to a row, 5 + 4. Step 3: five columns, nothing cut
+  tiles to a row, 5 + 3. Step 3: five columns, nothing cut
   or overlapping. Step 4: every label is complete and centred, on at most two lines, no word broken
   in the middle (a long word such as "Bildschirmfoto" shows a little smaller instead); nothing
   overlaps. Step 5: the focus goes through the tiles in reading order, left to right, then the
@@ -16041,10 +16042,11 @@ has no Android device, so this is `MANUAL`.
 ## Android — Pause sheet action tiles
 
 Every action of the Android pause sheet is a tile in one grid (issues 858 and 862): the former list
-rows "Save states", "Change skin", "Edit skin" and "RetroArch menu" follow the other tiles. Only the
-toggles (fast forward, slow motion, mute) ever light up.
+rows "Change skin", "Edit skin" and "RetroArch menu" follow the other tiles. Only the
+toggles (fast forward, slow motion, mute) ever light up. The "Save states" tile issue 862 added is
+gone (issue 867): "See all" under the slot slider opens the same list.
 
-### RT-987 — Save states, Change skin, Edit skin and RetroArch menu are tiles, not rows
+### RT-987 — Change skin, Edit skin and RetroArch menu are tiles, not rows; no Save states tile
 - **Area:** Android — Pause sheet
 - **Mode:** MANUAL
 - **Preconditions:** A phone, a Super Nintendo game started with a skin of its console, RetroAchievements
@@ -16052,7 +16054,7 @@ toggles (fast forward, slow motion, mute) ever light up.
   for step 9 if available.
 - **Steps:**
   1. Hold the phone upright and open the in-game menu.
-  2. Tap "Save states", then the back arrow at the top of the page.
+  2. Tap "See all" (under "Load"), then the back arrow at the top of the page.
   3. Close the menu, save a state from the skin or the menu, and open the menu again.
   4. Tap "Change skin", pick another skin, and open the menu again.
   5. Tap "Edit skin", close the editor without changes.
@@ -16063,20 +16065,21 @@ toggles (fast forward, slow motion, mute) ever light up.
   9. Turn the phone to landscape and open the menu; then, if available, open it on a tablet and on a
      half-open fold.
   10. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
-- **Expected:** Step 1: no list under the tiles; after "Mute" come the tiles "Save states" ("None
-  saved" under it), "Change skin" (the skin in use under it), "Edit skin" and "RetroArch menu" ("This
+- **Expected:** Step 1: no list under the tiles; after "Mute" come the tiles "Change skin" (the skin
+  in use under it), "Edit skin" and "RetroArch menu" ("This
   session only" under it), same size and style as "Fast forward", in the grid of RT-984; "Quit game"
-  follows the tiles. Step 2 opens the save states page and the arrow returns to the main menu. Step 3:
-  "1 saved" under "Save states". Step 4 opens the skin page; afterwards the tile names the new skin.
+  follows the tiles. There is no "Save states" tile (issue 867). Step 2 opens the save states
+  page and the arrow returns to the main menu. Step 3: the slot just saved is filled on the slot
+  slider, and there is still no "Save states" tile. Step 4 opens the skin page; afterwards the tile names the new skin.
   Step 5 opens the skin editor on the skin in use and closing it returns to the menu. Step 6 opens
-  RetroArch's menu. Step 7: only "Fast forward" lights up; "Save states", "Change skin", "Edit skin"
+  RetroArch's menu. Step 7: only "Fast forward" lights up; "Change skin", "Edit skin"
   and "RetroArch menu" never show the lit state. Step 8: with the gamepad connected a "Touch controls" tile
   sits between "Edit skin" and "RetroArch menu" (RT-989); the focus reaches every tile in reading
   order, then "Quit game". Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
   left and the tiles, five to a row, and "Quit game" are on the right; the tablet panel shows the
-  tiles in five columns with a "Restart game" row under them; the fold shows "Save states" and
-  "RetroArch menu" among its tiles (no skin tiles) and "Restart game" beside "Quit game" under them.
-  Step 10: "Save states" is faded and does nothing, also with the gamepad. With a skin that cannot be
+  tiles in five columns with a "Restart game" row under them; the fold shows "RetroArch menu"
+  among its tiles (no skin tiles) and "Restart game" beside "Quit game" under them.
+  Step 10: "See all" is faded and does nothing, also with the gamepad. With a skin that cannot be
   edited, "Edit skin" is faded and does nothing.
 - **Check:** human only.
 
