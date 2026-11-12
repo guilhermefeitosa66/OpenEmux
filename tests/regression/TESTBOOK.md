@@ -9670,10 +9670,12 @@ or into an environment that cannot run the tests.
   3. DevTools device mode at 360×740, reload, scroll through; try to scroll sideways.
   4. A wide window under 640 px tall (device mode 1280×600), reload, scroll through.
 - **Expected:** 1, 2 and 4: the final composition (window flat, phone over its corner), static, at
-  the section's natural height: no long empty scroll, every button and link works. 3: the copy
-  on top, then the window and the phone below it, centred, nothing overlapping or cut; while the
-  copy scrolls away the window settles, the devices hold at the top while the phone lands, then
-  the page goes on; no horizontal scroll (issue 686).
+  the section's natural height: no long empty scroll, every button and link works; without
+  JavaScript the download card lists Linux, Windows and Android one under the other, each under
+  its name. 3: the copy on top, the download card under it, then the window and the phone below,
+  centred, nothing overlapping or cut; while the copy and the card scroll away the window
+  settles, the devices hold at the top while the phone lands, then the page goes on; no
+  horizontal scroll (issue 686).
 - **Check:** human only. Unit-level: `tests/test_site.py`
   (`test_motion_only_with_a_driver_and_never_under_reduced_motion`).
 
@@ -9685,9 +9687,9 @@ or into an environment that cannot run the tests.
   with an Android and a Windows user agent; paste the site's URL into a link-preview tester.
 - **Expected:** the first screen transfers at most ~600 KB and the page at most ~6 MB without
   the video; the desktop capture's AVIF is preloaded from `<head>`; the header uses the 128 px
-  logo; the link preview is `og-opening.png` (1200×630, the opening's composition); an Android
-  user agent gets "Download for Android" first and highlighted, Windows gets Windows first,
-  anything else Linux first (issue 686).
+  logo; the link preview is `og-opening.png` (1200×630, the opening's composition); the download
+  card opens on "Android" for an Android user agent, on "Windows" for Windows, and on "Linux"
+  for anything else (issue 686).
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheOpeningStageTests -v 2>&1 | tail -3
@@ -16746,3 +16748,53 @@ has no Android device, so these are `MANUAL`.
   4 the tablet layouts have the triangle combo and the square A, and the game draws the same shapes in
   portrait and landscape. In step 5 the combo is the triangle in landscape, in the editor and in game.
 - **Check:** human only.
+
+## Site — Download card and What's new
+
+### RT-1026 — The download card beside the opening copy has every file of the latest release
+- **Area:** Site — Download card and What's new
+- **Mode:** MANUAL
+- **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), a window
+  about 1440×900, then DevTools device mode at 390×844.
+- **Steps:**
+  1. Open the home page. Look at the right of "Your retro collection, ready to play.".
+  2. In the card, go through "Linux", "Windows" and "Android" (click, then the arrow keys).
+  3. Click each download button of each tab; on Linux, click "Copy" next to each command and paste
+     it into a text editor.
+  4. Click "All versions and files →", come back, click "How to install ↓", and click "Download"
+     in the header.
+  5. Repeat 1 at 390×844.
+- **Expected:** 1: a card "Download OpenEmux" with "Latest" and the version number of the latest
+  release, and three tabs. 2: "Linux" lists Flatpak (marked "Recommended"), AppImage, Debian /
+  Ubuntu, Fedora and Arch Linux, each with a one-line description, a download button named after
+  the file type and the command that installs it; "Windows" lists the Installer ("Recommended")
+  and the Portable build, marked "Nothing installed" and saying it runs from a USB stick, with the
+  "Beta" note; "Android" the APK with its requirements. 3: each button downloads the file of the
+  latest release straight away (no Releases page in between), and each pasted command is exactly
+  the one shown, with no "Copy" label in it. 4: the first opens the latest release on GitHub,
+  the second scrolls to "Installing", and the header button scrolls back to the card. 5: the copy
+  first, the card under it at the full width, nothing cut and no sideways scroll; the copy
+  buttons show only their icon.
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheDownloadCardTests`).
+
+### RT-1027 — "What's new" shows the latest release with its animation and the ones before
+- **Area:** Site — Download card and What's new
+- **Mode:** MANUAL
+- **Preconditions:** as RT-1026.
+- **Steps:**
+  1. Click "What's new in this version ↓" under the opening copy.
+  2. Watch the phone in the section for about 20 seconds.
+  3. Click "Read the release notes →" and "Every release →", then a card under "Earlier releases".
+  4. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, look at the phone.
+  5. Switch the page to Português and to 日本語 and read the section.
+- **Expected:** 1: the page scrolls to "What's new · v<the latest version>", with a headline, a
+  short paragraph and four highlights. 2: on a loop of about nine seconds, the anchor key lights
+  up under a fingertip, the finger holds Y (Y lights) and slides onto B and back (B lights, the
+  character on the small screen jumps each time) while Y stays lit, then a "Y+B" button pops up
+  and is pressed (Y, B and the combo light together, the character jumps higher); the numbered
+  step under the phone that matches the moment is bright and the others dim. 3: the notes of
+  this version, the list of releases and the page of that earlier release open on GitHub. 4:
+  nothing moves: the anchor, Y and B lit and the combo shown, all three steps bright. 5: every
+  text of the section, the steps and the dates are in that language. The release skill rewrites
+  the section for every release.
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheNewsTests`).

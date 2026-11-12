@@ -204,8 +204,9 @@
 
     /* The full link row needs up to ~1100px next to the brand (French is the
        longest); collapse it before that, or the links wrap onto two lines and
-       the Download button is pushed past the viewport edge. */
-    @media(max-width:1099px) {
+       the Download button is pushed past the viewport edge. "What's new"
+       needs ~1500px in Portuguese. */
+    @media(max-width:1499px) {
       .nav-links a:not(.btn) {
         display: none
       }
@@ -361,15 +362,20 @@
         radial-gradient(1.1px 1.1px at 54% 84%, #fff, transparent);
     }
 
-    /* Wide: copy on the left, the devices on the right, both in one screen. */
+    /* The copy and the download card side by side on top, the devices
+       under them. */
     .hero-inner {
       position: relative;
       width: 100%;
-      box-sizing: border-box;
+      box-sizing: border-box
+    }
+
+    .hero-top {
       display: grid;
-      grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
-      gap: 48px;
-      align-items: center
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 56px;
+      align-items: center;
+      padding-bottom: 56px
     }
 
     .beta {
@@ -432,6 +438,8 @@
        buttons, so its frame is the border, the corners and the shadow. */
     .stage-devices {
       position: relative;
+      width: min(100%, 960px, calc((100vh - var(--nav-h) - 72px) * 1.42));
+      margin: 0 auto;
       padding: 0 0 48px;
       perspective: 1600px
     }
@@ -516,26 +524,17 @@
        holds still, so the copy column is set tighter than a normal section. */
     @media(min-width:900px) {
       .hero .stage-sticky {
-        padding: 28px 0
+        padding: 40px 0 28px
       }
 
       .hero h1 {
-        font-size: clamp(2.2rem, 3.4vw, 3.1rem);
+        font-size: clamp(2.3rem, 3.8vw, 3.4rem);
         margin-bottom: 14px
       }
 
       .hero p.lede {
         margin-bottom: 20px;
         font-size: 1.05rem
-      }
-
-      .hero .cta {
-        gap: 10px
-      }
-
-      .hero .cta .btn {
-        padding: 10px 16px;
-        font-size: .95rem
       }
 
       .hero-links {
@@ -560,13 +559,16 @@
         padding: 40px 0 32px
       }
 
-      .hero-inner {
+      .hero-top {
         grid-template-columns: minmax(0, 1fr);
         gap: 32px;
+        padding-bottom: 40px
+      }
+
+      .hero-copy {
         text-align: center
       }
 
-      .cta,
       .hero-links {
         justify-content: center
       }
@@ -597,10 +599,11 @@
       }
     }
 
-    /* With a driver at phone width the box that holds still is the devices
-       block, so the copy above it scrolls away first. Its containing block
-       has to be as tall as the stage for it to travel. */
-    @media (max-width: 899px) and (prefers-reduced-motion: no-preference) and (min-height: 560px) {
+    /* With a driver the box that holds still is the devices block, so the
+       copy and the download card above it scroll away first. Its containing
+       block has to be as tall as the stage for it to travel. */
+    @media (prefers-reduced-motion: no-preference) and (max-width: 899px) and (min-height: 560px),
+    (prefers-reduced-motion: no-preference) and (min-height: 640px) {
       @supports (animation-timeline: view()) {
         [data-stage].hero .stage-sticky {
           position: relative;
@@ -615,8 +618,7 @@
 
         [data-stage].hero .stage-devices {
           position: sticky;
-          top: calc(var(--nav-h) + 12px);
-          margin-top: 32px
+          top: calc(var(--nav-h) + 12px)
         }
       }
 
@@ -633,8 +635,7 @@
 
       .hero.stage-js .stage-devices {
         position: sticky;
-        top: calc(var(--nav-h) + 12px);
-        margin-top: 32px
+        top: calc(var(--nav-h) + 12px)
       }
     }
 
@@ -2547,6 +2548,802 @@
         mask-image: linear-gradient(90deg, transparent 0, #000 10%, #000 90%, transparent 100%)
       }
     }
+
+    /* ---------- download card (the opening, beside the copy) ----------
+       Tabs per platform, one row per file: what it is, a download button,
+       and the command that installs it with a copy button. Without
+       JavaScript the tab row stays hidden and the three platforms stack. */
+    .get {
+      position: relative;
+      text-align: left;
+      background:
+        linear-gradient(180deg, rgba(139, 92, 246, .16), rgba(21, 16, 41, .55) 38%),
+        rgba(14, 10, 28, .82);
+      border: 1px solid rgba(139, 92, 246, .38);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .06);
+      backdrop-filter: blur(8px)
+    }
+
+    .get [hidden] {
+      display: none !important
+    }
+
+    .get-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px
+    }
+
+    .get-title {
+      font-size: 1.25rem;
+      margin: 0;
+      letter-spacing: -.01em
+    }
+
+    .get-ver {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(255, 210, 30, .1);
+      border: 1px solid rgba(255, 210, 30, .32);
+      font-size: .8rem;
+      color: var(--muted)
+    }
+
+    .get-ver strong {
+      color: var(--gold)
+    }
+
+    .get-ver:hover {
+      text-decoration: none;
+      border-color: var(--gold)
+    }
+
+    .get-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      padding: 4px;
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, .35);
+      border: 1px solid var(--line);
+      border-radius: 14px
+    }
+
+    .get-tabs button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 8px 10px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: .92rem;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease
+    }
+
+    .get-tabs button:hover {
+      color: var(--text)
+    }
+
+    .get-tabs button[aria-selected="true"] {
+      background: linear-gradient(135deg, var(--violet), var(--violet-deep));
+      color: #fff;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, .35)
+    }
+
+    .os-icon {
+      width: 18px;
+      height: 18px;
+      flex: none;
+      fill: currentColor
+    }
+
+    .get-tabs button:focus-visible,
+    .get-panel:focus-visible,
+    .get-dl:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px
+    }
+
+    /* The platform's name heads its panel only while the panels are stacked. */
+    .get-platform {
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin: 14px 0 8px
+    }
+
+    .get.tabs-on .get-platform {
+      display: none
+    }
+
+    .get-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px
+    }
+
+    .get-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas: "what dl" "cmd cmd";
+      align-items: center;
+      gap: 0 12px;
+      padding: 9px 10px 9px 14px;
+      background: rgba(255, 255, 255, .035);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      transition: border-color .15s ease, background .15s ease
+    }
+
+    .get-row:hover {
+      border-color: rgba(139, 92, 246, .45);
+      background: rgba(139, 92, 246, .07)
+    }
+
+    .get-what {
+      grid-area: what;
+      min-width: 0;
+      font-size: .8rem;
+      line-height: 1.35;
+      color: var(--muted)
+    }
+
+    .get-what strong {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      color: var(--text);
+      font-size: .93rem;
+      margin-bottom: 2px
+    }
+
+    .get-tag {
+      font-size: .62rem;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      line-height: 1;
+      color: #c7f0d8;
+      background: rgba(199, 240, 216, .1);
+      border: 1px solid rgba(199, 240, 216, .35)
+    }
+
+    .get-tag-portable {
+      color: var(--gold);
+      background: rgba(255, 210, 30, .1);
+      border-color: rgba(255, 210, 30, .4)
+    }
+
+    .get-dl {
+      grid-area: dl;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--violet), var(--violet-deep));
+      color: #fff;
+      font-size: .84rem;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: 0 6px 20px rgba(139, 92, 246, .32);
+      transition: transform .15s ease, box-shadow .15s ease
+    }
+
+    .get-dl:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 28px rgba(139, 92, 246, .5)
+    }
+
+    .get-dl svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .get-row>pre,
+    .get-row>.cmd {
+      grid-area: cmd;
+      margin-top: 8px
+    }
+
+    .get pre {
+      padding: 9px 12px;
+      white-space: pre;
+      overflow-x: auto;
+      scrollbar-width: thin
+    }
+
+    .get code {
+      font-size: .74rem
+    }
+
+    /* The copy button beside the command, never over it: a long line
+       scrolls inside its own box. */
+    .get .cmd {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px
+    }
+
+    .get .cmd pre {
+      flex: 1;
+      min-width: 0;
+      padding: 7px 10px;
+      white-space: pre;
+      overflow-wrap: normal
+    }
+
+    .get .copy {
+      position: static;
+      flex: none;
+      min-height: 32px;
+      padding: 4px 9px;
+      font-size: .72rem
+    }
+
+    .get-note {
+      margin: 10px 2px 0;
+      font-size: .78rem;
+      line-height: 1.4;
+      color: var(--muted)
+    }
+
+    .get-note .beta {
+      display: inline-block;
+      margin-right: 8px;
+      vertical-align: 1px
+    }
+
+    .get-foot {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px 18px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      font-size: .86rem;
+      font-weight: 650
+    }
+
+    @media(max-width:899px) {
+      .get {
+        padding: 16px
+      }
+    }
+
+    @media(max-width:480px) {
+      .get-tabs button {
+        flex-direction: column;
+        gap: 2px;
+        font-size: .8rem
+      }
+
+      .get .copy {
+        max-width: 40px;
+        font-size: 0;
+        gap: 0
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .get-tabs button,
+      .get-row,
+      .get-dl {
+        transition: none
+      }
+    }
+
+    /* ---------- what's new ---------- */
+    .news {
+      background:
+        radial-gradient(700px 380px at 85% 20%, rgba(255, 210, 30, .07), transparent 65%),
+        radial-gradient(800px 420px at 10% 0%, rgba(139, 92, 246, .14), transparent 65%)
+    }
+
+    .news-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      gap: 56px;
+      align-items: center
+    }
+
+    .news-copy .lede {
+      margin-bottom: 22px
+    }
+
+    .news-list {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 22px;
+      display: grid;
+      gap: 12px
+    }
+
+    .news-list li {
+      position: relative;
+      padding-left: 30px;
+      color: var(--muted)
+    }
+
+    .news-list li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: .45em;
+      width: 14px;
+      height: 14px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, var(--gold), #ff9f1e);
+      box-shadow: 0 0 14px rgba(255, 210, 30, .45)
+    }
+
+    .news-list strong {
+      color: var(--text)
+    }
+
+    .news-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 22px;
+      font-weight: 650;
+      margin: 0
+    }
+
+    /* One clock for the phone and the steps under it. */
+    .news-demo {
+      --loop: 9s;
+      margin: 0
+    }
+
+    .news-demo figcaption {
+      margin-top: 18px
+    }
+
+    /* The demo: a phone on its side with an SNES-style pad. The anchor key
+       lights, a finger holds Y and slides onto B (the runner jumps each
+       time), then a Y+B combo button appears and is tapped. Everything is
+       placed in percentages of the phone, so it scales with the column. */
+    .nd {
+      padding: 18px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(139, 92, 246, .14), rgba(21, 16, 41, .4));
+      border: 1px solid rgba(139, 92, 246, .28)
+    }
+
+    .nd-phone {
+      position: relative;
+      aspect-ratio: 2.1 / 1;
+      border-radius: 28px;
+      background: linear-gradient(180deg, #1d1636, #120d24);
+      border: 1px solid rgba(255, 255, 255, .16);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, .6), inset 0 0 0 6px #0b0817;
+      overflow: hidden
+    }
+
+    .nd-screen {
+      position: absolute;
+      left: 24%;
+      top: 9%;
+      width: 41%;
+      height: 68%;
+      border-radius: 8px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #4b3a9a, #8d6fe0 70%, #f2c46b)
+    }
+
+    .nd-sun {
+      position: absolute;
+      right: 14%;
+      top: 14%;
+      width: 14%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 24px rgba(255, 210, 30, .7)
+    }
+
+    .nd-hill {
+      position: absolute;
+      left: -10%;
+      bottom: 14%;
+      width: 70%;
+      height: 40%;
+      border-radius: 50% 50% 0 0;
+      background: #2f2466
+    }
+
+    .nd-ground {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 200%;
+      height: 16%;
+      background: repeating-linear-gradient(90deg, #1a1236 0 18px, #241a4a 18px 36px);
+      border-top: 2px solid #c4b5fd
+    }
+
+    .nd-runner {
+      position: absolute;
+      left: 26%;
+      bottom: 16%;
+      width: 9%;
+      aspect-ratio: 3 / 4;
+      border-radius: 6px 6px 3px 3px;
+      background: linear-gradient(180deg, #ff6b6b 0 38%, #fff3e0 38% 60%, #3b82f6 60%);
+      box-shadow: 0 4px 0 rgba(0, 0, 0, .25)
+    }
+
+    .nd-dpad {
+      position: absolute;
+      left: 6%;
+      top: 32%;
+      width: 12%;
+      aspect-ratio: 1;
+      background:
+        linear-gradient(#2c2350, #2c2350) center / 34% 100% no-repeat,
+        linear-gradient(#2c2350, #2c2350) center / 100% 34% no-repeat
+    }
+
+    .nd-btn,
+    .nd-combo {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      color: #e9e3ff;
+      font-weight: 800;
+      font-size: clamp(.6rem, 1.6vw, .95rem);
+      overflow: hidden
+    }
+
+    .nd-btn {
+      width: 9.5%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #2c2350;
+      border: 1px solid rgba(255, 255, 255, .14)
+    }
+
+    .nd-x { left: 83%; top: 21% }
+    .nd-y { left: 74%; top: 44% }
+    .nd-a { left: 92%; top: 44% }
+    .nd-b { left: 83%; top: 67% }
+
+    .nd-combo {
+      left: 71%;
+      top: 82%;
+      width: 11%;
+      height: 15%;
+      border-radius: 999px;
+      background: #3a2f6b;
+      border: 1px solid rgba(255, 210, 30, .6);
+      color: var(--gold);
+      font-size: clamp(.5rem, 1.2vw, .78rem)
+    }
+
+    /* A button held: lighter, the way the app draws it. */
+    .nd-lit {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: rgba(255, 255, 255, .42);
+      opacity: 0
+    }
+
+    .nd-strip {
+      position: absolute;
+      left: 34%;
+      top: 84%;
+      width: 22%;
+      height: 10%;
+      display: flex;
+      gap: 6%;
+      justify-content: center
+    }
+
+    .nd-key {
+      position: relative;
+      flex: 1;
+      border-radius: 6px;
+      background: #241c44;
+      border: 1px solid rgba(255, 255, 255, .08)
+    }
+
+    .nd-anchor {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--gold)
+    }
+
+    .nd-anchor svg {
+      width: 70%;
+      height: 70%;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      stroke-linecap: round
+    }
+
+    .nd-lit-anchor {
+      background: rgba(255, 210, 30, .38)
+    }
+
+    .nd-lit-combo {
+      background: rgba(255, 210, 30, .4)
+    }
+
+    /* The finger: a full-size layer translated in percentages of the phone,
+       with the fingertip at its top-left corner. */
+    .nd-finger-track {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0
+    }
+
+    .nd-finger {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 7%;
+      aspect-ratio: 1;
+      margin: -3.5% 0 0 -3.5%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .55);
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 6px rgba(255, 255, 255, .14), 0 6px 18px rgba(0, 0, 0, .4)
+    }
+
+    .nd-steps {
+      list-style: none;
+      counter-reset: nd;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px
+    }
+
+    .nd-step {
+      counter-increment: nd;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid var(--line);
+      font-size: .82rem;
+      line-height: 1.35;
+      color: var(--muted)
+    }
+
+    .nd-step::before {
+      content: counter(nd);
+      display: block;
+      font-weight: 800;
+      color: var(--gold);
+      margin-bottom: 2px
+    }
+
+    /* Still (reduced motion): the last frame. Anchor on, Y and B held, the
+       combo there; every step at full strength. */
+    .nd-lit-anchor,
+    .nd-lit-y,
+    .nd-lit-b {
+      opacity: 1
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .nd-lit-anchor { animation: nd-anchor var(--loop) linear infinite }
+      .nd-lit-y { animation: nd-y var(--loop) linear infinite }
+      .nd-lit-b { animation: nd-b var(--loop) linear infinite }
+      .nd-lit-combo { animation: nd-combo-lit var(--loop) linear infinite }
+      .nd-combo { animation: nd-combo-in var(--loop) linear infinite }
+      .nd-finger-track { animation: nd-finger var(--loop) linear infinite }
+      .nd-finger { animation: nd-press var(--loop) linear infinite }
+      .nd-runner { animation: nd-runner var(--loop) linear infinite }
+      .nd-ground { animation: nd-ground 1.2s linear infinite }
+      .nd-step-1 { animation: nd-step-1 var(--loop) linear infinite }
+      .nd-step-2 { animation: nd-step-2 var(--loop) linear infinite }
+      .nd-step-3 { animation: nd-step-3 var(--loop) linear infinite }
+    }
+
+    @keyframes nd-anchor {
+      0%, 9% { opacity: 0 }
+      10%, 93% { opacity: 1 }
+      97%, 100% { opacity: 0 }
+    }
+
+    @keyframes nd-y {
+      0%, 21% { opacity: 0 }
+      22%, 60% { opacity: 1 }
+      61%, 75% { opacity: 0 }
+      76%, 84% { opacity: 1 }
+      85%, 100% { opacity: 0 }
+    }
+
+    @keyframes nd-b {
+      0%, 35% { opacity: 0 }
+      36%, 41% { opacity: 1 }
+      42%, 50% { opacity: 0 }
+      51%, 56% { opacity: 1 }
+      57%, 75% { opacity: 0 }
+      76%, 84% { opacity: 1 }
+      85%, 100% { opacity: 0 }
+    }
+
+    @keyframes nd-combo-lit {
+      0%, 75% { opacity: 0 }
+      76%, 84% { opacity: 1 }
+      85%, 100% { opacity: 0 }
+    }
+
+    @keyframes nd-combo-in {
+      0%, 63% { opacity: 0; transform: translate(-50%, -50%) scale(.2) }
+      67% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) }
+      70%, 93% { opacity: 1; transform: translate(-50%, -50%) scale(1) }
+      97%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(1) }
+    }
+
+    /* Anchor key (53.7%, 89%), Y (74%, 44%), B (83%, 67%), combo (71%, 82%). */
+    @keyframes nd-finger {
+      0% { opacity: 0; transform: translate(56%, 100%) }
+      5% { opacity: 1; transform: translate(53.7%, 89%) }
+      14% { opacity: 1; transform: translate(53.7%, 89%) }
+      20%, 30% { opacity: 1; transform: translate(74%, 44%) }
+      35%, 42% { opacity: 1; transform: translate(83%, 67%) }
+      46% { opacity: 1; transform: translate(74%, 44%) }
+      50%, 58% { opacity: 1; transform: translate(83%, 67%) }
+      62% { opacity: 0; transform: translate(83%, 67%) }
+      66% { opacity: 0; transform: translate(68%, 96%) }
+      72%, 85% { opacity: 1; transform: translate(71%, 82%) }
+      90%, 100% { opacity: 0; transform: translate(71%, 82%) }
+    }
+
+    @keyframes nd-press {
+      0%, 8% { transform: scale(1) }
+      10% { transform: scale(.8) }
+      12%, 20% { transform: scale(1) }
+      22%, 58% { transform: scale(.82) }
+      62%, 74% { transform: scale(1) }
+      76%, 84% { transform: scale(.82) }
+      87%, 100% { transform: scale(1) }
+    }
+
+    @keyframes nd-runner {
+      0%, 35% { transform: translateY(0) }
+      38% { transform: translateY(-120%) }
+      42%, 50% { transform: translateY(0) }
+      53% { transform: translateY(-120%) }
+      57%, 75% { transform: translateY(0) }
+      79% { transform: translateY(-150%) }
+      84%, 100% { transform: translateY(0) }
+    }
+
+    @keyframes nd-ground {
+      from { transform: translateX(0) }
+      to { transform: translateX(-36px) }
+    }
+
+    @keyframes nd-step-1 {
+      0%, 2% { opacity: .3 }
+      5%, 17% { opacity: 1 }
+      20%, 100% { opacity: .3 }
+    }
+
+    @keyframes nd-step-2 {
+      0%, 17% { opacity: .3 }
+      20%, 60% { opacity: 1 }
+      63%, 100% { opacity: .3 }
+    }
+
+    @keyframes nd-step-3 {
+      0%, 60% { opacity: .3 }
+      63%, 93% { opacity: 1 }
+      97%, 100% { opacity: .3 }
+    }
+
+    .news-earlier {
+      margin-top: 56px
+    }
+
+    .news-earlier h3 {
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px
+    }
+
+    .news-past {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px
+    }
+
+    .news-past li {
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, var(--panel), rgba(21, 16, 41, .45));
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5
+    }
+
+    .news-past a {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-weight: 750
+    }
+
+    .news-past time {
+      font-size: .76rem;
+      font-weight: 500;
+      color: var(--muted)
+    }
+
+    @media(max-width:899px) {
+      .news-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 36px
+      }
+
+      .news-past {
+        grid-template-columns: minmax(0, 1fr)
+      }
+    }
+
+    @media(max-width:520px) {
+      .nd {
+        padding: 10px
+      }
+
+      .nd-phone {
+        border-radius: 18px
+      }
+
+      .nd-steps {
+        grid-template-columns: minmax(0, 1fr)
+      }
+    }
   </style>
   <script src="../lang.js"></script>
   <link rel="preload" as="image" type="image/avif" imagesrcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" imagesizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" fetchpriority="high" />
@@ -2558,6 +3355,7 @@
     <div class="wrap nav">
       <a class="brand" href="#top"><img src="../assets/logo-128.png" width="30" height="30" alt="" /> OpenEmux</a>
       <nav class="nav-links">
+        <a href="#news">புதியவை</a>
         <a href="#share">அருகில் பகிர்</a>
         <a href="#consoles">கார்ட்ரிட்ஜ்கள்</a>
         <a href="#android">Android</a>
@@ -2567,7 +3365,7 @@
         <a href="https://github.com/guilhermefeitosa66/OpenEmux">GitHub</a>
         <a href="https://www.reddit.com/r/OpenEmux/">சமூகம்</a>
         <a class="btn btn-primary btn-sm"
-          href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">பதிவிறக்கு</a>
+          href="#downloads">பதிவிறக்கு</a>
       </nav>
       <details class="lang-switch">
         <summary aria-label="மொழி: தமிழ்"><span class="flag" aria-hidden="true">🇮🇳</span><span class="lang-name">தமிழ்</span></summary>
@@ -2586,26 +3384,21 @@
   </header>
 
   <main>
-  <!-- OPENING: the desktop library, the phone in front of it. A scroll
-       stage (see "scroll stages" in the CSS): the window settles into
-       place, then the phone lands over its lower right corner. -->
+  <!-- OPENING: the copy and the download card side by side, then the
+       desktop library with the phone in front of it. A scroll stage (see
+       "scroll stages" in the CSS): the copy and the card scroll away, the
+       window settles into place, then the phone lands over its lower right
+       corner. -->
   <section class="hero" id="top" data-stage>
     <div class="stage-sticky">
       <div class="stars"></div>
       <div class="wrap hero-inner">
+        <div class="hero-top">
         <div class="hero-copy">
           <h1>உங்கள் பழைய விளையாட்டுத் தொகுப்பு,<br /><span class="grad">விளையாடத் தயார்.</span></h1>
           <p class="lede">உங்களிடம் உள்ள விளையாட்டுகளைச் சேர்க்கவும். Linux, Windows, Android ஆகியவற்றில் OpenEmux அவற்றை அட்டைப் படங்களுடன் கன்சோல் வாரியாக அடுக்குகிறது.</p>
-          <div class="cta" id="downloads">
-            <a class="btn btn-primary" data-os="linux" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Linux-க்குப்
-          பதிவிறக்கு</a>
-            <a class="btn btn-ghost" data-os="windows" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">⬇ Windows-க்குப்
-          பதிவிறக்கு <span class="beta">Beta</span></a>
-            <a class="btn btn-ghost" data-os="android" href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest/download/OpenEmux-mobile.apk">⬇ Android-க்கு
-          பதிவிறக்கு</a>
-          </div>
           <p class="hero-links">
-            <a href="#install">நிறுவுவது எப்படி ↓</a>
+            <a href="#news">இந்தப் பதிப்பில் புதியவை ↓</a>
             <!-- The promo video, on demand only: without JavaScript the link is
                  the file itself; with it, a dialog that loads nothing before the
                  click. -->
@@ -2615,6 +3408,96 @@
         Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>
           <p class="cta-note">macOS-க்கான <a href="https://openemu.org/">OpenEmu</a>-வால் ஈர்க்கப்பட்டது, ஆனால் இது ஒரு fork அல்ல: எமுலேஷனுக்கு RetroArch-ஐப் பயன்படுத்தும் தனிக் குறியீடு. <a href="#thanks">இதைப் பற்றி மேலும்</a>.</p>
         </div>
+
+        <!-- DOWNLOADS: every file of the latest release, by platform, with
+             the command that installs it. The links are built for the
+             version this page was built with (the release rebuilds it) and
+             the install script points them at the newest release when one
+             is out. Without JavaScript the three platforms are stacked. -->
+        <aside class="get" id="downloads" aria-labelledby="getTitle">
+          <div class="get-head">
+            <h2 class="get-title" id="getTitle">OpenEmux பதிவிறக்கு</h2>
+            <a class="get-ver" href="#news"><span>சமீபத்தியது</span> <strong data-version>1.23.3</strong></a>
+          </div>
+          <div class="get-tabs" data-tablist aria-label="தளம்" hidden>
+            <button type="button" data-tab="linux"><svg class="os-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.5c-2.6 0-4 2.2-4 5 0 1.6-.6 2.6-1.6 4-1.3 1.8-2.6 3.8-2.6 6.2 0 1.1.4 2 1.2 2.6.6-.7 1.6-1 2.6-.9.9.1 1.6.6 2 1.3h4.8c.4-.7 1.1-1.2 2-1.3 1-.1 2 .2 2.6.9.8-.6 1.2-1.5 1.2-2.6 0-2.4-1.3-4.4-2.6-6.2-1-1.4-1.6-2.4-1.6-4 0-2.8-1.4-5-4-5Zm-1.6 4.2a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm3.2 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8ZM12 9.2l1.6 1.1-1.6 1-1.6-1Z" /></svg>Linux</button>
+            <button type="button" data-tab="windows"><svg class="os-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5.3 10.4 4.3v7.1H3Zm8.4-1.1L21 3v8.4h-9.6ZM3 12.6h7.4v7.1L3 18.7Zm8.4 0H21V21l-9.6-1.3Z" /></svg>Windows</button>
+            <button type="button" data-tab="android"><svg class="os-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M7.2 4.1 8.6 6.5A8 8 0 0 1 12 5.8a8 8 0 0 1 3.4.7l1.4-2.4.8.5-1.4 2.4A6.7 6.7 0 0 1 19.5 12h-15a6.7 6.7 0 0 1 3.3-5l-1.4-2.4ZM9 8.6a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Zm6 0a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8ZM4.5 13.3h15v4.2a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2Z" /></svg>Android</button>
+          </div>
+
+          <div class="get-panel" data-panel="linux">
+            <h3 class="get-platform">Linux</h3>
+            <ul class="get-list">
+              <li class="get-row">
+                <span class="get-what"><strong>Flatpak <span class="get-tag">பரிந்துரை</span></strong>எந்த distro-விலும், sandbox-இல். <code>flatpak update</code> மூலம் புதுப்பிப்பு.</span>
+                <a class="get-dl" data-asset="^OpenEmux-[0-9.]+\.flatpak$" aria-label="பதிவிறக்கு: Flatpak"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3.flatpak"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.flatpak</span></a>
+                <pre><code>flatpak install -y flathub org.libretro.RetroArch
+flatpak remote-add --if-not-exists --no-gpg-verify openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
+flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
+              </li>
+              <li class="get-row">
+                <span class="get-what"><strong>AppImage</strong>எந்த distro-விலும், ஒரே கோப்பு. நிறுவ வேண்டியதில்லை.</span>
+                <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-x86_64\.AppImage$" aria-label="பதிவிறக்கு: AppImage"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-x86_64.AppImage"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.AppImage</span></a>
+                <pre><code>chmod +x OpenEmux-*-x86_64.AppImage &amp;&amp; ./OpenEmux-*-x86_64.AppImage</code></pre>
+              </li>
+              <li class="get-row">
+                <span class="get-what"><strong>Debian / Ubuntu</strong>Ubuntu 24.04 அல்லது புதியது, அதை அடிப்படையாகக் கொண்ட distro-க்கள்.</span>
+                <a class="get-dl" data-asset="^openemux_[0-9.]+_amd64\.deb$" aria-label="பதிவிறக்கு: .deb"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux_1.23.3_amd64.deb"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.deb</span></a>
+                <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
+              </li>
+              <li class="get-row">
+                <span class="get-what"><strong>Fedora</strong>Fedora 40 அல்லது புதியது.</span>
+                <a class="get-dl" data-asset="^openemux-[0-9.]+-[0-9]+\.[a-z0-9]+\.x86_64\.rpm$" aria-label="பதிவிறக்கு: .rpm"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1.fc40.x86_64.rpm"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.rpm</span></a>
+                <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
+              </li>
+              <li class="get-row">
+                <span class="get-what"><strong>Arch Linux</strong>Rolling release: சார்புகளை pacman நிறுவும்.</span>
+                <a class="get-dl" data-asset="^openemux-[0-9.]+-[0-9]+-x86_64\.pkg\.tar\.zst$" aria-label="பதிவிறக்கு: .pkg.tar.zst"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1-x86_64.pkg.tar.zst"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zst</span></a>
+                <pre><code>sudo pacman -U ./openemux-*-x86_64.pkg.tar.zst</code></pre>
+              </li>
+            </ul>
+          </div>
+
+          <div class="get-panel" data-panel="windows">
+            <h3 class="get-platform">Windows</h3>
+            <ul class="get-list">
+              <li class="get-row">
+                <span class="get-what"><strong>Installer <span class="get-tag">பரிந்துரை</span></strong>உங்கள் பயனருக்கு மட்டும் நிறுவும், நிர்வாகி அனுமதி தேவையில்லை.</span>
+                <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-setup\.exe$" aria-label="பதிவிறக்கு: Installer"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-setup.exe"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.exe</span></a>
+              </li>
+              <li class="get-row">
+                <span class="get-what"><strong>Portable <span class="get-tag get-tag-portable">நிறுவல் இல்லை</span></strong>எங்கு வேண்டுமானாலும் விரித்து <code>OpenEmux.exe</code>-ஐ இயக்குங்கள். அமைப்புகளும் விளையாட்டுகளும் அதன் கோப்புறையிலேயே இருக்கும், அதனால் USB stick-இலிருந்தும் இயங்கும்.</span>
+                <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-windows-x86_64\.zip$" aria-label="பதிவிறக்கு: Portable"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-windows-x86_64.zip"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zip</span></a>
+              </li>
+            </ul>
+            <p class="get-note"><span class="beta">Beta</span>Windows 10 அல்லது 11, 64-bit. இன்னும் code-sign செய்யப்படவில்லை: SmartScreen எச்சரிக்கும், <em>More info → Run anyway</em> மூலம் தொடரலாம்.</p>
+          </div>
+
+          <div class="get-panel" data-panel="android">
+            <h3 class="get-platform">Android</h3>
+            <ul class="get-list">
+              <li class="get-row">
+                <span class="get-what"><strong>APK</strong>Android 8 அல்லது புதியது, 64-bit (arm64).</span>
+                <a class="get-dl" data-asset="^OpenEmux-mobile-[0-9.]+\.apk$" aria-label="பதிவிறக்கு: APK"
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-mobile-1.23.3.apk"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.apk</span></a>
+              </li>
+            </ul>
+            <p class="get-note">இன்னும் Play Store-இல் இல்லை: கோப்பைத் திறந்து, Android கேட்கும்போது செயலிகளை நிறுவ அனுமதியுங்கள். புதுப்பிப்புகள் உங்களிடம் உள்ள பதிப்பின் மேல் நிறுவப்படும்.</p>
+          </div>
+
+          <div class="get-foot">
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest">எல்லாப் பதிப்புகளும் கோப்புகளும் →</a>
+            <a href="#install">நிறுவுவது எப்படி ↓</a>
+          </div>
+        </aside>
+        </div>
         <div class="stage-devices">
           <div class="device-desktop" data-stage-layer>
             <picture><source type="image/avif" srcset="../assets/desktop/grid-sfc-640.avif 640w, ../assets/desktop/grid-sfc-1280.avif 1280w, ../assets/desktop/grid-sfc-1920.avif 1920w, ../assets/desktop/grid-sfc-2640.avif 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><source type="image/webp" srcset="../assets/desktop/grid-sfc-640.webp 640w, ../assets/desktop/grid-sfc-1280.webp 1280w, ../assets/desktop/grid-sfc-1920.webp 1920w, ../assets/desktop/grid-sfc-2640.webp 2640w" sizes="(max-width: 899px) calc(100vw - 32px), min(50vw, 590px)" /><img src="../assets/desktop/grid-sfc.png" alt="கணினியில் OpenEmux, அட்டைப் படங்களுடன் Super Nintendo நூலகம்" width="2640" height="1756" fetchpriority="high" decoding="async" data-full="../assets/desktop/grid-sfc-2640.webp" /></picture>
@@ -2623,6 +3506,63 @@
             <picture><source type="image/avif" srcset="../assets/android/library-snes-640.avif 640w, ../assets/android/library-snes-1280.avif 1280w, ../assets/android/library-snes-1440.avif 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><source type="image/webp" srcset="../assets/android/library-snes-640.webp 640w, ../assets/android/library-snes-1280.webp 1280w, ../assets/android/library-snes-1440.webp 1440w" sizes="(max-width: 899px) 34vw, min(13vw, 160px)" /><img src="../assets/android/library-snes.png" alt="Android இல் OpenEmux, Super Nintendo நூலகம்" width="1440" height="3120" fetchpriority="high" decoding="async" data-full="../assets/android/library-snes-1440.webp" /></picture>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHAT'S NEW: the latest release in a few lines, with an animation of
+       its headline feature, then the releases before it. The release skill
+       rewrites the news.* strings (and the animation when the headline
+       changes) for every release, so the page always opens on the newest.
+       The animation is CSS only, transform and opacity, on a loop; under
+       reduced motion it is the last frame, still. -->
+  <section class="news" id="news">
+    <div class="wrap">
+      <div class="news-grid">
+        <div class="news-copy">
+          <span class="eyebrow">புதியவை · v1.23.3</span>
+          <h2>அழுத்தியபடி நிற்கும் பொத்தான்கள், இணைந்து அழுத்தும் பொத்தான்கள்.</h2>
+          <p class="lede">OpenEmux 1.23 Android-இன் திரைக் கட்டுப்பாடுகளைப் பற்றியது: ஒரே நேரத்தில் இரண்டு பொத்தான்கள் தேவைப்படும் விளையாட்டுகளை இப்போது திரையிலேயே விளையாடலாம்.</p>
+          <ul class="news-list"><li><strong>நங்கூர முறை.</strong> நங்கூர விசையை இயக்கினால், முதலில் அழுத்திய பொத்தான் அழுத்தியபடியே இருக்கும், விரல் மற்ற பொத்தான்களுக்கு நகரலாம். Y-ஐப் பிடித்து B-க்கு நகர்த்தினால், ஓடிக்கொண்டே குதிக்கலாம்.</li><li><strong>Combo பொத்தான்கள்.</strong> Y+B, L+R அல்லது L+R+A போல மூன்று வரை ஒரே நேரத்தில் அழுத்தும் பொத்தானை உருவாக்கி, skin-இல் எங்கு வேண்டுமானாலும் வையுங்கள்.</li><li><strong>எந்த வடிவமும், அழுத்தும் தோற்றமும்.</strong> ஒவ்வொரு பொத்தானும் வட்டம், மாத்திரை, வளைந்த சதுரம் அல்லது முக்கோணமாக இருக்கலாம், அழுத்தியிருக்கும்போது ஒளிரும்.</li><li><strong>புதிய இடைநிறுத்த மெனு.</strong> தொடர், மீண்டும் தொடங்கு, சேமி, ஏற்று மேலே, மற்றவை tile-களாக, ஒவ்வொரு விளையாட்டுக்கும் save slot நினைவில் வைக்கப்படும்.</li></ul>
+          <p class="news-links">
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3">வெளியீட்டுக் குறிப்புகளைப் படியுங்கள் →</a>
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases">எல்லா வெளியீடுகளும் →</a>
+          </p>
+        </div>
+        <figure class="news-demo">
+          <div class="nd" role="img" aria-label="அசைவூட்டம்: நங்கூர விசை ஒளிர்கிறது, ஒரு விரல் Y-ஐப் பிடித்து B-க்கு நகர்கிறது, திரையில் உள்ள பாத்திரம் குதிக்கிறது, பின் Y+B combo பொத்தான் தோன்றி அழுத்தப்படுகிறது">
+            <div class="nd-phone" aria-hidden="true">
+              <div class="nd-screen">
+                <i class="nd-sun"></i>
+                <i class="nd-hill"></i>
+                <i class="nd-ground"></i>
+                <i class="nd-runner"></i>
+              </div>
+              <i class="nd-dpad"></i>
+              <span class="nd-btn nd-x">X</span>
+              <span class="nd-btn nd-y">Y<i class="nd-lit nd-lit-y"></i></span>
+              <span class="nd-btn nd-a">A</span>
+              <span class="nd-btn nd-b">B<i class="nd-lit nd-lit-b"></i></span>
+              <span class="nd-combo">Y+B<i class="nd-lit nd-lit-combo"></i></span>
+              <span class="nd-strip">
+                <i class="nd-key"></i><i class="nd-key"></i><i class="nd-key"></i>
+                <span class="nd-key nd-anchor"><svg viewBox="0 0 24 24"><path d="M12 3a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 3Zm0 4.4V21M8 11h8M4.5 13.5c0 4.2 3.4 7.5 7.5 7.5s7.5-3.3 7.5-7.5" /></svg><i class="nd-lit nd-lit-anchor"></i></span>
+              </span>
+              <span class="nd-finger-track"><i class="nd-finger"></i></span>
+            </div>
+          </div>
+          <figcaption>
+            <ol class="nd-steps">
+              <li class="nd-step nd-step-1">நங்கூரத்தை இயக்குங்கள்.</li>
+              <li class="nd-step nd-step-2">Y-ஐப் பிடித்து B-க்கு நகர்த்துங்கள்.</li>
+              <li class="nd-step nd-step-3">அல்லது Y+B combo-வை அழுத்துங்கள்.</li>
+            </ol>
+          </figcaption>
+        </figure>
+      </div>
+      <div class="news-earlier">
+        <h3>முந்தைய வெளியீடுகள்</h3>
+        <ul class="news-past"><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0">1.22 <time datetime="2026-11-09">9 நவ. 2026</time></a>இடைநிறுத்த மெனுவிலிருந்து skin-ஐ மாற்றித் திருத்துதல், முழுப் படத்துடன் save state-கள், விளையாட்டு வரும்போதும் தொடர்ந்து விளையாடுதல்.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.1">1.21.1 <time datetime="2026-11-07">7 நவ. 2026</time></a>அமைப்புகளில் மொழியைத் தேர்ந்தெடுக்கும்போது Android செயலி மூடியதைச் சரிசெய்கிறது.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.0">1.21 <time datetime="2026-11-07">7 நவ. 2026</time></a>கட்டுப்படுத்தியின் வரைபடத்தில் பொத்தான்களை மாற்றுதல், விளையாட்டில் வேலை செய்யாத பொத்தான்கள் மீண்டும் இயங்குகின்றன, உண்மையிலேயே portable ஆன Windows portable முறை.</li></ul>
       </div>
     </div>
   </section>
@@ -2947,7 +3887,7 @@
             <div class="format-head">
               <div><h3>Sandbox-இல், தானாகப் புதுப்பிக்கப்படும்</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+\.flatpak$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.flatpak பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3.flatpak"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.flatpak பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>Flathub-இலிருந்து RetroArch-ஐ நிறுவவும்:</p>
@@ -2969,7 +3909,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>எந்த distro-வும்</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-x86_64\.AppImage$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>AppImage பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-x86_64.AppImage"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>AppImage பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>மேலே உள்ள பொத்தானால் பதிவிறக்கவும்.</p></li>
@@ -2989,7 +3929,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
                 <div class="note"><p>Ubuntu 24.04 LTS அல்லது அதற்குப் புதியது.</p></div>
               </div>
               <a class="btn btn-primary" data-asset="^openemux_[0-9.]+_amd64\.deb$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.deb பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux_1.23.3_amd64.deb"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.deb பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>மேலே உள்ள பொத்தானால் பதிவிறக்கவும்.</p></li>
@@ -3007,7 +3947,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
                 <div class="note"><p>Fedora 40 அல்லது அதற்குப் புதியது.</p></div>
               </div>
               <a class="btn btn-primary" data-asset="^openemux-[0-9.]+-[0-9]+\.[a-z0-9]+\.x86_64\.rpm$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.rpm பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1.fc40.x86_64.rpm"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.rpm பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>மேலே உள்ள பொத்தானால் பதிவிறக்கவும்.</p></li>
@@ -3033,7 +3973,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>வழக்கமான வழி</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-setup\.exe$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>நிறுவியைப் பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-setup.exe"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>நிறுவியைப் பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>மேலே உள்ள பொத்தானால் பதிவிறக்கவும்.</p></li>
@@ -3048,7 +3988,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>எதுவும் நிறுவப்படாது</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-windows-x86_64\.zip$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.zip பதிவிறக்கு</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-windows-x86_64.zip"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>.zip பதிவிறக்கு</a>
             </div>
             <ol class="install-steps">
               <li><p>மேலே உள்ள பொத்தானால் பதிவிறக்கவும்.</p></li>
@@ -3635,9 +4575,18 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var windows = tablist(windowsPanel.querySelector("[data-tablist]"), panelsIn(windowsPanel));
       section.classList.add("tabs-on");
 
-      platforms(/Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "linux");
+      var mine = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "linux";
+      platforms(mine);
       linux(/Ubuntu|Debian|Mint/i.test(ua) ? "deb" : /Fedora|Red Hat/i.test(ua) ? "rpm" : "flatpak");
       windows("installer");
+
+      // The download card at the top: the same tabs, the visitor's platform first.
+      var get = document.getElementById("downloads");
+      var getList = get && get.querySelector("[data-tablist]");
+      if (getList) {
+        tablist(getList, panelsIn(get))(mine);
+        get.classList.add("tabs-on");
+      }
 
       // ---- copy buttons ----
       var status = document.getElementById("copyStatus");
@@ -3663,7 +4612,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         sel.addRange(range);
       }
 
-      [].forEach.call(section.querySelectorAll("pre"), function (pre) {
+      [].forEach.call(document.querySelectorAll("#install pre, #downloads pre"), function (pre) {
         var code = pre.querySelector("code") || pre;
         var box = document.createElement("div");
         box.className = "cmd";
@@ -3696,23 +4645,29 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       });
 
       // ---- download buttons: the asset of the latest release, by name ----
-      // Asked once per visit: the answer is kept for the session, so moving
-      // between the language pages does not spend the API's hourly quota.
-      var buttons = section.querySelectorAll("[data-asset]");
+      // The links already name the files of the version the page was built
+      // with; a newer release, once out, takes over here (and its number
+      // goes on the card). Asked once per visit: the answer is kept for the
+      // session, so moving between the language pages does not spend the
+      // API's hourly quota.
+      var buttons = document.querySelectorAll("[data-asset]");
       if (!buttons.length) return;
-      var KEY = "openemux-latest-assets";
+      var KEY = "openemux-latest-release";
 
-      function point(assets) {
+      function point(latest) {
+        var assets = latest.assets;
         [].forEach.call(buttons, function (a) {
           var pattern = new RegExp(a.getAttribute("data-asset"));
           var hit = assets.filter(function (x) { return x && pattern.test(x.name); })[0];
           if (hit && /^https:\/\/github\.com\//.test(hit.url)) a.href = hit.url;
         });
+        var tag = /^v?(\d+(\.\d+)+)$/.exec(latest.tag || "");
+        if (tag) [].forEach.call(document.querySelectorAll("[data-version]"), function (el) { el.textContent = tag[1]; });
       }
 
       var cached = null;
       try { cached = JSON.parse(sessionStorage.getItem(KEY)); } catch (e) { }
-      if (Array.isArray(cached)) return point(cached);
+      if (cached && Array.isArray(cached.assets)) return point(cached);
       if (!window.fetch) return;
       var abort = window.AbortController ? new AbortController() : null;
       var timeout = setTimeout(function () { if (abort) abort.abort(); }, 5000);
@@ -3721,13 +4676,16 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (release) {
           clearTimeout(timeout);
-          var assets = ((release && release.assets) || []).map(function (x) {
-            return { name: x.name, url: x.browser_download_url };
-          });
-          if (assets.length) {
-            try { sessionStorage.setItem(KEY, JSON.stringify(assets)); } catch (e) { }
+          var latest = {
+            tag: (release && release.tag_name) || "",
+            assets: ((release && release.assets) || []).map(function (x) {
+              return { name: x.name, url: x.browser_download_url };
+            })
+          };
+          if (latest.assets.length) {
+            try { sessionStorage.setItem(KEY, JSON.stringify(latest)); } catch (e) { }
           }
-          point(assets);
+          point(latest);
         })
         .catch(function () { clearTimeout(timeout); });
     })();
@@ -3847,22 +4805,6 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       }
       if (motion.addEventListener) motion.addEventListener("change", apply);
       apply();
-    })();
-
-    // The visitor's own system first among the download buttons: Android
-    // and Windows move to the front and take the primary style; anything
-    // else keeps the order as written (Linux first).
-    (function () {
-      var ua = navigator.userAgent;
-      var os = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "";
-      var box = document.getElementById("downloads");
-      var mine = os && box && box.querySelector('[data-os="' + os + '"]');
-      if (!mine) return;
-      [].forEach.call(box.querySelectorAll("[data-os]"), function (btn) {
-        btn.classList.toggle("btn-primary", btn === mine);
-        btn.classList.toggle("btn-ghost", btn !== mine);
-      });
-      box.insertBefore(mine, box.firstChild);
     })();
   </script>
 </body>
