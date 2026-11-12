@@ -15454,7 +15454,7 @@ no Android device, so these are `MANUAL`.
   each tablet layout has the combo, over nothing.
 - **Check:** human only.
 
-### RT-969 — The Shape tool makes a combo a pill or a triangle, per layout
+### RT-969 — The Shape tool makes a combo a pill or a triangle, on every layout
 - **Area:** Android — Combo buttons
 - **Mode:** MANUAL
 - **Preconditions:** An editable SNES skin with a "Y+B" combo, open in the editor in portrait.
@@ -15470,8 +15470,9 @@ no Android device, so these are `MANUAL`.
   same centre: the pill wider and lower (about 1.6 times as wide, 0.8 times as tall as the circle),
   each triangle as large as the circle with its square corner at the chosen corner, its three corners
   visibly rounded, and its "Y+B" label inside it, near that corner. Size still reads 100 % after each
-  change. Step 3 undoes and redoes one shape at a time. In step 4 the landscape layout still has a
-  circle.
+  change. Step 3 undoes and redoes one shape at a time. In step 4 the landscape layout has the same
+  triangle pointing bottom-left, where the combo is there and at its size there (issue 891: a shape is
+  the control's, not one layout's).
 - **Check:** human only.
 
 ### RT-970 — A triangle in the gap between Y and B presses only inside the triangle
@@ -15497,10 +15498,12 @@ no Android device, so these are `MANUAL`.
 - **Steps:**
   1. Export the skin as a zip, delete it, import the zip and open it in the editor.
   2. Send it with Share nearby and open it in the editor on the other device.
-  3. In the exported `skin.json`, change the portrait combo's `"shape"` to `"star"`, zip it again and
-     import it.
-- **Expected:** In steps 1 and 2 the portrait combo is the bottom-left triangle where it was saved,
-  the other layouts' combos are circles. In step 3 the skin opens, with that combo drawn as a circle.
+  3. In the exported `skin.json`, change the combo's `"shape"` to `"star"` on every layout (each
+     layout's `combos` entry), zip it again and import it.
+  4. Do step 3 again changing only the portrait combo's `"shape"` to `"star"`.
+- **Expected:** In steps 1 and 2 the combo is the bottom-left triangle on every layout (issue 891),
+  the portrait one where it was saved. In step 3 the skin opens, with the combo drawn as a circle on
+  every layout. In step 4 the portrait combo takes the triangle the other layouts give it.
 - **Check:** `unzip -p <skin>.zip skin.json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["layouts"]["phone-portrait"]["combos"][0].get("shape"), d["layouts"]["phone-portrait"]["combos"][0].get("corner"))'`
   prints `triangle bottom-left`.
 
@@ -16606,7 +16609,8 @@ Any button of a skin of the player's own can be drawn in another outline (issue 
 [openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`):
 selecting a button or a keypad key in the skin editor puts "Shape" first in the actions bar, whose row
 offers "Original" (the skin's own outline, the default), a circle, a pill, a rounded square and the
-triangle at each corner, per layout. The D-pad, the sticks and the quick actions never offer it. The
+triangle at each corner. The shape is the control's, as its colour is: every layout of the skin
+(portrait, landscape, tablet, fold) draws it, each where the control is there. The D-pad, the sticks and the quick actions never offer it. The
 choice is saved in the skin's `outline` key, so "Original" still brings back the skin's outline and
 proportions after a restart. Triangles (a button's or a combo's) have rounded corners, as round as the
 rounded square's. In game, every button is tinted while the touch overlay presses it (30 % black on a
@@ -16628,7 +16632,8 @@ has no Android device, so these are `MANUAL`.
 - **Expected:** Step 1 shows "Shape", "Colour", "Texture", the size, "Nudge" and "Reset", with Shape
   first. In step 2 L turns into a circle about the same centre, about 1.25 times as tall as the pill
   was, and Size still reads 100 %. In step 4 L and R are circles where they
-  were put and press L and R. In step 5 the landscape layout still has the skin's pills.
+  were put and press L and R. In step 5 L and R are circles in landscape too, where the landscape
+  layout has them (the drag in step 3 moved them in portrait only).
 - **Check:** human only.
 
 ### RT-1019 — The Shape row: Original first, seven outlines, never on the D-pad, a stick or a quick action
@@ -16717,4 +16722,27 @@ has no Android device, so these are `MANUAL`.
 - **Expected:** In step 1 each held button's picture is tinted over its own shape, nothing around it.
   In step 2 the package's art shows no tint (out of scope: its art has no outline per button), and its
   buttons still press as before.
+- **Check:** human only.
+
+### RT-1025 — A shape stays on a rotation, and a skin saved with one shape per rotation is mended
+- **Area:** Android — Button shapes and the pressed look
+- **Mode:** MANUAL
+- **Preconditions:** An editable SNES skin with a "Y+B" combo and a tablet layout off, open in the
+  editor in portrait; for step 5, a skin saved by beta 1.23.1 whose combo was a triangle in portrait
+  and a circle in landscape (or such a `skin.json` made by hand: `"shape": "triangle"` on the portrait
+  combo place, none on the landscape one).
+- **Steps:**
+  1. Select the combo, "Shape", the triangle pointing top-right. Select A alone, "Shape", the rounded
+     square. Save.
+  2. Rotate the phone to landscape, still in the editor; look at the combo and A. Select A, tap
+     "Shape".
+  3. Pick the pill for A there, rotate back to portrait and look at A. Tap Undo, rotate again.
+  4. Open "Layouts", switch Tablets on, and open a tablet layout. Save. Play the game in each
+     rotation.
+  5. Open the skin of the preconditions in the editor, in landscape, then play the game in landscape.
+- **Expected:** In step 2 the combo is the top-right triangle and A the rounded square in landscape,
+  each where the landscape layout has them, and the Shape row marks the rounded square. In step 3 A is
+  a pill in portrait too; Undo brings A back to the rounded square in both rotations at once. In step
+  4 the tablet layouts have the triangle combo and the square A, and the game draws the same shapes in
+  portrait and landscape. In step 5 the combo is the triangle in landscape, in the editor and in game.
 - **Check:** human only.
