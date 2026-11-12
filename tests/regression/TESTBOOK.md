@@ -11619,11 +11619,10 @@ keyevent` comes from a virtual device and never changes the family. A release AP
   navigate with a controller (for example, A to confirm and B to go back). The bottom button always
   confirms and the right one goes back." and four cards, each with a small diamond
   of that family's faces with the bottom one purple (Automatic's diamond shows the detected pad's faces);
-  the current choice is selected and the "Controllers" row's subtitle shows its name after the interface
-  mode. With the pad in use the screen shows its hint bar (A "Choose", B "Back"). Each forced family
+  the current choice is selected. With the pad in use the screen shows its hint bar (A "Choose", B "Back"). Each forced family
   wins over the Sony pad, the A/B hints change with it at once, and
-  Automatic goes back to PlayStation faces. After the restart, with no pad, the row still reads
-  "PlayStation" and the hints show PlayStation faces. In each language the row, screen, lead and
+  Automatic goes back to PlayStation faces. After the restart, with no pad, "PlayStation" is still
+  selected and the hints show PlayStation faces. In each language the row, screen, lead and
   descriptions are translated, while "Xbox", "Nintendo", "PlayStation" and the faces stay as they are.
 - **Check:** human only (`adb exec-out screencap -p`).
 
@@ -16281,8 +16280,8 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
   4. Switch the app to Português (Brasil) and open the screen again.
 - **Expected:** "General" lists "ROM folder", "Controllers", "Back up and restore", "Check for
   updates" and "About"; there is no "Controls", "Controller layout" or "Button labels" row. The
-  "Controllers" row's subtitle reads the interface mode and the button labels picked
-  ("Automatic · Automatic" by default). The screen is titled "Controllers" with the lead "Settings for
+  "Controllers" row's subtitle reads the interface mode picked ("Automatic" by default, "Touch
+  screen" or "Controller" after a change). The screen is titled "Controllers" with the lead "Settings for
   physical controllers: gamepads and the built-in controls of handhelds." and two sections, "Interface
   mode" (RT-580) and "Button labels" (RT-583). On the phone it is a screen of its own and the link goes
   back to Settings; on the tablet it opens in the pane beside the list, with the row highlighted. In
