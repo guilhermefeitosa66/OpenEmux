@@ -186,6 +186,14 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Thu Nov 12 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.0-1
+- Android: anchor mode and user-made combo buttons for the on-screen controls
+- Android: a redesigned pause menu with tiles, a slot slider and Quit at the end
+- Android: touch controls can be shown or hidden over a detected controller
+- Android: a Controllers settings screen with the interface mode and button labels
+- Android: pinch to zoom the library, marquee titles, zebra list, aligned covers
+- Android: controller skins are included in the backup
+
 * Mon Nov 09 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.22.0-1
 - Android: change and edit the skin from the in-game pause menu
 - Android: save states show the whole picture, can be deleted, and the in-game menu picks the slot

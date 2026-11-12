@@ -87,6 +87,19 @@
   </keywords>
 
   <releases>
+    <release version="1.23.0" date="2026-11-12">
+      <description>
+        <p>An Android release about the on-screen controls, the pause menu and the library. The desktop app has no changes.</p>
+        <ul>
+          <li>Android: anchor mode and user-made combo buttons for the on-screen controls</li>
+          <li>Android: a redesigned pause menu with tiles, a slot slider and Quit at the end</li>
+          <li>Android: touch controls can be shown or hidden over a detected controller</li>
+          <li>Android: a Controllers settings screen with the interface mode and button labels</li>
+          <li>Android: pinch to zoom the library, marquee titles, zebra list, aligned covers</li>
+          <li>Android: controller skins are included in the backup</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.22.0" date="2026-11-09">
       <description>
         <p>An Android release about what happens while you play. The desktop app has no changes.</p>
