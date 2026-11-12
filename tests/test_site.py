@@ -132,7 +132,7 @@ class SupportButtonsTests(unittest.TestCase):
 class TheNarrativeTests(unittest.TestCase):
     """The page tells the story of the issue 680 redesign, in order (issue 685)."""
 
-    ORDER = ("top", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support")
+    ORDER = ("top", "news", "share", "consoles", "android", "cartridges", "install", "more", "thanks", "support")
     MOMENTS = ("share", "shots", "android")
 
     def test_every_page_follows_the_narrative_order(self):
@@ -527,11 +527,12 @@ class TheOpeningStageTests(unittest.TestCase):
     def test_the_whole_page_fits_its_budget(self):
         self.assertLessEqual(self._weight(first_screen=False), self.PAGE_BUDGET)
 
-    def test_the_visitors_system_comes_first_among_the_downloads(self):
-        cta = re.search(r'<div class="cta" id="downloads">(.*?)</div>', self.en, re.S).group(1)
-        self.assertEqual(re.findall(r'data-os="([a-z]+)"', cta), ["linux", "windows", "android"])
-        self.assertIn("/Android/i.test(ua)", self.en)
-        self.assertIn("box.insertBefore(mine, box.firstChild)", self.en)
+    def test_the_visitors_system_is_the_tab_the_card_opens_on(self):
+        self.assertIn('var mine = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "linux";',
+                      self.en)
+        self.assertIn("tablist(getList, panelsIn(get))(mine);", self.en)
+        platforms = self.en[self.en.index("var platforms = tablist("):]
+        self.assertIn("platforms(mine);", platforms)
 
 
 class TheShareSequenceTests(unittest.TestCase):
@@ -914,6 +915,150 @@ class TheManualTests(unittest.TestCase):
             build_site.render_manual("fr", template="{{nope-1}}", strings={})
 
 
+RELEASES = "https://github.com/guilhermefeitosa66/OpenEmux/releases/"
+
+
+def _assert_direct_downloads(case, markup, marker):
+    """Every link after ``marker`` in ``markup`` downloads one file of a release.
+
+    A link with a ``data-asset`` pattern names the file of the version the
+    page was built with, and the pattern finds that name; the APK may also
+    be the unversioned copy every release carries.
+    """
+    version = build_site.app_version()
+    links = re.findall(re.escape(marker) + r'([^>]*?)href="([^"]+)"', markup, re.S)
+    case.assertTrue(links)
+    for attrs, href in links:
+        with case.subTest(href=href):
+            if href == RELEASES + "latest/download/OpenEmux-mobile.apk":
+                continue
+            case.assertTrue(href.startswith(f"{RELEASES}download/v{version}/"), href)
+            name = href.rsplit("/", 1)[1]
+            case.assertIn(version, name)
+            pattern = re.search(r'data-asset="([^"]+)"', attrs)
+            case.assertIsNotNone(pattern, href)
+            case.assertRegex(name, html.unescape(pattern.group(1)))
+
+
+class TheDownloadCardTests(unittest.TestCase):
+    """The download card beside the opening copy: a tab per platform, every
+    file of the latest release with the command that installs it, and the
+    Releases page one link away."""
+
+    @staticmethod
+    def _card(locale="en"):
+        text = build_site.render(locale)
+        hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', text, re.S).group(1)
+        start = hero.index('<aside class="get" id="downloads"')
+        return hero[start:hero.index("</aside>", start)]
+
+    def test_it_sits_beside_the_copy_above_the_devices(self):
+        text = build_site.render("en")
+        hero = re.search(r'<section class="hero" id="top"[^>]*>(.*?)</section>', text, re.S).group(1)
+        top = hero.index('<div class="hero-top">')
+        self.assertLess(top, hero.index('<div class="hero-copy">'))
+        self.assertLess(hero.index('<div class="hero-copy">'), hero.index('id="downloads"'))
+        self.assertLess(hero.index("</aside>"), hero.index('<div class="stage-devices">'))
+
+    def test_a_tab_and_a_panel_per_platform(self):
+        card = self._card()
+        tabs = re.search(r'<div class="get-tabs" data-tablist aria-label="Platform" hidden>(.*?)</div>', card, re.S)
+        self.assertIsNotNone(tabs)
+        self.assertEqual(re.findall(r'data-tab="([a-z]+)"', tabs.group(1)), ["linux", "windows", "android"])
+        self.assertEqual(re.findall(r'class="get-panel" data-panel="([a-z]+)"', card), ["linux", "windows", "android"])
+        self.assertNotRegex(card, r'data-panel="[a-z]+"[^>]*hidden')
+
+    def test_every_file_of_a_release_has_its_row(self):
+        card = self._card()
+        patterns = [html.unescape(p) for p in re.findall(r'data-asset="([^"]+)"', card)]
+        self.assertEqual(len(patterns), 8)
+        for name in TheInstallSectionTests.RELEASE_ASSETS:
+            if name in ("SHA256SUMS", "OpenEmux-mobile.apk") or "aarch64" in name:
+                continue
+            with self.subTest(asset=name):
+                self.assertEqual(sum(bool(re.search(p, name)) for p in patterns), 1)
+
+    def test_every_download_names_the_file_of_this_version(self):
+        _assert_direct_downloads(self, self._card(), 'class="get-dl"')
+        self.assertIn(f"<strong data-version>{build_site.app_version()}</strong>", self._card())
+
+    def test_the_commands_install_what_was_downloaded(self):
+        card = self._card()
+        for command in ("flatpak install -y flathub org.libretro.RetroArch",
+                        "flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux",
+                        "chmod +x OpenEmux-*-x86_64.AppImage",
+                        "sudo apt install ./openemux_*_amd64.deb",
+                        "sudo dnf install ./openemux-*.x86_64.rpm",
+                        "sudo pacman -U ./openemux-*-x86_64.pkg.tar.zst"):
+            with self.subTest(command=command):
+                self.assertIn(command, card)
+
+    def test_the_portable_build_says_it_is_one(self):
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            windows = self._card(locale).split('data-panel="windows"')[1].split('data-panel="android"')[0]
+            with self.subTest(locale=locale):
+                self.assertIn(strings["install.tab_portable"], windows)
+                self.assertIn(strings["get.no_install"], windows)
+                self.assertIn("OpenEmux.exe", strings["get.portable"])
+
+    def test_every_version_is_one_link_away(self):
+        for locale in build_site.ORDER:
+            with self.subTest(locale=locale):
+                self.assertIn(f'<a href="{RELEASES}latest">', self._card(locale))
+                self.assertIn('href="#downloads"', build_site.load_strings(locale)["nav.download"])
+
+    def test_the_script_points_every_download_at_the_newest_release(self):
+        page = build_site.TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn('var buttons = document.querySelectorAll("[data-asset]");', page)
+        self.assertIn('document.querySelectorAll("#install pre, #downloads pre")', page)
+        self.assertIn('document.querySelectorAll("[data-version]")', page)
+
+
+class TheNewsTests(unittest.TestCase):
+    """What's new: the latest release, its headline animated, the ones before."""
+
+    @staticmethod
+    def _news(locale="en"):
+        return re.search(r'<section class="news" id="news">(.*?)</section>', build_site.render(locale), re.S).group(1)
+
+    def test_it_names_this_version_and_links_its_notes(self):
+        version = build_site.app_version()
+        for locale in build_site.ORDER:
+            news = self._news(locale)
+            with self.subTest(locale=locale):
+                self.assertIn(f"v{version}</span>", news)
+                self.assertIn(f'href="{RELEASES}tag/v{version}"', news)
+                self.assertIn('class="news-list"', news)
+                self.assertIn('href="#news"', build_site.load_strings(locale)["nav.news"])
+
+    def test_earlier_releases_link_their_own_pages(self):
+        for locale in build_site.ORDER:
+            past = re.findall(r'<a href="' + re.escape(RELEASES) + r'tag/v([0-9.]+)">([0-9.]+) <time datetime="',
+                              self._news(locale))
+            with self.subTest(locale=locale):
+                self.assertGreaterEqual(len(past), 2)
+                for tag, label in past:
+                    self.assertTrue(tag.startswith(label), (tag, label))
+                    self.assertTrue((REPO / "release" / f"RELEASE_NOTES_v{tag}.md").exists(), tag)
+
+    def test_the_animation_is_labelled_and_moves_only_transform_and_opacity(self):
+        css = _css(build_site.render("en"))
+        frames = re.findall(r"@keyframes (nd-[a-z0-9-]+)", css)
+        self.assertGreaterEqual(len(frames), 10)
+        for name in frames:
+            body = _blocks(css, f"@keyframes {name} ")[0]
+            with self.subTest(keyframes=name):
+                self.assertLessEqual(set(re.findall(r"([a-z-]+)\s*:", body)), {"transform", "opacity"})
+        # It plays only for people who did not ask for less motion.
+        motion = _blocks(css, "@media (prefers-reduced-motion: no-preference) {\n      .nd-lit-anchor")
+        self.assertEqual(len(motion), 1)
+        for locale in build_site.ORDER:
+            strings = build_site.load_strings(locale)
+            with self.subTest(locale=locale):
+                self.assertIn(f'role="img" aria-label="{strings["news.anim_label"]}"', self._news(locale))
+
+
 class TheInstallSectionTests(unittest.TestCase):
     """The install section: platform tabs, one download per package, copy
     buttons, the checksum block folded away (issue 689)."""
@@ -976,11 +1121,10 @@ class TheInstallSectionTests(unittest.TestCase):
                 self.assertEqual(len(hits), 1, hits)
 
     def test_every_download_works_without_the_api(self):
-        # The href is what a visitor gets when the script cannot ask GitHub.
-        for href in re.findall(r'class="btn btn-primary"[^>]*href="([^"]+)"', self._section(), re.S):
-            with self.subTest(href=href):
-                self.assertTrue(href.startswith(
-                    "https://github.com/guilhermefeitosa66/OpenEmux/releases/latest"))
+        # The href is what a visitor gets when the script cannot ask GitHub:
+        # the file of the version the page was built with, which its own
+        # pattern finds.
+        _assert_direct_downloads(self, self._section(), 'class="btn btn-primary"')
 
     def test_the_copy_labels_are_translated_on_every_page(self):
         for locale in build_site.ORDER:

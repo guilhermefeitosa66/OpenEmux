@@ -89,6 +89,12 @@ def page_url(locale, page=""):
     return SITE_URL + (slug(locale) + "/" if slug(locale) else "") + page
 
 
+def app_version():
+    """The app's version (``openemux.__version__``), read without importing it."""
+    text = (REPO / "src" / "openemux" / "__init__.py").read_text(encoding="utf-8")
+    return re.search(r'^__version__ = "([^"]+)"', text, re.M).group(1)
+
+
 def load_strings(locale):
     return json.loads((STRINGS / f"{locale}.json").read_text(encoding="utf-8"))
 
@@ -156,6 +162,9 @@ def render(locale, template=None, strings=None, manifest=None):
             "canonical": page_url(locale),
             "hreflang_links": hreflang_links(),
             "lang_switcher": lang_switcher(locale, strings["lang.label"]),
+            # The download links and the news name the files of this
+            # version, so the release that bumps it rebuilds the site.
+            "version": app_version(),
         }
     )
 
