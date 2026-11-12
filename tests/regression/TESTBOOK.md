@@ -6476,7 +6476,8 @@ opening flat brings each one's own skin back. Every scenario ends with `hinge-an
 - **Expected:** The top half shows the dimmed, paused game with a "PAUSED" chip and a card (cart,
   title, time played). The bottom half starts under the fold: "Save" (focused first) beside "Load",
   with "See all" and the slot slider under them, and "Back to game" beside that block (under it on
-  a narrow fold); the action tiles; "Restart game" and "Quit game"; the hint bar. The focus never
+  a narrow fold); the action tiles, ending with the red "Quit" tile (RT-1008); "Restart game"
+  alone on its row; the hint bar. The focus never
   leaves the bottom half. "See all" opens the save states inside
   the bottom half and B comes back. Tapping the band does nothing; tapping the card resumes the
   game. START closes the menu. The light theme has the same layout.
@@ -8495,8 +8496,8 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
 - **Expected:** The menu is a panel about 440dp wide on the right, the full height, rounded on its
   left corners: the game's title and play time, "Save" beside "Load", "See all" and the slot slider
   (RT-996), the action tiles (with
-  the skin tiles and "RetroArch menu" among them, no "Save states" tile, RT-987), a "Restart game" row, and
-  "Quit game" at the foot. On the left the game stays visible,
+  the skin tiles and "RetroArch menu" among them, no "Save states" tile, RT-987, and the red "Quit"
+  tile last, RT-1008) and a "Restart game" row; nothing is pinned at the foot. On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
   "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
@@ -11225,7 +11226,7 @@ image) and `adb`. The package is `com.openemux.mobile`. A frame-by-frame look at
 - **Steps:**
   1. With the app on the shelf, press Home, start recording and reopen the app from the launcher.
   2. Open a game and take a screenshot while it runs.
-  3. Leave the game with "Quit game" in the pause menu while recording.
+  3. Leave the game with the "Quit" tile in the pause menu while recording.
 - **Expected:** Step 1: the shelf is full screen and does not move; at most the launcher's own
   opening animation may carry its bars over the shelf for a few frames (about 0.1 s) while they
   fade, which the app cannot reach, and nothing is pushed by them. Step 2: the game fills the screen
@@ -11349,14 +11350,14 @@ and `--es pads fake,real` stands for a second controller connected next to the f
   restart, the play position is kept.
 - **Check:** human only; `adb logcat -d | grep OpenEmuxGame` shows `gamepad true: portrait -> pad-portrait` (debug APK).
 
-### RT-566 — With a pad, the menu key opens the pause sheet and "Quit game" works
+### RT-566 — With a pad, the menu key opens the pause sheet and "Quit" works
 - **Area:** Android — In-game controls with a gamepad
 - **Mode:** MANUAL
 - **Preconditions:** A game running in the gamepad layout (RT-564).
 - **Steps:**
   1. Tap the menu key.
-  2. Tap "Quit game".
-- **Expected:** The pause sheet opens over the game; "Quit game" returns to the library. The pad
+  2. Tap the "Quit" tile.
+- **Expected:** The pause sheet opens over the game; "Quit" returns to the library. The pad
   never has to be disconnected.
 - **Check:** human only.
 
@@ -11502,7 +11503,7 @@ the last of the action tiles (RT-987), in every layout. It closes the sheet
 and opens RetroArch's own menu (MaterialUI) over the running game, for settings the app does not
 expose (issue 639). Leaving it returns to the game, and the next menu request opens the pause sheet
 again. Everything changed there lasts for the session only: the app writes its own config at every
-launch. "Close Content" and "Quit RetroArch" leave the game like "Quit game", and the entries that
+launch. "Close Content" and "Quit RetroArch" leave the game like the pause sheet's "Quit", and the entries that
 would load other content or cores (Load Core, Load Content, the updaters, Restart RetroArch,
 Configuration File, History, Favorites, Playlists, Explore) are hidden. `MANUAL`, like the other
 Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-window -read-only`) with
@@ -11539,7 +11540,7 @@ Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-windo
   game.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
-### RT-576 — Leaving through RetroArch's menu quits like "Quit game", and its settings do not stay
+### RT-576 — Leaving through RetroArch's menu quits like the pause sheet's "Quit", and its settings do not stay
 - **Area:** Android — RetroArch menu
 - **Mode:** MANUAL
 - **Preconditions:** RT-575's game running, hardcore off, played for a minute.
@@ -11554,7 +11555,7 @@ Android sections: a phone or a headless emulator (`emulator -avd <avd> -no-windo
 - **Expected:** In step 1 the main menu has no "Load Core", "Load Content", "Online Updater",
   "Restart RetroArch", "Configuration File", History, Favorites, Playlists or Explore; "Quit
   RetroArch" is there. In step 2 both changes take effect at once in the running game. In step 3 the
-  game closes and the app is back on the library, as with "Quit game": the auto state is written
+  game closes and the app is back on the library, as with the pause sheet's "Quit": the auto state is written
   (its time moved) and the playtime grew. In step 4 the core option and the video setting are back
   to the app's values. In step 5 the game also closes back to the library, with the auto state
   written.
@@ -15836,7 +15837,7 @@ has no Android device, so this is `MANUAL`.
   purple and the widest button, with "Restart" on its right; under them "Save" with "Slot N · Empty"
   and "Load", faded, then the "Save slot" caption on the left, "See all" on the right and the slot slider, the whole width of the two
   buttons (RT-996). The right column holds the action tiles
-  (RT-987), five to a row, then "Quit game"; there is no list and no "Restart game" row. Step 2 closes
+  (RT-987), five to a row, the red "Quit" tile last (RT-1008); there is no list and no "Restart game" row. Step 2 closes
   the menu and the game goes on. Step 3 asks "Restart game?" and "Cancel" leaves the game as it was,
   the menu still open. Step 4: "State saved to slot N", the line turns "Slot N · In use", that slot's
   stop turns filled, and "Load" brings the game back to that moment. Step 5: "Continue" is focused when the menu opens and A
@@ -15860,10 +15861,10 @@ has no Android device, so this is `MANUAL`.
      each time.
   5. Upright, with the gamepad, move from the tiles' first row to the second and along each row.
 - **Expected:** Step 1: four columns; "Fast forward", "Slow motion", "Screenshot" and "Shader" on
-  the first row, "Mute", "Change skin", "Edit skin" and "RetroArch menu" on the second, and no third
-  row (issues 862 and 867: there is no "Save states" tile); the tiles close together (about the same
+  the first row, "Mute", "Change skin", "Edit skin" and "RetroArch menu" on the second, and "Quit"
+  alone at the left of a third row (issue 875; issues 862 and 867: there is no "Save states" tile); the tiles close together (about the same
   spacing as in landscape), the rows lined up with the buttons above, every label whole. Step 2: five
-  tiles to a row, 5 + 3. Step 3: five columns, nothing cut
+  tiles to a row, 5 + 4. Step 3: five columns, nothing cut
   or overlapping. Step 4: every label is complete and centred, on at most two lines, no word broken
   in the middle (a long word such as "Bildschirmfoto" shows a little smaller instead); nothing
   overlaps. Step 5: the focus goes through the tiles in reading order, left to right, then the
@@ -16066,28 +16067,56 @@ gone (issue 867): "See all" under the slot slider opens the same list.
   5. Tap "Edit skin", close the editor without changes.
   6. Tap "RetroArch menu", then leave RetroArch's menu (RT-575).
   7. Turn fast forward on from its tile and look at the tiles; turn it off.
-  8. With the gamepad, open the menu and move through every tile with the D-pad, then down to
-     "Quit game".
+  8. With the gamepad, open the menu and move through every tile with the D-pad, down to the last
+     one, "Quit".
   9. Turn the phone to landscape and open the menu; then, if available, open it on a tablet and on a
      half-open fold.
   10. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
 - **Expected:** Step 1: no list under the tiles; after "Mute" come the tiles "Change skin" (the skin
   in use under it), "Edit skin" and "RetroArch menu" ("This
-  session only" under it), same size and style as "Fast forward", in the grid of RT-984; "Quit game"
-  follows the tiles. There is no "Save states" tile (issue 867). Step 2 opens the save states
+  session only" under it), same size and style as "Fast forward", in the grid of RT-984; the red
+  "Quit" tile is the last one (RT-1008). There is no "Save states" tile (issue 867). Step 2 opens the save states
   page and the arrow returns to the main menu. Step 3: the slot just saved is filled on the slot
   slider, and there is still no "Save states" tile. Step 4 opens the skin page; afterwards the tile names the new skin.
   Step 5 opens the skin editor on the skin in use and closing it returns to the menu. Step 6 opens
   RetroArch's menu. Step 7: only "Fast forward" lights up; "Change skin", "Edit skin"
   and "RetroArch menu" never show the lit state. Step 8: with the gamepad connected a "Touch controls" tile
   sits between "Edit skin" and "RetroArch menu" (RT-989); the focus reaches every tile in reading
-  order, then "Quit game". Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
-  left and the tiles, five to a row, and "Quit game" are on the right; the tablet panel shows the
-  tiles in five columns with a "Restart game" row under them; the fold shows "RetroArch menu"
-  among its tiles (no skin tiles) and "Restart game" beside "Quit game" under them.
+  order, "Quit" last. Step 9: in landscape "Continue"/"Restart" and "Save"/"Load" stay on the
+  left and the tiles, five to a row, "Quit" last, are on the right; the tablet panel shows the
+  tiles in five columns, "Quit" last, with a "Restart game" row under them; the fold shows
+  "RetroArch menu" and "Quit" among its tiles (no skin tiles) and "Restart game" alone under them.
   Step 10: "See all" is faded and does nothing, also with the gamepad. With a skin that cannot be
   edited, "Edit skin" is faded and does nothing.
 - **Check:** human only.
+
+### RT-1008 — Quit is the pause sheet's last tile, in the muted tile's red
+- **Area:** Android — Pause sheet
+- **Mode:** MANUAL
+- **Preconditions:** A phone, a Super Nintendo game started with a skin of its console and played
+  for a minute; a Nintendo DS game for step 5; a gamepad for step 6; a tablet or a half-open fold
+  for step 4 if available.
+- **Steps:**
+  1. Hold the phone upright, open the in-game menu and scroll to the end of the tiles.
+  2. Tap "Mute" and compare the two red tiles; tap it again.
+  3. Tap "Quit".
+  4. Start the game again; open the menu in landscape, then, if available, on a tablet (side panel)
+     and on a half-open fold.
+  5. Start the Nintendo DS game upright and open the menu.
+  6. With the gamepad, open the menu, move through the tiles with the D-pad to the last one and
+     press A.
+  7. Set the app language to Português (Brasil) and open the menu.
+- **Expected:** Step 1: the last tile is "Quit", with an exit icon (a door frame with an arrow going
+  out), on a light red square with a red border and a red icon; there is no "Quit game" button
+  under the tiles. Step 2: the muted "Unmute" tile has exactly the same red background, border and
+  icon colour as "Quit"; "Quit" does not change when the sound does. Step 3: the game closes and the
+  app is back on the library; the game's AUTO state is written ("just now") and the play time grew,
+  as before. Step 4: "Quit" is the last tile in every form; nothing is pinned at the tablet panel's
+  foot, and the fold's bottom row holds only "Restart game". Step 5: the grid, with "Screens", wraps
+  from the left with "Quit" last. Step 6: the focus reaches "Quit" last and A quits the game. Step 7:
+  the tile reads "Sair".
+- **Check:** human only (`adb shell dumpsys activity activities | grep topResumedActivity` names
+  `MainActivity` after step 3).
 
 ## Android — Long game names
 
