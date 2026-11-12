@@ -6262,7 +6262,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   1. Open the "Settings" tab and, under "General", tap "Back up and restore".
   2. Switch the theme to "Light" and turn the phone to landscape; come back to the screen.
 - **Expected:** The row reads "Back up and restore" with "Keep your saves and settings when you
-  reinstall" under it, between "Controls" and "Check for updates". The screen shows the "Export"
+  reinstall" under it, between "Controllers" and "Check for updates". The screen shows the "Export"
   section ("Saves and states", "Settings and artwork", each with a size, and "Include ROMs" switched on
   with "<n> games · <size>"), "Export data · <total>", the note about cores, covers and
   RetroAchievements, the "Import" section with "Import data", and the "Uninstalling to update?"
@@ -6658,7 +6658,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Mode:** MANUAL
 - **Preconditions:** As RT-857, at 800×360dp, a pad in use (as RT-582) and the gamepad layout on.
 - **Steps:**
-  1. Set Settings → "Button labels" to "Xbox", open "All games" and press
+  1. Set Settings → "Controllers" → "Button labels" to "Xbox", open "All games" and press
      `KEYCODE_BUTTON_R1` twice, then `KEYCODE_BUTTON_L1` once.
   2. Repeat step 1 with "Nintendo", then "PlayStation".
   3. From a focused game press UP, then LEFT/RIGHT along the row; press A on the filter name, move in
@@ -6871,7 +6871,9 @@ with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
 Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
 focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
-"Settings → General → Controller layout" ("Automatic", "Always", "Never"). The emulator has no real
+"Settings → General → Controllers → Interface mode" ("Automatic", "Touch screen", "Controller"; issue 873
+renamed it from "Controller layout" with "Automatic", "Never" and "Always", and stores the same `auto`,
+`never` and `always`). The emulator has no real
 controller, and `adb shell input` is a virtual device that never counts as one: on a debug build a
 controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`
 (`false` disconnects it, `--ez clear true` goes back to the real devices).
@@ -6936,8 +6938,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 ### RT-437 — Touch still works as before next to the gamepad
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** RT-434's library; no controller connected (or "Controller layout" set to
-  "Never"); gamepad mode on with a game focused.
+- **Preconditions:** RT-434's library; no controller connected (or "Interface mode" set to
+  "Touch screen"); gamepad mode on with a game focused.
 - **Steps:**
   1. Tap the screen, then scroll and fling the grid with a finger.
   2. Open the search and type a few letters.
@@ -7038,7 +7040,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 ### RT-578 — Connecting a controller shows the gamepad layout, disconnecting hides it
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
-- **Preconditions:** A debug build; RT-434's library; "Controller layout" on "Automatic"; no
+- **Preconditions:** A debug build; RT-434's library; "Interface mode" on "Automatic"; no
   controller connected; the app open on a console's shelf in landscape, nothing touched since.
 - **Steps:**
   1. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`)
@@ -7071,29 +7073,32 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   Back on the shelf the ring is on the game that was tapped.
 - **Check:** human only.
 
-### RT-580 — The "Controller layout" setting
+### RT-580 — The "Interface mode" setting
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** A debug build; RT-434's library; no controller connected.
 - **Steps:**
-  1. Open "Settings" → "General" → "Controller layout" and look at the choices.
-  2. Pick "Always" and close the sheet.
+  1. Open "Settings" → "General" → "Controllers" and look at the "Interface mode" choices.
+  2. Pick "Controller" and go back to the library.
   3. Force-stop and relaunch (`adb shell am force-stop $PKG`, then open the app).
-  4. Pick "Never", connect a controller (the broadcast with `true`), press DOWN, then tap the screen.
+  4. Pick "Touch screen", connect a controller (the broadcast with `true`), open the library, press
+     DOWN, then tap the screen.
   5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
      connect the controller.
-  6. On a tablet-size window (`adb shell wm size 1600x2560`, `adb shell wm size reset` after), open
-     the setting.
-- **Expected:** The row sits right after "Controls" and shows the current choice; the default is
-  "Automatic". The sheet lists "Automatic" ("The controller layout while a controller is
-  connected."), "Always" ("For handhelds with built-in controls.") and "Never" ("The touch layout,
-  even with a controller connected."). "Always" shows the gamepad layout with no controller, a tap
-  does not hide it, and it is still on after the relaunch. "Never" with a controller shows the touch
-  layout: DOWN still moves the focus with the ring and the hint bar showing, the tap hides them
-  again, and the chips keep their touch size. "Never" survives the relaunch. "Automatic" follows the
-  controller again. In split view the setting opens as a pane with the same three choices.
-  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`,
-  `never` or `auto`.
+- **Expected:** "Interface mode" is the first section of the Controllers screen, with the lead
+  "Whether the app is used with a controller or by touch. Controller mode shows the focus ring and the
+  button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
+  mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Always touch: no
+  focus ring or button hints until a controller button is pressed, and games open with the on-screen
+  controls. Pick this if the app thinks a controller is connected and there is none.") and
+  "Controller" ("Always controller mode, even before a controller is detected. For handhelds with
+  built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
+  controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
+  controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
+  with the ring and the hint bar showing, the tap hides them again, and the chips keep their touch
+  size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
+  `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
+  (Controller), `never` (Touch screen) or `auto`.
 - **Check:** human only.
 
 ### RT-581 — Gamepad layout targets and shoulders
@@ -7169,7 +7174,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   3. On the sort button and the view toggle, read the hint bar.
   4. Tap the "Shelf" back link, the console chips (or the pager's arrows), search, the detail's back
      arrow, star and share button with a finger.
-  5. Disconnect the gamepad (or set "Controller layout" to touch) and repeat 4.
+  5. Disconnect the gamepad (or set "Interface mode" to "Touch screen") and repeat 4.
 - **Expected:** 1: focus reaches sort, the view toggle (and the filter label in landscape), never the
   back link or arrow, search (SELECT), the console chips or the pager's steps (L1/R1). 2: from "Play"
   focus reaches the pencil after the game's name (and "Search artwork…" when the game has no art);
@@ -11564,8 +11569,8 @@ right one goes back. Only the face drawn in each hint badge follows the pad fami
 LB RB, the Menu and View icons) for Microsoft pads and any pad the app does not know, Nintendo style
 (B A Y X, L R, + and −) and PlayStation style (drawn cross, circle, square and triangle outlines,
 L1 R1, OPTIONS, SHARE, or CREATE on a DualSense). The purple badge is always the bottom button, so on a
-Nintendo pad it reads B. Settings → General → "Button labels" (Automatic / Xbox / Nintendo /
-PlayStation) overrides the detection. `MANUAL`, like the other Android sections: a phone or a headless
+Nintendo pad it reads B. Settings → General → "Controllers" → "Button labels" (Automatic / Xbox /
+Nintendo / PlayStation) overrides the detection. `MANUAL`, like the other Android sections: a phone or a headless
 emulator with `adb`. `$PKG` is `com.openemux.mobile`. A debug APK fakes the pad in use with
 `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ei vendor <id>` ("pad <id>" below;
 `--ei product <id>` and `--es name <text>` are optional, `--ez clear true` goes back to the real
@@ -11602,21 +11607,22 @@ keyevent` comes from a virtual device and never changes the family. A release AP
 - **Mode:** MANUAL
 - **Preconditions:** A debug APK; pad `1356` (Sony) said to be in use.
 - **Steps:**
-  1. Settings → General → "Button labels" (right after "Controller layout"). On a phone it opens a
-     sheet; in a tablet-size window (`adb shell wm size 1600x2560`, reset after) it opens in the pane.
+  1. Settings → General → "Controllers", section "Button labels" (after "Interface mode"). On a phone
+     the Controllers screen is a screen of its own; in a tablet-size window
+     (`adb shell wm size 1600x2560` and `adb shell wm density 240`, both reset after) it opens in the pane.
   2. Pick "Nintendo", then "Xbox", then "PlayStation", then "Automatic", looking at the hint bar after
      each.
   3. Pick "PlayStation", run `adb shell am force-stop $PKG` and `--ez clear true`, relaunch and press
      the D-pad once.
-  4. Switch the app to Português (Brasil), then 日本語, and open the row again.
-- **Expected:** The sheet (or pane) has the title, the line "How the button hints name each button. The
-  bottom button always confirms and the right one goes back." and four cards, each with a small diamond
+  4. Switch the app to Português (Brasil), then 日本語, and open the screen again.
+- **Expected:** The section has the title and the line "The button style shown in the hints while you
+  navigate with a controller (for example, A to confirm and B to go back). The bottom button always
+  confirms and the right one goes back." and four cards, each with a small diamond
   of that family's faces with the bottom one purple (Automatic's diamond shows the detected pad's faces);
-  the current choice is selected and the row shows its name. With the pad in use the sheet shows its
-  own hint bar (A "Choose", B "Back"). Each forced family wins over the Sony pad, the sheet's own A/B
-  hints change with it, and
-  Automatic goes back to PlayStation faces. After the restart, with no pad, the row still reads
-  "PlayStation" and the hints show PlayStation faces. In each language the row, sheet, lead and
+  the current choice is selected. With the pad in use the screen shows its hint bar (A "Choose", B "Back"). Each forced family
+  wins over the Sony pad, the A/B hints change with it at once, and
+  Automatic goes back to PlayStation faces. After the restart, with no pad, "PlayStation" is still
+  selected and the hints show PlayStation faces. In each language the row, screen, lead and
   descriptions are translated, while "Xbox", "Nintendo", "PlayStation" and the faces stay as they are.
 - **Check:** human only (`adb exec-out screencap -p`).
 
@@ -16135,7 +16141,7 @@ after the last scenario.
 - **Area:** Android — Long game names
 - **Mode:** MANUAL
 - **Preconditions:** The shared preconditions plus a second long-named game on the same console;
-  a gamepad connected (or Settings → "Controller layout" set to "Always").
+  a gamepad connected (or Settings → "Controllers" → "Interface mode" set to "Controller").
 - **Steps:**
   1. Open the console's shelf in the "Cartridges" view and move the focus with the D-pad onto a short
      name.
@@ -16258,3 +16264,45 @@ are `MANUAL`: a person runs them on a phone (or on an emulator with its multi-to
   library had before (the sideways row in landscape, automatic columns elsewhere). Step 4: 4 columns
   again.
 - **Check:** human only.
+
+## Android — Controllers settings
+
+Since issue 873 every setting about physical controllers sits on one Settings screen,
+"Controllers": the interface mode (formerly "Controller layout") and the button labels. `$PKG` is
+`com.openemux.mobile`; the debug broadcasts are the ones in the gamepad navigation section.
+
+### RT-1005 — One "Controllers" entry holds the controller settings
+- **Area:** Android — Settings
+- **Mode:** MANUAL
+- **Preconditions:** The Android app installed, first-run setup done.
+- **Steps:**
+  1. Open the "Settings" tab and scroll to "General".
+  2. Tap "Controllers", look at the screen, then go back with the "Settings" link.
+  3. In a tablet-size window (`adb shell wm size 1600x2560` and `adb shell wm density 240`, both reset
+     after), open "Settings" → "Controllers".
+  4. Switch the app to Português (Brasil) and open the screen again.
+- **Expected:** "General" lists "ROM folder", "Controllers", "Back up and restore", "Check for
+  updates" and "About"; there is no "Controls", "Controller layout" or "Button labels" row. The
+  "Controllers" row's subtitle reads the interface mode picked ("Automatic" by default, "Touch
+  screen" or "Controller" after a change). The screen is titled "Controllers" with the lead "Settings for
+  physical controllers: gamepads and the built-in controls of handhelds." and two sections, "Interface
+  mode" (RT-580) and "Button labels" (RT-583). On the phone it is a screen of its own and the link goes
+  back to Settings; on the tablet it opens in the pane beside the list, with the row highlighted. In
+  Portuguese the entry reads "Controles" and every text on the screen is translated.
+- **Check:** human only (`adb exec-out screencap -p`).
+
+### RT-1006 — "Touch screen" opens games with the on-screen controls
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; a game installed; a controller faked with the debug broadcast
+  (`--ez connected true`).
+- **Steps:**
+  1. Settings → "Controllers" → "Interface mode" on "Automatic"; start the game and open the pause
+     sheet.
+  2. Back in the library, pick "Touch screen", start the game again and open the pause sheet.
+  3. Pick "Controller", disconnect the controller (`--ez connected false`) and start the game.
+- **Expected:** 1: the game opens on the gamepad skin with the touch-controls key, and the pause sheet
+  has the "Touch controls" tile (issue 865). 2: the game opens with the full on-screen controls although
+  a controller is detected, and the pause sheet has no "Touch controls" tile. 3: with no controller the
+  game opens with the on-screen controls (Controller mode changes the app's navigation, not the skin).
+- **Check:** human only (`adb exec-out screencap -p`).
