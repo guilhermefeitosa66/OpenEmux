@@ -1640,6 +1640,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         controller = Gtk.EventControllerKey()
         controller.connect("key-pressed", self._on_window_escape)
         self.add_controller(controller)
+        # TV mode (issue 914) collapses the split view, and the navigation
+        # view inside it pops the content page on Escape before that bubble
+        # handler runs: the sidebar came back as a full-screen page with the
+        # mode still on. Leaving the mode is decided in the capture phase
+        # instead, with anything that owns its Escape still left alone.
+        first = Gtk.EventControllerKey()
+        first.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        first.connect("key-pressed", self._on_tv_mode_escape)
+        self.add_controller(first)
+
+    def _on_tv_mode_escape(self, _controller, keyval, _keycode, _state):
+        if keyval != Gdk.KEY_Escape or not self._tv_mode:
+            return False
+        if (
+            self.get_visible_dialog() is not None
+            or self.navigation._active_popover() is not None
+            or self.search_bar.get_search_mode()
+        ):
+            return False
+        return self._on_window_escape(None, keyval, 0, 0)
 
     def _on_window_escape(self, _controller, keyval, _keycode, _state):
         if keyval != Gdk.KEY_Escape:

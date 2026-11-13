@@ -2508,6 +2508,35 @@ class TheGameAndInputHandoffTests(WindowCase):
             with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
                 self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
 
+    def test_the_capture_handler_leaves_tv_mode_before_the_split_view_pops(self):
+        # Collapsed, the split view pops its content page on Escape before the
+        # bubble handler runs; the capture handler gets there first.
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None):
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.win.toggle_tv_mode()
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_a, 0, 0))
+            self.assertTrue(self.win.tv_mode)
+            self.assertTrue(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.assertFalse(self.win.tv_mode)
+
+    def test_the_capture_handler_leaves_a_dialog_a_popover_and_the_search_box_their_escape(self):
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None) as popover:
+            self.win.toggle_tv_mode()
+            with mock.patch.object(self.win, "get_visible_dialog", return_value=mock.Mock()):
+                self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            popover.return_value = mock.Mock()
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            popover.return_value = None
+            self.win.search_bar.set_search_mode(True)
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.win.search_bar.set_search_mode(False)
+            self.assertTrue(self.win.tv_mode)
+            self.win.toggle_tv_mode()
+
     def test_the_on_screen_keyboard_opens_over_a_searchable_page(self):
         from openemux.ui.onscreen_keyboard import OnScreenKeyboard
 

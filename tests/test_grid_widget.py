@@ -343,19 +343,16 @@ class LaunchingFromTheGridTests(_GridCase):
             self.grid._launch_rom(None)
         launch.assert_not_called()
 
-    def test_enter_on_a_cell_launches_through_the_views_activate_signal(self):
-        # The cell wrapping a card is a GtkListItemWidget, whose own binding
-        # takes Enter and Space before the grid's key controller runs and
-        # reports them as GtkGridView::activate with the position (issue 914).
-        with mock.patch.object(self.win.game, "launch") as launch:
-            self.grid.emit("activate", 1)
-        launch.assert_called_once()
-        self.assertEqual(launch.call_args.args[0], self.entries[1].rom)
-
-    def test_an_activation_past_the_end_launches_nothing(self):
-        with mock.patch.object(self.win.game, "launch") as launch:
-            self.grid.emit("activate", len(self.entries) + 5)
-        launch.assert_not_called()
+    def test_the_key_controller_runs_before_the_cells_own_bindings(self):
+        # The cell wrapping a card is a GtkListItemWidget, whose binding takes
+        # Enter and Space on the way up and drops them (the cell is not
+        # activatable); only a capture-phase controller sees them (issue 914).
+        phases = [
+            controller.get_propagation_phase()
+            for controller in self.grid.observe_controllers()
+            if isinstance(controller, Gtk.EventControllerKey)
+        ]
+        self.assertIn(Gtk.PropagationPhase.CAPTURE, phases)
 
 
 @needs_display
