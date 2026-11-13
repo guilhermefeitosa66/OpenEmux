@@ -78,14 +78,17 @@ class Job:
     left to finish.
     """
 
-    __slots__ = ("fn", "args", "kwargs", "_state", "_lock", "_done", "_result", "_exception")
+    __slots__ = ("fn", "args", "kwargs", "_pool", "_state", "_lock", "_done", "_result", "_exception")
 
     PENDING, RUNNING, FINISHED, CANCELLED = range(4)
 
-    def __init__(self, fn, args, kwargs):
+    def __init__(self, fn, args, kwargs, pool=None):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        #: The pool the job was submitted to: a promotion re-queues it there,
+        #: not on the shared pool, which a private pool's job used to land on.
+        self._pool = pool
         self._state = self.PENDING
         self._lock = threading.Lock()
         self._done = threading.Event()
@@ -121,10 +124,10 @@ class Job:
         return True
 
     def promote(self):
-        """Move a pending job to the front of the queue."""
+        """Move a pending job to the front of its pool's queue."""
         if self._state != self.PENDING:
             return False
-        return pool().requeue(self, PRIORITY_URGENT)
+        return (self._pool or pool()).requeue(self, PRIORITY_URGENT)
 
     def done(self):
         return self._done.is_set()
@@ -154,7 +157,7 @@ class DecodePool:
         self._shutdown = False
 
     def submit(self, fn, *args, priority=PRIORITY_NORMAL, **kwargs):
-        job = Job(fn, args, kwargs)
+        job = Job(fn, args, kwargs, pool=self)
         self.requeue(job, priority)
         return job
 
