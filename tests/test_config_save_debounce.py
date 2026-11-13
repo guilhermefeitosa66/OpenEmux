@@ -8,6 +8,7 @@ still written atomically, so a crash inside the window loses at most those
 last settings and never the file.
 """
 
+import os
 import threading
 import time
 import unittest
@@ -154,8 +155,10 @@ class NonDurableWritesTests(unittest.TestCase):
                 atomic_write, "_fsync_directory", wraps=atomic_write._fsync_directory
             ) as sync_dir:
                 atomic_write.atomic_write_text(path, "a: 1\n")
-            # The content, and then the directory entry through _fsync_directory.
-            self.assertEqual(fsync.call_count, 2)
+            # The content, and then the directory entry through _fsync_directory
+            # -- except on Windows, which cannot open a directory for fsync, so
+            # the helper returns on the OSError and only the content is synced.
+            self.assertEqual(fsync.call_count, 1 if os.name == "nt" else 2)
             sync_dir.assert_called_once()
 
     def test_the_session_store_writes_without_a_sync(self):
