@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>OpenEmux moved</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <script>
+    // GitHub Pages serves this for any path it does not have. The site moved
+    // from /OpenEmux/ to the root of openemux.libre-apps.org with the same
+    // paths, so drop the prefix and keep the query and the fragment.
+    // The project documents Pages also served stayed in the code repository.
+    (function () {
+      var path = location.pathname.replace(/^\/OpenEmux(?=\/|$)/i, "") || "/";
+      var docs = { "/DEVELOPMENT.md": 1, "/PRODUCT.md": 1, "/share-protocol.md": 1, "/assets/CREDITS.md": 1 };
+      var dest = docs[path]
+        ? "https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/docs" + path
+        : "https://openemux.libre-apps.org" + path;
+      location.replace(dest + location.search + location.hash);
+    })();
+  </script>
+</head>
+<body>
+  <p>OpenEmux moved to <a href="https://openemux.libre-apps.org/">openemux.libre-apps.org</a>.</p>
+</body>
+</html>
