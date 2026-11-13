@@ -6323,7 +6323,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   ```bash
   adb pull "/sdcard/Download/OpenEmux backup $(date +%F).zip" backup.zip
   unzip -Z1 backup.zip | head -2                                          # manifest.json, prefs/openemux.json
-  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system)/|internal/(meta\.json|nds-layout|labels/))'   # 0
+  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system|skins)/|internal/(meta\.json|nds-layout|labels/))'   # 0
   unzip -p backup.zip | grep -ac '<ra-username>\|cheevos_token'           # 0
   ```
 
@@ -6356,7 +6356,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Steps:**
   1. Import any `.zip` that is not a backup (e.g. a zipped ROM).
   2. Import a copy cut inside the manifest: `head -c 100 backup.zip > cut.zip`, pushed to Downloads.
-  3. Import a backup whose `manifest.json` says `"version":2` (unzip, edit, zip again with
+  3. Import a backup whose `manifest.json` says `"version":3` (unzip, edit, zip again with
      `manifest.json` first).
   4. Import a copy cut in half (`head -c $(( $(stat -c %s backup.zip) / 2 )) backup.zip > half.zip`),
      then tap "Replace and restore" on the sheet.
@@ -6399,6 +6399,49 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Check:**
   ```bash
   adb shell ls /sdcard/Download | grep -c 'OpenEmux backup'    # 0 (or the count from before)
+  ```
+
+### RT-1138 — The backup carries the player's skins and they are in use after a restore
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A Delta or Manic skin imported for one console and an edited copy of a bundled
+  skin saved for another (#843), each picked for its console in the skin picker.
+- **Steps:**
+  1. Settings → "Back up and restore": read the "Settings and artwork" row. Switch "Include ROMs"
+     off and export.
+  2. `adb shell pm clear $PKG`, open the app, finish the first-run setup, then import the archive
+     and tap "Replace and restore".
+  3. After the restart, open each console's skin picker and start a game of each console.
+- **Expected:** 1: the row reads "Settings, favorites, labels, BIOS, skins" and its size includes
+  the skins. The archive lists both skins under `external/skins/` and nothing else there: no
+  bundled skin, no `.tmp`, `.old` or draft entry; its manifest says `"version":2`. 3: both skins
+  are listed, each is the selected one for its console, and the games draw them.
+- **Check:**
+  ```bash
+  unzip -Z1 backup.zip | grep '^external/skins/'                   # the two skins only
+  unzip -Z1 backup.zip | grep -c '^external/skins/.*/\.'           # 0
+  unzip -p backup.zip manifest.json | grep -o '"version":[0-9]*'   # "version":2
+  adb shell ls -R $EXT/skins                                        # after step 2: both back
+  ```
+
+### RT-1139 — A backup without skins stays readable by older versions and keeps the phone's skins
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A phone with no skin of the player's (none imported or edited); a second
+  phone (or the same one, later) with skins.
+- **Steps:**
+  1. On the phone without skins, export.
+  2. On the phone with skins, import that archive and tap "Replace and restore".
+  3. Import an archive made by the app before #843 (version 1) the same way.
+- **Expected:** 1: the archive has no `external/skins/` entry and its manifest says
+  `"version":1`, so an app from before #843 restores it. 2 and 3: the restore ends with the green
+  box and the restart; the phone's own skins are still there and still picked. A console whose
+  picked skin is gone plays its default skin, with no error.
+- **Check:**
+  ```bash
+  unzip -Z1 backup.zip | grep -c '^external/skins/'                # 0
+  unzip -p backup.zip manifest.json | grep -o '"version":[0-9]*'   # "version":1
+  adb shell ls -R $EXT/skins                                        # after step 2: unchanged
   ```
 
 
