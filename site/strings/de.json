@@ -14,8 +14,6 @@
   "hero.lede": "<p class=\"lede\">Füge die Spiele hinzu, die dir gehören. OpenEmux sortiert sie nach Konsole, mit Covern, unter Linux, Windows und Android.</p>",
   "hero.install_link": "So installierst du es ↓",
   "hero.watch": "▶ Video ansehen (44 s)",
-  "hero.shot_desktop": "OpenEmux auf dem Computer, die Super-Nintendo-Bibliothek mit ihren Covern",
-  "hero.shot_phone": "OpenEmux auf Android, die Super-Nintendo-Bibliothek",
   "hero.note": "<p class=\"cta-note\">Kostenlos und quelloffen · MIT-Lizenz · AppImage, .deb, .rpm &amp; Flatpak für Linux ·\n        Installer &amp; portables ZIP für Windows · APK auf Android (GPLv3)</p>",
   "hero.relation": "<p class=\"cta-note\">Inspiriert von <a href=\"https://openemu.org/\">OpenEmu</a> für macOS, aber kein Fork: eine eigene Codebasis mit RetroArch als Emulations-Backend. <a href=\"#thanks\">Mehr dazu</a>.</p>",
   "hero.video_label": "OpenEmux in 44 Sekunden: die Bibliothek, die Modulansicht und ein laufendes Spiel am Desktop, dann die Android-App mit Regal, Bildschirm-Controllern, Hoch- und Querformat und dem Nintendo DS",

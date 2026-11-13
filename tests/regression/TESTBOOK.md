@@ -9640,44 +9640,23 @@ or into an environment that cannot run the tests.
 - **Expected:** The slide changes at once, with no sliding animation, and the dots change without
   growing; nothing on the page moves by itself (issue 688).
 - **Check:** human only. Unit-level: `tests/test_site.py` (`test_reduced_motion_jumps_without_animation`).
-### RT-614 — The opening plays as you scroll: the desktop settles, then the phone lands
+### RT-615 — Without JavaScript and at phone width the opening is complete
 - **Area:** Developer tooling & docs
 - **Mode:** MANUAL
 - **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
-  Chrome and Firefox (Safari too when one is at hand), window about 1440×900.
+  Chrome and Firefox.
 - **Steps:**
-  1. Load the home page and look at the opening before scrolling.
-  2. Scroll down slowly with the mouse wheel through the opening, then back up.
-  3. Do the same with Space / Page Down / the arrow keys, by dragging the scrollbar and, in
-     DevTools device mode, by touch.
-  4. Repeat 1–2 in Firefox.
-- **Expected:** 1: headline, buttons and links on the left; on the right the desktop Super
-  Nintendo library, slightly tilted and smaller, in a plain frame (rounded corners and a shadow,
-  no extra title bar: the capture already has the app's own). 2: the window flattens into place,
-  then the phone (the Android Super Nintendo library) slides up and lands over the window's lower
-  right corner; the composition holds a moment and the next section follows. Scrolling up plays
-  it in reverse. 3: the page scrolls exactly as any page does: no snapping, no point where the
-  scroll sticks or jumps. 4: the same motion (Firefox runs the script fallback) (issue 686).
-- **Check:** human only. Unit-level: `tests/test_site.py` (`TheOpeningStageTests`).
-
-### RT-615 — With reduced motion, without JavaScript and at phone width the opening is complete
-- **Area:** Developer tooling & docs
-- **Mode:** MANUAL
-- **Preconditions:** as RT-614.
-- **Steps:**
-  1. DevTools → Rendering → emulate `prefers-reduced-motion: reduce`, reload, scroll through.
+  1. Load the home page at about 1440×900 and scroll from the top into the next section.
   2. Firefox with JavaScript disabled (`javascript.enabled` false), reload, scroll through.
   3. DevTools device mode at 360×740, reload, scroll through; try to scroll sideways.
-  4. A wide window under 640 px tall (device mode 1280×600), reload, scroll through.
-- **Expected:** 1, 2 and 4: the final composition (window flat, phone over its corner), static, at
-  the section's natural height: no long empty scroll, every button and link works; without
-  JavaScript the download card lists Linux, Windows and Android one under the other, each under
-  its name. 3: the copy on top, the download card under it, then the window and the phone below,
-  centred, nothing overlapping or cut; while the copy and the card scroll away the window
-  settles, the devices hold at the top while the phone lands, then the page goes on; no
-  horizontal scroll (issue 686).
+- **Expected:** 1: on the left the logo and "OpenEmux" in large type, the headline, the lede and
+  the links; on the right the download card; nothing moves as you scroll and "What's new" comes
+  straight after (no desktop or phone screenshots in the opening). 2: the same, every button and
+  link works, and the download card lists Linux, Windows and Android one under the other, each
+  under its name. 3: the logo and name centred, the copy on top, the download card under it,
+  nothing overlapping or cut, no horizontal scroll.
 - **Check:** human only. Unit-level: `tests/test_site.py`
-  (`test_motion_only_with_a_driver_and_never_under_reduced_motion`).
+  (`test_the_opening_is_the_copy_and_the_card_then_whats_new`).
 
 ### RT-616 — The opening's weight, preload, link preview and download order
 - **Area:** Developer tooling & docs
@@ -9686,13 +9665,12 @@ or into an environment that cannot run the tests.
 - **Steps:** As a QA person: open the home page with the Network panel (cache disabled), then
   with an Android and a Windows user agent; paste the site's URL into a link-preview tester.
 - **Expected:** the first screen transfers at most ~600 KB and the page at most ~6 MB without
-  the video; the desktop capture's AVIF is preloaded from `<head>`; the header uses the 128 px
-  logo; the link preview is `og-opening.png` (1200×630, the opening's composition); the download
+  the video; the header uses the 128 px logo and the opening the 240 px one; the link preview is `og-opening.png` (1200×630, the opening's composition); the download
   card opens on "Android" for an Android user agent, on "Windows" for Windows, and on "Linux"
   for anything else (issue 686).
 - **Check:**
   ```bash
-  PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheOpeningStageTests -v 2>&1 | tail -3
+  PYTHONPATH=src .venv/bin/python -m unittest tests.test_site.TheOpeningTests -v 2>&1 | tail -3
   ```
   Passes when the last line is `OK`.
 
@@ -15754,6 +15732,29 @@ engine's mute state, whatever muted the game.
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-614 — The opening plays as you scroll: the desktop settles, then the phone lands
+- **Retired:** 2026-11-12 (no issue; asked by the maintainer).
+- **Reason:** The opening no longer has the desktop and phone screenshots nor the scroll animation:
+  after the copy and the download card the page goes straight to "What's new" (RT-615).
+- **Area:** Developer tooling & docs
+- **Mode:** MANUAL
+- **Preconditions:** the site served from `docs/` (`python3 -m http.server -d docs`), current
+  Chrome and Firefox (Safari too when one is at hand), window about 1440×900.
+- **Steps:**
+  1. Load the home page and look at the opening before scrolling.
+  2. Scroll down slowly with the mouse wheel through the opening, then back up.
+  3. Do the same with Space / Page Down / the arrow keys, by dragging the scrollbar and, in
+     DevTools device mode, by touch.
+  4. Repeat 1–2 in Firefox.
+- **Expected:** 1: headline, buttons and links on the left; on the right the desktop Super
+  Nintendo library, slightly tilted and smaller, in a plain frame (rounded corners and a shadow,
+  no extra title bar: the capture already has the app's own). 2: the window flattens into place,
+  then the phone (the Android Super Nintendo library) slides up and lands over the window's lower
+  right corner; the composition holds a moment and the next section follows. Scrolling up plays
+  it in reverse. 3: the page scrolls exactly as any page does: no snapping, no point where the
+  scroll sticks or jumps. 4: the same motion (Firefox runs the script fallback) (issue 686).
+- **Check:** human only. Unit-level: `tests/test_site.py` (`TheOpeningStageTests`, removed).
 
 ### RT-941 — The in-game menu saves to the slot it shows
 - **Retired:** 2026-11-11 (issue 857).
