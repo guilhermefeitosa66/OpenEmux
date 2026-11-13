@@ -14,7 +14,8 @@ library (``tools/demo_library.py --configure``), starts it with
 Each is the window content only (no device chrome), 2640x1756: the
 1320x878 layout of the README captures at twice the pixels. Check them by eye
 (no toast, no red Log badge, no "Search artwork..." placeholder), copy them to
-``docs/assets/desktop/`` and run ``tools/build_site.py --images`` on the host.
+``public/assets/desktop/`` of the site repository
+(``../site-openemux-libre-apps-org``) and run ``make images`` there.
 The app is driven with xdotool and captured with ImageMagick's ``import``,
 both provisioned in the devbox.
 """

@@ -14,7 +14,7 @@ here is imported by the app, and nothing here ships in a package.
 | `selection_input_harness.py` | Drive the real grid with synthesized input on a nested X server | see below |
 | `grid_virtualization_probe.py` | Assert the grid still builds only a screenful of cards | see below |
 | `phone_shots.py` | The site's Android in-game shots: a bundled skin over a demo gameplay frame | see `docs/DEVELOPMENT.md` (Android and Share nearby captures) |
-| `site_art.py` | The site's link preview (`og-opening.png`) and small header logo, drawn from the captures | `python3 tools/site_art.py`; see `docs/DEVELOPMENT.md` (Composed images) |
+| `site_captures.py` | The site's high-resolution desktop captures, taken in the devbox | see `docs/DEVELOPMENT.md` (The website) |
 
 The last three exist because the unit suite cannot reach what they check:
 without a display, constructing a GTK widget segfaults the interpreter
@@ -24,6 +24,13 @@ every check passes — which is what makes them usable from the regression test
 book rather than only by hand.
 
 [Xephyr]: https://www.freedesktop.org/wiki/Software/Xephyr/
+
+The website itself (its source, `build_site.py`, `site_art.py` and the
+published pages) lives in its own repository,
+[`site-openemux-libre-apps-org`](https://github.com/guilhermefeitosa66/site-openemux-libre-apps-org),
+checked out at `../site-openemux-libre-apps-org`. The site's capture tools
+(`phone_shots.py`, `site_captures.py`) stay here because they run the app;
+what they write is copied into that repository's `public/assets/`.
 
 ## `generate_name_db.py` — the game-name database (issue #184)
 

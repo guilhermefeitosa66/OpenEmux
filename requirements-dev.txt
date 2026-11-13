@@ -12,9 +12,9 @@ coverage[toml]
 # nobody touched.
 ruff~=0.17.3
 
-# Encodes the site's AVIF/WebP screenshot widths (tools/build_site.py --images,
-# issue #683). Build-time only: the published site and the app never import it,
-# and `build_site.py --check` (what CI runs) needs only the standard library.
+# Image tools under tools/ (export_controller_art.py, phone_shots.py) and their
+# tests. Build-time only: the app never imports it. (It also encoded the site's
+# AVIF/WebP widths, issue #683, before the site moved to its own repository.)
 # 13.0 fixes the CVEs pip-audit reports against 12.x and needs Python 3.11+;
 # on 3.10 it is simply absent and the encoder tests skip themselves.
 Pillow>=13; python_version >= "3.11"
