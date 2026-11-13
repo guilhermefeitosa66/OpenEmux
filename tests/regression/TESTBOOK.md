@@ -16907,3 +16907,24 @@ has no Android device, so these are `MANUAL`.
   (`test_the_same_pixbuf_is_attached_as_the_same_texture_every_time`,
   `test_the_composite_is_rendered_at_the_cards_display_scale`), `tests/test_grid_widget.py`
   (`test_the_cards_render_their_composites_at_the_display_scale`).
+
+### RT-1033 — Settings changed with a gesture reach the disk once the gesture stops, and survive a close
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: press Ctrl+plus ten times quickly, switch the sort order, toggle the
+  theme, open and close the log panel, click through ten consoles in the sidebar; then close the
+  window right after a zoom step and start the app again.
+- **Expected:** Nothing stalls on the gesture: the zoom, view mode, sort order, theme, log panel
+  and per-page layout setters change the config in memory, which is what the window reads, and
+  write it on a worker thread 0.4 s after the last change — ten rapid zoom steps are one YAML dump
+  and one atomic write, not ten, and no fsync runs on the main thread. The session file written
+  on every sidebar click keeps its atomic rename and drops its two fsyncs (it is rebuilt by the
+  next click). Closing the window, quitting with Ctrl+Q or launching a game flushes whatever is
+  waiting, so the zoom chosen a moment before the close is the zoom the next start opens with;
+  a crash inside the 0.4 s window loses only those last settings and never the file, which is
+  still written atomically (issue 905).
+- **Check:** suite files `tests/test_config_save_debounce.py`, `tests/test_window.py`
+  (`test_closing_flushes_a_setting_still_waiting_for_its_write`), `tests/test_game_session.py`
+  (`test_a_launch_flushes_a_setting_still_waiting_for_its_write`), `tests/test_app_bootstrap.py`
+  (`test_quitting_flushes_a_setting_still_waiting_for_its_write`).

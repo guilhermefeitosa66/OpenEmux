@@ -138,6 +138,21 @@ class ThePathOutTests(_ApplicationCase):
         with mock.patch.object(Adw.Application, "do_shutdown"):
             self.app.do_shutdown()
 
+    def test_quitting_flushes_a_setting_still_waiting_for_its_write(self):
+        self.config.set_zoom(1.5)
+        with mock.patch.object(Adw.Application, "do_shutdown"):
+            self.app.do_shutdown()
+        self.assertFalse(self.config.has_pending_save())
+
+    def test_quitting_logs_how_many_cards_the_session_built(self):
+        # The performance bench reads this line (issue 899); Ctrl+Q never
+        # emits the window's close-request, so it is logged here.
+        with mock.patch.object(Adw.Application, "do_shutdown"), self.assertLogs(
+            "openemux.app", level="INFO"
+        ) as logs:
+            self.app.do_shutdown()
+        self.assertTrue(any("cards built this session=" in line for line in logs.output))
+
 
 @needs_display
 class PresentingTheMainWindowTests(_ApplicationCase):
@@ -157,8 +172,6 @@ class PresentingTheMainWindowTests(_ApplicationCase):
             self.app._present_main_window()
         build.assert_not_called()
         window.present.assert_called_once()
-
-
 @needs_display
 class TheBootstrapFlowTests(_ApplicationCase):
     def setUp(self):

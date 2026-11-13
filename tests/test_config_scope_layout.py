@@ -24,6 +24,7 @@ class ScopeLayoutConfigTests(unittest.TestCase):
             manager.set_view_mode("cover")  # global
             manager.enable_scope_override("SFC")
             manager.set_scope_display("SFC", "view_mode", "cartridge")
+            manager.flush()  # the layout setters write once the changes pause (issue 905)
 
             reloaded = ConfigManager(config_file=cfg_path)
             self.assertTrue(reloaded.has_scope_override("SFC"))

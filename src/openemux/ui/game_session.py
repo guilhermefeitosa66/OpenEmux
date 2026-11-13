@@ -82,6 +82,10 @@ class GameSession:
         return self.win.t(message)
 
     def launch(self, rom):
+        # Whatever the user just changed reaches the disk before the game
+        # does: a session that ends with the app is the one that would lose
+        # the last half second of settings (issue 905).
+        self.win.config_manager.flush()
         try:
             success, error_msg = self.win.runtime_manager.launch(
                 rom["path"], rom["console"]

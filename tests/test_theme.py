@@ -50,7 +50,9 @@ class ThemeConfigTests(unittest.TestCase):
     def test_round_trips(self):
         with TemporaryDirectory() as tmp_dir:
             cfg_path = Path(tmp_dir) / "config.yaml"
-            ConfigManager(config_file=cfg_path).set_theme(THEME_DARK)
+            manager = ConfigManager(config_file=cfg_path)
+            manager.set_theme(THEME_DARK)
+            manager.flush()  # the theme is written once the changes pause (issue 905)
 
             reloaded = ConfigManager(config_file=cfg_path)
             self.assertEqual(reloaded.get_ui_settings()["theme"], THEME_DARK)

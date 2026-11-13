@@ -67,7 +67,7 @@ from openemux.core.console_order import (
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.gamepad_backend import make_navigator
-from openemux.ui.grid import RomGrid, cards_built as grid_cards_built
+from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
 from openemux.ui.log_panel import BugReportDialog, LogPanel
@@ -227,7 +227,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
-        self.connect("close-request", self._on_close_log_grid_stats)
+        # A setting changed in the last half second is still waiting for its
+        # debounced write (issue 905).
+        self.connect("close-request", self._on_close_flush_config)
         # The last word on where the library was left (issue #383). The
         # per-navigation write is what survives a crash or a session logout;
         # this one catches a view changed by something other than the sidebar.
@@ -1483,14 +1485,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return True
         return self.navigation.escape_to_sidebar()
 
-    def _on_close_log_grid_stats(self, *_args):
-        """One line for the performance checks: how many cards this session built.
-
-        A grouped page on a big library used to build a card per game of
-        every console within thirty rows of its anchor (issue 899); the
-        bench in tools/perf reads this line from the log.
-        """
-        logger.info("library grid: cards built this session=%d", grid_cards_built())
+        self.connect("close-request", self._on_close_stop_game)
+    def _on_close_flush_config(self, *_args):
+        self.config_manager.flush()
         return False
 
     def _on_close_stop_gamepad(self, *_args):

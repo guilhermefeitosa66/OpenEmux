@@ -514,6 +514,10 @@ class ConfigManager:
         # One writer at a time: save_config runs from the GTK main thread, the
         # volume-persist timer, the bootstrap worker and atexit (issue #208).
         self._save_lock = threading.RLock()
+        # The debounced write (issue 905): a timer that saves on a worker
+        # thread, and whether anything is waiting for it.
+        self._save_timer = None
+        self._save_pending = False
         self.input_profiles = InputProfileManager(self.store_path("input"))
         self.shaders = ShaderConfigStore(self.store_path("shaders"))
         self.cores = CoreConfigStore(self.store_path("cores"))
@@ -776,11 +780,61 @@ class ConfigManager:
         with self._save_lock:
             if config:
                 self.config = config
+            self._cancel_save_timer()
+            self._save_pending = False
             snapshot = stored_config(self.config)
             try:
                 atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
             except Exception as e:
                 logger.error("config not saved: %s", e)
+
+    #: How long a setting change may wait before it reaches the disk. Ten
+    #: zoom steps inside this window are one YAML dump and two fsyncs, not
+    #: twenty; a crash inside it loses at most these settings and never the
+    #: file, which is still written atomically.
+    SAVE_DEBOUNCE_S = 0.4
+
+    def save_config_soon(self):
+        """Save on a worker thread, after the changes stop for a moment.
+
+        For the settings the user changes with a key or a click while
+        looking at the result -- zoom, view mode, sort order, theme, the log
+        panel -- where the in-memory config is what the UI reads and the disk
+        can wait (issue 905). :meth:`flush` writes at once; the window flushes
+        on close and before a launch, and :meth:`save_config` itself flushes
+        whatever is pending along with its own write.
+        """
+        with self._save_lock:
+            self._save_pending = True
+            self._cancel_save_timer()
+            timer = threading.Timer(self.SAVE_DEBOUNCE_S, self._save_from_timer)
+            timer.daemon = True
+            timer.name = "openemux-config-save"
+            self._save_timer = timer
+            timer.start()
+
+    def _cancel_save_timer(self):
+        timer, self._save_timer = self._save_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _save_from_timer(self):
+        with self._save_lock:
+            if not self._save_pending:
+                return
+            self.save_config()
+
+    def has_pending_save(self):
+        return self._save_pending
+
+    def flush(self):
+        """Write a debounced save now, if one is waiting. Returns whether it did."""
+        with self._save_lock:
+            if not self._save_pending:
+                self._cancel_save_timer()
+                return False
+            self.save_config()
+            return True
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
@@ -875,7 +929,7 @@ class ConfigManager:
     def set_theme(self, theme):
         ui = self.config.setdefault("ui", {})
         ui["theme"] = normalize_theme(theme)
-        self.save_config()
+        self.save_config_soon()
         return ui["theme"]
 
     def get_update_settings(self):
@@ -914,7 +968,7 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["view_mode"] = normalize_view_mode(view_mode)
         ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
-        self.save_config()
+        self.save_config_soon()
 
     def get_zoom(self):
         return normalize_zoom(self.config.get("ui", {}).get("zoom", DEFAULT_ZOOM))
@@ -922,7 +976,7 @@ class ConfigManager:
     def set_zoom(self, zoom):
         ui = self.config.setdefault("ui", {})
         ui["zoom"] = normalize_zoom(zoom)
-        self.save_config()
+        self.save_config_soon()
 
     def get_sort_order(self):
         return normalize_sort_order(self.config.get("ui", {}).get("sort_order"))
@@ -930,7 +984,7 @@ class ConfigManager:
     def set_sort_order(self, order):
         ui = self.config.setdefault("ui", {})
         ui["sort_order"] = normalize_sort_order(order)
-        self.save_config()
+        self.save_config_soon()
 
     def set_render_cartridge_overlay(self, enabled):
         """Legacy entry point: the cartridge frame is a view mode now."""
@@ -970,20 +1024,20 @@ class ConfigManager:
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         entry = overrides.setdefault(str(scope), {})
         entry[key] = normalize_display_value(key, value)
-        self.save_config()
+        self.save_config_soon()
 
     def enable_scope_override(self, scope):
         """Start a scope's own layout, seeded from the current global values."""
         base = self.get_ui_settings()
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         overrides[str(scope)] = {key: base[key] for key in DISPLAY_KEYS}
-        self.save_config()
+        self.save_config_soon()
 
     def clear_scope_override(self, scope):
         """Drop a scope's override so it follows the global layout again."""
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         if overrides.pop(str(scope), None) is not None:
-            self.save_config()
+            self.save_config_soon()
 
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
@@ -1084,7 +1138,7 @@ class ConfigManager:
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_log_panel"] = bool(enabled)
-        self.save_config()
+        self.save_config_soon()
 
     def set_gamepad_navigation(self, enabled):
         ui = self.config.setdefault("ui", {})

@@ -130,6 +130,14 @@ class LaunchingTests(_SessionCase):
             self.toasts,
         )
 
+    def test_a_launch_flushes_a_setting_still_waiting_for_its_write(self):
+        # Issue 905: a session that ends with the app would lose the last
+        # half second of settings otherwise.
+        self.config.set_zoom(1.5)
+        self.assertTrue(self.config.has_pending_save())
+        self.session.launch(self.rom())
+        self.assertFalse(self.config.has_pending_save())
+
     def test_a_refused_launch_says_why_and_records_nothing(self):
         self.runtime.launch_result = (False, "toast.launch_busy")
         rom = self.rom()

@@ -66,6 +66,7 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertEqual(settings["view_mode"], "list")
             self.assertFalse(settings["render_cartridge_overlay"])
 
+            manager.flush()  # the view mode is written once the changes pause (issue 905)
             self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "list")
 
     def test_zoom_defaults_to_100_percent_and_round_trips(self):
@@ -75,6 +76,7 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertEqual(manager.get_zoom(), 1.0)
 
             manager.set_zoom(1.5)
+            manager.flush()
             self.assertEqual(ConfigManager(config_file=cfg_path).get_zoom(), 1.5)
 
     def test_a_junk_zoom_does_not_break_the_library(self):
@@ -108,6 +110,7 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
 
             # Turning it back off has to stick: the flip happens only once.
             manager.set_render_cartridge_overlay(False)
+            manager.flush()  # a view-mode change is written once the changes pause (issue 905)
             reopened = ConfigManager(config_file=cfg_path)
             self.assertFalse(reopened.get_ui_settings()["render_cartridge_overlay"])
 

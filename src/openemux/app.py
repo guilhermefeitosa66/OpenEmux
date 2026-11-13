@@ -42,6 +42,7 @@ from gi.repository import Gtk  # noqa: F401
 from gi.repository import Adw, GLib
 from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
+from openemux.ui.grid import cards_built as grid_cards_built
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
@@ -176,6 +177,16 @@ class OpenEmuxApplication(Adw.Application):
         share = getattr(self.main_window, "_share_coordinator", None)
         if share is not None:
             share.shutdown()
+        # A debounced setting save still waiting (issue 905).
+        self.config_manager.flush()
+        # One line for the performance checks: a grouped page on a big
+        # library used to build a card per game of every console within
+        # thirty rows of its anchor (issue 899). Here rather than on the
+        # window's close-request, which Ctrl+Q never emits; the bench in
+        # tools/perf reads it from the log.
+        logging.getLogger(__name__).info(
+            "library grid: cards built this session=%d", grid_cards_built()
+        )
         Adw.Application.do_shutdown(self)
 
     def _on_window_added(self, _application, window):
