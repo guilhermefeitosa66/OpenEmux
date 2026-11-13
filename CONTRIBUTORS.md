@@ -73,6 +73,11 @@ Pointed out that the in-game bar's hide button, a down arrow, read as "more"
 or "minimize" rather than "hide this bar", which gave it the Android app's eye
 in [#938](https://github.com/guilhermefeitosa66/OpenEmux/issues/938).
 
+Reported that a volume turned down during a game was back at full on the next
+one, so every game started far too loud. Since
+[#939](https://github.com/guilhermefeitosa66/OpenEmux/issues/939) the next game
+starts at the volume the last one ended at, and never muted.
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no

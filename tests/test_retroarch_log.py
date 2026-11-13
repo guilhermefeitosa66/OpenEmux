@@ -5,10 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core.retroarch_log import (
+    clamp_volume_db,
     failure_reason,
     is_fuse_failure,
+    last_volume_db,
     read_failure_reason,
     read_is_fuse_failure,
+    read_last_volume_db,
 )
 
 class FailureReasonTests(unittest.TestCase):
@@ -114,6 +117,51 @@ class ReadFailureReasonTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             self.assertIsNone(read_failure_reason(Path(tmp_dir) / "nope.log"))
         self.assertIsNone(read_failure_reason(None))
+
+
+class TheVolumeAGameEndedAtTests(unittest.TestCase):
+    """The last volume change in a finished log is the next game's (issue 939)."""
+
+    def test_a_game_that_never_touched_the_volume_has_none(self):
+        self.assertIsNone(last_volume_db(["[INFO] [Audio] Started synchronous audio driver.\n"]))
+
+    def test_another_line_that_mentions_db_is_not_a_volume(self):
+        self.assertIsNone(last_volume_db(["[INFO] [Video] Gamma: 2.2 dB. (not audio)\n"]))
+
+    def test_the_line_retroarch_writes_is_read(self):
+        self.assertEqual(last_volume_db(["[INFO] [Audio] Audio volume: -3.0 dB.\n"]), -3.0)
+
+    def test_the_last_change_wins(self):
+        lines = [
+            "[INFO] [Audio] Audio volume: -0.5 dB.\n",
+            "[INFO] [Video] something else\n",
+            "[INFO] [Audio] Audio volume: -1.0 dB.\n",
+            "[INFO] [Audio] Audio volume: 1.5 dB.\n",
+        ]
+        self.assertEqual(last_volume_db(lines), 1.5)
+
+    def test_a_translated_label_and_a_decimal_comma_are_read_too(self):
+        # The label is RetroArch's MSG_AUDIO_VOLUME in the user's language.
+        self.assertEqual(last_volume_db(["[INFO] [Audio] Volume do áudio: -2,5 dB.\n"]), -2.5)
+
+    def test_a_value_outside_retroarchs_range_is_clamped(self):
+        self.assertEqual(last_volume_db(["[INFO] [Audio] Audio volume: -99.0 dB.\n"]), -80.0)
+        self.assertEqual(last_volume_db(["[INFO] [Audio] Audio volume: 20.0 dB.\n"]), 12.0)
+        self.assertEqual(clamp_volume_db("3"), 3.0)
+
+    def test_a_finished_log_is_read_from_disk(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "[INFO] starting\n[INFO] [Audio] Audio volume: -4.5 dB.\n[INFO] quit\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(read_last_volume_db(log_path), -4.5)
+
+    def test_no_log_or_an_unreadable_one_has_no_volume(self):
+        self.assertIsNone(read_last_volume_db(None))
+        with TemporaryDirectory() as tmp_dir:
+            self.assertIsNone(read_last_volume_db(Path(tmp_dir) / "gone.log"))
 
 
 if __name__ == "__main__":

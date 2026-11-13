@@ -2394,6 +2394,41 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only. Known limit: a toggle flipped from the keyboard or RetroArch's menu does
   not change the bar's icon.
 
+### RT-1140 — The volume set in a game is where the next game starts
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session; note the modification time of the
+  RetroArch config OpenEmux launches with (`~/.config/retroarch/retroarch.cfg`, or the RetroArch
+  Flatpak's `~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg`).
+- **Steps:**
+  1. Start a game and click the bar's volume − four times. Quit the game.
+  2. Start any game (another console is fine) and click volume − once.
+  3. Quit the game, close OpenEmux entirely, reopen it and start a game; click volume − once.
+  4. Start a game, leave the volume alone, quit; start a game and click volume − once.
+- **Expected:** In 1, RetroArch's volume widget ends at −2.0 dB. In 2 the game starts at that
+  quieter level, and the widget shows −2.5 dB: it continues from where the last game stopped, not
+  from 0. In 3 it continues the same way after the restart (−3.0 dB). 4 changes nothing: the
+  widget shows −3.5 dB. The RetroArch config's modification time never changes (issue 939).
+- **Check:** human for the sound. The stored value and the launch argument:
+  `grep game_volume_db ~/.openemux/config.yaml` shows the last level, and the newest
+  `~/.openemux/runtime/runtime_*.cfg` carries `audio_volume = "<that level>"`. The read, the store
+  and the launch argument: `tests/test_retroarch_log.py`, `tests/test_runtime_manager.py`,
+  `tests/test_config_bootstrap_defaults.py`, `tests/test_retroarch_launcher.py`.
+- **Restore:** click volume + until the widget shows 0.0 dB, then quit the game.
+
+### RT-1141 — A game always starts unmuted
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Start a game, click the bar's mute button (it turns red), quit the game.
+  2. Start a game.
+- **Expected:** The game in 2 has sound, and the bar's mute button is in its normal, not red,
+  state. Mute is never carried from one game to the next, so no game starts silent without a sign
+  of why (issue 939).
+- **Check:** human for the sound. The newest `~/.openemux/runtime/runtime_*.cfg` carries
+  `audio_mute_enable = "false"`; suite: `tests/test_retroarch_launcher.py`.
+
 ### RT-329 — Hiding the bar gives its space back to the game
 - **Area:** Launch
 - **Mode:** MANUAL
