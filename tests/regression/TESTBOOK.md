@@ -17316,6 +17316,46 @@ has no Android device, so these are `MANUAL`.
   (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
   `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).
 
+### RT-1142 — Recently played follows the library's view mode
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** games played on at least two consoles that have a cartridge (SNES, NES, N64,
+  GBA) and on one that has none (PlayStation); the global view mode is "Cartridge".
+- **Steps:**
+  1. Open "Recently played" and read the cards.
+  2. While on the page, switch the view mode from the header bar to "Cover", then to "List", then
+     back to "Cartridge".
+  3. Give "Recently played" a layout of its own ("List") from the page's view menu; open "All",
+     then come back.
+  4. Narrow the window to about 520 px wide.
+- **Expected:** 1: one grid in play order, newest first; every game is drawn in its own console's
+  cartridge (in the shell colour chosen for it), the cartridges of a row stand on the same line
+  right above their titles, and the PlayStation game shows its cover; the caption under each title
+  is still when and for how long (issue 942). 2: the page changes at once each time, the same way
+  "All" does, and keeps its order. 3: "Recently played" shows rows while "All" keeps the global
+  layout. 4: the grid reflows to fewer columns, nothing is clipped.
+- **Check:** suite files `tests/test_library_pages.py` (`TheRecentPageTests`),
+  `tests/test_cartridge_on_mixed_pages.py` (`OneGridInPlayOrderTests`),
+  `tests/test_rom_card_widget.py` (`ACartridgeOnAPageThatMixesConsolesTests`); human for the look
+  of the shelf.
+
+### RT-1143 — Recently played keeps only the 12 latest games
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with at least 13 games.
+- **Steps:**
+  1. Launch and quit 13 different games, one after the other. Open "Recently played" and read the
+     header count and the order.
+  2. Launch a game that is already on the page, the sixth from the top; quit it.
+  3. Open the details of the first game launched in step 1 (the one that is no longer listed).
+- **Expected:** 1: the header says "12 games"; the last game launched is first and the first
+  game launched is gone (issue 942). 2: that game moves to the first position and appears only
+  once; still 12 games. 3: its play count and play time are still shown; only the page is capped,
+  `~/.openemux/play_history.json` still has all 13 games.
+- **Check:** suite files `tests/test_play_history.py`
+  (`test_the_page_is_capped_at_twelve_but_the_history_is_not`), `tests/test_library_pages.py`
+  (`TheRecentPageTests`).
+
 ### RT-1040 — Launching answers at once, runs off the main thread, and speaks the player's language when it ends
 - **Area:** Launch
 - **Mode:** AUTO-SUITE

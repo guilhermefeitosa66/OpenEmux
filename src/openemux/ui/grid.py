@@ -51,6 +51,7 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     columns_and_slack,
     cover_size_for_console,
     default_item_size,
+    tallest_cartridge_frame,
 )
 from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
@@ -144,6 +145,7 @@ class RomGrid(Gtk.GridView):
         dormant=False,
         play_caption=None,
         has_auto_state=None,
+        mixed_cartridges=False,
     ):
         # Before anything else: the GObject has to exist before this widget
         # can be configured. The model and the factory are attached at the
@@ -213,9 +215,18 @@ class RomGrid(Gtk.GridView):
         # A cartridge composite carries its shadow in a transparent margin
         # (issue 903): the card grows by it on every side, and the gaps and
         # the edges give the same back, so the cartridges keep their place.
-        cartridge_frame_path = cartridge_frame_for(
-            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
-        )
+        # A page that mixes consoles in one grid may still draw cartridges
+        # when it asks to ("Recently played", issue 942): the cell is sized by
+        # the tallest shell and each card draws its own console's.
+        self._mixed_cartridges = bool(mixed_consoles and mixed_cartridges)
+        if self._mixed_cartridges:
+            cartridge_frame_path = tallest_cartridge_frame(
+                (rom.get("console") for rom in roms), self.view_mode, compact=self.compact
+            )
+        else:
+            cartridge_frame_path = cartridge_frame_for(
+                console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
+            )
         self._shadow_pad = CARTRIDGE_SHADOW_PAD if cartridge_frame_path else 0
         self._spacing = max(0, self._spacing - 2 * self._shadow_pad)
         # GtkGridView has no row/column spacing of its own: the horizontal gap
@@ -688,6 +699,8 @@ class RomGrid(Gtk.GridView):
         """This ROM's shell: the console frame in the ROM's chosen color."""
         if not self._base_frame_path:
             return None
+        if self._mixed_cartridges:
+            return self._mixed_frame_path_for_rom(rom)
         if self._frame_color_for_rom is None:
             return self._base_frame_path
         color = self._frame_color_for_rom(rom)
@@ -696,6 +709,23 @@ class RomGrid(Gtk.GridView):
         except KeyError:
             path = cartridge_frame_svg(rom["console"], color) or self._base_frame_path
             self._frame_by_color[color] = path
+            return path
+
+    def _mixed_frame_path_for_rom(self, rom):
+        """The ROM's own console shell on a grid mixing consoles (issue 942).
+
+        Never the grid's base frame, which is only the tallest console's: a
+        console with no shell drawn gets ``None`` and its card shows the cover.
+        """
+        console = rom.get("console")
+        color = self._frame_color_for_rom(rom) if self._frame_color_for_rom else None
+        key = (console, color)
+        try:
+            return self._frame_by_color[key]
+        except KeyError:
+            path = cartridge_frame_svg(console, color) if color else None
+            path = path or cartridge_frame_svg(console)
+            self._frame_by_color[key] = path
             return path
 
     def refresh_rom_frame(self, rom):

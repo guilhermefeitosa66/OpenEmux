@@ -179,6 +179,30 @@ def cartridge_frame_for(console, view_mode, mixed_consoles=False, compact=False)
     return cartridge_frame_svg(console)
 
 
+def tallest_cartridge_frame(consoles, view_mode, compact=False):
+    """The shell that sizes a grid mixing consoles in cartridge view, or None.
+
+    "Recently played" is one grid in play order (issue 910), so it cannot be
+    split per console the way "All" is. Every shell is drawn at the same
+    width, though -- only the heights differ -- so one lattice still holds
+    them all if the cell is as tall as the tallest shell on the page, each
+    cartridge centred in it (issue 942). ``None`` when the page draws no
+    cartridge: not the cartridge view, list view, or no console on it has a
+    shell drawn.
+    """
+    if compact or not renders_cartridge(view_mode):
+        return None
+    tallest, tallest_height = None, -1
+    for console in dict.fromkeys(consoles):
+        path = cartridge_frame_svg(console)
+        if path is None:
+            continue
+        _width, height = cartridge_render.load_frame(path).size_for_width(FIXED_ITEM_WIDTH)
+        if height > tallest_height:
+            tallest, tallest_height = path, height
+    return tallest
+
+
 class FixedSizePicture(Gtk.Picture):
     """A Picture that measures as the slot it sits in, not as its image.
 
@@ -200,6 +224,17 @@ class FixedSizePicture(Gtk.Picture):
     def __init__(self, width, height):
         super().__init__()
         self._slot_size = (width, height)
+
+    def set_slot_size(self, width, height):
+        """Measure as a different slot from now on.
+
+        A card on a page mixing consoles in cartridge view (issue 942) holds a
+        cartridge of its own height, or a cover kept at its own proportions,
+        and is recycled between the two.
+        """
+        if self._slot_size != (width, height):
+            self._slot_size = (width, height)
+            self.queue_resize()
 
     def do_measure(self, orientation, for_size):
         size = (

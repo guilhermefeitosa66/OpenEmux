@@ -969,6 +969,76 @@ class OnASingleConsoleCoverPageTests(_CardCase):
 
 
 @needs_display
+class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
+    """Issue 942: "Recently played" draws cartridges of several consoles in
+    one grid; each stands on the bottom of a cell as tall as the tallest."""
+
+    def setUp(self):
+        super().setUp()
+        ctx = copy.copy(self.grid._card_ctx)
+        ctx.mixed_consoles = True
+        ctx.cartridge = True
+        ctx.compact = False
+        ctx.render_scale = 2
+        self.host = Gtk.Window()
+        self.addCleanup(self.host.destroy)
+        self.card = RomItem(ctx)
+        self.host.set_child(self.card)
+        self.host.present()
+        self.pump()
+        self.card.bind(self.entry)
+
+    def apply(self, pixbuf, full_resolution):
+        self.card._apply_cover_pixbuf(self.card._generation, pixbuf, full_resolution)
+
+    def has_fill(self):
+        return self.card._backdrop.has_css_class("rom-cover-backdrop")
+
+    def test_the_cartridge_stands_on_the_bottom_of_its_cell_with_nothing_behind(self):
+        self.apply(self.pixbuf(160, 100), True)
+        self.assertEqual(self.card.cover_image.get_size_request(), (80, 50))
+        self.assertEqual(self.card.cover_image._slot_size, (80, 50))
+        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.END)
+        self.assertFalse(self.has_fill())
+
+    def test_a_cover_after_a_cartridge_gets_the_backdrop_and_the_centre_back(self):
+        self.apply(self.pixbuf(160, 100), True)
+        self.apply(self.pixbuf(30, 44), False)
+        self.assertTrue(self.has_fill())
+        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.CENTER)
+        self.assertEqual(self.card.cover_image._slot_size, (30, 44))
+
+    def test_the_placeholder_gets_the_backdrop_back(self):
+        self.apply(self.pixbuf(160, 100), True)
+        self.card._show_placeholder()
+        self.assertTrue(self.has_fill())
+
+    def test_putting_the_art_back_in_the_backdrop_keeps_its_alignment(self):
+        self.apply(self.pixbuf(160, 100), True)
+        self.card._show_placeholder()
+        self.card._show_cover_image()
+        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.END)
+
+    def test_the_label_is_only_looked_for_on_a_game_with_a_shell(self):
+        kinds = []
+
+        def resolve(rom, roms_dir, wanted):
+            kinds.append(wanted)
+            return None
+
+        with mock.patch.object(
+            rom_card_module.cover_cache, "submit", side_effect=lambda job: job()
+        ), mock.patch.object(rom_card_module, "resolve_local_art", side_effect=resolve):
+            self.entry.art_path = rom_card_module.ART_UNRESOLVED
+            self.card.cartridge_frame_path = None
+            self.card._start_cover_fetch()
+            self.entry.art_path = rom_card_module.ART_UNRESOLVED
+            self.card.cartridge_frame_path = "/tmp/shell.svg"
+            self.card._start_cover_fetch()
+        self.assertEqual(kinds, [(COVER_ART,), (LABEL_ART, COVER_ART)])
+
+
+@needs_display
 class TheContextMenuTests(_CardCase):
     def test_opening_it_builds_a_popover_parented_to_the_card(self):
         self.card.show_context_menu()
