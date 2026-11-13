@@ -98,10 +98,6 @@ class TheRuleTests(unittest.TestCase):
         self.assertIsNone(cartridge_frame_for("NOPE", VIEW_MODE_CARTRIDGE))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class OneGridInPlayOrderTests(unittest.TestCase):
     """"Recently played" stays one grid and still draws cartridges (issue 942).
 
@@ -143,3 +139,7 @@ class OneGridInPlayOrderTests(unittest.TestCase):
         self.assertIsNone(
             tallest_cartridge_frame(self.consoles, VIEW_MODE_CARTRIDGE, compact=True)
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

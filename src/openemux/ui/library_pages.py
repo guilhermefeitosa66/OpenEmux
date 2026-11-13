@@ -393,6 +393,9 @@ class LibraryPages:
         paths = self.win.play_history.recent()
         resolve = self.win.playlist_manager.entries_for_paths
         entries = []
+        # Two history keys can spell the same file (a stray space, a doubled
+        # slash): the page lists the game once, at its latest launch.
+        listed = set()
         # A chunk at a time: resolving checks every file on disk, and a long
         # history only needs as many as it takes to fill the page.
         for start in range(0, len(paths), RECENT_LIMIT):
@@ -402,8 +405,10 @@ class LibraryPages:
             # Keyed as the entry spells its path, which is normalised.
             found = {entry["path"]: entry for entry in resolve(chunk)}
             for path in chunk:
-                entry = found.get(str(Path(str(path).strip())))
-                if entry is not None:
+                key = str(Path(str(path).strip()))
+                entry = found.get(key)
+                if entry is not None and key not in listed:
+                    listed.add(key)
                     entries.append(entry)
             if len(entries) >= RECENT_LIMIT:
                 break

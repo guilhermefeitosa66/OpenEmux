@@ -497,6 +497,14 @@ class TheRecentPageTests(WindowCase):
         self.assertEqual(listed.count(again), 1)
         self.assertEqual(len(listed), 12)
 
+    def test_a_game_recorded_under_two_spellings_is_listed_once(self):
+        latest = self.played[-1]["path"]
+        self.win.play_history.record_launch(latest + " ")
+        listed = self.listed()
+        self.assertEqual(listed[0], latest)
+        self.assertEqual(listed.count(latest), 1)
+        self.assertEqual(len(listed), 12)
+
     def test_cartridge_view_draws_each_game_in_its_own_shell(self):
         if cartridge_frame_svg("SFC") is None or cartridge_frame_svg("FC") is None:
             self.skipTest("no cartridge art shipped (or no rsvg)")

@@ -17352,8 +17352,7 @@ has no Android device, so these are `MANUAL`.
   game launched is gone (issue 942). 2: that game moves to the first position and appears only
   once; still 12 games. 3: its play count and play time are still shown; only the page is capped,
   `~/.openemux/play_history.json` still has all 13 games.
-- **Check:** `python3 -c "import json,os;print(len(json.load(open(os.path.expanduser('~/.openemux/play_history.json')))))"`
-  prints 13 or more; suite files `tests/test_play_history.py`
+- **Check:** suite files `tests/test_play_history.py`
   (`test_the_page_is_capped_at_twelve_but_the_history_is_not`), `tests/test_library_pages.py`
   (`TheRecentPageTests`).
 
