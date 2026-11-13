@@ -2186,6 +2186,25 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             row.connect("notify::selected", self._on_core_changed, console_id)
             group.add(row)
 
+        # The deferred sweep after the first boot fetches only the cores some
+        # picker above would list; the ~200 others the buildbot builds are an
+        # opt-in (issue 908). Turning it on owes the sweep again, and the
+        # window starts it right away.
+        download_group = Adw.PreferencesGroup(title=self.t("prefs.group.core_downloads"))
+        self._download_all_cores_row = Adw.SwitchRow(
+            title=self.t("settings.cores.download_all.title"),
+            subtitle=self.t("settings.cores.download_all.subtitle"),
+        )
+        self._download_all_cores_row.add_prefix(
+            Gtk.Image.new_from_icon_name("folder-download-symbolic")
+        )
+        self._download_all_cores_row.set_active(
+            self.config.get_retroarch_updater_settings()["download_all_cores"]
+        )
+        self._download_all_cores_row.connect("notify::active", self._on_download_all_cores_changed)
+        download_group.add(self._download_all_cores_row)
+        page.add(download_group)
+
         # Settings the core itself understands, which do not travel in the
         # config file the launch appends (issue #296). Only for the cores that
         # have any, so this group is empty on most libraries.
@@ -2679,6 +2698,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # "System" that lands on the same appearance emits no notify::dark,
         # so the header icon is refreshed here rather than left to that.
         self.win._sync_theme_button()
+
+    def _on_download_all_cores_changed(self, row, *_a):
+        enabled = row.get_active()
+        self.config.set_download_all_cores(enabled)
+        if enabled:
+            self.win._start_deferred_asset_download()
 
     def _on_show_tips_changed(self, row, *_a):
         enabled = row.get_active()

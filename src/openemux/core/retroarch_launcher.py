@@ -151,14 +151,16 @@ def x11_only_env(env):
 
 
 class RetroArchLauncher:
-    def __init__(self, project_root, config_manager):
+    def __init__(self, project_root, config_manager, core_catalog=None):
         self.project_root = Path(project_root).expanduser()
         self.config_manager = config_manager
         self.shader_catalog = ShaderCatalog(
             runtime_dir=self.config_manager.get_runtime_dir(),
             project_root=self.project_root,
         )
-        self.core_catalog = CoreCatalog(project_root=self.project_root)
+        # The window hands its own catalog in, so the process scans the core
+        # directories once rather than once per holder (issue 908).
+        self.core_catalog = core_catalog or CoreCatalog(project_root=self.project_root)
         #: Why the last launch has no shader, or ``None``. Set on every launch
         #: so the UI can say it out loud instead of leaving the only trace in a
         #: log file (issue #366).

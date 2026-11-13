@@ -314,11 +314,35 @@ class TheDeferredDownloadTests(unittest.TestCase):
         result = bootstrapper.download_deferred_assets(cancel_event=cancel_event)
         return cfg, recorder, result
 
-    def test_it_fetches_every_core_but_the_curated_ones(self):
+    def test_it_fetches_only_the_cores_a_picker_would_list(self):
+        # Issue 908: the sweep used to fetch all ~240 cores the buildbot
+        # builds; the ~200 no picker shows are an opt-in now.
         with TemporaryDirectory() as tmp_dir:
-            _, recorder, _ = self._run(tmp_dir)
+            with patch(
+                "openemux.core.first_boot.pickable_core_filenames",
+                return_value=["extra_libretro.so"] + curated_core_filenames()[:1],
+            ):
+                _, recorder, _ = self._run(tmp_dir)
         self.assertEqual(recorder.calls["download_all"]["skip"], curated_core_filenames())
-        self.assertNotIn("only", recorder.calls["download_all"])
+        self.assertEqual(recorder.calls["download_all"]["only"], ["extra_libretro.so"])
+
+    def test_opting_in_fetches_every_core(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.config["runtime"]["retroarch"]["updater"]["download_all_cores"] = True
+            cfg.mark_deferred_assets_pending()
+            bootstrapper = FirstBootBootstrapper(cfg)
+            recorder = _RecordingUpdater(bootstrapper.updater)
+            bootstrapper.download_deferred_assets()
+        self.assertIsNone(recorder.calls["download_all"]["only"])
+        self.assertEqual(recorder.calls["download_all"]["skip"], curated_core_filenames())
+
+    def test_the_info_files_are_looked_for_in_the_updaters_core_dir_first(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
+            dirs = bootstrapper._core_info_dirs()
+        self.assertEqual(dirs[0], bootstrapper.updater.core_dir)
+        self.assertGreater(len(dirs), 1)
 
     def test_it_fetches_the_other_shader_pack(self):
         for driver, packs in (

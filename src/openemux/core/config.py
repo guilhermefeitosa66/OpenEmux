@@ -196,6 +196,11 @@ UPDATER_DEFAULTS = {
     "request_timeout_sec": 30,
     "retries": 3,
     "parallel_downloads": 8,
+    # The deferred sweep after the first boot fetches only the cores some
+    # picker would list -- the curated ones and those whose .info names a
+    # supported system (issue 908). The other ~200 the buildbot builds are
+    # an opt-in, from Preferences.
+    "download_all_cores": False,
 }
 
 # Bumped when a UI default changes in a way that should reach configs written
@@ -1346,9 +1351,27 @@ class ConfigManager:
         # The three the caller relies on being the right type: a hand-edited
         # config can put a string where a number belongs.
         resolved["enabled"] = bool(resolved["enabled"])
+        resolved["download_all_cores"] = bool(resolved["download_all_cores"])
         for key in ("request_timeout_sec", "retries", "parallel_downloads"):
             resolved[key] = int(resolved[key])
         return resolved
+
+    def set_download_all_cores(self, enabled):
+        """Opt in to (or out of) the full core sweep after the first boot.
+
+        Turning it on owes the sweep again, so the next start fetches what
+        the pickable-only sweep left out (issue 908).
+        """
+        updater = (
+            self.config.setdefault("runtime", {})
+            .setdefault("retroarch", {})
+            .setdefault("updater", {})
+        )
+        updater["download_all_cores"] = bool(enabled)
+        if enabled:
+            self.mark_deferred_assets_pending()
+        self.save_config()
+        return updater["download_all_cores"]
 
     def get_shaders_config_file(self):
         return self.shaders.config_file

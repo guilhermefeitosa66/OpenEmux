@@ -1243,6 +1243,20 @@ class TheRomsFolderPickerTests(WindowCase):
         dialog.select_folder_finish.return_value = selected
         return dialog
 
+    def test_the_window_and_the_launcher_share_one_core_catalog(self):
+        # Issue 908: two catalogs scanned the info directory twice.
+        self.assertIs(self.win.runtime_manager.retroarch_launcher.core_catalog, self.win.core_catalog)
+        self.assertEqual(
+            self.win.core_catalog.cache_file, self.config.config_dir / "cores_catalog.json"
+        )
+
+    def test_the_core_catalog_is_warmed_on_a_worker(self):
+        with mock.patch.object(window_module, "Thread") as thread:
+            self.win._warm_core_catalog()
+        self.assertEqual(thread.call_args.kwargs["target"], self.win.core_catalog.warm_up)
+        self.assertTrue(thread.call_args.kwargs["daemon"])
+        thread.return_value.start.assert_called_once()
+
     def test_the_incremental_flag_reaches_the_playlist_rebuild(self):
         with mock.patch.object(
             self.win.playlist_manager, "scan_and_rebuild_all_playlists",
@@ -2788,10 +2802,12 @@ class TheDeferredAssetDownloadTests(WindowCase):
         self.config.mark_deferred_assets_pending()
         refreshed = []
         launcher = self.win.runtime_manager.retroarch_launcher
+        # One core catalog for the window and the launcher (issue 908); the
+        # shader catalogs are still two.
+        self.assertIs(launcher.core_catalog, self.win.core_catalog)
         for name, catalog in (
             ("core", self.win.core_catalog),
             ("shader", self.win.shader_catalog),
-            ("launcher core", launcher.core_catalog),
             ("launcher shader", launcher.shader_catalog),
         ):
             patcher = mock.patch.object(
@@ -2820,9 +2836,7 @@ class TheDeferredAssetDownloadTests(WindowCase):
     def test_owed_assets_download_under_the_banner_and_refresh_the_catalogs(self):
         fake, refreshed, updates = self._start()
         self.assertEqual(len(self.win.tasks), 0)
-        self.assertEqual(
-            sorted(refreshed), ["core", "launcher core", "launcher shader", "shader"]
-        )
+        self.assertEqual(sorted(refreshed), ["core", "launcher shader", "shader"])
         self.assertEqual([args[1:] for args in updates], [(3, 7)])
         self.assertIsNotNone(fake.cancel_event)
 
@@ -2880,15 +2894,13 @@ class TheMissingCoreRepairTests(WindowCase):
     def _catalog_spy(self):
         refreshed = []
         launcher = self.win.runtime_manager.retroarch_launcher
-        for name, catalog in (
-            ("core", self.win.core_catalog),
-            ("launcher core", launcher.core_catalog),
-        ):
-            patcher = mock.patch.object(
-                catalog, "refresh", lambda name=name: refreshed.append(name)
-            )
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        # One catalog for the window and the launcher (issue 908).
+        self.assertIs(launcher.core_catalog, self.win.core_catalog)
+        patcher = mock.patch.object(
+            self.win.core_catalog, "refresh", lambda: refreshed.append("core")
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         return refreshed
 
     def _run(self, summary=None, manual=False, missing=("a_libretro.so",), crash=None):
@@ -2934,7 +2946,7 @@ class TheMissingCoreRepairTests(WindowCase):
         self.assertEqual(seen["labels"], [self.said("status.cores.restoring")])
         self.assertEqual(seen["updates"], [(1, 1)])
         self.assertEqual(len(self.win.tasks), 0)
-        self.assertEqual(sorted(seen["refreshed"]), ["core", "launcher core"])
+        self.assertEqual(seen["refreshed"], ["core"])
         self.assertEqual(self.toasts, [self.said("toast.cores.restored.one")])
         self.assertIsNotNone(seen["fake"].cancel_event)
         self.assertFalse(seen["fake"].repair_missing_cores.call_args.kwargs["manual"])

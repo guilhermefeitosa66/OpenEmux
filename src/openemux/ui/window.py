@@ -159,7 +159,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks = TaskBanner(self.t)
 
         project_root = str(get_project_root())
-        self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        self.project_root = Path(project_root)
+        # One catalog for the window and the launcher, cached on disk beside
+        # the config and warmed on a worker once the window is up (issue
+        # 908): the first right-click on a card no longer parses the info
+        # directory on the main thread.
+        self.core_catalog = CoreCatalog(
+            project_root=self.project_root,
+            cache_file=self.config_manager.config_dir / "cores_catalog.json",
+        )
+        self.runtime_manager = RuntimeManager(
+            project_root, self.config_manager, core_catalog=self.core_catalog
+        )
         # Launch, the relaunch dance and the runtime poll: one collaborator,
         # because they only make sense together (issue #237).
         self.game = GameSession(self)
@@ -168,9 +179,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # to another console.
         self._reveal_pending = []
         self._reveal_timer = None
-        self.project_root = Path(project_root)
         self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
-        self.core_catalog = CoreCatalog(project_root=self.project_root)
         self._rom_context_services = RomContextMenuServices(self)
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -249,12 +258,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # to Favorites or All by the same rule a rescan uses.
         self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
         self._start_startup_scan()
+        self._warm_core_catalog()
         self._maybe_show_bootstrap_warning()
         # A repair that starts chains the deferred sweep from its done handler.
         if not self._start_core_repair():
             self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
+
+    def _warm_core_catalog(self):
+        """Scan the core directories on a worker, so the first menu finds them scanned."""
+        Thread(target=self.core_catalog.warm_up, daemon=True, name="openemux-core-catalog").start()
 
     def _start_deferred_asset_download(self):
         """Fetch the cores and shaders the first boot left for later.
@@ -300,11 +314,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks.finish(task_id)
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
+        # The core catalog is one object for the window and the launcher.
         self.core_catalog.refresh()
         self.shader_catalog.refresh()
-        launcher = self.runtime_manager.retroarch_launcher
-        launcher.core_catalog.refresh()
-        launcher.shader_catalog.refresh()
+        self.runtime_manager.retroarch_launcher.shader_catalog.refresh()
+        self._warm_core_catalog()
         logger.info(
             "deferred asset download finished: failed=%s cancelled=%s error=%s",
             summary.get("failed"),
@@ -392,8 +406,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.tasks.finish(self._core_repair_task)
             self._core_repair_task = None
         if summary.get("downloaded"):
+            # One catalog for the window and the launcher (issue 908).
             self.core_catalog.refresh()
-            self.runtime_manager.retroarch_launcher.core_catalog.refresh()
+            self._warm_core_catalog()
         message = self._core_repair_message(manual, summary)
         if message:
             self._core_toast(*message)

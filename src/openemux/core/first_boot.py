@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 
 from openemux import __version__
-from openemux.core.cores import core_search_dirs
+from openemux.core.cores import core_search_dirs, pickable_core_filenames
 from openemux.core.paths import get_project_root, is_running_in_flatpak
 from openemux.core.platform import CORE_SUFFIX
 from openemux.core.playlist_manager import PlaylistManager
@@ -227,6 +227,12 @@ class FirstBootBootstrapper:
     def _primary_shader_pack(self):
         return shader_pack_for(self.config_manager.get_retroarch_video_driver())
 
+    def _core_info_dirs(self):
+        """Where the ``.info`` files may be: the updater's core dir first."""
+        dirs = [self.updater.core_dir]
+        dirs.extend(core_search_dirs(get_project_root()))
+        return dirs
+
     def download_deferred_assets(self, on_progress=None, cancel_event=None):
         """Fetch what the first boot left for later: the other cores and shaders.
 
@@ -236,9 +242,22 @@ class FirstBootBootstrapper:
         raises, for the same reason ``download_all`` does not.
         """
         primary_pack = self._primary_shader_pack()
+        curated = curated_core_filenames()
+        if self.updater.settings.get("download_all_cores"):
+            wanted = None
+        else:
+            # Only what some picker would list: the cores whose .info names
+            # a supported system, from the info files the first boot
+            # installed. The ~200 others are an opt-in (issue 908).
+            wanted = [
+                name
+                for name in pickable_core_filenames(self._core_info_dirs())
+                if name not in set(curated)
+            ]
         cores_summary = self.updater.download_all(
             on_progress=on_progress,
-            skip=curated_core_filenames(),
+            only=wanted,
+            skip=curated,
             cancel_event=cancel_event,
         )
         cancelled = bool(cancel_event is not None and cancel_event.is_set())

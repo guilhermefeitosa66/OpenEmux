@@ -1866,6 +1866,19 @@ class TheCoresPageTests(_PreferencesCase):
         )
         self.assertEqual(len(self.called("_warn_missing_bios_for_core")), 1)
 
+    def test_the_download_every_core_switch_stores_the_choice_and_starts_the_sweep(self):
+        # Issue 908: the sweep after the first boot fetches only the cores a
+        # picker would list; this switch fetches the rest.
+        row = self.prefs._download_all_cores_row
+        self.assertFalse(row.get_active())
+        row.set_active(True)
+        self.assertTrue(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.assertTrue(self.config.deferred_assets_pending())
+        self.assertEqual(len(self.called("_start_deferred_asset_download")), 1)
+        row.set_active(False)
+        self.assertFalse(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.assertEqual(len(self.called("_start_deferred_asset_download")), 1)
+
     def test_going_back_to_automatic_clears_the_override_without_a_bios_check(self):
         row = self._core_row("SFC")
         row.set_selected(1)

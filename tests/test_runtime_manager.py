@@ -951,3 +951,21 @@ class WhatTheHotApplySnapshotAnswersTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ASharedCoreCatalogTests(unittest.TestCase):
+    """The window's catalog is the launcher's (issue 908)."""
+
+    def test_the_catalog_handed_in_is_the_launchers(self):
+        from openemux.core.cores import CoreCatalog
+
+        with TemporaryDirectory() as tmp_dir:
+            catalog = CoreCatalog(core_dirs=[Path(tmp_dir)])
+            config = _DummyConfig(tmp_dir)
+            manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), core_catalog=catalog)
+        self.assertIs(manager.retroarch_launcher.core_catalog, catalog)
+
+    def test_without_one_the_launcher_makes_its_own(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+        self.assertIsNotNone(manager.retroarch_launcher.core_catalog)

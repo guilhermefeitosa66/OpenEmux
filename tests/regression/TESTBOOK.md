@@ -16975,3 +16975,27 @@ has no Android device, so these are `MANUAL`.
   (`OneWalkOneStatTests`), `tests/test_dir_walk.py` (`WalkEntriesTests`, `DirectoryStampsTests`),
   `tests/test_window.py` (`test_the_startup_scan_is_a_silent_incremental_rescan`,
   `test_the_date_and_size_orders_read_the_index_not_the_disk`).
+
+### RT-1035 — A fresh install downloads only the cores a picker would list, and the catalog is ready before the first menu
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: finish a first boot on a fresh install, watch the "Downloading the
+  remaining cores" banner, then right-click a card; open Preferences → Cores and turn on
+  "Download every libretro core".
+- **Expected:** The sweep after the first boot fetches only the cores some picker would list: the
+  curated candidates of every console plus each core whose `.info` names a supported system —
+  about a sixth of the ~240 the buildbot builds. The rest are the opt-in switch on the Cores page;
+  turning it on owes the sweep again and starts it at once. The first context menu opens without
+  parsing the `.info` directory on the main thread: the window and the launcher share one core
+  catalog, scanned on a worker right after the window is up and cached as
+  `~/.openemux/cores_catalog.json`, keyed by the core directories' mtimes, so the next start loads
+  it with one read. A core that lands later (the sweep, Verify cores) refreshes the catalog and
+  warms it again (issue 908).
+- **Check:** suite files `tests/test_cores.py` (`PickableCoresTests`, `TheCatalogCacheTests`),
+  `tests/test_first_boot.py` (`test_it_fetches_only_the_cores_a_picker_would_list`,
+  `test_opting_in_fetches_every_core`), `tests/test_config_accessors.py`
+  (`test_opting_in_to_every_core_owes_the_sweep_again`), `tests/test_preferences.py`
+  (`test_the_download_every_core_switch_stores_the_choice_and_starts_the_sweep`),
+  `tests/test_window.py` (`test_the_window_and_the_launcher_share_one_core_catalog`,
+  `test_the_core_catalog_is_warmed_on_a_worker`).

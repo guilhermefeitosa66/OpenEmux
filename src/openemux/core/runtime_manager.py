@@ -40,7 +40,9 @@ class RuntimeManager:
     - integrated_core: reserved for future embedded core runtime.
     """
 
-    def __init__(self, project_root, config_manager, sleep=time.sleep, clock=time.monotonic):
+    def __init__(
+        self, project_root, config_manager, sleep=time.sleep, clock=time.monotonic, core_catalog=None
+    ):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
         self._sleep = sleep
@@ -48,7 +50,9 @@ class RuntimeManager:
         # When the running game started, so a poll can tell "the user quit"
         # from "it never came up" (issue #226).
         self._launched_at = None
-        self.retroarch_launcher = RetroArchLauncher(project_root, config_manager)
+        self.retroarch_launcher = RetroArchLauncher(
+            project_root, config_manager, core_catalog=core_catalog
+        )
         self.active_process = None
         self.active_rom = None
         # Something the last successful launch has to tell the user -- today
