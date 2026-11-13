@@ -599,6 +599,21 @@ class SleepingAndWakingTests(_GridCase):
         self.assertEqual(self.grid._columns_for(-1), 1)
         self.assertEqual(self.grid._columns_for(0), 1)
 
+    def test_asleep_a_width_counts_the_columns_it_would_hold(self):
+        from openemux.ui.grid import columns_and_slack
+
+        self.grid.set_dormant(True)
+        width = 4000
+        expected, _ = columns_and_slack(
+            self.grid._available_width(width),
+            self.grid._card_allocation_width(),
+            len(self.grid._entries),
+            spacing=self.grid._spacing,
+        )
+        columns = self.grid._columns_for(width)
+        self.assertEqual(columns, max(1, min(expected, len(self.grid._entries))))
+        self.assertGreater(columns, 1)
+
     def test_a_sleeping_grid_with_nothing_to_show_is_flat(self):
         self.grid.set_dormant(True)
         self.grid.set_filter("nothing matches this")
