@@ -193,7 +193,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # to another console.
         self._reveal_pending = []
         self._reveal_timer = None
-        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
+        #: True while "Search everywhere" moves to the All page, so the
+        #: selection handler keeps the query instead of clearing it (issue 906).
+        self._carrying_search_query = False
+        #: Fullscreen couch layout (issue 914), off until F11 or the Guide button.
+        self._tv_mode = False
+        # The card transitions follow the desktop's animation setting (issue
+        # 915): a class on the window the CSS keys off.
+        self._gtk_settings = Gtk.Settings.get_default()
+        if self._gtk_settings is not None:
+            self._gtk_settings.connect("notify::gtk-enable-animations", self._sync_animations_class)
+        self._sync_animations_class()
+        #: The tour waits for the first games (issue 909); the folder picker
+        #: asks for covers once the scan it started has counted them.
+        self._welcome_pending = False
+        self._offer_covers_after_scan = False
         self._rom_context_services = RomContextMenuServices(self)
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -2745,6 +2759,22 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return save_states.has_auto_state(
             self.config_manager.get_console_states_dir(console), path
         )
+
+    def _sync_animations_class(self, *_args):
+        """``.animated`` on the window while GNOME wants animations (issue 915)."""
+        enabled = True
+        if self._gtk_settings is not None:
+            enabled = bool(self._gtk_settings.get_property("gtk-enable-animations"))
+        if enabled:
+            self.add_css_class("animated")
+        else:
+            self.remove_css_class("animated")
+        return enabled
+
+    def set_rom_launching(self, rom, launching):
+        """The game's card shows "Starting…" on every page it is on (issue 904)."""
+        for grid in self.pages.grids():
+            grid.set_rom_launching(rom, launching)
 
     def on_game_ended(self, rom):
         """Bring the library up to date with a game that just ended.

@@ -250,6 +250,7 @@ TRANSLATIONS = {
     "header.console_input": "这台主机的手柄设置",
     "filter.missing_artwork": "仅显示无封面",
     "rom.artwork.missing": "未找到这款游戏的封面",
+    "a11y.card.favorite": "收藏",
     "rom.artwork.search": "搜索封面…",
     "search.everywhere": "在整个游戏库中搜索",
     "search.empty.clear": "清除搜索",

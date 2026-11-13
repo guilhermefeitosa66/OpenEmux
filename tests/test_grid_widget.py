@@ -161,6 +161,10 @@ class TheFactoryCallbacksTests(_GridCase):
         def get_item(self):
             return self._item
 
+        def get_position(self):
+            # The screen reader's "item n of m" (issue 915) reads the position.
+            return 0
+
         def set_child(self, child):
             self._child = child
 

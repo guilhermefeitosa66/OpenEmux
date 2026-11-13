@@ -256,6 +256,9 @@ class RomItem(Gtk.Box):
         )
         self.ctx = ctx
         self.entry = None
+        # One named item per game for a screen reader (issue 915); GTK's list
+        # item wrapper around it is what carries the position in the set.
+        self.set_accessible_role(Gtk.AccessibleRole.LIST_ITEM)
         # Bumped on every bind and every manual refresh: a cover fetch that
         # was in flight when the card moved to another game answers with a
         # stale token and is dropped.
@@ -417,6 +420,12 @@ class RomItem(Gtk.Box):
             self.favorite_button.set_margin_start(6)
         self.favorite_button.connect("clicked", self._on_favorite_button_clicked)
         self._is_favorite_now = False
+        # A tooltip is not an accessible name (issue 915): Orca read these
+        # buttons as unnamed. The star's name follows its state in
+        # _sync_favorite_button.
+        self.favorite_button.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("context.favorite.add")]
+        )
         if not compact:
             self.cover_overlay.add_overlay(self.favorite_button)
 
@@ -427,6 +436,11 @@ class RomItem(Gtk.Box):
         self.artwork_badge = Gtk.Image.new_from_icon_name("image-missing-symbolic")
         self.artwork_badge.add_css_class("artwork-missing-badge")
         self.artwork_badge.set_tooltip_text(self.t("rom.artwork.missing"))
+        # Named, so the state the icon conveys is not conveyed by the icon alone.
+        self.artwork_badge.set_accessible_role(Gtk.AccessibleRole.IMG)
+        self.artwork_badge.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("rom.artwork.missing")]
+        )
         self.artwork_badge.set_visible(False)
         self.artwork_badge.set_halign(Gtk.Align.END)
         self.artwork_badge.set_valign(Gtk.Align.END)
@@ -450,6 +464,9 @@ class RomItem(Gtk.Box):
             self.menu_button.set_margin_top(6)
             self.menu_button.set_margin_end(6)
         self.menu_button.set_tooltip_text(self.t("context.more_options"))
+        self.menu_button.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("context.more_options")]
+        )
         self.menu_button.set_visible(False)
         self.menu_button.connect("clicked", self._on_menu_button_clicked)
         if not compact:
@@ -460,6 +477,10 @@ class RomItem(Gtk.Box):
         self.resume_badge = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
         self.resume_badge.add_css_class("resume-badge")
         self.resume_badge.set_tooltip_text(self.t("card.resume.tooltip"))
+        self.resume_badge.set_accessible_role(Gtk.AccessibleRole.IMG)
+        self.resume_badge.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("card.resume.tooltip")]
+        )
         self.resume_badge.set_visible(False)
         self.resume_badge.set_halign(Gtk.Align.START)
         self.resume_badge.set_valign(Gtk.Align.END)
@@ -571,6 +592,7 @@ class RomItem(Gtk.Box):
 
         self._sync_favorite_button(self.is_favorite(rom))
         self.artwork_badge.set_visible(entry.has_artwork is False)
+        self._sync_accessible_description()
         self.set_selected(entry.selected)
         # Any hover/focus affordance belongs to the card that just left.
         self.remove_css_class("rom-card-hover")
@@ -684,6 +706,9 @@ class RomItem(Gtk.Box):
             search_btn.set_focusable(False)
             search_btn.set_can_focus(False)
             search_btn.set_halign(Gtk.Align.CENTER)
+            search_btn.update_property(
+                [Gtk.AccessibleProperty.LABEL], [self.t("rom.artwork.search")]
+            )
             search_btn.connect("clicked", self._on_search_artwork_clicked)
             placeholder_center.append(search_btn)
 
@@ -955,6 +980,10 @@ class RomItem(Gtk.Box):
         self.favorite_button.set_visible(
             self._is_favorite_now or self.has_css_class("rom-card-hover")
         )
+        self.favorite_button.update_property(
+            [Gtk.AccessibleProperty.LABEL],
+            [self.t("context.favorite.remove" if is_favorite else "context.favorite.add")],
+        )
 
     def _on_favorite_button_clicked(self, _button):
         self.toggle_favorite()
@@ -1090,6 +1119,39 @@ class RomItem(Gtk.Box):
         # double-click does not try to start the game twice (issue #236).
         if self.on_launch_callback:
             self.on_launch_callback(rom)
+
+    def _sync_accessible_description(self):
+        """What a screen reader says for this card (issue 915).
+
+        The name is the game's title; the description carries the console,
+        the favorite and artwork states and the play time, so nothing the
+        badges show is conveyed by an icon alone.
+        """
+        entry = self.entry
+        if entry is None:
+            return
+        rom = entry.rom
+        self.update_property([Gtk.AccessibleProperty.LABEL], [entry.display_name])
+        parts = [get_system_display_name(rom["console"])]
+        if self._is_favorite_now:
+            parts.append(self.t("a11y.card.favorite"))
+        if entry.has_artwork is False:
+            parts.append(self.t("rom.artwork.missing"))
+        if self.resume_badge.get_visible():
+            parts.append(self.t("card.resume.tooltip"))
+        caption = self.ctx.play_caption(rom) if self.ctx.play_caption else None
+        if caption:
+            parts.append(caption)
+        self.update_property([Gtk.AccessibleProperty.DESCRIPTION], [", ".join(parts)])
+
+    def set_position_in_set(self, position, total):
+        """Tell the screen reader "item n of m" (issue 915); the grid knows the order."""
+        if position is None or total <= 0:
+            return
+        self.update_relation(
+            [Gtk.AccessibleRelation.POS_IN_SET, Gtk.AccessibleRelation.SET_SIZE],
+            [int(position) + 1, int(total)],
+        )
 
     def sync_play_state(self):
         """The caption under the title and the resume badge, from the game's history (issue 910)."""

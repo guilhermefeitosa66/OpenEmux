@@ -250,6 +250,7 @@ TRANSLATIONS = {
     "header.console_input": "このコンソールのコントローラー設定",
     "filter.missing_artwork": "アートワークなしのみ",
     "rom.artwork.missing": "このゲームのアートワークが見つかりません",
+    "a11y.card.favorite": "お気に入り",
     "rom.artwork.search": "アートワークを検索…",
     "search.everywhere": "ライブラリ全体を検索",
     "search.empty.clear": "検索をクリア",

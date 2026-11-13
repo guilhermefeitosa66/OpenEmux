@@ -17229,6 +17229,24 @@ has no Android device, so these are `MANUAL`.
   (`test_alt_return_opens_the_game_details`), `tests/test_window.py`
   (`test_the_game_details_dialog_opens_for_a_game`).
 
+### RT-1044 — Every card and every icon-only button has an accessible name, and the lift honours the animation setting
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Orca or the GTK inspector (`GTK_DEBUG=interactive`) available; a favorite, a
+  game without artwork and one with an automatic save state.
+- **Steps:**
+  1. With Orca on, arrow across three cards; open the inspector's Accessibility tab on a card and on
+     its star, menu and "Search artwork…" buttons and on the badges.
+  2. In GNOME Settings › Accessibility turn animations off; hover a card.
+- **Expected:** 1: each card reads as "<title>, <console>, Favorite, No artwork found for this game,
+  Play picks up where you left off, item n of m" (only the parts that apply); every button and badge
+  has a label, never just a tooltip (issue 915). 2: no lift or tint animation runs on the card; the
+  window loses its `.animated` class and gets it back when animations are turned on again.
+- **Check:** suite files `tests/test_rom_card_widget.py` (`WhatAScreenReaderHearsTests`),
+  `tests/test_window.py` (`test_the_card_transitions_follow_the_desktops_animation_setting`).
+
   4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
      PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
      card.
+  (sidebar back, zoom back); F11 toggles it again. Reduced motion follows RT-1044's class; GNOME's
+  large text scales the labels as everywhere else.

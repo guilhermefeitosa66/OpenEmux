@@ -252,6 +252,7 @@ TRANSLATIONS = {
     "header.console_input": "Configurar controle deste console",
     "filter.missing_artwork": "Somente sem capa",
     "rom.artwork.missing": "Nenhuma capa encontrada para este jogo",
+    "a11y.card.favorite": "Favorito",
     "rom.artwork.search": "Buscar capa…",
     "search.everywhere": "Buscar em toda a biblioteca",
     "search.empty.clear": "Limpar busca",

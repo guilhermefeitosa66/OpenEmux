@@ -252,6 +252,7 @@ TRANSLATIONS = {
     "header.console_input": "இந்தக் கன்சோலுக்கான கன்ட்ரோலர் அமைப்புகள்",
     "filter.missing_artwork": "படம் இல்லாதவை மட்டும்",
     "rom.artwork.missing": "இந்த விளையாட்டுக்குப் படம் எதுவும் கிடைக்கவில்லை",
+    "a11y.card.favorite": "விருப்பம்",
     "rom.artwork.search": "படங்களைத் தேடு…",
     "search.everywhere": "முழு நூலகத்திலும் தேடு",
     "search.empty.clear": "தேடலை அழி",

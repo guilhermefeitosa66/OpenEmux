@@ -586,11 +586,17 @@ class RomGrid(Gtk.GridView):
         list_item.set_child(card)
 
     def _on_factory_bind(self, _factory, list_item):
+        self._bind_cell(list_item)
+
+    def _bind_cell(self, list_item):
         card = list_item.get_child()
         entry = list_item.get_item()
         if card is None or entry is None:
             return
         card.bind(entry)
+        # "item n of m" for a screen reader (issue 915): the position in the
+        # filtered model, which is the order on screen.
+        card.set_position_in_set(list_item.get_position(), self._filtered.get_n_items())
         self._bound[entry] = card
         if self._focused_card is card:
             # It kept the focus through the rebind, so this is where the user

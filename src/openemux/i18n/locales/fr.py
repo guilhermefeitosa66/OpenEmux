@@ -250,6 +250,7 @@ TRANSLATIONS = {
     "header.console_input": "Configurer la manette de cette console",
     "filter.missing_artwork": "Uniquement sans jaquette",
     "rom.artwork.missing": "Aucune jaquette trouvée pour ce jeu",
+    "a11y.card.favorite": "Favori",
     "rom.artwork.search": "Chercher une jaquette…",
     "search.everywhere": "Chercher partout",
     "search.empty.clear": "Effacer la recherche",

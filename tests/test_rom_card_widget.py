@@ -61,6 +61,129 @@ class _CardCase(WindowCase):
 
 
 @needs_display
+class WhatAScreenReaderHearsTests(_CardCase):
+    """Issue 915: names on the card and on every icon-only button."""
+
+    def _label(self, widget):
+        return widget.get_accessible_role(), widget
+
+    def test_the_card_is_a_named_list_item_with_a_description(self):
+        self.assertEqual(self.card.get_accessible_role(), Gtk.AccessibleRole.LIST_ITEM)
+        # The description names the console, and states what the badges show.
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        labels = {call.args[0][0]: call.args[1][0] for call in update.call_args_list}
+        self.assertEqual(labels[Gtk.AccessibleProperty.LABEL], self.entry.display_name)
+        self.assertIn(
+            get_system_display_name(self.entry.rom["console"]),
+            labels[Gtk.AccessibleProperty.DESCRIPTION],
+        )
+        self.assertNotIn(self.said("a11y.card.favorite"), labels[Gtk.AccessibleProperty.DESCRIPTION])
+
+    def test_the_description_says_favorite_missing_art_and_resume(self):
+        self.card._sync_favorite_button(True)
+        self.entry.has_artwork = False
+        self.card.ctx.has_auto_state = lambda rom: True
+        self.card.sync_play_state()
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        description = [c.args[1][0] for c in update.call_args_list if c.args[0][0] == Gtk.AccessibleProperty.DESCRIPTION][0]
+        for part in (
+            self.said("a11y.card.favorite"),
+            self.said("rom.artwork.missing"),
+            self.said("card.resume.tooltip"),
+        ):
+            self.assertIn(part, description)
+
+    def test_an_unbound_card_describes_nothing(self):
+        self.card.unbind()
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        update.assert_not_called()
+
+    def test_the_star_is_named_for_what_it_will_do(self):
+        with mock.patch.object(self.card.favorite_button, "update_property") as update:
+            self.card._sync_favorite_button(False)
+            self.card._sync_favorite_button(True)
+        self.assertEqual(
+            [c.args[1][0] for c in update.call_args_list],
+            [self.said("context.favorite.add"), self.said("context.favorite.remove")],
+        )
+
+    def test_the_position_in_the_set_is_told_to_the_reader(self):
+        with mock.patch.object(self.card, "update_relation") as relation:
+            self.card.set_position_in_set(2, 10)
+            self.card.set_position_in_set(None, 10)
+            self.card.set_position_in_set(0, 0)
+        relation.assert_called_once()
+        self.assertEqual(relation.call_args.args[1], [3, 10])
+
+    def test_the_badges_are_named_images(self):
+        self.assertEqual(self.card.artwork_badge.get_accessible_role(), Gtk.AccessibleRole.IMG)
+        self.assertEqual(self.card.resume_badge.get_accessible_role(), Gtk.AccessibleRole.IMG)
+
+
+@needs_display
+class TheStartingStateTests(_CardCase):
+    """Issue 904: the card answers the click before the process is up."""
+
+    def test_starting_swaps_the_play_icon_for_a_spinner_over_a_dimmed_cover(self):
+        self.card.set_launching(True)
+        self.assertTrue(self.card.launching)
+        self.assertTrue(self.card.launch_spinner.get_visible())
+        self.assertTrue(self.card.launch_spinner.get_spinning())
+        self.assertFalse(self.card.play_icon.get_visible())
+        self.assertTrue(self.card.play_overlay.get_visible())
+        self.assertLess(self.card.cover_overlay.get_opacity(), 1.0)
+        self.card.set_launching(False)
+        self.assertFalse(self.card.launching)
+        self.assertTrue(self.card.play_icon.get_visible())
+        self.assertFalse(self.card.launch_spinner.get_visible())
+        self.assertFalse(self.card.play_overlay.get_visible())
+        self.assertEqual(self.card.cover_overlay.get_opacity(), 1.0)
+
+    def test_leaving_the_card_keeps_the_state_showing(self):
+        self.card.set_launching(True)
+        self.card._on_hover_enter(None, 0, 0)
+        self.card._on_hover_leave(None)
+        self.assertTrue(self.card.play_overlay.get_visible())
+        self.card.set_focus_visual(True)
+        self.card.set_focus_visual(False)
+        self.assertTrue(self.card.play_overlay.get_visible())
+        # Clearing the state while the pointer is still there leaves hover in charge.
+        self.card._on_hover_enter(None, 0, 0)
+        self.card.set_launching(False)
+        self.assertTrue(self.card.play_overlay.get_visible())
+
+    def test_setting_the_same_state_twice_changes_nothing(self):
+        self.card.set_launching(False)
+        self.assertFalse(self.card.launch_spinner.get_visible())
+
+    def test_a_recycled_card_starts_clean(self):
+        self.card.set_launching(True)
+        self.card.bind(self.entry)
+        self.assertFalse(self.card.launching)
+
+
+@needs_display
+class OpeningTheDetailsTests(_CardCase):
+    """Issue 913: the menu row and Alt+Return both reach the window's dialog."""
+
+    def test_the_menu_action_opens_the_dialog_for_the_cards_game(self):
+        with mock.patch.object(self.win, "open_game_details") as open_details:
+            self.card._act_details(None, None)
+        open_details.assert_called_once_with(self.card.rom)
+
+    def test_without_a_game_or_a_window_nothing_opens(self):
+        with mock.patch.object(self.win, "open_game_details") as open_details:
+            with mock.patch.object(self.card, "context_services", None):
+                self.card.open_details()
+            self.card.unbind()
+            self.card.open_details()
+        open_details.assert_not_called()
+
+
+@needs_display
 class ThePlayStateTests(_CardCase):
     """Issue 910: the resume badge and the caption follow the game's history."""
 

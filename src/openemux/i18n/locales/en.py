@@ -252,6 +252,7 @@ TRANSLATIONS = {
     "header.console_input": "Controller settings for this console",
     "filter.missing_artwork": "Only without artwork",
     "rom.artwork.missing": "No artwork found for this game",
+    "a11y.card.favorite": "Favorite",
     "rom.artwork.search": "Search artwork…",
     "search.everywhere": "Search everywhere",
     "search.empty.clear": "Clear search",

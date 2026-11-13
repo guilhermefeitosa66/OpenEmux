@@ -5,6 +5,12 @@
 .rom-card {
     border-radius: 10px;
     padding: 8px;
+}
+
+/* The lift and the tint animate only while the desktop wants animations:
+   the window carries .animated when gtk-enable-animations is on (issue 915),
+   as the Adwaita widgets already honour that setting. */
+.animated .rom-card {
     transition: background-color 0.15s ease, transform 0.15s ease;
 }
 

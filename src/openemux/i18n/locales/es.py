@@ -250,6 +250,7 @@ TRANSLATIONS = {
     "header.console_input": "Configurar el mando de esta consola",
     "filter.missing_artwork": "Solo sin carátula",
     "rom.artwork.missing": "No se encontró carátula para este juego",
+    "a11y.card.favorite": "Favorito",
     "rom.artwork.search": "Buscar carátula…",
     "search.everywhere": "Buscar en toda la biblioteca",
     "search.empty.clear": "Borrar búsqueda",

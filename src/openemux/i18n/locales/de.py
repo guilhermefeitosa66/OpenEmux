@@ -250,6 +250,7 @@ TRANSLATIONS = {
     "header.console_input": "Controller-Einstellungen dieser Konsole",
     "filter.missing_artwork": "Nur ohne Cover",
     "rom.artwork.missing": "Für dieses Spiel wurde kein Cover gefunden",
+    "a11y.card.favorite": "Favorit",
     "rom.artwork.search": "Cover suchen…",
     "search.everywhere": "Überall suchen",
     "search.empty.clear": "Suche löschen",
