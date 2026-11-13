@@ -124,6 +124,19 @@ class TheRegistryMovesAsOneTests(unittest.TestCase):
 
 
 @needs_display
+class ReturningTheFreedHeapTests(unittest.TestCase):
+    def test_off_linux_the_heap_is_left_alone(self):
+        from gi.repository import GLib
+
+        from openemux.ui import library_pages
+
+        with mock.patch.object(library_pages.sys, "platform", "win32"), mock.patch.object(
+            library_pages.ctypes, "CDLL", side_effect=AssertionError("no libc off Linux")
+        ):
+            self.assertEqual(library_pages._return_freed_heap(), GLib.SOURCE_REMOVE)
+
+
+@needs_display
 class CollectionPagesTests(unittest.TestCase):
     def setUp(self):
         self.pages, self.win = _pages()
