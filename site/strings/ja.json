@@ -168,15 +168,15 @@
   "get.download": "ダウンロード",
   "get.all": "すべてのバージョンとファイル →",
   "news.eyebrow": "新機能",
-  "news.title": "<h2>押しっぱなしにできるボタン、まとめて押せるボタン。</h2>",
-  "news.lede": "<p class=\"lede\">OpenEmux 1.23 は Android の画面上のコントローラーのリリースです。ボタンを 2 つ同時に使うゲームも、画面の上で遊べるようになりました。</p>",
-  "news.items": "<ul class=\"news-list\"><li><strong>アンカーモード。</strong> アンカーキーをオンにすると、最初に押したボタンは押されたまま、指をほかのボタンへ滑らせられます。Y を押したまま B へ滑らせれば、走りながらジャンプできます。</li><li><strong>コンボボタン。</strong> Y+B、L+R、L+R+A のように最大 3 つを同時に押すボタンを作り、スキンの好きな場所に置けます。</li><li><strong>好きな形と、押したときの表示。</strong> ボタンは円、ピル、角丸の四角、三角から選べ、押している間は明るく光ります。</li><li><strong>新しいポーズメニュー。</strong> 続ける・リスタート・セーブ・ロードを上に、ほかはタイルで並べ、セーブスロットはゲームごとに記憶します。</li></ul>",
+  "news.title": "<h2>大きなライブラリも速く、ダウンロードより先にゲームを。</h2>",
+  "news.lede": "<p class=\"lede\">OpenEmux 1.23.4 は、デスクトップと Android のスピード、そしてこれまで何が起きているのか分かりにくかった場面のためのリリースです。</p>",
+  "news.items": "<ul class=\"news-list\"><li><strong>大きなライブラリも速く。</strong> 3000 本のゲームでも「すべて」が 3 秒ではなく 1 秒未満で開き、メモリ使用量もほぼ半分になりました。</li><li><strong>ダウンロードより先にライブラリ。</strong> ROM フォルダーを選べばすぐにライブラリが開き、各機種のエミュレーターは初めて遊ぶときにダウンロードされます。起動中は「起動中…」と表示し、終了後はプレイ時間を伝えます。</li><li><strong>最近プレイしたゲーム、ゲーム詳細、TV モード。</strong> 中断したところから再開でき、コア・シェーダー・セーブ・プレイ時間を 1 か所にまとめ、F11 かガイドボタンでソファーから遊べます。</li><li><strong>Android は軽く速く、コントローラーでポーズ。</strong> APK が小さくなり、起動時間はおよそ半分に。コントローラーの Start 長押しでポーズメニューが開きます。</li></ul>",
   "news.notes": "リリースノートを読む →",
   "news.all": "すべてのリリース →",
-  "news.anim_label": "アニメーション：アンカーキーが光り、指が Y を押したまま B へ滑り、画面のキャラクターがジャンプします。続いて Y+B のコンボボタンが現れて押されます",
-  "news.step1": "アンカーをオン。",
-  "news.step2": "Y を押したまま B へ。",
-  "news.step3": "または Y+B コンボを押す。",
+  "news.anim_label": "アニメーション：ROM フォルダーを選ぶと、エミュレーターのダウンロードバーが進んでいる間にライブラリがカートリッジで埋まり、続いてゲームをクリックすると起動中の表示が出ます",
+  "news.step1": "ROM フォルダーを選ぶ。",
+  "news.step2": "ゲームがすぐに並ぶ。",
+  "news.step3": "遊ぶときにエミュレーターを取得。",
   "news.earlier_title": "<h3>以前のリリース</h3>",
-  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">2026年11月9日</time></a>ポーズメニューからスキンの変更と編集、画像全体が見えるセーブステート、ゲームを受け取りながらプレイを続行。</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.1\">1.21.1 <time datetime=\"2026-11-07\">2026年11月7日</time></a>設定で言語を選ぶと Android アプリが閉じる問題を修正。</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.0\">1.21 <time datetime=\"2026-11-07\">2026年11月7日</time></a>コントローラーの絵の上でボタン割り当て、ゲーム中に効かなかったボタンが復活、本当にポータブルな Windows のポータブルモード。</li></ul>"
+  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3\">1.23.3 <time datetime=\"2026-11-12\">2026年11月12日</time></a>Android で画面上のボタンごとに形を選べるように。角の丸い三角と、押したときの表示も。</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.0\">1.23 <time datetime=\"2026-11-12\">2026年11月12日</time></a>Android の画面上のコントローラーにアンカーモードとコンボボタン。ボタンを 2 つ同時に使うゲームも画面の上で遊べます。</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">2026年11月9日</time></a>ポーズメニューからスキンの変更と編集、画像全体が見えるセーブステート、ゲームを受け取りながらプレイを続行。</li></ul>"
 }

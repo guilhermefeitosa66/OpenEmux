@@ -1000,21 +1000,19 @@ class TheNewsTests(unittest.TestCase):
                     self.assertTrue(tag.startswith(label), (tag, label))
                     self.assertTrue((REPO / "release" / f"RELEASE_NOTES_v{tag}.md").exists(), tag)
 
-    def test_the_held_button_is_ringed_and_the_finger_tied_to_it_like_the_app(self):
-        # AnchorLayer.kt in the Android app: an amber (#F2A23A) dashed ring
-        # around the held button, a dashed white line from it to the finger.
-        css = _css(build_site.render("en"))
-        ring = _blocks(css, ".nd-ring {")[0]
-        self.assertIn("border: 2.5px dashed #f2a23a", ring)
-        self.assertIn("left: 74%;\n      top: 44%", ring)
-        guide = _blocks(css, ".nd-guide {")[0]
-        self.assertIn("dashed rgba(255, 255, 255, .7)", guide)
-        self.assertIn("left: 74%;\n      top: 44%", guide)
-        for name in ("nd-ring", "nd-guide"):
-            self.assertEqual(len(_blocks(css, f"@keyframes {name} ")), 1)
-        phone = re.search(r'<div class="nd-phone".*?<span class="nd-finger-track">', build_site.render("en"), re.S)
-        self.assertIn('<i class="nd-guide"></i>', phone.group(0))
-        self.assertIn('<i class="nd-ring"></i>', phone.group(0))
+    def test_the_library_fills_before_the_emulator_download_ends(self):
+        # 1.23.4: the library opens before the emulators are downloaded. The
+        # cards are the site's own cartridges (already in the page budget),
+        # every one of them on screen before the banner's bar is half full.
+        page = build_site.render("en")
+        css = _css(page)
+        cards = re.findall(r'<i class="nd-card" style="background-image:url\(assets/carts/([^)]+)\)"', page)
+        self.assertEqual(len(cards), 9)
+        for name in cards:
+            self.assertTrue((REPO / "docs" / "assets" / "carts" / name).exists(), name)
+        self.assertIn("0%, 21% { opacity: 0", _blocks(css, "@keyframes nd-card ")[0])
+        self.assertIn("93%, 100% { transform: scaleX(.45) }", _blocks(css, "@keyframes nd-fill ")[0])
+        self.assertIn("transform: scaleX(.45)", _blocks(css, ".nd-fill {")[0])
 
     def test_the_animation_is_labelled_and_moves_only_transform_and_opacity(self):
         css = _css(build_site.render("en"))
@@ -1025,7 +1023,7 @@ class TheNewsTests(unittest.TestCase):
             with self.subTest(keyframes=name):
                 self.assertLessEqual(set(re.findall(r"([a-z-]+)\s*:", body)), {"transform", "opacity"})
         # It plays only for people who did not ask for less motion.
-        motion = _blocks(css, "@media (prefers-reduced-motion: no-preference) {\n      .nd-lit-anchor")
+        motion = _blocks(css, "@media (prefers-reduced-motion: no-preference) {\n      .nd-side")
         self.assertEqual(len(motion), 1)
         for locale in build_site.ORDER:
             strings = build_site.load_strings(locale)
