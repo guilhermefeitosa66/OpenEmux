@@ -201,6 +201,49 @@ class TheMasterCheckboxTests(WindowCase):
 
 
 @needs_display
+class TheBiosBannerTests(WindowCase):
+    """The console page says what system file it lacks (issue 911)."""
+
+    def setUp(self):
+        super().setUp()
+        self.pages = self.win.pages
+        self.page = self.pages.page_for("SFC")
+
+    def test_the_banner_names_the_console_and_the_files_and_opens_the_bios_page(self):
+        self.assertTrue(self.pages.set_bios_banner("SFC", ["scph5501.bin", "scph5502.bin"]))
+        banner = self.page.bios_banner
+        self.assertTrue(banner.get_visible())
+        self.assertEqual(
+            banner.label.get_label(),
+            self.said(
+                "bios.banner.title",
+                console=self.win.sidebar.label_for("SFC"),
+                names="scph5501.bin, scph5502.bin",
+            ),
+        )
+        with mock.patch.object(self.win, "open_bios_settings") as opened:
+            banner.import_button.emit("clicked")
+        opened.assert_called_once_with("SFC")
+
+    def test_the_banner_goes_when_the_files_arrive(self):
+        self.pages.set_bios_banner("SFC", ["scph5501.bin"])
+        self.assertFalse(self.pages.set_bios_banner("SFC", []))
+        self.assertFalse(self.page.bios_banner.get_visible())
+
+    def test_a_dismissed_banner_stays_down_for_the_session(self):
+        self.pages.set_bios_banner("SFC", ["scph5501.bin"])
+        self.page.bios_banner.dismiss_button.emit("clicked")
+        self.assertFalse(self.page.bios_banner.get_visible())
+        self.assertFalse(self.pages.set_bios_banner("SFC", ["scph5501.bin"]))
+        self.assertFalse(self.page.bios_banner.get_visible())
+
+    def test_a_page_that_never_needed_a_banner_has_none(self):
+        self.assertFalse(self.pages.set_bios_banner("SFC", []))
+        self.assertIsNone(self.page.bios_banner)
+        self.assertFalse(self.pages.set_bios_banner("N64", ["x"]))
+
+
+@needs_display
 class LoadingAPageTests(WindowCase):
     def setUp(self):
         super().setUp()

@@ -17041,3 +17041,27 @@ has no Android device, so these are `MANUAL`.
   (`test_the_title_names_the_console_and_counts_its_games`), `tests/test_game_session.py`
   (`test_a_launch_records_the_play_and_says_it_is_running`).
 
+## Desktop — BIOS warnings
+
+### RT-1038 — A console whose core needs a missing system file says so before any launch
+- **Area:** Desktop — BIOS warnings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console whose selected core needs a BIOS (PlayStation, Saturn) and an
+  empty BIOS folder for it.
+- **Steps:**
+  1. Start the app and look at that console's row in the sidebar; hover it.
+  2. Select the console and read the top of its page; click "Import BIOS…".
+  3. Import the file, come back to the page.
+  4. On a console whose core needs no BIOS, look at the row and the page.
+- **Expected:** 1: a warning icon on the row, with the tooltip "Needs system files: scph5501.bin"
+  (the real file names, never a path). 2: a banner over the grid, "Sony PlayStation needs
+  scph5501.bin to run games", with "Import BIOS…" and a close button; the button opens
+  Preferences on the BIOS page with that console's row expanded; the close button hides the
+  banner for the session. 3: the icon and the banner clear without a restart; they also re-check
+  after a core change and after a Share nearby transfer, since both refresh the library.
+  4: nothing is shown (issue 911).
+- **Check:** suite files `tests/test_window.py` (`TheBiosWarningsTests`),
+  `tests/test_console_sidebar.py` (`test_a_row_warns_about_a_missing_bios_and_names_the_files`),
+  `tests/test_library_pages.py` (`TheBiosBannerTests`), `tests/test_preferences.py`
+  (`test_the_bios_page_can_open_on_a_console`, `test_an_import_re_checks_the_window_warnings`).
+

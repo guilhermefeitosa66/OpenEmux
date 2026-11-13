@@ -579,6 +579,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=f"{console_id} — {status['display_name']}",
                 subtitle=f"{present}/{total}",
             )
+            expander._bios_console = console_id
             # The row names a console, so show its icon like everywhere else.
             expander.add_prefix(console_icon(console_id))
             # One Import per console: the file is checked against this
@@ -624,6 +625,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if show_toast:
             self._toast(self.t("bios.reloaded"))
 
+    def show_bios_console(self, console_id):
+        """Open ``console_id``'s row on the BIOS page, for the page banner."""
+        for row in getattr(self, "_bios_rows", []):
+            if getattr(row, "_bios_console", None) == console_id:
+                row.set_expanded(True)
+                return True
+        return False
+
     def _open_bios_import_picker(self, console_id):
         dialog = Gtk.FileDialog()
         dialog.set_title(
@@ -663,6 +672,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # The rows read the disk again, so the imported files show as present
         # now; the pre-launch check reads the disk on every launch already.
         self._reload_bios(show_toast=False)
+        # The sidebar icon and the console page's banner clear without a
+        # restart (issue 911).
+        self.win.sync_bios_warnings([summary["console"]])
         # Settings may have been closed while the files were copying; an
         # Adw.Dialog presented on an unrooted widget never shows, so fall back
         # to the main window.

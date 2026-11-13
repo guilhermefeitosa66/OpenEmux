@@ -635,6 +635,57 @@ class NavigatingTheSidebarTests(WindowCase):
 
 
 @needs_display
+class TheBiosWarningsTests(WindowCase):
+    """A missing system file is shown before any launch fails (issue 911)."""
+
+    def _core(self, path):
+        return mock.patch.object(
+            self.win.runtime_manager.retroarch_launcher, "resolve_core_path", return_value=path
+        )
+
+    def test_the_console_is_checked_against_the_core_a_launch_would_run(self):
+        with self._core("/cores/pcsx_rearmed_libretro.so"), mock.patch.object(
+            window_module, "find_missing_required_for_core", return_value=["scph5501.bin"]
+        ) as check:
+            self.assertEqual(self.win.missing_bios_for_console("SFC"), ["scph5501.bin"])
+        self.assertEqual(check.call_args[0][1:], ("SFC", "pcsx_rearmed_libretro.so"))
+
+    def test_a_console_with_no_core_or_no_such_console_needs_nothing(self):
+        with self._core(None):
+            self.assertEqual(self.win.missing_bios_for_console("SFC"), [])
+        self.assertEqual(self.win.missing_bios_for_console(ALL_CONSOLES_ID), [])
+
+    def test_the_sync_puts_the_icon_on_the_row_and_the_banner_on_the_page(self):
+        with mock.patch.object(
+            self.win, "missing_bios_for_console", side_effect=lambda c: ["bios.bin"] if c == "SFC" else []
+        ):
+            self.win.sync_bios_warnings()
+        self.assertTrue(self.win.sidebar.find_row("SFC").bios_warning.get_visible())
+        self.assertFalse(self.win.sidebar.find_row("FC").bios_warning.get_visible())
+        self.assertTrue(self.win.pages.page_for("SFC").bios_banner.get_visible())
+        self.assertIsNone(self.win.pages.page_for("FC").bios_banner)
+
+    def test_a_rebuilt_library_is_checked(self):
+        with mock.patch.object(self.win, "sync_bios_warnings") as sync:
+            self.win.refresh_library(force=True)
+            self.win.refresh_library()
+        self.assertEqual(sync.call_count, 2)
+
+    def test_the_banner_opens_preferences_on_the_consoles_bios_row(self):
+        dialog = mock.Mock()
+        with mock.patch.object(self.win, "_open_preferences") as open_prefs, mock.patch.object(
+            self.win, "_open_preferences_dialog", return_value=dialog
+        ):
+            self.win.open_bios_settings("SFC")
+        open_prefs.assert_called_once_with(page="bios")
+        dialog.show_bios_console.assert_called_once_with("SFC")
+        with mock.patch.object(self.win, "_open_preferences"), mock.patch.object(
+            self.win, "_open_preferences_dialog", return_value=None
+        ):
+            self.win.open_bios_settings("SFC")
+
+
+@needs_display
 class RefreshingTheLibraryTests(WindowCase):
     def test_a_refresh_that_finds_the_same_consoles_keeps_the_pages(self):
         # Issue #230: tearing the whole stack down for an unchanged library
@@ -1044,6 +1095,15 @@ class PerRomOverridesTests(WindowCase):
         rom = self.rom()
         self.win.set_rom_core(rom, None)
         self.assertIn(self.said("toast.core.rom_auto", name=rom["name"]), self.toasts)
+
+    def test_a_core_whose_bios_is_missing_marks_the_console_too(self):
+        # Issue 911: the toast is for the moment; the sidebar icon and the
+        # page banner stay until the file arrives.
+        with mock.patch.object(
+            window_module, "find_missing_required_for_core", return_value=["scph5501.bin"]
+        ), mock.patch.object(self.win, "sync_bios_warnings") as sync:
+            self.win._warn_missing_bios_for_core("SFC", "snes9x_libretro.so")
+        sync.assert_called_once_with(["SFC"])
 
     def test_a_core_whose_bios_is_missing_warns_about_it(self):
         with mock.patch.object(

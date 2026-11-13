@@ -475,3 +475,11 @@ button.controller-target.current.lit {
   padding: 8px;
   border-radius: 6px;
 }
+
+/* The "needs system files" banner over a console page (issue 911): the
+   warning colours of the theme, a row the grid sits under. */
+.bios-banner {
+    padding: 8px 14px;
+    background-color: alpha(@warning_bg_color, 0.18);
+    border-bottom: 1px solid alpha(@warning_bg_color, 0.4);
+}

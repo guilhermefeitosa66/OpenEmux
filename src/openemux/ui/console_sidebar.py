@@ -264,6 +264,19 @@ class ConsoleSidebar:
         else:
             self.list_box.insert(row, position)
 
+    def set_bios_warning(self, console_id, missing):
+        """Show (with the file names) or hide the row's BIOS warning."""
+        row = self.find_row(console_id)
+        warning = getattr(row, "bios_warning", None) if row is not None else None
+        if warning is None:
+            return False
+        warning.set_visible(bool(missing))
+        if missing:
+            warning.set_tooltip_text(
+                self.win.t("sidebar.bios.tooltip", names=", ".join(missing))
+            )
+        return True
+
     # ----- dragging a console into place (issue #386) ----------------------
     #
     # Only the console rows take part. "All", "Favorites" and the collections

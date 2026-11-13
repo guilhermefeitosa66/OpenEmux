@@ -108,6 +108,8 @@ class LibraryPages:
         self._grids = {}
         #: scope id -> what its cards were last built from; see _signature
         self._signatures = {}
+        #: Consoles whose BIOS banner was dismissed this session (issue 911).
+        self._dismissed_bios = set()
 
     # ----- the registry ---------------------------------------------------
     def reset(self):
@@ -223,8 +225,68 @@ class LibraryPages:
         page.header = header
         page.master_check = check
         page.master_guard = [False]
+        page.bios_banner = None
         check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
         return page
+
+    # ----- the BIOS banner (issue 911) -------------------------------------
+    def set_bios_banner(self, console, missing):
+        """Show the console page's "needs system files" banner, or take it down.
+
+        Above the grid, in plain language with the real file names, and one
+        step from the fix: "Import BIOS" opens Preferences on this console's
+        row. Dismissed, it stays down for the session; the next import or
+        core change brings it back if the files are still missing.
+        """
+        page = self.page_for(console)
+        if page is None:
+            return False
+        if not missing or console in self._dismissed_bios:
+            if page.bios_banner is not None:
+                page.bios_banner.set_visible(False)
+            return False
+        if page.bios_banner is None:
+            page.bios_banner = self._build_bios_banner(console)
+            page.prepend(page.bios_banner)
+        page.bios_banner.label.set_label(
+            self.win.t(
+                "bios.banner.title",
+                console=get_system_display_name(console),
+                names=", ".join(missing),
+            )
+        )
+        page.bios_banner.set_visible(True)
+        return True
+
+    def _build_bios_banner(self, console):
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        banner.add_css_class("bios-banner")
+        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+        icon.add_css_class("warning")
+        banner.append(icon)
+        label = Gtk.Label(xalign=0)
+        label.set_wrap(True)
+        label.set_hexpand(True)
+        banner.append(label)
+        banner.label = label
+        import_button = Gtk.Button(label=self.win.t("bios.banner.import"))
+        import_button.add_css_class("suggested-action")
+        import_button.set_valign(Gtk.Align.CENTER)
+        import_button.connect("clicked", lambda _b, c=console: self.win.open_bios_settings(c))
+        banner.append(import_button)
+        banner.import_button = import_button
+        dismiss = Gtk.Button.new_from_icon_name("window-close-symbolic")
+        dismiss.add_css_class("flat")
+        dismiss.set_valign(Gtk.Align.CENTER)
+        dismiss.set_tooltip_text(self.win.t("bios.banner.dismiss"))
+        dismiss.connect("clicked", lambda _b, c=console: self.dismiss_bios_banner(c))
+        banner.append(dismiss)
+        banner.dismiss_button = dismiss
+        return banner
+
+    def dismiss_bios_banner(self, console):
+        self._dismissed_bios.add(console)
+        self.set_bios_banner(console, [])
 
     def _on_master_check_toggled(self, page):
         if page.master_guard[0]:

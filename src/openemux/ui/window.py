@@ -2044,6 +2044,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.pages.ensure_loaded(target)
                 self.content_stack.set_visible_child_name(target)
                 self._update_window_title(target)
+            self.sync_bios_warnings()
             return
 
         while child := self.content_stack.get_first_child():
@@ -2097,6 +2098,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         target_view = preferred_view
         if target_view is None:
             target_view = previous_visible or self.current_console
+
+        self.sync_bios_warnings()
 
         desired = landing_view(
             self.visible_consoles,
@@ -2432,6 +2435,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.t("toast.core.bios_warning", core=core_filename, bios=", ".join(missing)),
                 timeout=6,
             )
+        self.sync_bios_warnings([console])
+
+    # ----- missing BIOS, before the first launch fails (issue 911) ---------
+    def missing_bios_for_console(self, console):
+        """The system files the console's core needs and the BIOS folder lacks.
+
+        The core is the one a launch would run -- the console's override or
+        the first curated candidate installed -- so the answer is the same
+        the launcher gives, only before anyone clicks Play.
+        """
+        if console not in SYSTEM_IDS:
+            return []
+        core_path = self.runtime_manager.retroarch_launcher.resolve_core_path(console)
+        if not core_path:
+            return []
+        # A look, not a launch: no BIOS folder is created for it.
+        return find_missing_required_for_core(
+            self.config_manager, console, Path(core_path).name, ensure_dir=False
+        )
+
+    def sync_bios_warnings(self, consoles=None):
+        """Re-check the consoles' BIOS and show or clear the warnings.
+
+        The sidebar row gets its icon, the console's page its banner. Called
+        after the library is rebuilt, after a BIOS import, after a core
+        change and after a Share nearby transfer, which is every way the
+        answer can move while the window is open.
+        """
+        targets = [c for c in (consoles or self.visible_consoles) if c in SYSTEM_IDS]
+        for console in targets:
+            missing = self.missing_bios_for_console(console)
+            self.sidebar.set_bios_warning(console, missing)
+            self.pages.set_bios_banner(console, missing)
+
+    def open_bios_settings(self, console):
+        """Preferences, on the BIOS page, with ``console``'s row open."""
+        self._open_preferences(page="bios")
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog.show_bios_console(console)
 
     def set_rom_shader(self, rom, shader_id):
         """Persist a per-ROM shader override (``shader_id=None`` clears it)."""

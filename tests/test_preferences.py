@@ -353,6 +353,24 @@ class TheBiosPageTests(_PreferencesCase):
         self.assertEqual(len(self.prefs._bios_rows), 1)
         self.assertEqual(self.prefs._bios_rows[0].get_title(), "bios.no_requirements")
 
+    def test_the_bios_page_can_open_on_a_console(self):
+        # Issue 911: the console page's banner lands on the right row.
+        row = self.prefs._bios_rows[0]
+        console = row._bios_console
+        self.assertFalse(row.get_expanded())
+        self.assertTrue(self.prefs.show_bios_console(console))
+        self.assertTrue(row.get_expanded())
+        self.assertFalse(self.prefs.show_bios_console("NOPE"))
+
+    def test_an_import_re_checks_the_window_warnings(self):
+        summary = {"console": "PS", "imported": [], "rejected": []}
+        self.prefs._set_bios_import_running(True)
+        with mock.patch.object(self.prefs, "_build_bios_import_summary") as build:
+            self.prefs._on_bios_import_done(summary)
+        build.return_value.present.assert_called_once()
+        self.assertFalse(self.prefs._bios_import_running)
+        self.assertEqual(self.called("sync_bios_warnings"), [("sync_bios_warnings", (["PS"],), {})])
+
 
 def _descendants(root):
     stack = [root]
