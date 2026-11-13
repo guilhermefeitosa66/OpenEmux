@@ -2225,6 +2225,20 @@ class TheDialogsAndMenusTests(WindowCase):
         self.assertIn("OpenEmu Team", notice)
         self.assertEqual(license_type, Gtk.License.BSD_3)
 
+    def test_the_about_dialog_links_the_site_the_foundation_and_the_code(self):
+        with mock.patch.object(Adw.AboutDialog, "present"), \
+                mock.patch.object(Adw.AboutDialog, "set_website") as website, \
+                mock.patch.object(Adw.AboutDialog, "add_link") as link:
+            self.win._show_about()
+        website.assert_called_once_with("https://openemux.libre-apps.org/")
+        self.assertEqual(
+            [call.args for call in link.call_args_list],
+            [
+                (self.win.t("about.link.source"), "https://github.com/guilhermefeitosa66/OpenEmux"),
+                (self.win.t("about.link.foundation"), "https://libre-apps.org/"),
+            ],
+        )
+
     def test_the_shortcuts_window_lists_every_group(self):
         with mock.patch.object(Gtk.ShortcutsWindow, "present"):
             self.win._show_shortcuts()

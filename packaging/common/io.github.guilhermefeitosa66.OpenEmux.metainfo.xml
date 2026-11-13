@@ -63,8 +63,9 @@
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/guilhermefeitosa66/OpenEmux</url>
+  <url type="homepage">https://openemux.libre-apps.org/</url>
   <url type="bugtracker">https://github.com/guilhermefeitosa66/OpenEmux/issues</url>
+  <url type="vcs-browser">https://github.com/guilhermefeitosa66/OpenEmux</url>
 
   <content_rating type="oars-1.1" />
 

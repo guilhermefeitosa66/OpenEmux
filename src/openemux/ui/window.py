@@ -1824,7 +1824,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         about.set_developer_name("OpenEmux")
         about.set_version(__version__)
         about.set_comments(self.t("about.comments"))
-        about.set_website("https://github.com/guilhermefeitosa66/OpenEmux")
+        about.set_website("https://openemux.libre-apps.org/")
+        about.add_link(self.t("about.link.source"), "https://github.com/guilhermefeitosa66/OpenEmux")
+        # The foundation that hosts the project's site, next to it.
+        about.add_link(self.t("about.link.foundation"), "https://libre-apps.org/")
         about.set_license_type(Gtk.License.MIT_X11)
         # Project names stay untranslated; libadwaita turns the URL into a link.
         about.add_acknowledgement_section(self.t("about.ack.inspired_by"), ["OpenEmu https://openemu.org/"])

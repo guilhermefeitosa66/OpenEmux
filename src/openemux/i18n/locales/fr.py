@@ -157,6 +157,8 @@ TRANSLATIONS = {
     "about.ack.inspired_by": "Inspiré de",
     "about.ack.emulation": "Émulation par",
     "about.legal.console_icons": "Icônes des consoles",
+    "about.link.source": "Code source",
+    "about.link.foundation": "Fondation Libre Apps",
     "shortcuts.group.general": "Général",
     "shortcuts.search": "Rechercher dans la bibliothèque",
     "shortcuts.preferences": "Ouvrir les paramètres",
