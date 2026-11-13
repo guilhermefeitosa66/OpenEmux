@@ -2356,12 +2356,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** A working core and ROM for at least one console.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Play for ~30 s, then close the game with the bar's power button.
+  2. Play for ~30 s, then close the game with the bar's quit button (a red door with an arrow).
 - **Expected:** The card shows a spinner over a dimmed cover from the click until RetroArch is up,
   and the window's banner reads "Starting <game>…" with a "Stop" button, then "Playing <game>"
   while the game runs (issue 904). The game opens in RetroArch's own window — **with its title bar
   and borders** — and the in-game bar sits across the bottom edge (RT-327). Sound plays, input
-  responds, and the power button ends the game and returns to the library cleanly: the banner
+  responds, and the quit button ends the game and returns to the library cleanly: the banner
   goes and a toast reads "Played <game> for N min" (the game's title, never the file name; no exit
   code when it is zero). No OpenEmux window wraps the game and no "game window" notice is shown
   (issue #469).
@@ -2428,6 +2428,25 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   of why (issue 939).
 - **Check:** human for the sound. The newest `~/.openemux/runtime/runtime_*.cfg` carries
   `audio_mute_enable = "false"`; suite: `tests/test_retroarch_launcher.py`.
+
+### RT-1144 — The in-game bar draws the same action glyphs as the Android app
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Look at the bar from left to right.
+  2. Click fast-forward, slow motion and turbo in turn, each twice.
+  3. Click mute twice.
+  4. Click save state, then load state.
+- **Expected:** Quit is a red door with an arrow pointing out (no power symbol), restart a
+  clockwise arrow, slow motion a dashed ring around a play triangle (no speedometer), fast-forward
+  two solid triangles, turbo a lightning bolt, save a floppy with a down arrow beside it and load
+  the same floppy with an up arrow (no dark disc behind the arrow), sound a speaker with a single
+  wave. Fast-forward, slow motion and turbo turn blue with the same glyph while on; muted is a red
+  tile with a crossed speaker; paused, pause becomes a blue solid play triangle. The glyphs match
+  the Android app's game screen (issue 944).
+- **Check:** human only; `tests/test_overlay_bar.py`
+  (`test_the_bar_draws_the_unified_action_glyphs`) pins the paths the PNGs are rendered from.
 
 ### RT-329 — Hiding the bar gives its space back to the game
 - **Area:** Launch
@@ -2694,7 +2713,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   included) — what a stop signal reaches depends on how RetroArch was launched.
 - **Steps:**
   1. Launch a game and let it run until sound is playing.
-  2. Close it with the bar's power button; repeat with the window's "×".
+  2. Close it with the bar's quit button (a red door with an arrow); repeat with the window's "×".
   3. Each time, wait 5 s, then run `pgrep -af retroarch` in a terminal.
 - **Expected:** The window closes, the sound stops with it, and no RetroArch process is left
   behind — `pgrep` prints nothing. The library window is still there, with the "finished" toast.

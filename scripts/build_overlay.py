@@ -64,24 +64,26 @@ SHOW_OPACITY = 0.45
 
 TILE_BG = "#383838"
 ICON = {
-    "close": '<path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/>',
+    # A door with an arrow walking out of it: quit the game.
+    "close": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     "menu": '<path d="M4 7h16M4 12h16M4 17h16"/>',
     "pause": '<path d="M9 5v14M15 5v14" stroke-width="2.6"/>',
-    "play": '<path d="M7 5l12 7-12 7z" fill="currentColor" stroke-width="1.5"/>',
-    "reset": '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 3.5V8h4.5"/>',
-    "ff": '<path d="M3.5 6.5l8 5.5-8 5.5zM12.5 6.5l8 5.5-8 5.5z" fill="currentColor" stroke-width="1.5"/>',
+    "play": '<path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/>',
+    "reset": '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/>',
+    "ff": '<path d="M3 6v12l9-6zM12 6v12l9-6z" fill="currentColor" stroke="none"/>',
     # A lightning bolt: turbo, the button that fires by itself.
-    "turbo": '<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z"/>',
-    # A speedometer with its needle low: slow motion.
-    "slow": '<path d="M4.5 17.5a8.5 8.5 0 1 1 15 0"/><path d="M12 15.5L7.8 11.3"/><circle cx="12" cy="15.5" r="1.4" fill="currentColor"/>',
-    "save": ('<g stroke-width="1.8"><path d="M3.5 2h9l3.5 3.5v9.5a1.5 1.5 0 0 1-1.5 1.5H3.5A1.5 1.5 0 0 1 2 15V3.5A1.5 1.5 0 0 1 3.5 2z"/>'
-             '<path d="M6 2v4h6V2"/><path d="M5.5 16.5V12h7v4.5"/><circle cx="18.5" cy="18.5" r="5" fill="{bg}"/>'
-             '<path d="M18.5 16v5M16.5 19l2 2 2-2"/></g>'),
-    "load": ('<g stroke-width="1.8"><path d="M3.5 2h9l3.5 3.5v9.5a1.5 1.5 0 0 1-1.5 1.5H3.5A1.5 1.5 0 0 1 2 15V3.5A1.5 1.5 0 0 1 3.5 2z"/>'
-             '<path d="M6 2v4h6V2"/><path d="M5.5 16.5V12h7v4.5"/><circle cx="18.5" cy="18.5" r="5" fill="{bg}"/>'
-             '<path d="M18.5 21v-5M16.5 18l2-2 2 2"/></g>'),
-    "sound": '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
-    "muted": '<path d="M11 5L6 9H3v6h3l5 4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+    "turbo": '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+    # A dashed ring around a play triangle: slow motion.
+    "slow": ('<path d="M13.17 3.08A9 9 0 0 1 17.48 4.86M19.14 6.52A9 9 0 0 1 20.92 10.83M20.92 13.17A9 9 0 0 1 19.14 17.48'
+             'M17.48 19.14A9 9 0 0 1 13.17 20.92M10.83 20.92A9 9 0 0 1 6.52 19.14M4.86 17.48A9 9 0 0 1 3.08 13.17'
+             'M3.08 10.83A9 9 0 0 1 4.86 6.52M6.52 4.86A9 9 0 0 1 10.83 3.08M10 8.5v7l5.5-3.5z"/>'),
+    # The floppy, with an arrow beside it: down to save, up to load.
+    "save": ('<path d="M16 13V5.5L12.5 2H3.5A1.5 1.5 0 0 0 2 3.5V15a1.5 1.5 0 0 0 1.5 1.5H12.8M6 2v4h6V2'
+             'M5.5 16.5V12h7v4.5M18.5 15v6.5M15.5 18.5l3 3 3-3" stroke-width="1.8"/>'),
+    "load": ('<path d="M16 13V5.5L12.5 2H3.5A1.5 1.5 0 0 0 2 3.5V15a1.5 1.5 0 0 0 1.5 1.5H12.8M6 2v4h6V2'
+             'M5.5 16.5V12h7v4.5M18.5 21.5V15M15.5 18l3-3 3 3" stroke-width="1.8"/>'),
+    "sound": '<path d="M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7"/>',
+    "muted": '<path d="M4 9v6h4l5 4V5L8 9zM17 9l4 6M21 9l-4 6"/>',
     "minus": '<path d="M6 12h12" stroke-width="2.4"/>',
     "plus": '<path d="M12 6v12M6 12h12" stroke-width="2.4"/>',
     "fullscreen": '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
@@ -119,7 +121,7 @@ def render(svg, path):
 def tile_png(name, icon, w=44, h=44, bg=TILE_BG, fg="#ffffff", radius=12,
              icon_px=22, opacity=1.0, border=None):
     """One button: a rounded tile (or none) with its icon centered."""
-    body = ICON[icon].replace("{bg}", bg if bg != "none" else TILE_BG)
+    body = ICON[icon]
     rect = ""
     if bg != "none":
         stroke = f' stroke="{border}" stroke-width="1"' if border else ""

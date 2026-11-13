@@ -1,3 +1,4 @@
+import ast
 import os
 import re
 import tempfile
@@ -84,6 +85,40 @@ class TranslucentBarTests(unittest.TestCase):
         show = re.search(r'^    "show": \'<path d="([^"]+)"', script, re.M).group(1)
         self.assertEqual(hide, eye + "M4 4l16 16")
         self.assertEqual(show, eye)
+
+    def test_the_bar_draws_the_unified_action_glyphs(self):
+        # Issue 944: the desktop bar takes the glyphs the Android app draws
+        # (issue 940), with the redrawn floppy for save and load.
+        script = (Path(__file__).resolve().parent.parent / "scripts" / "build_overlay.py").read_text()
+        tree = ast.parse(script)
+        icon = next(ast.literal_eval(node.value) for node in tree.body
+                    if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "ICON")
+        floppy = ("M16 13V5.5L12.5 2H3.5A1.5 1.5 0 0 0 2 3.5V15a1.5 1.5 0 0 0 1.5 1.5H12.8"
+                  "M6 2v4h6V2M5.5 16.5V12h7v4.5")
+        expected = {
+            "close": "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+            "play": "M7 4.5v15l13-7.5z",
+            "reset": "M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5",
+            "ff": "M3 6v12l9-6zM12 6v12l9-6z",
+            "turbo": "M13 2L4 14h7l-1 8 9-12h-7z",
+            "save": floppy + "M18.5 15v6.5M15.5 18.5l3 3 3-3",
+            "load": floppy + "M18.5 21.5V15M15.5 18l3-3 3 3",
+            "sound": "M4 9v6h4l5 4V5L8 9zM16.5 8.5a5 5 0 0 1 0 7",
+            "muted": "M4 9v6h4l5 4V5L8 9zM17 9l4 6M21 9l-4 6",
+        }
+        for name, path in expected.items():
+            self.assertEqual(re.findall(r'd="([^"]+)"', icon[name]), [path], name)
+        slow = re.findall(r'd="([^"]+)"', icon["slow"])
+        self.assertEqual(len(slow), 1)
+        self.assertEqual(slow[0].count("A9 9 0 0 1"), 8)  # the dashed ring
+        self.assertTrue(slow[0].endswith("M10 8.5v7l5.5-3.5z"))
+        # The filled glyphs draw no outline; the floppies need no background disc.
+        for name in ("play", "ff"):
+            self.assertIn('fill="currentColor" stroke="none"', icon[name])
+        for name in ("save", "load"):
+            self.assertNotIn("<circle", icon[name])
+            self.assertIn('stroke-width="1.8"', icon[name])
+        self.assertNotIn('replace("{bg}"', script)
 
     def test_no_strip_is_kept_with_or_without_a_console_shader(self):
         _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, translucent=True)
