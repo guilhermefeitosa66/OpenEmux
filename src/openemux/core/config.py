@@ -45,6 +45,7 @@ from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.retroachievements import AchievementsStore
+from openemux.core.retroarch_log import clamp_volume_db
 from openemux.core.session_store import SessionStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
@@ -1149,6 +1150,29 @@ class ConfigManager:
         retroarch["auto_resume"] = bool(enabled)
         self.save_config()
         return retroarch["auto_resume"]
+
+    def get_game_volume_db(self):
+        """The volume the last game ended at, in dB, or ``None`` (issue 939).
+
+        ``None`` until a game has changed the volume once: then no launch
+        names one, and the user's own retroarch.cfg value still applies.
+        Deliberately not ``master_volume_db``, which belonged to the retired
+        game window and is dropped on load (RETIRED_RUNTIME_KEYS).
+        """
+        value = self.config.get("runtime", {}).get("retroarch", {}).get("game_volume_db")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return clamp_volume_db(value)
+
+    def set_game_volume_db(self, value):
+        """Remember ``value`` (dB) for the next launch; saves only on a change."""
+        value = round(clamp_volume_db(value), 1)
+        retroarch = self.config.setdefault("runtime", {}).setdefault("retroarch", {})
+        if retroarch.get("game_volume_db") == value:
+            return value
+        retroarch["game_volume_db"] = value
+        self.save_config()
+        return value
 
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})

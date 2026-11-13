@@ -120,3 +120,65 @@ def read_is_fuse_failure(log_path, limit=TAIL_LIMIT_BYTES):
         logger.debug("launch failure: cannot read RetroArch log %s: %s", log_path, exc)
         return False
     return is_fuse_failure(raw.decode("utf-8", errors="replace"))
+
+
+# -- the volume a game ended at (issue 939) --------------------------------
+#
+# OpenEmux launches RetroArch with config_save_on_exit off, so a user's own
+# retroarch.cfg is never written -- and nothing RetroArch changes at runtime
+# survives the game either. The volume is the one change a player notices:
+# turned down during a game, it was back at full on the next. Every volume
+# change goes through RetroArch's command_event_set_volume, whichever way it
+# was asked for (the bar's buttons, the hotkeys, VOLUME_UP/VOLUME_DOWN on the
+# command channel), and that logs the new value. The last such line is where
+# the game ended.
+
+#: RetroArch's own limits for audio_volume (command_event_set_volume).
+VOLUME_MIN_DB = -80.0
+VOLUME_MAX_DB = 12.0
+
+#: ``[INFO] [Audio] Audio volume: -3.0 dB.`` -- the label is RetroArch's
+#: translated MSG_AUDIO_VOLUME, so only the shape around it is matched.
+VOLUME_LINE_RE = re.compile(r"\[Audio\] .*: (-?\d+(?:[.,]\d+)?) dB\.\s*$")
+
+
+def clamp_volume_db(value):
+    """``value`` inside the range RetroArch itself accepts."""
+    return max(VOLUME_MIN_DB, min(VOLUME_MAX_DB, float(value)))
+
+
+def _volume_from_line(line):
+    match = VOLUME_LINE_RE.search(line)
+    if not match:
+        return None
+    return clamp_volume_db(match.group(1).replace(",", "."))
+
+
+def last_volume_db(lines):
+    """The volume, in dB, of the last volume change among ``lines``.
+
+    ``None`` when the game never changed it: then there is nothing new to
+    remember, and whatever was remembered before still stands.
+    """
+    volume = None
+    for line in lines:
+        found = _volume_from_line(line)
+        if found is not None:
+            volume = found
+    return volume
+
+
+def read_last_volume_db(log_path):
+    """:func:`last_volume_db` for a finished launch log.
+
+    Read line by line: a long session under --verbose is easily megabytes.
+    Never raises: a log we cannot read has no volume to give.
+    """
+    if not log_path:
+        return None
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as handle:
+            return last_volume_db(handle)
+    except OSError as exc:
+        logger.debug("volume: cannot read RetroArch log %s: %s", log_path, exc)
+        return None

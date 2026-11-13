@@ -677,6 +677,24 @@ class RetroArchLauncherTests(unittest.TestCase):
         for lines in (windowed, full):
             self.assertIn('video_windowed_fullscreen = "true"', lines)
             self.assertIn('config_save_on_exit = "false"', lines)
+    def test_a_game_starts_unmuted_at_the_remembered_volume(self):
+        # Issue 939: the volume the last game ended at, and never muted;
+        # with nothing remembered, the user's own retroarch.cfg volume stays.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            untouched = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
+            cfg.get_game_volume_db = lambda: None
+            unset = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
+            cfg.get_game_volume_db = lambda: -4.5
+            remembered = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
+        for lines in (untouched, unset, remembered):
+            self.assertIn('audio_mute_enable = "false"', lines)
+            self.assertIn('config_save_on_exit = "false"', lines)
+        self.assertFalse([line for line in untouched + unset if line.startswith("audio_volume ")])
+        self.assertIn('audio_volume = "-4.5"', remembered)
+
     def test_a_console_with_a_bezel_loads_the_bar_with_it_under(self):
         # Issue #507: the bezel is drawn as part of the bar's own overlay.
         with TemporaryDirectory() as tmp_dir:

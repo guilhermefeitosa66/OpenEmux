@@ -586,6 +586,38 @@ class StartupFailureTests(unittest.TestCase):
             memory = HwDriverMemory(manager.config_manager.get_runtime_dir())
             self.assertEqual(memory.get("/cores/parallel_n64_libretro.so"), "glcore")
 
+    def test_the_volume_a_game_ended_at_is_remembered(self):
+        # Issue 939: RetroArch never writes its config back, so the volume
+        # turned down in this game is carried to the next by OpenEmux.
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text(
+                "[INFO] [Audio] Audio volume: -0.5 dB.\n"
+                "[INFO] [Audio] Audio volume: -2.0 dB.\n",
+                encoding="utf-8",
+            )
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+            stored = []
+            manager.config_manager.set_game_volume_db = stored.append
+            clock.advance(600.0)
+            proc.exit_code = 0
+            manager.poll_active()
+        self.assertEqual(stored, [-2.0])
+
+    def test_a_game_that_left_the_volume_alone_changes_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "launch.log"
+            log_path.write_text("[INFO] quit\n", encoding="utf-8")
+            clock = _Clock()
+            manager, proc = self._running(tmp_dir, clock, log_path=log_path)
+            stored = []
+            manager.config_manager.set_game_volume_db = stored.append
+            clock.advance(600.0)
+            proc.exit_code = 0
+            manager.poll_active()
+        self.assertEqual(stored, [])
+
     def test_a_long_session_that_ends_badly_is_not_a_startup_failure(self):
         # A game the user played for an hour and that crashed on the way out
         # is not a launch that failed; the finished toast is the right one.

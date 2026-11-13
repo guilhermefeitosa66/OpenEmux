@@ -402,6 +402,7 @@ class RuntimeManager:
         hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir()).remember_from_log(
             getattr(proc, "_openemux_core_path", None), log_path
         )
+        self._remember_volume(log_path)
 
         result = {
             "exit_code": exit_code,
@@ -426,6 +427,20 @@ class RuntimeManager:
                 log_path,
             )
         return result
+
+    def _remember_volume(self, log_path):
+        """Keep the volume the game ended at for the next launch (issue 939).
+
+        RetroArch never writes its config back (config_save_on_exit is off,
+        so the user's retroarch.cfg stays theirs), which is why the change
+        has to be read from the log and carried by OpenEmux instead.
+        """
+        remember = getattr(self.config_manager, "set_game_volume_db", None)
+        if remember is None:
+            return
+        volume = retroarch_log.read_last_volume_db(log_path)
+        if volume is not None:
+            remember(volume)
 
     def _retry_unpacked(self, log_path):
         """Relaunch the game that just died, unpacked instead of FUSE-mounted.

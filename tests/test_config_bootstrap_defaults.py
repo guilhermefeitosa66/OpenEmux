@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from openemux.core.config import ConfigManager
 
@@ -130,6 +131,41 @@ class TheAutoResumeSettingTests(unittest.TestCase):
             self.assertTrue(ConfigManager(config_file=cfg_path).get_auto_resume())
             ConfigManager(config_file=cfg_path).set_auto_resume(False)
             self.assertFalse(ConfigManager(config_file=cfg_path).get_auto_resume())
+
+
+class TheGameVolumeSettingTests(unittest.TestCase):
+    """The volume the last game ended at (issue 939): unset until one changes it."""
+
+    def test_it_is_unset_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertIsNone(manager.get_game_volume_db())
+
+    def test_it_survives_a_restart_rounded_and_clamped(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            self.assertEqual(ConfigManager(config_file=cfg_path).set_game_volume_db(-3.04), -3.0)
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_game_volume_db(), -3.0)
+            self.assertEqual(ConfigManager(config_file=cfg_path).set_game_volume_db(40), 12.0)
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_game_volume_db(), 12.0)
+
+    def test_the_same_value_is_not_written_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            manager.set_game_volume_db(-6.0)
+            with mock.patch.object(manager, "save_config") as save:
+                self.assertEqual(manager.set_game_volume_db(-6.0), -6.0)
+            save.assert_not_called()
+
+    def test_a_stored_value_that_is_not_a_number_is_ignored(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            retroarch = manager.config["runtime"]["retroarch"]
+            for junk in ("loud", True, None, [1]):
+                retroarch["game_volume_db"] = junk
+                self.assertIsNone(manager.get_game_volume_db())
+            retroarch["game_volume_db"] = -200
+            self.assertEqual(manager.get_game_volume_db(), -80.0)
 
 
 class TheControllerLabelSettingsTests(unittest.TestCase):
