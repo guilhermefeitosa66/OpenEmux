@@ -938,6 +938,31 @@ class OneShaderPackOfTwoTests(unittest.TestCase):
                 summary = updater.download_shader_packs_if_missing(packs=[])
         self.assertEqual((summary["total"], summary["failed"]), (0, 0))
 
+    def test_each_pack_reports_its_progress(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            events = []
+
+            def _fake_urlopen(url, timeout=5):
+                return _FakeResponse(_zip_bytes({"shaders_glsl/handheld/dot.glslp": b"dot"}))
+
+            with patch("urllib.request.urlopen", side_effect=_fake_urlopen):
+                updater.download_shader_packs_if_missing(on_progress=events.append, packs=["shaders_glsl"])
+
+        self.assertEqual(
+            events,
+            [{"type": "download_progress", "current": 1, "total": 1, "core_name": "shaders_glsl"}],
+        )
+
+    def test_a_disabled_updater_fetches_no_pack(self):
+        with TemporaryDirectory() as tmp_dir:
+            updater = RetroArchBuildbotUpdater(_FakeConfigManager(tmp_dir))
+            updater.settings["enabled"] = False
+            with patch("urllib.request.urlopen", side_effect=AssertionError("no fetch")):
+                summary = updater.download_shader_packs_if_missing()
+        self.assertTrue(summary["disabled"])
+        self.assertEqual((summary["total"], summary["downloaded"]), (0, 0))
+
 
 class WhichShaderPackTheDriverReadsTests(unittest.TestCase):
     def test_gl_reads_glsl(self):
