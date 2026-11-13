@@ -340,6 +340,10 @@ class RomGrid(Gtk.GridView):
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", self._on_grid_key_pressed)
         self.add_controller(key)
+        # Enter and Space never reach that controller: the cell wrapping the
+        # card is a GtkListItemWidget, whose own binding takes both keys on
+        # the way up and reports them as this signal with the position.
+        self.connect("activate", self._on_cell_activated)
 
         # A page switch replaces the whole grid. A context menu still up is
         # parented to a card that is about to be disposed, so close it while
@@ -925,6 +929,12 @@ class RomGrid(Gtk.GridView):
             return
         self._last_activation = (path, now)
         self.on_launch_callback(rom)
+
+    def _on_cell_activated(self, _view, position):
+        """Enter or Space on a focused cell: launch the game at ``position``."""
+        entry = self.get_model().get_item(position)
+        if entry is not None:
+            self._launch_rom(entry.rom)
 
     def _is_repeat_activation(self, path, now):
         """Whether this activation is the second half of a double-click."""

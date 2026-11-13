@@ -1647,13 +1647,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if self._selected_roms:
             self._clear_selection()
             return True
-        if self.navigation.escape_to_sidebar():
-            return True
         if self.tv_mode:
-            # Nothing else wanted the Escape: it leaves TV mode (issue 914).
+            # The sidebar is away in TV mode, so stepping back to it would only
+            # swap the page for a full-screen console list: Escape leaves the
+            # mode instead (issue 914).
             self.toggle_tv_mode()
             return True
-        return False
+        return self.navigation.escape_to_sidebar()
 
     # ----- TV mode (issue 914) ---------------------------------------------
     @property

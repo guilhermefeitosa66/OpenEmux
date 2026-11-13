@@ -2494,13 +2494,19 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.assertFalse(self.win.has_css_class("tv-mode"))
         self.assertEqual(self.win._zoom, 1.0)
 
-    def test_escape_leaves_tv_mode_when_nothing_else_wants_it(self):
+    def test_escape_leaves_tv_mode_before_it_looks_for_the_sidebar(self):
+        # With the split view collapsed, stepping back to the sidebar would
+        # show it as a full-screen page with no games on it.
         with mock.patch.object(self.win, "fullscreen"), mock.patch.object(self.win, "unfullscreen"):
             self.win.toggle_tv_mode()
-            with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
+            with mock.patch.object(
+                self.win.navigation, "escape_to_sidebar", return_value=True
+            ) as to_sidebar:
                 self.assertTrue(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+            to_sidebar.assert_not_called()
             self.assertFalse(self.win.tv_mode)
-            self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+            with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
+                self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
 
     def test_the_on_screen_keyboard_opens_over_a_searchable_page(self):
         from openemux.ui.onscreen_keyboard import OnScreenKeyboard
