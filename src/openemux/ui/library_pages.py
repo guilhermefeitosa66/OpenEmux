@@ -48,6 +48,13 @@ def is_mixed_scope(scope):
 logger = logging.getLogger(__name__)
 
 
+def _teardown(grid):
+    """Release a grid or a group the pages no longer show, if it is one."""
+    release = getattr(grid, "teardown", None)
+    if callable(release):
+        release()
+
+
 class LibraryPages:
     """Owns the page, the grid and the load state of every scope.
 
@@ -76,6 +83,8 @@ class LibraryPages:
     # ----- the registry ---------------------------------------------------
     def reset(self):
         """Forget every page. The caller empties the content stack itself."""
+        for grid in self._grids.values():
+            _teardown(grid)
         self._pages = {}
         self._loaded = {}
         self._grids = {}
@@ -99,7 +108,7 @@ class LibraryPages:
         refreshes for a page that was no longer in the stack.
         """
         self._loaded.pop(scope, None)
-        self._grids.pop(scope, None)
+        _teardown(self._grids.pop(scope, None))
         self._signatures.pop(scope, None)
         return self._pages.pop(scope, None)
 
@@ -339,9 +348,12 @@ class LibraryPages:
             return
         self._signatures[console] = signature
         page.header.set_visible(False)
+        # Whatever the page showed before is let go of explicitly, textures
+        # and entries included, rather than left for the garbage collector
+        # to find the cycle (issue 900).
+        _teardown(self._grids.pop(console, None))
         if not roms:
             scroll.set_child(self._empty_page_for(console))
-            self._grids.pop(console, None)
             if console == win.current_console:
                 win._update_window_title(console)
             return
@@ -370,6 +382,7 @@ class LibraryPages:
         mixed_consoles=False,
         on_selection_changed=None,
         band_host_is_self=False,
+        dormant=False,
     ):
         win = self.win
         grid = RomGrid(
@@ -391,6 +404,7 @@ class LibraryPages:
             on_selection_changed=on_selection_changed or win._on_selection_changed,
             context_services=win._rom_context_services,
             frame_color_for_rom=win._cartridge_color_for_rom,
+            dormant=dormant,
         )
         if band_host_is_self:
             grid.band_host = grid
@@ -416,12 +430,16 @@ class LibraryPages:
         body = GroupedScroll()
         group = GridGroup(on_selection_changed=win._on_selection_changed)
         for console, group_roms in group_roms_by_console(roms, win.visible_consoles):
+            # Asleep until the page lays it out near the viewport (issue
+            # 899): a group built awake would realize up to thirty rows of
+            # cards in the first allocation, whether on screen or not.
             grid = self._build_grid(
                 console,
                 group_roms,
                 display_settings,
                 on_selection_changed=group.on_child_selection_changed,
                 band_host_is_self=True,
+                dormant=True,
             )
             header, set_count = self._group_header(console, len(group_roms), grid.compact)
             body.add_section(header, grid)

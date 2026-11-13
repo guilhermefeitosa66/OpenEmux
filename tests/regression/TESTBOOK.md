@@ -1430,10 +1430,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   cards is the same on both (issue #219). Before virtualization the page held one live card and
   one decoded cover texture per ROM, for as long as it existed.
   The guarantee is per *grid*. Since issue #384 a mixed page ("All", "Favorites", a collection) is
-  one grid per console stacked in the page's scroller, and each of those is allocated its natural
-  height — so a mixed page builds a card per ROM. Grouping and virtualizing across sections at the
-  same time needs a layout GtkGridView does not have; the console pages, where a single console's
-  thousands of ROMs live, are unaffected.
+  one grid per console stacked in the page's scroller; since issue 899 a group further than a
+  page from the viewport sleeps (no model, so no cards, but the height of its rows), so a mixed
+  page builds a few screens of cards and not one per ROM — see RT-1029.
 - **Check:**
   ```bash
   Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
@@ -16829,3 +16828,54 @@ has no Android device, so these are `MANUAL`.
   (`test_the_fetch_resolves_the_art_once_and_remembers_it_on_the_entry`,
   `RememberingTheCompositeTests`), `tests/test_grid_widget.py`
   (`test_a_shell_colour_is_resolved_once_per_grid`).
+
+### RT-1029 — "All" on a big library builds a few screens of cards, and a zoom rebuilds only them
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox up with the 3000-game synthetic library
+  (`tools/perf/gen_library.py`, see `tools/perf/README.md`) and the config pointed at it
+  (`tools/perf/library_bench.sh --use ~/games/big`).
+- **Steps:**
+  1. Start the app on a console page and click "All".
+  2. Press Ctrl+plus, then Ctrl+minus.
+  3. Scroll "All" to the bottom with Page Down and quit.
+- **Expected:** "All" opens with its first groups filled and the window answering at once: the
+  groups further than a page below the viewport hold no cards (they sleep, and the page keeps
+  their height, so the scrollbar is right from the start); they wake as the page scrolls near
+  them. A zoom step updates the cards on screen within half a second and builds nothing for the
+  sleeping groups. The cards on screen get their cover before the rows below them: the grid
+  moves the fetches of the cards that overlap its allocation to the front of the decode pool
+  after every layout, and a fetch queued for a card that has moved on returns before touching
+  the disk. Favorites and the collections behave the same, since they share the page body.
+  Before issue 899, opening "All" built 1843 cards for a viewport showing nine, blocked the
+  main loop for two seconds and added 140 MB; a zoom step rebuilt every group.
+- **Check:** `./devbox/devbox.sh exec env DEVBOX_REPO=$PWD tools/perf/library_bench.sh all`
+  prints `all_main_settle_s` below `0.3`, `zoom_in_main_settle_s` below `0.5`, and a
+  `cards_built` for the whole session (start, "All", search, zoom in, zoom out, a scroll, ten
+  consoles, "All" again) below `1500` — about three screens per page shown. Unit-level:
+  `tests/test_grouped_scroll.py` (`test_only_the_groups_near_the_viewport_hold_cards`,
+  `test_the_page_builds_a_few_screens_of_cards_not_the_library`,
+  `WhoIsNearTheViewportTests`), `tests/test_grid_widget.py` (`SleepingAndWakingTests`),
+  `tests/test_cover_cache.py` (`ThePriorityQueueTests`).
+
+### RT-1030 — Memory comes back after a zoom round-trip and does not grow with the pages visited
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-UI
+- **Preconditions:** as RT-1029.
+- **Steps:**
+  1. Start on a console page, open "All", zoom in and back out.
+  2. Visit ten consoles in the sidebar, then come back to "All".
+  3. Leave a console page and come back to it after scrolling it halfway.
+- **Expected:** 1: the RSS after the zoom out is within 10% of the RSS before the zoom in: the
+  re-rendered page tears the previous grids down (entries, cards, textures, selection) instead
+  of leaving them for the garbage collector. 2: each console page sleeps when it is left — it
+  keeps its entries and its scroll position, not its cards — so ten visits add a few MB in
+  total, not 9 MB each, and the RSS back on "All" stays below 400 MB on that library (850 MB
+  before issue 900). 3: the page comes back at the same scroll position with its cards rebuilt.
+- **Check:** `./devbox/devbox.sh exec env DEVBOX_REPO=$PWD tools/perf/library_bench.sh mem`:
+  `rss_kb` at `zoom_out` is within 10% of `rss_kb` at `all`; `rss_kb` at `all_again` is below
+  `400000`. Unit-level: `tests/test_grid_widget.py`
+  (`test_leaving_the_page_puts_the_grid_to_sleep_and_coming_back_wakes_it`,
+  `test_waking_puts_the_page_back_where_it_was`, `test_tearing_down_lets_go_of_the_entries_and_the_cards`),
+  `tests/test_library_pages.py` (`test_a_rebuilt_page_tears_the_previous_grid_down`,
+  `test_forgetting_and_resetting_tear_the_grids_down`).

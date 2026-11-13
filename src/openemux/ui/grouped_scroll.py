@@ -26,7 +26,18 @@ A grid that is off screen is still allocated -- one pixel, just outside the
 viewport, where the clip hides it -- rather than hidden: hiding a widget
 unmaps it, and a grid attaches its selection and its focus watcher on map and
 dismisses its popovers on unmap, which scrolling must never trigger.
+
+A grid further than a page from the viewport is put to sleep instead (issue
+899): GTK keeps up to thirty rows of cards around a grid's anchor whatever
+its allocation, so fourteen groups of a few hundred games each were close to
+two thousand live cards for a screen showing nine. A sleeping grid holds no
+model, so it has no cards, and it still measures as tall as its rows, so the
+page keeps its height and the scrollbar its place. The page wakes a group as
+it comes within a page of the viewport.
 """
+
+#: How far beyond the viewport, in viewport heights, a group is kept awake.
+WAKE_MARGIN_PAGES = 1
 
 import gi
 
@@ -179,6 +190,12 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
             top += margin_top
             content_height = max(0, child_height - margin_top - margin_bottom)
             visible = slice_for(top, content_height, scroll, height)
+            sleeper = getattr(grid, "set_dormant", None)
+            if sleeper is not None:
+                # Before the allocation, so a grid that is far away builds
+                # nothing for it, and one that came near builds its cards in
+                # this very pass.
+                sleeper(not _near_viewport(top, content_height, scroll, height))
             adjustment = grid.get_vadjustment()
             if visible is None:
                 # Off screen: one pixel just past the edge it is beyond, kept
@@ -231,10 +248,8 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         top, child_height = layout
         margin_top = grid.get_margin_top()
         content_height = max(0, child_height - margin_top - grid.get_margin_bottom())
-        model = grid.get_model()
-        count = model.get_n_items() if model is not None else 0
         item_top, item_height = item_span(
-            position, grid.get_max_columns(), count, content_height
+            position, grid.get_max_columns(), _item_count(grid), content_height
         )
         target = scroll_to_show(
             vadj.get_value(), vadj.get_page_size(), top + margin_top + item_top, item_height
@@ -242,6 +257,25 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         if target != vadj.get_value():
             vadj.set_value(target)
         return True
+
+
+def _near_viewport(top, height, scroll, viewport):
+    """Whether a child at ``top`` is within WAKE_MARGIN_PAGES of the viewport."""
+    margin = viewport * WAKE_MARGIN_PAGES
+    return top + height > scroll - margin and top < scroll + viewport + margin
+
+
+def _item_count(grid):
+    """How many items a grid shows -- asked of the grid when it can answer.
+
+    A sleeping ``RomGrid`` has no model on the view, but it knows its count;
+    a plain ``Gtk.GridView`` only has the model to ask.
+    """
+    count = getattr(grid, "count", None)
+    if callable(count):
+        return count()
+    model = grid.get_model()
+    return model.get_n_items() if model is not None else 0
 
 
 def _unparent_children(widget):

@@ -2148,6 +2148,12 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.assertFalse(self.win._on_close_stop_gamepad())
         self.win.gamepad_navigator.stop.assert_called_once()
 
+    def test_closing_logs_how_many_cards_the_session_built(self):
+        # The performance bench reads this line (issue 899).
+        with self.assertLogs("openemux.ui.window", level="INFO") as logs:
+            self.assertFalse(self.win._on_close_log_grid_stats())
+        self.assertTrue(any("cards built this session=" in line for line in logs.output))
+
     def test_closing_takes_the_running_game_with_it(self):
         with mock.patch.object(
             self.win.runtime_manager, "is_running", return_value=True

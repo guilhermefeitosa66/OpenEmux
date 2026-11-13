@@ -256,6 +256,14 @@ class NavigationTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
+    def test_tearing_the_page_down_tears_every_group_down(self):
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        for grid in grids:
+            grid.teardown = lambda g=grid: g.calls.append("teardown")
+        group.teardown()
+        self.assertEqual(group.sections, [])
+        self.assertTrue(all("teardown" in grid.calls for grid in grids))
+
     def test_a_rom_is_refreshed_by_the_group_that_owns_it(self):
         group, _ = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
         self.assertTrue(group.refresh_rom_artwork({"console": "SFC"}))

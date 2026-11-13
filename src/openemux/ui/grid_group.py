@@ -232,6 +232,13 @@ class GridGroup:
                 return True
         return self.focus_first_card()
 
+    # ----- lifetime -------------------------------------------------------
+    def teardown(self):
+        """Let every group go (issue 900); the page is being rebuilt."""
+        for section in self.sections:
+            section.grid.teardown()
+        self.sections = []
+
     # ----- per-ROM refreshes ----------------------------------------------
     def refresh_rom_frame(self, rom):
         return any(grid.refresh_rom_frame(rom) for grid in self.grids())

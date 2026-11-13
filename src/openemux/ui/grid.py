@@ -63,6 +63,16 @@ from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
 
 logger = logging.getLogger(__name__)
 
+#: How many cards every grid in this process has built, for the probes and
+#: the test book: a grouped page on a big library used to build one card per
+#: ROM of every console within thirty rows of each group's anchor (issue 899).
+_cards_built = 0
+
+
+def cards_built():
+    """The running count of cards built since the process started."""
+    return _cards_built
+
 
 class RomGrid(Gtk.GridView):
     """The library grid: a GtkGridView over the page's ROMs.
@@ -116,6 +126,7 @@ class RomGrid(Gtk.GridView):
         context_services=None,
         frame_color_for_rom=None,
         band_host=None,
+        dormant=False,
     ):
         # Before anything else: the GObject has to exist before this widget
         # can be configured. The model and the factory are attached at the
@@ -137,6 +148,21 @@ class RomGrid(Gtk.GridView):
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
         self.on_selection_changed = on_selection_changed
+        # Whether the view holds its model. A dormant grid has let go of it,
+        # so GTK keeps no card for it; it still measures as tall as its rows,
+        # so the page around it keeps its height (issue 899). Set by
+        # set_dormant; grouped pages start their grids asleep and wake the
+        # ones that come near the viewport.
+        self._awake = True
+        # An unparented card measured for the row height and the card width
+        # before any real card exists -- CSS applies to it as to the rest.
+        self._probe = None
+        self._measured_row_height = None
+        # Where the page was scrolled to when the grid went to sleep.
+        self._sleep_scroll = None
+        self._restore_source = None
+        # Coalesces the per-allocation promotion of the visible cards' fetches.
+        self._promotion_pending = False
         # Focus memory: coming back from the sidebar restores this game. The
         # entry, not the widget -- the widget may be showing another game by
         # then (issue #219).
@@ -251,7 +277,9 @@ class RomGrid(Gtk.GridView):
         factory.connect("teardown", self._on_factory_teardown)
 
         self.set_factory(factory)
-        self.set_model(Gtk.NoSelection(model=self._filtered))
+        self._awake = not dormant
+        if self._awake:
+            self.set_model(Gtk.NoSelection(model=self._filtered))
         # Zeroes the theme's padding on the item wrappers, so a cell is exactly
         # the card and the gaps are exactly _spacing.
         self.add_css_class("rom-grid")
@@ -285,10 +313,138 @@ class RomGrid(Gtk.GridView):
         # Both want an ancestry that only exists once the grid is in a window.
         self._watch_root_focus()
         self.selection.attach()
+        # A console page coming back on screen gets its cards back; on a
+        # grouped page that is the page's call, group by group, as it lays
+        # them out.
+        if not self._in_grouped_page():
+            self.set_dormant(False)
 
     def _on_unmap(self, *_args):
         self._unwatch_root_focus()
         dismiss_context_popover()
+        # A page the user left keeps its entries and its scroll position, but
+        # not its cards and their textures: ten console visits used to add
+        # about 9 MB each and keep it for the life of the window (issue 900).
+        self.set_dormant(True)
+
+    def _in_grouped_page(self):
+        return isinstance(self.get_parent(), GroupedScroll)
+
+    # -- dormancy ----------------------------------------------------------
+
+    def is_dormant(self):
+        return not self._awake
+
+    def set_dormant(self, dormant):
+        """Let go of the cards (``True``) or take the model back (``False``).
+
+        GTK keeps up to thirty rows of cards alive around a grid's anchor
+        however small the part of it on screen is, and with one grid per
+        console on a grouped page that multiplied by the number of groups:
+        "All" on a 3000-game library built 1843 cards for a viewport showing
+        nine (issue 899). A grid that is nowhere near the viewport holds no
+        model instead, so GTK tears its cards down, and it reports the height
+        its rows would take so the page and its scrollbar do not move.
+
+        A console page's grid does the same when its page is unmapped
+        (issue 900) and takes its scroll position back on waking.
+        """
+        dormant = bool(dormant)
+        if dormant == (not self._awake):
+            return
+        if dormant:
+            vadj = self.get_vadjustment()
+            self._sleep_scroll = vadj.get_value() if vadj is not None else None
+            self._awake = False
+            # Tearing the cards down bumps every card's generation, so the
+            # fetches still queued for them return before doing any work.
+            self.set_model(None)
+            return
+        self._awake = True
+        self.set_model(Gtk.NoSelection(model=self._filtered))
+        if not self._in_grouped_page() and self._sleep_scroll:
+            # Attaching a model puts the view's anchor at the top. The page's
+            # own scroll is restored at once, and once more after the layout
+            # that the new model queues, in case GTK moved it meanwhile.
+            self._restore_sleep_scroll()
+            if self._restore_source is None:
+                self._restore_source = GLib.idle_add(self._restore_sleep_scroll_idle)
+
+    def _restore_sleep_scroll_idle(self):
+        self._restore_source = None
+        self._restore_sleep_scroll()
+        return GLib.SOURCE_REMOVE
+
+    def _restore_sleep_scroll(self):
+        vadj = self.get_vadjustment()
+        target = self._sleep_scroll
+        if vadj is None or target is None or not self._awake:
+            return
+        target = max(0.0, min(target, vadj.get_upper() - vadj.get_page_size()))
+        if abs(vadj.get_value() - target) >= 1:
+            vadj.set_value(target)
+
+    def _probe_card(self):
+        """A card like the ones the factory builds, for measuring only."""
+        if self._probe is None:
+            self._probe = RomItem(self._card_ctx)
+            self._probe.set_margin_top(self._card_margin)
+            self._probe.set_margin_bottom(self._card_margin)
+        return self._probe
+
+    def _row_height(self):
+        """How tall one row of cards is, margins included.
+
+        Read off a card on screen when there is one, else off the probe:
+        an unparented card measures exactly as a realized one does, CSS
+        padding and all, so the height a dormant grid reports is the height
+        it will take when it wakes.
+        """
+        if self._measured_row_height is None:
+            card = next(iter(self._bound.values()), None) or self._probe_card()
+            self._measured_row_height = card.measure(Gtk.Orientation.VERTICAL, -1)[1]
+        return self._measured_row_height
+
+    def _columns_for(self, for_size):
+        """The column count a width calls for, as _retune_columns would set."""
+        if self.compact:
+            return 1
+        if for_size is None or for_size < 0:
+            return self._column_state[0] if self._column_state else 1
+        available = self._available_width(for_size)
+        if available <= 0:
+            return 1
+        columns, _slack = columns_and_slack(
+            available, self._card_allocation_width(), len(self._entries), spacing=self._spacing
+        )
+        return max(1, min(columns, len(self._entries) or 1))
+
+    def _dormant_height(self, for_size):
+        """The height the rows would take, with no card built to measure."""
+        count = self._filtered.get_n_items()
+        if count == 0:
+            return 0
+        rows = -(-count // self._columns_for(for_size))
+        return rows * self._row_height()
+
+    def teardown(self):
+        """Let go of everything the page no longer shows (issue 900).
+
+        A re-render used to replace the scroller's child and leave the old
+        grid -- its cards, their textures, its entries and the selection --
+        for the garbage collector to find the cycle. Dropping the model and
+        the entries here returns the memory when the page is rebuilt.
+        """
+        self.set_dormant(True)
+        if self._restore_source is not None:
+            GLib.source_remove(self._restore_source)
+            self._restore_source = None
+        self._bound.clear()
+        self._store.remove_all()
+        self._entries = []
+        self._by_path = {}
+        self._visible_cache = None
+        self._probe = None
 
     # -- the model ---------------------------------------------------------
 
@@ -356,6 +512,8 @@ class RomGrid(Gtk.GridView):
     # -- the factory -------------------------------------------------------
 
     def _on_factory_setup(self, _factory, list_item):
+        global _cards_built
+        _cards_built += 1
         card = RomItem(self._card_ctx)
         # GtkGridView has no row spacing of its own, so the vertical gap is
         # half of it on each card. The horizontal gap comes from the cell
@@ -504,6 +662,11 @@ class RomGrid(Gtk.GridView):
     # -- layout ------------------------------------------------------------
 
     def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.VERTICAL and not self._awake:
+            # No cards to measure: the rows' height, from the row count the
+            # width allows and a card measured off screen (issue 899).
+            height = self._dormant_height(for_size)
+            return height, height, -1, -1
         if orientation == Gtk.Orientation.VERTICAL and 0 <= for_size < self._card_size[0]:
             # Asked how tall the page is at a width no card fits in -- which
             # the content stack does for a frame while it swaps pages.
@@ -537,6 +700,50 @@ class RomGrid(Gtk.GridView):
         # are allocated an empty cell on the way to the second.
         self._retune_columns(width)
         Gtk.GridView.do_size_allocate(self, width, height, baseline)
+        self._queue_fetch_promotion()
+
+    def _queue_fetch_promotion(self):
+        """After a layout, move the on-screen cards' fetches to the front.
+
+        GTK binds the rows it keeps around the anchor as well as the ones on
+        screen, and the pool takes the fetches in arrival order, so after a
+        zoom or a page switch the visible cards used to wait behind the rows
+        below them (issue 899). Coalesced onto one idle per layout burst.
+        """
+        if self._promotion_pending or not self._bound:
+            return
+        self._promotion_pending = True
+        GLib.idle_add(self._promote_visible_fetches)
+
+    def _promote_visible_fetches(self):
+        self._promotion_pending = False
+        for card in self.visible_cards():
+            card.promote_pending_fetch()
+        return GLib.SOURCE_REMOVE
+
+    def visible_cards(self):
+        """The bound cards whose cell overlaps the grid's own allocation.
+
+        A GtkGridView lays its cells out in viewport coordinates, so a cell
+        is on screen when it overlaps ``[0, height)`` -- on a grouped page
+        the allocation is the slice the page handed this grid, so the same
+        test holds there.
+        """
+        height = self.get_height()
+        if height <= 0:
+            return []
+        visible = []
+        for card in list(self._bound.values()):
+            wrapper = card.get_parent()
+            if wrapper is None:
+                continue
+            ok, bounds = wrapper.compute_bounds(self)
+            if not ok:
+                continue
+            top = bounds.get_y()
+            if top + bounds.get_height() > 0 and top < height:
+                visible.append(card)
+        return visible
 
     def _retune_columns(self, width=None):
         """Pack the cards left-to-right with fixed gaps, like an icon view.
@@ -605,10 +812,10 @@ class RomGrid(Gtk.GridView):
         them tighter than they fit and the grid wraps a column early.
         """
         if self._measured_card_width is None:
-            card = next(iter(self._bound.values()), None)
-            if card is None:
-                # Before the first card exists; recomputed once one does.
-                return self._card_size[0]
+            # Off the probe before the first card exists: it measures as the
+            # real thing, so the column count never has to change once a
+            # card is built (which also keeps a dormant grid's height right).
+            card = next(iter(self._bound.values()), None) or self._probe_card()
             self._measured_card_width = max(
                 self._card_size[0], card.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
             )
@@ -701,6 +908,9 @@ class RomGrid(Gtk.GridView):
         entry = visible[position]
         if self._grab_focus_on(entry):
             return True
+        # A sleeping group has nothing to scroll to; it wakes here and the
+        # page reveal below keeps it awake.
+        self.set_dormant(False)
         self._reveal_on_page(position)
         self.scroll_to(position, Gtk.ListScrollFlags.FOCUS, None)
         GLib.idle_add(self._grab_focus_when_realized, entry)

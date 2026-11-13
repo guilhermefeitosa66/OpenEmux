@@ -242,6 +242,43 @@ class LoadingAPageTests(WindowCase):
         self.pages.ensure_collection_page(slug)
         self.assertIs(self.pages.page_for(collection_scope(slug)), page)
 
+    def test_a_rebuilt_page_tears_the_previous_grid_down(self):
+        # Issue 900: the old grid, its cards and their textures were left for
+        # the garbage collector to find the cycle.
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.win._apply_view_mode(VIEW_MODE_LIST)
+        self.assertIsNot(self.pages.grid_for("SFC"), grid)
+        self.assertTrue(grid.is_dormant())
+        self.assertEqual(grid.entries(), [])
+
+    def test_a_page_that_empties_tears_its_grid_down_too(self):
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.render("SFC", [])
+        self.assertIsNone(self.pages.grid_for("SFC"))
+        self.assertTrue(grid.is_dormant())
+
+    def test_forgetting_and_resetting_tear_the_grids_down(self):
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.forget("SFC")
+        self.assertTrue(grid.is_dormant())
+        self.win.refresh_library(force=True)
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.reset()
+        self.assertTrue(grid.is_dormant())
+
+    def test_the_groups_of_a_mixed_page_start_asleep(self):
+        # Issue 899: a group built awake realizes up to thirty rows of cards
+        # in its first allocation, on screen or not.
+        self.pages._signatures.clear()  # the landing page is already built
+        with mock.patch.object(self.win.pages, "_build_grid", wraps=self.win.pages._build_grid) as build:
+            self.pages.ensure_all_loaded()
+        self.assertTrue(build.call_args_list)
+        self.assertTrue(all(call.kwargs.get("dormant") for call in build.call_args_list))
+
     def test_a_forced_rescan_rebuilds_the_playlist_and_fetches_the_artwork(self):
         # A playlist built for the first time is exactly when the library has
         # ROMs with no covers.
