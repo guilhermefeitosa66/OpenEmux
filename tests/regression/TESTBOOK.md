@@ -6382,7 +6382,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   adb shell ls /sdcard/Download | grep -c 'OpenEmux backup'    # 0 (or the count from before)
   ```
 
-### RT-967 — The backup carries the player's skins and they are in use after a restore
+### RT-1138 — The backup carries the player's skins and they are in use after a restore
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** A Delta or Manic skin imported for one console and an edited copy of a bundled
@@ -6405,7 +6405,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   adb shell ls -R $EXT/skins                                        # after step 2: both back
   ```
 
-### RT-968 — A backup without skins stays readable by older versions and keeps the phone's skins
+### RT-1139 — A backup without skins stays readable by older versions and keeps the phone's skins
 - **Area:** Android — Backup and restore
 - **Mode:** MANUAL
 - **Preconditions:** A phone with no skin of the player's (none imported or edited); a second
