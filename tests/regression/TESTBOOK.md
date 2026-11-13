@@ -16854,7 +16854,9 @@ has no Android device, so these are `MANUAL`.
   own CPU time for the switch and for the zoom: what the window is blocked for; the
   `*_main_settle_s` beside them also count the trickle of covers landing on the main loop
   afterwards), and a `cards_built` for the whole session (start, "All", search, zoom in, zoom
-  out, a scroll, ten consoles, "All" again) below `1500` — about three screens per page shown.
+  out, a scroll, ten consoles, "All" again) below `2000` — GTK still keeps up to thirty rows of
+  each awake group, so a page shown is a few hundred cards, not the 1843 one "All" used to build
+  (6304 for this session before issue 899).
   Unit-level:
   `tests/test_grouped_scroll.py` (`test_only_the_groups_near_the_viewport_hold_cards`,
   `test_the_page_builds_a_few_screens_of_cards_not_the_library`,

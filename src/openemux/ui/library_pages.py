@@ -12,13 +12,15 @@ page nobody could reach -- exactly the class of bug that having one owner
 removes rather than fixes (issue #237).
 """
 
+import ctypes
 import logging
+import sys
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from openemux.core.library_groups import group_roms_by_console
 from openemux.core.systems import get_system_display_name
@@ -53,6 +55,33 @@ def _teardown(grid):
     release = getattr(grid, "teardown", None)
     if callable(release):
         release()
+        GLib.idle_add(_return_freed_heap)
+
+
+_libc = None
+
+
+def _return_freed_heap():
+    """Hand the heap a torn-down page freed back to the OS (issue 900).
+
+    Thousands of small objects -- cards, their widgets, the entries -- are
+    freed at once when a page is rebuilt, and glibc keeps the arenas they
+    sat in: RSS stayed where the biggest page had put it, however little was
+    live. ``malloc_trim`` is the one call that returns those arenas, and it
+    costs a few milliseconds on an idle. Linux glibc only; elsewhere this is
+    a no-op.
+    """
+    global _libc
+    if not sys.platform.startswith("linux"):
+        return GLib.SOURCE_REMOVE
+    try:
+        if _libc is None:
+            _libc = ctypes.CDLL("libc.so.6")
+        _libc.malloc_trim(0)
+    except (OSError, AttributeError) as exc:  # pragma: no cover - a libc without it
+        logger.debug("malloc_trim unavailable: %s", exc)
+        _libc = False
+    return GLib.SOURCE_REMOVE
 
 
 class LibraryPages:

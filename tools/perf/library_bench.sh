@@ -61,14 +61,15 @@ for _ in $(seq 1 1200); do
 	[ -n "$wid" ] && break
 	sleep 0.05
 done
-t_win=$(echo "$(date +%s.%N) - $start" | bc)
+t_win=$(awk -v now="$(date +%s.%N)" -v t0="$start" 'BEGIN { printf "%.3f", now - t0 }')
 
 cpu() { awk '{printf "%.2f", ($14+$15)/100}' /proc/$pid/stat; }
 mcpu() { awk '{printf "%.2f", ($14+$15)/100}' "/proc/$pid/task/$pid/stat"; }
 rss() { awk '/VmRSS/{print $2}' /proc/$pid/status; }
 snap() {
-	echo "{\"label\":\"$label\",\"at\":\"$1\",\"rss_kb\":$(rss),\"cpu_s\":$(cpu),\"main_cpu_s\":$(mcpu),\"t\":$(echo "$(date +%s.%N) - $start" | bc)}"
+	echo "{\"label\":\"$label\",\"at\":\"$1\",\"rss_kb\":$(rss),\"cpu_s\":$(cpu),\"main_cpu_s\":$(mcpu),\"t\":$(since "$start" 0)}"
 }
+delta() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.2f", a - b }'; }
 # Quiet for 1.0 s of the whole process; printed relative to $1.
 settle() {
 	local t0=$1 last quiet=0 now
@@ -80,7 +81,11 @@ settle() {
 		last=$now
 		[ $quiet -ge 10 ] && break
 	done
-	echo "$(echo "$(date +%s.%N) - $t0 - 1.0" | bc)"
+	since "$t0" 1.0
+}
+# Seconds since $1 minus the quiet window $2, never negative, as valid JSON.
+since() {
+	awk -v now="$(date +%s.%N)" -v t0="$1" -v quiet="$2" 'BEGIN { v = now - t0 - quiet; if (v < 0) v = 0; printf "%.3f", v }'
 }
 # Quiet for 0.5 s of the main thread alone, polled every 50 ms.
 msettle() {
@@ -93,7 +98,7 @@ msettle() {
 		last=$now
 		[ $quiet -ge 10 ] && break
 	done
-	echo "$(echo "$(date +%s.%N) - $t0 - 0.5" | bc)"
+	since "$t0" 0.5
 }
 step() { # step <name> <xdotool args...>: time the main thread and the process after an action
 	local name=$1 m0 t0 ms s
@@ -102,7 +107,7 @@ step() { # step <name> <xdotool args...>: time the main thread and the process a
 	t0=$(date +%s.%N)
 	xdotool "$@"
 	ms=$(msettle "$t0")
-	echo "{\"label\":\"$label\",\"${name}_main_settle_s\":$ms,\"${name}_main_cpu_s\":$(echo "$(mcpu) - $m0" | bc)}"
+	echo "{\"label\":\"$label\",\"${name}_main_settle_s\":$ms,\"${name}_main_cpu_s\":$(delta "$(mcpu)" "$m0")}"
 	s=$(settle "$t0")
 	echo "{\"label\":\"$label\",\"${name}_settle_s\":$s}"
 	snap "$name"
@@ -125,7 +130,7 @@ sleep 0.5
 m0=$(mcpu); t0=$(date +%s.%N)
 for ch in a l p h a; do xdotool key $ch; sleep 0.4; done
 ms=$(msettle "$t0")
-echo "{\"label\":\"$label\",\"search_main_settle_s\":$ms,\"search_main_cpu_s\":$(echo "$(mcpu) - $m0" | bc)}"
+echo "{\"label\":\"$label\",\"search_main_settle_s\":$ms,\"search_main_cpu_s\":$(delta "$(mcpu)" "$m0")}"
 snap "search"
 import -display "$DISPLAY" -window root "$out/$label-search.png"
 xdotool key ctrl+a
@@ -133,13 +138,18 @@ xdotool key BackSpace
 sleep 1.5
 xdotool key Escape
 sleep 0.5
-xdotool mousemove 650 300 click 1
+# A click on the header bar gives the window the focus without launching a
+# game (a card click is a launch); the zoom and the page keys are window-wide.
+xdotool mousemove 1000 125 click 1
 sleep 0.5
 step zoom_in key ctrl+plus
 step zoom_out key ctrl+minus
-xdotool mousemove 650 300 click 1
+# Ctrl+click selects the first card instead of launching it: the grid then
+# has the focus for Page Down.
+xdotool mousemove 650 300 keydown ctrl click 1 keyup ctrl
 sleep 0.3
 for _ in $(seq 1 15); do xdotool key Page_Down; sleep 0.2; done
+xdotool key Escape
 sleep 2
 snap "scrolled"
 import -display "$DISPLAY" -window root "$out/$label-scrolled.png"
