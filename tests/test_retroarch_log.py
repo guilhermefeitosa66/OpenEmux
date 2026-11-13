@@ -119,7 +119,6 @@ class ReadFailureReasonTests(unittest.TestCase):
         self.assertIsNone(read_failure_reason(None))
 
 
-
 class TheVolumeAGameEndedAtTests(unittest.TestCase):
     """The last volume change in a finished log is the next game's (issue 939)."""
 

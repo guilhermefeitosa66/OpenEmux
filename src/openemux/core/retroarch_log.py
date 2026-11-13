@@ -128,10 +128,11 @@ def read_is_fuse_failure(log_path, limit=TAIL_LIMIT_BYTES):
 # retroarch.cfg is never written -- and nothing RetroArch changes at runtime
 # survives the game either. The volume is the one change a player notices:
 # turned down during a game, it was back at full on the next. Every volume
-# change goes through RetroArch's command_event_set_volume, whichever way it
-# was asked for (the bar's buttons, the hotkeys, VOLUME_UP/VOLUME_DOWN on the
-# command channel), and that logs the new value. The last such line is where
-# the game ended.
+# change made from the bar's buttons, the hotkeys or VOLUME_UP/VOLUME_DOWN on
+# the command channel goes through RetroArch's command_event_set_volume, which
+# logs the new value; the last such line is where the game ended. (The slider
+# in RetroArch's own menu sets the volume without logging it, so that one is
+# not carried over.)
 
 #: RetroArch's own limits for audio_volume (command_event_set_volume).
 VOLUME_MIN_DB = -80.0
@@ -148,6 +149,9 @@ def clamp_volume_db(value):
 
 
 def _volume_from_line(line):
+    # The cheap test first: a long session's log is mostly other lines.
+    if "dB." not in line:
+        return None
     match = VOLUME_LINE_RE.search(line)
     if not match:
         return None

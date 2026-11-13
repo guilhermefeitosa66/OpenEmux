@@ -677,6 +677,7 @@ class RetroArchLauncherTests(unittest.TestCase):
         for lines in (windowed, full):
             self.assertIn('video_windowed_fullscreen = "true"', lines)
             self.assertIn('config_save_on_exit = "false"', lines)
+
     def test_a_game_starts_unmuted_at_the_remembered_volume(self):
         # Issue 939: the volume the last game ended at, and never muted;
         # with nothing remembered, the user's own retroarch.cfg volume stays.

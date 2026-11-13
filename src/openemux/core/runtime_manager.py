@@ -93,6 +93,10 @@ class RuntimeManager:
             # so the launcher's own free-text failures still pass through
             # unchanged (issue #232).
             return False, "toast.launch.already_running"
+        # A game that ended without the one-second poll noticing yet -- a
+        # relaunch waits only for the process to go -- still has a log the
+        # next launch should learn from (issue 939).
+        self._remember_finished(self.active_process)
 
         mode = self.config_manager.get_runtime_mode_for_console(system_id)
 
@@ -176,6 +180,7 @@ class RuntimeManager:
             return False, "No active game process."
 
         if proc.poll() is not None:
+            self._remember_finished(proc)
             self._clear_active()
             return False, "No active game process."
 
@@ -183,7 +188,10 @@ class RuntimeManager:
         # a game that honours it is gone before the first grace period is up.
         self.send_command("QUIT")
         if block:
-            self._escalate_stop(proc)
+            # The app's own shutdown: no poll comes after this one, so the
+            # finished game's log is read here or never (issue 939).
+            if self._escalate_stop(proc):
+                self._remember_finished(proc)
         else:
             threading.Thread(
                 target=self._escalate_stop,
@@ -397,12 +405,7 @@ class RuntimeManager:
         log_path = getattr(proc, "_openemux_log_path", None)
         ran_for = self._clock() - (self._launched_at or self._clock())
         self._clear_active()
-        # Whatever video driver this core made RetroArch switch to is where
-        # its next launch starts (issue #471).
-        hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir()).remember_from_log(
-            getattr(proc, "_openemux_core_path", None), log_path
-        )
-        self._remember_volume(log_path)
+        self._remember_finished(proc)
 
         result = {
             "exit_code": exit_code,
@@ -427,6 +430,23 @@ class RuntimeManager:
                 log_path,
             )
         return result
+
+    def _remember_finished(self, proc):
+        """Carry what a finished launch's log says to the next launch, once.
+
+        The hw driver a core switched to (issue #471) and the volume the game
+        ended at (issue 939). Called from every path that sees the game gone
+        -- the poll, a launch or a stop that finds it already over, the app's
+        own blocking stop -- since only the first of them may ever run.
+        """
+        if proc is None or getattr(proc, "_openemux_finished_remembered", False):
+            return
+        proc._openemux_finished_remembered = True
+        log_path = getattr(proc, "_openemux_log_path", None)
+        hw_driver.HwDriverMemory(self.config_manager.get_runtime_dir()).remember_from_log(
+            getattr(proc, "_openemux_core_path", None), log_path
+        )
+        self._remember_volume(log_path)
 
     def _remember_volume(self, log_path):
         """Keep the volume the game ended at for the next launch (issue 939).
