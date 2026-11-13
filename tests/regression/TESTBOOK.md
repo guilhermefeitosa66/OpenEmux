@@ -16805,3 +16805,632 @@ has no Android device, so these are `MANUAL`.
   text of the section, the steps and the dates are in that language. The release skill rewrites
   the section for every release.
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheNewsTests`).
+
+## Android — Pause with the controller
+
+The controller combination that opens the pause sheet while a game plays (issue 924;
+[openemux-android](https://github.com/guilhermefeitosa66/openemux-android), `pkg/android/openemux`,
+`ui/PauseCombo.kt`, `launch/GameLauncher.kt`). "Settings" › "Controllers" › "Pause with the controller"
+offers "Hold Start" (the default), "Start + Select", "L3 + R3" and "Off"; the launcher writes the choice as
+RetroArch's `input_menu_toggle_gamepad_combo`, and the engine's menu toggle opens the app's pause sheet as
+the skin's menu key does. `MANUAL`: a phone with a real controller (USB or Bluetooth), or the headless
+emulator with `adb shell input gamepad keycombination KEYCODE_BUTTON_START KEYCODE_BUTTON_SELECT` for the
+two-button combinations (a held Start cannot be injected with `adb shell input`). `$PKG` is `com.openemux.mobile`.
+
+### RT-1100 — Settings offers the pause combination, Hold Start by default
+- **Area:** Android — Pause with the controller
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install, or one that never opened this setting.
+- **Steps:**
+  1. Open "Settings" › "Controllers".
+  2. Scroll to "Pause with the controller".
+  3. Pick "Start + Select", leave the screen and come back.
+- **Expected:** Step 2: a lead paragraph and four radio cards, "Hold Start" selected, each with a
+  one-line explanation ("Hold Start for two seconds. A short press still reaches the game."). Step 3:
+  "Start + Select" is still selected after leaving and returning (kept in the app's preferences). With a
+  controller, the D-pad reaches every card and A picks it.
+- **Check:** human only; `adb shell run-as $PKG cat shared_prefs/openemux.xml | grep pause_combo` shows
+  `start_select` after step 3.
+- **Restore:** pick "Hold Start" again.
+
+### RT-1101 — Holding Start for two seconds opens the pause sheet, and Continue returns to the game
+- **Area:** Android — Pause with the controller
+- **Mode:** MANUAL
+- **Preconditions:** "Hold Start" (the default); a controller connected; any game.
+- **Steps:**
+  1. Launch the game and play a few seconds without touching the screen.
+  2. Press Start briefly (in a game that uses Start, it pauses or opens the game's own menu).
+  3. Hold Start for two seconds.
+  4. Pick "Continue" with A.
+- **Expected:** Step 2: the game gets the press, no sheet. Step 3: the pause sheet opens, the game
+  paused behind it, the screen untouched throughout. Step 4: the game resumes where it was.
+- **Check:** human only. The generated config has the combination:
+  `adb shell run-as $PKG cat files/launch/current/retroarch.cfg | grep menu_toggle_gamepad_combo` prints `"7"`.
+
+### RT-1102 — Start + Select and L3 + R3 pause when chosen, and Off leaves only the menu key and Back
+- **Area:** Android — Pause with the controller
+- **Mode:** MANUAL
+- **Preconditions:** A controller connected; any game.
+- **Steps:**
+  1. Pick "Start + Select"; launch the game; press Start and Select together.
+  2. Quit; pick "L3 + R3"; launch; press both sticks in together.
+  3. Quit; pick "Off"; launch; try every combination above, then the skin's menu key (or the system
+     Back button).
+- **Expected:** Steps 1 and 2: the pause sheet opens on the chosen combination and on no other.
+  Step 3: no combination opens it; the menu key and Back still do.
+- **Check:** `retroarch.cfg` as in RT-1101 prints `"4"`, `"2"` and `"0"` for the three choices.
+  On the emulator, step 1 can be driven with
+  `adb shell input gamepad keycombination KEYCODE_BUTTON_START KEYCODE_BUTTON_SELECT`.
+- **Restore:** pick "Hold Start" again.
+
+### RT-1103 — The first pad seen in a game shows the hint once
+- **Area:** Android — Pause with the controller
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install (or `adb shell run-as $PKG rm shared_prefs/game_hints.xml`); a
+  controller connected before the launch.
+- **Steps:**
+  1. Launch a game.
+  2. Quit, and launch it again.
+  3. Launch with no controller, then connect one mid-game.
+- **Expected:** Step 1: about two seconds after the game appears, a toast "Hold Start for two seconds
+  to pause" (naming the chosen combination; none when it is "Off"). Step 2: no toast. Step 3 (after
+  the reset in Preconditions): the toast appears when the controller connects, once.
+- **Check:** human only; `adb shell run-as $PKG cat shared_prefs/game_hints.xml` holds `pause_combo_hint`
+  after the first toast. A debug APK stands a controller in with
+  `adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`.
+
+## Android — Continue playing on the phone
+
+The phone shelf's "Continue playing" row (issue 925; `ui/LibraryScreens.kt` `PhoneContinueRow`,
+`ui/ShelfLayout.kt`): the last three games played, right under the header and before the console
+cards, in a row that scrolls sideways. One game takes the whole width; two or more are 280 dp wide
+(narrower on a small phone) so the next card peeks in at the edge. A tap resumes the game, a long
+press opens its page. Nothing shows until a game was launched. `MANUAL`, on a phone or the headless
+emulator.
+
+### RT-1104 — A fresh library shows no Continue row
+- **Area:** Android — Continue playing on the phone
+- **Mode:** MANUAL
+- **Preconditions:** A library whose games were never launched (a fresh install with imported games).
+- **Steps:**
+  1. Open the "Library" tab.
+- **Expected:** The header (logo, "Shelf", the counts, the update banner and the sync pill when they
+  apply), then "All games" and the console cards: no "Continue playing" heading.
+- **Check:** `adb shell uiautomator dump /sdcard/ui.xml && adb shell grep -c "Continue playing" /sdcard/ui.xml` prints `0`.
+
+### RT-1105 — After a launch the phone shelf shows Continue playing under the header
+- **Area:** Android — Continue playing on the phone
+- **Mode:** MANUAL
+- **Preconditions:** RT-1104's library, phone in portrait.
+- **Steps:**
+  1. Launch a game, quit it from the pause sheet.
+  2. Launch two more games of other consoles, quitting each.
+  3. Launch a fourth.
+- **Expected:** Step 1: back on the shelf, "Continue playing" with "See recent" on the right, and one
+  card as wide as the console cards under it: the cartridge (or box art), the title, "SNES · just now"
+  and a purple play circle. Step 2: three cards, the newest first, the second one peeking in at the right
+  edge; the row scrolls sideways. Step 3: still three cards, the oldest gone.
+- **Check:** human only (`adb exec-out screencap -p > shot.png`); the dump of RT-1104 prints `1`.
+
+### RT-1106 — A tap resumes, a long press opens the game's page, and the pad lands on the first card
+- **Area:** Android — Continue playing on the phone
+- **Mode:** MANUAL
+- **Preconditions:** RT-1105's shelf; a save state on the first game's current slot.
+- **Steps:**
+  1. Tap the first card.
+  2. Quit; long-press the second card.
+  3. Go back; connect a controller (or "Controller" interface mode) and press a D-pad key on the shelf.
+  4. Press Right, then A.
+- **Expected:** Step 1: the game opens and continues from the state, as the play button on "Recent"
+  does. Step 2: the game's page opens (no launch). Step 3: the focus ring is on the first continue card,
+  before "All games". Step 4: Right moves along the row (the row scrolls to show the card), A resumes
+  that game.
+- **Check:** human only; TalkBack announces the row as a list ("in list, 3 items").
+
+### RT-1107 — Landscape keeps the row above the two-column shelf
+- **Area:** Android — Continue playing on the phone
+- **Mode:** MANUAL
+- **Preconditions:** RT-1105's shelf.
+- **Steps:**
+  1. Turn the phone to landscape (headless emulator: `adb shell wm density 260`, then `wm density reset`).
+- **Expected:** The row spans the shelf's width above the two columns of console cards, its cards
+  280 dp wide, scrolling sideways; the tablet layout (three cards side by side, no scrolling) is not
+  used on a phone.
+- **Check:** human only.
+
+## Android — Android TV
+
+The app on an Android TV home screen (issue 926; `AndroidManifest.xml`, `res/drawable-xhdpi/tv_banner.png`):
+the library activity also answers `LEANBACK_LAUNCHER`, the application carries a 320x180 banner and
+declares `android.software.leanback` as not required, so one APK serves phones, tablets and TV boxes.
+`MANUAL`, on a TV box or an Android TV AVD (`avdmanager create avd -n openemux-tv -k
+"system-images;android-36;android-tv;x86_64" -d tv_1080p`), driven with a controller or
+`adb shell input keyevent KEYCODE_DPAD_*` / `KEYCODE_BUTTON_A`.
+
+### RT-1108 — The app appears on the Android TV home screen with its banner
+- **Area:** Android — Android TV
+- **Mode:** MANUAL
+- **Preconditions:** The TV AVD or box, the APK installed with `adb install`.
+- **Steps:**
+  1. Press Home and look at the apps row.
+  2. Select the OpenEmux tile and press A (or the centre key).
+- **Expected:** Step 1: an "OpenEmux" tile with the banner (the joystick mascot on a dark purple
+  background, "OpenEmux" and "powered by RetroArch" beside it), not a stretched phone icon. Step 2:
+  the app opens on the setup screen (first run) or the shelf.
+- **Check:** `adb shell cmd package query-activities -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER`
+  lists `com.openemux.mobile/.MainActivity`; `aapt2 dump badging OpenEmuxMobile-release.apk | grep -c leanback` prints `1`.
+
+### RT-1109 — First run, import, launch, pause and quit with a controller only on the TV
+- **Area:** Android — Android TV
+- **Mode:** MANUAL
+- **Preconditions:** RT-1108, a fresh install; a ROM reachable on the device (USB stick or a folder a
+  file manager can share), a controller.
+- **Steps:**
+  1. Open the app; press A on "Start"; wait for the setup.
+  2. Go to "Import" with the D-pad and import the ROM from the folder picker.
+  3. Open the game from its console; hold Start for two seconds; pick "Quit".
+- **Expected:** Every step completes with the D-pad and the face buttons; the focus ring is visible
+  from the sofa; the setup, the import and the game never ask for a touch. Phones and tablets behave as
+  before.
+- **Check:** human only.
+
+## Android — Touch targets
+
+Every tappable control in the library header, the list controls and the pause sheet measures at least
+48 dp, spacing included (issue 928; `ui/Gamepad.kt` `MinTouchTarget`, `ui/LibraryScreens.kt`,
+`ui/Components.kt`, `game/PauseSheet.kt`). The drawn buttons keep their look: the hit area around the Size
+button and the filter chips is the invisible 48 dp box, the round icon buttons grew from 44 to 48 dp, the
+view toggle's buttons are 44 dp with 4 dp between them in a pill 48 dp tall. `MANUAL`, on a phone or the
+headless emulator; `nodes` below is the pipeline's `qa-lib/android.sh` helper that prints each clickable
+node's size in dp from a `uiautomator dump`.
+
+### RT-1110 — The library header and the list controls measure 48 dp
+- **Area:** Android — Touch targets
+- **Mode:** MANUAL
+- **Preconditions:** A library with games on at least two consoles.
+- **Steps:**
+  1. Open "All games" (cartridge view).
+  2. Dump the clickable nodes (`nodes`, or Accessibility Scanner).
+- **Expected:** The back link, the search and filter round buttons, the console chips ("All",
+  "Favorites", "NES"...), the "Cartridges" view toggle's three buttons and the Size button each report a
+  height of at least 48 dp and a width of at least 48 dp (chips: at least 48 dp tall); the chips still
+  draw as 36 dp pills, the Size button as a 38 dp square, with the extra room invisible. Accessibility
+  Scanner reports no touch-target finding on the page.
+- **Check:** `nodes | awk '{for(i=1;i<=NF;i++) if($i ~ /^[wh]=/){v=substr($i,3); sub("dp","",v); if (v+0<48) print}}'`
+  prints nothing for the header rows.
+
+### RT-1111 — The pause sheet's icon buttons measure 48 dp
+- **Area:** Android — Touch targets
+- **Mode:** MANUAL
+- **Preconditions:** Any game running.
+- **Steps:**
+  1. Open the pause sheet; dump the clickable nodes.
+  2. Open "Restart" so its dialog shows; dump again.
+- **Expected:** The sheet's round icon buttons (close, the slot stepper's arrows, the state tiles' dots
+  menu) report 48 x 48 dp; the dialog's "Cancel" and "Restart" are at least 48 dp tall. Nothing else moved.
+- **Check:** as RT-1110, on the sheet's dump.
+
+### RT-1112 — "Remove animations" stops the library's motion
+- **Area:** Android — Touch targets
+- **Mode:** MANUAL
+- **Preconditions:** A library with several consoles; "Remove animations" on (Settings › Accessibility),
+  or `adb shell settings put global animator_duration_scale 0`.
+- **Steps:**
+  1. On the shelf, long-press a console card and drag it one slot down.
+  2. On a console page, pinch (or the Size menu) to another zoom step.
+  3. Open and close the pause sheet in a game; focus a card with a controller.
+- **Expected:** Every change lands in one frame: the cards swap places without sliding, the tiles
+  take their new size without gliding, the sheet appears and disappears without the slide, the focus
+  ring appears without the tween. Compose runs its animations through the Recomposer's
+  `MotionDurationScale`, which follows the system scale (`WindowRecomposer_androidKt.getAnimationScaleFlowFor`),
+  so no app code is involved; the title marquee has its own guard (issue 869).
+- **Check:** human only.
+- **Restore:** `adb shell settings put global animator_duration_scale 1`.
+
+## Android — Share nearby hash cache
+
+The SHA-256 of every file Share nearby offers is remembered with the file's size and modification
+time (issue 921; `share/HashCache.kt`, `share/ManifestBuilder.kt`, `files/share/hashes.json`), so a
+second offer of the same games reads nothing, and a file that changed is hashed again. Hashing still
+reports its progress to the "Preparing" line. `MANUAL`, on a phone or the headless emulator with
+`adb logcat`; one device is enough: the manifest is built when the Share screen opens with a selection.
+
+### RT-1113 — Offering the same games twice hashes nothing the second time
+- **Area:** Android — Share nearby hash cache
+- **Mode:** MANUAL
+- **Preconditions:** A console with a few games; `adb logcat -c`.
+- **Steps:**
+  1. On the shelf, long-press the console's card and pick "Share console"; wait for "Preparing" to end.
+  2. Go back to the shelf; do step 1 again.
+- **Expected:** Step 1: `adb logcat -d | grep "share manifest"` shows `N files hashed, 0 remembered`
+  (N the files of those games). Step 2: `0 files hashed, N remembered`, and "Preparing" is over at once.
+- **Check:** the two logcat lines above; `adb shell run-as $PKG cat files/share/hashes.json` lists each
+  file's path with its `size`, `mtime` and `sha256`.
+
+### RT-1114 — A changed file is hashed again
+- **Area:** Android — Share nearby hash cache
+- **Mode:** MANUAL
+- **Preconditions:** RT-1113 done; `adb logcat -c`.
+- **Steps:**
+  1. Replace one of the games' ROM file with a different one of the same name (or append a byte to it).
+  2. Share the console again.
+- **Expected:** `1 files hashed, N-1 remembered`; the manifest carries the new file's hash, so the
+  receiver verifies the file that is really sent.
+- **Check:** the logcat line; `hashes.json` shows the file's new `size` or `mtime`.
+
+## Android — Start-up and metadata writes
+
+Issue 920 (`OpenEmuxApp.kt`, `data/Library.kt`, `MainActivity.kt`, `ui/AppNav.kt`): metadata changes
+are written to meta.json by a writer thread 250 ms after the last one (a rename and a bulk delete at
+once; a backup and the activity's stop flush what is pending), a resume scan reads only the cue sheets
+that changed, debug builds log every disk read or write on the main thread through StrictMode, the
+shelf reports "Fully drawn" once the launch gate is open and the library known, and the gate waits at
+most 400 ms for the bars. `MANUAL` with a debug APK on a phone or the headless emulator; `$PKG` is
+`com.openemux.mobile`.
+
+### RT-1115 — Cold start reports Fully drawn, and no disk read on the main thread but the first frame's
+- **Area:** Android — Start-up and metadata writes
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK, a library with games; `adb logcat -c`.
+- **Steps:**
+  1. `adb shell am force-stop $PKG; adb shell am start -W -n $PKG/.MainActivity`.
+  2. `adb logcat -d | grep -E "Fully drawn|launch gate open"`.
+  3. `adb logcat -d | grep -A25 "StrictMode policy violation" | grep "at com.openemux"`.
+- **Expected:** Step 2: one `Fully drawn com.openemux.mobile/.MainActivity: +N ms` line, and one
+  `launch gate open after N ms (bars hidden)` with N well under 400. Step 3: no frame of the app's own
+  (the index and the metadata are read inside `StrictMode.allowThreadDiskWrites`, on purpose, before
+  the first frame).
+- **Check:** the two logcat commands above; on the pipeline emulator the gate opened after 250 to 310 ms.
+
+### RT-1116 — Ten favourite toggles write meta.json once, and a stop flushes a pending change
+- **Area:** Android — Start-up and metadata writes
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK, a game's page open.
+- **Steps:**
+  1. `adb shell run-as $PKG stat -c %Y files/meta.json` (or note that it does not exist).
+  2. Tap the favourite star ten times within two seconds.
+  3. After a second, run step 1 again; then `adb shell run-as $PKG cat files/meta.json`.
+  4. Tap the star once more and at once press Home; `cat` the file again.
+- **Expected:** Step 3: the time changed once (one write for the burst), and the file holds the star's
+  final state. Step 4: the file holds the last tap: the activity's stop flushed it. No StrictMode line
+  names `Library.writeMeta` on the main thread.
+- **Check:** the commands above; unit-level `LibraryMetaWriterTest`.
+
+### RT-1117 — Returning from a game reads no unchanged cue sheet
+- **Area:** Android — Start-up and metadata writes
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK; a PlayStation game as `.cue` + `.bin` in the library.
+- **Steps:**
+  1. Open the app (the first scan reads the cue sheet), launch any game, quit it.
+  2. `adb logcat -d | grep -A25 "StrictMode policy violation" | grep -c "scanRoms"`.
+  3. Append a comment line to the `.cue` (`adb shell run-as ...` or a file manager), resume the app.
+- **Expected:** Step 2: `0` (the scan runs on IO anyway, and the sheet's tracks come from memory: same
+  length and modification time). Step 3: the changed sheet is read again, its tracks still hidden
+  from the list.
+- **Check:** human only; unit-level the scan tests in `LibraryStartupTest`.
+
+## Android — Library performance
+
+Issues 919 and 918 (`ui/LibraryScreens.kt`, `ui/Components.kt`, `ui/Theme.kt`, `data/Covers.kt`): the
+mixed All, Favorites and search pages compose one lazy row per group row instead of every tile of
+every console; the covers come from a map computed off the main thread; the cartridge frame lookup,
+the icons' vectors and the text styles are cached; the derived lists are remembered; the tile is a
+skippable `GameTile`. `MANUAL` with a debug APK on the headless emulator, a synthetic library of 600
+games across NES, SNES, Mega Drive, GBA, Game Boy and PlayStation (zero-byte files are enough).
+
+### RT-1118 — All games composes only the rows on screen
+- **Area:** Android — Library performance
+- **Mode:** MANUAL
+- **Preconditions:** The library above; a debug APK; Layout Inspector (Android Studio) attached, or
+  `adb shell dumpsys gfxinfo $PKG` and `dumpsys meminfo`.
+- **Steps:**
+  1. Open "All games" in the cartridge view and wait for it to settle.
+  2. Count the `GameTile` nodes in Layout Inspector (or swipe eight times and read `gfxinfo`).
+- **Expected:** Only the rows on screen plus the prefetch window are composed (tens of tiles, not
+  600). Scrolling: the 95th percentile frame is no worse than the console page's. On the pipeline
+  emulator (software rendering) the page went from p95 29 ms / 164 MB PSS before the change to the
+  numbers recorded in the epic's PR.
+- **Check:** human only; `adb shell dumpsys gfxinfo $PKG | grep percentile`.
+
+### RT-1119 — No file stat, asset read or resource lookup by name in a tile
+- **Area:** Android — Library performance
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK (StrictMode on); `adb logcat -c`.
+- **Steps:**
+  1. Open "All games", scroll to the end and back; open a game's page; launch it and open the pause
+     sheet.
+  2. `adb logcat -d | grep -A25 "StrictMode policy violation" | grep "at com.openemux"`.
+- **Expected:** No frame in `GameTile`, `coverFor`, `Cartridge`, `CartArt.frameRes`, the detail page
+  (its states and play time are listed on IO) or the pause sheet (its states and the cartridge
+  picture are read on IO).
+- **Check:** the logcat command above.
+
+### RT-1120 — A change on one tile leaves the others alone
+- **Area:** Android — Library performance
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK built with `-PcomposeReports=true`; Layout Inspector with
+  recomposition counts on.
+- **Steps:**
+  1. `grep -A3 "fun com.openemux.mobile.ui.GameTile" pkg/android/openemux/build/compose_compiler/OpenEmuxMobile-composables.txt`.
+  2. On a console page, long-press a tile to select it, then tap another to add it.
+- **Expected:** Step 1: `restartable skippable`. Step 2: the recomposition counts of the tiles that
+  did not change stay at 0 while the two chosen tiles recompose.
+- **Check:** the grep above (`OpenEmuxMobile-composables.csv` lists GameTile with skippable = 1).
+
+## Android — Launch skin cache
+
+Issue 917 (`launch/SkinCache.kt`, `launch/CartCache.kt`, `launch/GameLauncher.kt`): the skins and
+cartridge pictures drawn for a launch are kept under `launch/skins` and `launch/carts` by a key naming
+every input, so a launch like one before draws no page and writes no PNG; the fold is read from the
+window's last report and the engine is polled every 50 ms. One log line per launch
+(`OpenEmuxLaunch`) says what was kept; the game logs `first overlay N ms after start`. `MANUAL`.
+
+### RT-1121 — A second launch of the same console draws no skin page
+- **Area:** Android — Launch skin cache
+- **Mode:** MANUAL
+- **Preconditions:** A debug APK; `adb logcat -c`.
+- **Steps:**
+  1. Launch a NES game; quit; launch it again.
+  2. `adb logcat -d | grep -E "OpenEmuxLaunch|first overlay"`.
+  3. `adb shell run-as $PKG ls -la files/launch/skins files/launch/carts`.
+- **Expected:** Step 2: the first launch says `skin drawn, cartridge composed, N ms so far`, the second
+  `skin kept, cartridge kept, M ms so far` with M well under N; `first overlay` comes sooner too.
+  Step 3: one folder under `skins` (a 24-character id) with `drawn.txt` and the PNGs, one `.png`
+  under `carts`; their times unchanged by the second launch.
+- **Check:** the commands above; unit-level `SkinCacheTest`, `CartCacheTest`.
+
+### RT-1122 — A changed input draws the skin again
+- **Area:** Android — Launch skin cache
+- **Mode:** MANUAL
+- **Preconditions:** RT-1121 done.
+- **Steps:**
+  1. Pick another skin colour for the console (or a player's skin), launch again.
+  2. Connect a controller (or the debug broadcast) before a launch; launch again.
+  3. Enable RetroAchievements hardcore; launch again.
+- **Expected:** Each launch logs `skin drawn`; the skin matches the change (colour, the gamepad layout,
+  the greyed speed keys). Six folders at most stay under `launch/skins`, the oldest dropped.
+- **Check:** `adb logcat -d | grep OpenEmuxLaunch`; `ls files/launch/skins | wc -l` never above 6.
+
+## Android — Launch pre-flight and failures
+
+Issue 923 (`ui/AppNav.kt`, `launch/LaunchOutcome.kt`, `launch/GameLauncher.kt`, `game/GameActivity.kt`): a
+console whose required BIOS is missing asks before the engine starts; a launch that throws shows its
+message; a session that ends on its own (the engine never drew, or closed within twenty seconds without the
+pause sheet's Quit) is explained with the engine's log; the launch overlay names its stage and offers
+Cancel a second in; the game shows the cartridge over the black until the engine's first overlay.
+`MANUAL`; `$PKG` is `com.openemux.mobile`; the engine's log of the last session is
+`files/launch/current/retroarch.log`, its marks `started` and `quit` next to it.
+
+### RT-1123 — A disc game with no BIOS asks before the engine starts
+- **Area:** Android — Launch pre-flight and failures
+- **Mode:** MANUAL
+- **Preconditions:** A PlayStation game in the library; no `scph*.bin` in the BIOS folder.
+- **Steps:**
+  1. Open the game's page and tap "Play".
+  2. Tap "Import BIOS".
+  3. Go back, tap "Play" again, then "Play anyway".
+- **Expected:** Step 1: no launch; a sheet "PlayStation needs a BIOS file" naming the accepted files
+  (scph5500.bin / scph5501.bin / ...), with "Import BIOS" and "Play anyway". Step 2: the BIOS screen,
+  scrolled to the PlayStation card, the pad's focus on its "Import" button. Step 3: the engine starts
+  as before (and, with the core refusing the disc, RT-1125 follows).
+- **Check:** human only; unit-level `LaunchOutcomeTest` (`theMissingBiosIsTheFirstRequiredOneWithNoneOfItsFiles`).
+
+### RT-1124 — The launch overlay names its stage and can be cancelled a second in
+- **Area:** Android — Launch pre-flight and failures
+- **Mode:** MANUAL
+- **Preconditions:** A console whose skin was never drawn on this install (a first launch, or
+  `adb shell run-as $PKG rm -r files/launch/skins`); on a fresh install, one whose core is not downloaded.
+- **Steps:**
+  1. Tap "Play"; read the overlay.
+  2. On a launch that takes more than a second (a core download, a slow phone), press Back, or tap
+     "Cancel".
+- **Expected:** Step 1: the cartridge, a spinner and "Preparing the controls…", then "Starting
+  Nestopia…" (the core's name); while a core downloads, "Downloading Nestopia…" with a progress bar.
+  Step 2: the overlay goes, the library is as it was, no game opens (the engine was never started:
+  `adb logcat -d | grep OpenEmuxGame` shows no new session).
+- **Check:** human only.
+
+### RT-1125 — A session that dies early is explained, with the engine's log
+- **Area:** Android — Launch pre-flight and failures
+- **Mode:** MANUAL
+- **Preconditions:** A game the core refuses: a zero-byte file named `Broken.nes` in `roms/FC` (a
+  rescan lists it), or a disc game without its BIOS.
+- **Steps:**
+  1. Tap "Play" on it.
+  2. On the sheet, tap "Show details".
+  3. Tap "Try again", then "Close".
+  4. Launch a working game, play ten seconds, quit through the pause sheet.
+- **Expected:** Step 1: the engine starts and exits; back in the library a sheet "The game did not
+  start" says RetroArch closed N seconds after the launch. Step 2: the last lines of RetroArch's
+  log, in a scrolling box. Step 3: the launch repeats; the sheet closes. Step 4: no sheet (a quit
+  through the pause sheet, `files/launch/current/quit` left by the game).
+- **Check:** `adb shell run-as $PKG ls files/launch/current` lists `retroarch.log`, no `started` after
+  step 1, `quit` after step 4. Unit-level `LaunchOutcomeTest`.
+
+### RT-1126 — The game shows the cartridge until the engine draws
+- **Area:** Android — Launch pre-flight and failures
+- **Mode:** MANUAL
+- **Preconditions:** A PSP or GameCube game (a core that takes seconds to load), or any game on a
+  slow phone.
+- **Steps:**
+  1. Tap "Play" and watch the game's window.
+- **Expected:** Instead of black, the cartridge (or box art) in the middle with "Starting PPSSPP" under
+  it, until the first frame with the skin replaces it. Never more than thirty seconds, whatever the engine does.
+- **Check:** human only; `adb logcat -d | grep "first overlay"` shows when the splash went.
+
+## Android — First run without a gate
+
+Issue 922 (`data/Setup.kt`, `ui/SetupScreen.kt`, `ui/AppNav.kt`, `launch/GameLauncher.kt`): the app opens
+on the shelf at once; the core info files come down quietly at first run, each console's core the first
+time one of its games is launched (inside the launch overlay, with progress and Cancel), and "Download all
+emulators" (Settings, or the shelf's pill) fetches the rest, three at a time. `MANUAL`, a fresh install
+(`adb uninstall com.openemux.mobile` first) on a phone or the headless emulator.
+
+### RT-1127 — A fresh install opens on the shelf, with the downloads in a pill
+- **Area:** Android — First run without a gate
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install, online.
+- **Steps:**
+  1. Open the app and time it.
+  2. Read the shelf.
+  3. Tap the pill.
+- **Expected:** Step 1: the shelf (empty state, "Import games") within a few seconds, no "Getting
+  OpenEmux ready" screen. Step 2: under the header a pill "Emulators download when you first play a
+  game". Step 3: a sheet with the explanation (each console's emulator on first play, download all for
+  offline, about 160 MB), the three steps, "N emulators still to download", "Download all emulators" and
+  "Later".
+- **Check:** `adb logcat -d | grep "Fully drawn"` within a few seconds of the start;
+  `adb shell run-as $PKG ls files/info | wc -l` grows past 0 within a minute (the info files).
+
+### RT-1128 — Importing works while the emulators download
+- **Area:** Android — First run without a gate
+- **Mode:** MANUAL
+- **Preconditions:** RT-1127, the sheet open.
+- **Steps:**
+  1. Tap "Download all emulators".
+  2. Go to "Import" and import a folder of ROMs.
+  3. Back on the shelf, read the pill; wait for it to go.
+- **Expected:** Step 1: the pill says "Downloading emulators · N of M" with a thin bar filling, the
+  app usable throughout. Step 2: the import runs and the games appear. Step 3: the count climbs,
+  three downloads at a time (`adb logcat` shows overlapping fetches), then the pill disappears and
+  Settings › "Download all emulators" says "Every emulator is on the device".
+- **Check:** human only; `adb shell run-as $PKG cat files/setup.done` reads `1/<abi>` at the end.
+
+### RT-1129 — The first launch of a console fetches its core inside the overlay
+- **Area:** Android — First run without a gate
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install, a NES game imported, nothing downloaded yet.
+- **Steps:**
+  1. Tap "Play" on the NES game.
+  2. Once it runs, quit; launch again.
+  3. Repeat with a PSP game.
+- **Expected:** Step 1: the overlay says "Downloading Nestopia…" with a progress bar, then "Preparing
+  the controls…", "Starting Nestopia…", and the game opens. Step 2: no download. Step 3: the PSP core
+  and its system files come down first. Back on the shelf, the pill's count went down by one each time.
+- **Check:** `adb shell run-as $PKG ls files/cores` lists `nestopia_libretro.so` after step 1 and
+  `ppsspp_libretro.so` after step 3; `files/system` holds the PPSSPP folder.
+
+### RT-1130 — Offline, the first run still opens and says what will be fetched
+- **Area:** Android — First run without a gate
+- **Mode:** MANUAL
+- **Preconditions:** A fresh install; airplane mode on.
+- **Steps:**
+  1. Open the app; tap the pill.
+  2. Import a game; tap "Play".
+  3. Go online; tap "Play" again.
+- **Expected:** Step 1: the shelf, the pill, the sheet explaining the emulators come down at first play.
+  Step 2: the overlay tries the download and a sheet "The game could not start" says "No internet
+  connection." Step 3: the core downloads and the game opens.
+- **Check:** human only.
+
+### RT-1131 — A cancelled core download leaves nothing half written
+- **Area:** Android — First run without a gate
+- **Mode:** MANUAL
+- **Preconditions:** A console whose core is not downloaded; a slow connection helps.
+- **Steps:**
+  1. Tap "Play"; while "Downloading …" shows with its bar, press Back.
+  2. `adb shell run-as $PKG ls files/cores files/setup`.
+  3. Tap "Play" again.
+- **Expected:** Step 1: back on the game's page, no engine started. Step 2: no `.part` or
+  `download-*.zip` left under `setup`, no truncated `.so` under `cores`. Step 3: the download restarts
+  from the beginning and the game opens.
+- **Check:** the listing above; unit-level `SetupTest`.
+
+## Android — Sort menu and facet chips
+
+Issue 927 (`ui/LibraryFilters.kt`, `ui/LibraryScreens.kt`): the library's sort button opens a menu naming
+the current order (A–Z, Recently played, Recently added, Most played, Unplayed first), kept as a setting;
+under the console chips a row of facet chips (Favorites, Has save state, Missing artwork, Never played)
+with counts, any of them together, with "Clear filters" while one is on; an empty result shows why and
+the way out. `MANUAL`, on a phone or the headless emulator, a library with a few played games, a save
+state and a favourite.
+
+### RT-1132 — The sort menu shows the current order and keeps the choice
+- **Area:** Android — Sort menu and facet chips
+- **Mode:** MANUAL
+- **Preconditions:** A console page with games played at different times.
+- **Steps:**
+  1. Tap the sort button (the lines icon in the header).
+  2. Pick "Recently played"; read the heading over the grid.
+  3. Pick "Most played", then "Unplayed first", then "Recently added".
+  4. Leave the app (Home), open it again, open any console page.
+- **Expected:** Step 1: a menu "SORT BY" with the five orders, A–Z ticked. Step 2: the last game played
+  first, the heading "Last played". Step 3: the grid reorders each time, the heading follows ("Most
+  played", "Unplayed first", "Recently added"); ties stay A to Z. Step 4: the last order is still on.
+- **Check:** `adb shell run-as $PKG cat shared_prefs/openemux.xml | grep library_sort`; unit-level
+  `LibraryFiltersTest`.
+
+### RT-1133 — The facet chips narrow the page, combine and count
+- **Area:** Android — Sort menu and facet chips
+- **Mode:** MANUAL
+- **Preconditions:** "All games", two favourites, one of them with a save state, one game never played.
+- **Steps:**
+  1. Read the chips under the console chips.
+  2. Tap "Favorites"; then "Has save state" too.
+  3. Tap "Missing artwork" as well.
+  4. Tap "Clear filters".
+- **Expected:** Step 1: "Favorites · 2", "Has save state · 1", "Missing artwork · N", "Never played · N",
+  none lit. Step 2: two games, then one (both facets hold); the lit chips, "Clear filters" at the end
+  of the row. Step 3: "No games match these filters." with a "Clear filters" button under it, never an
+  empty grid without a way out. Step 4: everything back.
+- **Check:** human only; unit-level `LibraryFiltersTest` (`facetsCombineAndCount`).
+
+### RT-1134 — The pad reaches the chips and the sort menu
+- **Area:** Android — Sort menu and facet chips
+- **Mode:** MANUAL
+- **Preconditions:** A controller (or the debug broadcast), a console page.
+- **Steps:**
+  1. Walk the header with the D-pad: the sort button, then down to the facet chips.
+  2. Press A on "Never played", then on the sort button; Down and A on "Most played".
+- **Expected:** The focus ring lands on each facet chip (the console chips are stepped with L1/R1, not
+  focused) and on the sort button; A toggles the chip; the menu opens with the focus inside, A picks
+  the order, the focus returns to the button.
+- **Check:** human only.
+
+## Android — Release build
+
+Issue 916 (`build.gradle.kts`, `proguard-rules.pro`, `src/main/baseline-prof.txt`): the release build is
+shrunk and optimised by R8 with resource shrinking, keeps the JNI surface the engine calls by name, ships
+the arm64 engine only (`-PopenemuxAbis=all` adds x86_64 for the emulator) and carries a baseline profile of
+the app's own classes, installed at first run by profileinstaller. `MANUAL`; the APK comes from
+`./gradlew assembleRelease` with the signing key set, as `beta-apk.sh` builds it.
+
+### RT-1135 — The release APK is shrunk, arm64 only and under the size budget
+- **Area:** Android — Release build
+- **Mode:** MANUAL
+- **Preconditions:** `./gradlew --no-daemon assembleRelease` done.
+- **Steps:**
+  1. `ls -la pkg/android/openemux/build/outputs/apk/release/OpenEmuxMobile-release.apk`.
+  2. `unzip -l OpenEmuxMobile-release.apk | grep -E "lib/|classes.*dex|dexopt/baseline.prof"`.
+- **Expected:** Step 1: well under 120 MB (the epic's PR records the number against the 186.5 MB of 1.23.3).
+  Step 2: `lib/arm64-v8a/libretroarch-activity.so` only (no x86_64), a single `classes.dex` of a few MB,
+  and `assets/dexopt/baseline.prof` larger than the libraries' 10 KB default.
+- **Check:** the commands above; `aapt2 dump badging` lists `native-code: 'arm64-v8a'` alone.
+
+### RT-1136 — Everything the engine calls by name still works under R8
+- **Area:** Android — Release build
+- **Mode:** MANUAL
+- **Preconditions:** The release APK installed on a phone (or the `-PopenemuxAbis=all` build on the emulator),
+  a controller, RetroAchievements credentials, two devices for Share nearby.
+- **Steps:**
+  1. Launch a game; open the pause sheet from the skin's menu key and with the controller combination;
+     save and load a state; toggle fast forward; change the skin; turn the device; quit.
+  2. Sign in to RetroAchievements and play a game with achievements.
+  3. Share a console to the other device.
+- **Expected:** Every step works as in the debug build: the pause sheet opens (onExternalMenuRequested),
+  the pad drives it (onExternalMenuInput), the skin follows the overlay (onOverlayChanged), the toggles
+  light (onToggleStates), the achievements unlock, the transfer completes. `adb logcat` shows no
+  `NoSuchMethodError`, `ClassNotFoundException` or JNI "method not found".
+- **Check:** human only; `adb logcat -d | grep -E "NoSuchMethod|ClassNotFound|JNI"` prints nothing new.
+
+### RT-1137 — The baseline profile is installed after the first run
+- **Area:** Android — Release build
+- **Mode:** MANUAL
+- **Preconditions:** The release APK freshly installed.
+- **Steps:**
+  1. Open the app, browse the shelf and a console page, wait a minute, close it.
+  2. `adb shell cmd package dump-profiles com.openemux.mobile`, then
+     `adb shell cat /data/misc/profman/com.openemux.mobile-primary.prof.txt | wc -l` (or `pm art dump`).
+- **Expected:** The profile lists methods of `com.openemux.mobile` (hundreds of lines), proof that the
+  shipped profile was installed and merged with what ran.
+- **Check:** the commands above. Cold start TTFD on the maintainer's phone, before and after, goes in the issue.
