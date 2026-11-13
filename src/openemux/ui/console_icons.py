@@ -20,7 +20,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, GLib, Gtk
 
 from openemux.core.systems import get_icon_name
-from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, is_collection_scope
+from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID, is_collection_scope
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,8 @@ def console_icon(console_id):
         icon = Gtk.Image.new_from_icon_name("starred-symbolic")
         icon.add_css_class("favorites-sidebar-icon")
         return icon
+    if console_id == RECENT_ID:
+        return Gtk.Image.new_from_icon_name("document-open-recent-symbolic")
     if is_collection_scope(console_id):
         return Gtk.Image.new_from_icon_name("user-bookmarks-symbolic")
 

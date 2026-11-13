@@ -353,6 +353,24 @@ class TheBiosPageTests(_PreferencesCase):
         self.assertEqual(len(self.prefs._bios_rows), 1)
         self.assertEqual(self.prefs._bios_rows[0].get_title(), "bios.no_requirements")
 
+    def test_the_bios_page_can_open_on_a_console(self):
+        # Issue 911: the console page's banner lands on the right row.
+        row = self.prefs._bios_rows[0]
+        console = row._bios_console
+        self.assertFalse(row.get_expanded())
+        self.assertTrue(self.prefs.show_bios_console(console))
+        self.assertTrue(row.get_expanded())
+        self.assertFalse(self.prefs.show_bios_console("NOPE"))
+
+    def test_an_import_re_checks_the_window_warnings(self):
+        summary = {"console": "PS", "imported": [], "rejected": []}
+        self.prefs._set_bios_import_running(True)
+        with mock.patch.object(self.prefs, "_build_bios_import_summary") as build:
+            self.prefs._on_bios_import_done(summary)
+        build.return_value.present.assert_called_once()
+        self.assertFalse(self.prefs._bios_import_running)
+        self.assertEqual(self.called("sync_bios_warnings"), [("sync_bios_warnings", (["PS"],), {})])
+
 
 def _descendants(root):
     stack = [root]
@@ -1866,6 +1884,19 @@ class TheCoresPageTests(_PreferencesCase):
         )
         self.assertEqual(len(self.called("_warn_missing_bios_for_core")), 1)
 
+    def test_the_download_every_core_switch_stores_the_choice_and_starts_the_sweep(self):
+        # Issue 908: the sweep after the first boot fetches only the cores a
+        # picker would list; this switch fetches the rest.
+        row = self.prefs._download_all_cores_row
+        self.assertFalse(row.get_active())
+        row.set_active(True)
+        self.assertTrue(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.assertTrue(self.config.deferred_assets_pending())
+        self.assertEqual(len(self.called("_start_deferred_asset_download")), 1)
+        row.set_active(False)
+        self.assertFalse(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.assertEqual(len(self.called("_start_deferred_asset_download")), 1)
+
     def test_going_back_to_automatic_clears_the_override_without_a_bios_check(self):
         row = self._core_row("SFC")
         row.set_selected(1)
@@ -2020,6 +2051,28 @@ class TheSystemPageTests(_PreferencesCase):
         self.assertTrue(self.config.get_ui_settings()["translucent_game_bar"])
         prefs = prefs_module.OpenEmuxPreferences(self.win)
         self.assertTrue(prefs._translucent_bar_row.get_active())
+
+    def test_the_controller_label_family_and_the_swap_are_stored(self):
+        # Issue 914: the hint bar's letters and a Nintendo-style confirm.
+        self.assertEqual(self.prefs._glyph_family_row.get_selected(), 0)
+        self.prefs._glyph_family_row.set_selected(2)
+        self.assertEqual(self.config.get_controller_glyph_family(), "playstation")
+        self.prefs._swap_confirm_row.set_active(True)
+        self.assertTrue(self.config.get_swap_confirm_cancel())
+        self.assertEqual(len(self.called("apply_controller_preferences")), 2)
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertEqual(prefs._glyph_family_row.get_selected(), 2)
+        self.assertTrue(prefs._swap_confirm_row.get_active())
+
+    def test_the_resume_switch_is_stored_and_the_page_re_read(self):
+        # Issue 910: off by default; the resume badges follow the setting, so
+        # the page on screen is re-read when it flips.
+        self.assertFalse(self.prefs._auto_resume_row.get_active())
+        self.prefs._auto_resume_row.set_active(True)
+        self.assertTrue(self.config.get_auto_resume())
+        self.assertTrue(self.called("_reload_current_page"))
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertTrue(prefs._auto_resume_row.get_active())
 
     def test_the_start_fullscreen_switch_is_stored(self):
         # Issue #505: windowed by default, read again at the next launch.

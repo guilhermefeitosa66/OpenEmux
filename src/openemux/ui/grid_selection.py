@@ -136,6 +136,10 @@ class GridSelection:
         Filtering and skipping this is how selection desyncs: the model would
         still hold indices into the previous visible list.
         """
+        if self._key is None and not any(entry.selected for entry in self.grid.entries()):
+            # Never seeded and nothing selected: a keystroke on a 3000-game
+            # page has no selection to carry over (issue 906).
+            return
         model, entries = self._model_and_entries()
         self._paint(model, entries)
 

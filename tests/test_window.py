@@ -41,9 +41,11 @@ if HAVE_DISPLAY:
         ALL_CONSOLES_ID,
         FAVORITES_ID,
         LIBRARY_EMPTY_ID,
+        RECENT_ID,
         collection_scope,
     )
     from openemux.ui.window import OpenEmuxWindow
+    from openemux.core import save_states
 
 
 def _walk(widget):
@@ -69,9 +71,10 @@ class TheWindowOpensOnALibraryTests(WindowCase):
 
     def test_the_title_names_the_console_and_counts_its_games(self):
         self.win.sidebar.select("SFC")
+        # The console's name alone, never the folder id (issue 912).
         self.assertEqual(
             self.win.window_title.get_title(),
-            f"SFC — {window_module.get_system_display_name('SFC')}",
+            window_module.get_system_display_name("SFC"),
         )
         self.assertEqual(
             self.win.window_title.get_subtitle(),
@@ -127,6 +130,34 @@ class AnEmptyLibraryTests(WindowCase):
 
     def test_search_is_switched_off_with_nothing_to_search(self):
         self.assertFalse(self.win.search_entry.get_sensitive())
+
+    def test_choosing_the_folder_is_the_suggested_action_and_import_the_second(self):
+        # Issue 909: most people already keep a folder of games.
+        page = self.win.content_stack.get_child_by_name(LIBRARY_EMPTY_ID)
+        actions = page.get_child()
+        first = actions.get_first_child()
+        second = first.get_next_sibling()
+        self.assertEqual(first.get_label(), self.said("library.empty.choose"))
+        self.assertTrue(first.has_css_class("suggested-action"))
+        self.assertEqual(second.get_label(), self.said("library.empty.action"))
+        self.assertFalse(second.has_css_class("suggested-action"))
+        with mock.patch.object(self.win, "_choose_roms_path") as choose:
+            first.emit("clicked")
+        choose.assert_called_once()
+
+    def test_the_tour_waits_for_the_first_games(self):
+        # Issue 909: a tour before there is anything to tour is forgotten.
+        self.config.set_show_welcome_on_startup(True)
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.win.maybe_show_welcome()
+        idle_add.assert_not_called()
+        self.assertTrue(self.win._welcome_pending)
+        self.home.add_rom("SFC", "Chrono Trigger.sfc")
+        self.win.playlist_manager.scan_and_rebuild_playlist("SFC")
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.win.refresh_library()
+        idle_add.assert_any_call(self.win._open_welcome)
+        self.assertFalse(self.win._welcome_pending)
 
     def test_an_empty_library_has_no_view_to_remember(self):
         # Overwriting the stored view with the empty page would throw away the
@@ -519,6 +550,133 @@ class TheSearchFieldTests(WindowCase):
             self.win.apply_library_filters()
         self.assertEqual(set_filter.call_args[0][0], "metroid")
 
+    def test_enter_launches_the_one_match(self):
+        # Issue 906: the search entry had no activate handler.
+        self.win.sidebar.select("SFC")
+        rom = self.rom()
+        self.win.search_entry.set_text(rom["name"])
+        self.win.apply_library_filters()
+        with mock.patch.object(self.win, "on_launch_game") as launch:
+            self.win.search_entry.emit("activate")
+        launch.assert_called_once_with(rom)
+
+    def test_enter_on_several_matches_lands_on_the_first(self):
+        grid = self.show_with_cards("SFC")
+        self.win.search_entry.set_text("")
+        with mock.patch.object(grid, "focus_first_card") as focus:
+            self.win.search_entry.emit("activate")
+        focus.assert_called_once()
+
+    def test_enter_on_no_match_or_no_page_does_nothing(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        with mock.patch.object(self.win, "on_launch_game") as launch:
+            self.win.search_entry.emit("activate")
+            with mock.patch.object(self.win, "_visible_grid", return_value=None):
+                self.win.search_entry.emit("activate")
+        launch.assert_not_called()
+
+    def test_closing_the_bar_clears_the_query_and_goes_back_to_the_games(self):
+        grid = self.show_with_cards("SFC")
+        self.win.search_button.set_active(True)
+        self.win.search_entry.set_text("metroid")
+        with mock.patch.object(grid, "focus_first_card") as focus:
+            self.win.search_button.set_active(False)
+        self.assertEqual(self.win.search_entry.get_text(), "")
+        focus.assert_called_once()
+
+    def test_a_query_that_matches_nothing_shows_the_way_out(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        self.assertTrue(self.win.search_empty.get_visible())
+        self.assertEqual(
+            self.win.search_empty.get_title(),
+            self.said("search.empty.title", query="nothing matches this"),
+        )
+        self.assertEqual(
+            self.win.search_empty.get_description(), self.said("search.empty.body.scope")
+        )
+        self.assertTrue(self.win.search_empty_everywhere.get_visible())
+        self.win.search_empty_clear.emit("clicked")
+        self.assertEqual(self.win.search_entry.get_text(), "")
+        self.assertFalse(self.win.search_empty.get_visible())
+
+    def test_on_the_whole_library_the_empty_state_offers_no_wider_scope(self):
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        self.assertTrue(self.win.search_empty.get_visible())
+        self.assertEqual(
+            self.win.search_empty.get_description(), self.said("search.empty.body.library")
+        )
+        self.assertFalse(self.win.search_everywhere_button.get_visible())
+
+    def test_the_placeholder_names_the_scope(self):
+        self.win.sidebar.select("SFC")
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(),
+            self.said(
+                "search.placeholder.console",
+                console=window_module.get_system_display_name("SFC"),
+            ),
+        )
+        self.assertTrue(self.win.search_everywhere_button.get_visible())
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(), self.said("search.placeholder.library")
+        )
+        self.win.playlist_manager.toggle_favorite(self.rom())
+        self.win.sidebar.sync_favorites_row()
+        self.win.sidebar.select(FAVORITES_ID)
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(),
+            self.said("search.placeholder.scope", scope=self.said("sidebar.favorites")),
+        )
+
+    def test_search_everywhere_keeps_the_query_on_the_all_page(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        self.win.search_everywhere_button.emit("clicked")
+        self.assertEqual(self.win.current_console, ALL_CONSOLES_ID)
+        self.assertEqual(self.win.search_entry.get_text(), "metroid")
+        self.assertTrue(self.win.search_button.get_active())
+        # Library-wide now: Metroid on the FC and Super Metroid on the SFC.
+        self.assertEqual(self.win.pages.grid_for(ALL_CONSOLES_ID).count(), 2)
+
+    def test_search_everywhere_with_no_all_page_changes_nothing(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        with mock.patch.object(self.win.sidebar, "select", return_value=False):
+            self.win._on_search_everywhere()
+        self.assertEqual(self.win.current_console, "SFC")
+        self.assertFalse(self.win._carrying_search_query)
+
+    def test_switching_console_still_clears_the_query(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.search_entry.get_text(), "")
+
+    def test_a_count_change_on_another_page_is_ignored(self):
+        self.win.sidebar.select("SFC")
+        other = self.win.pages.grid_for("FC") or self.win.pages.grid_for(ALL_CONSOLES_ID)
+        with mock.patch.object(self.win, "_update_window_title") as update:
+            self.win._on_grid_count_changed(object())
+            self.win._on_grid_count_changed(self.win.pages.grid_for("SFC"))
+        update.assert_called_once_with("SFC")
+        self.assertIsNotNone(other)
+
+    def test_a_count_change_inside_the_visible_group_updates_the_title(self):
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        group = self.win.pages.grid_for(ALL_CONSOLES_ID)
+        with mock.patch.object(self.win, "_update_window_title") as update:
+            self.win._on_grid_count_changed(group.grids()[0])
+            self.win.content_stack.set_visible_child_name("SFC")
+            self.win._on_grid_count_changed(group.grids()[0])
+        update.assert_called_once_with(ALL_CONSOLES_ID)
+
     def test_the_artwork_filter_rides_along_with_the_query(self):
         # Issue #127: one place decides visibility, so the two filters cannot
         # fight over the same flag.
@@ -631,6 +789,57 @@ class NavigatingTheSidebarTests(WindowCase):
     def test_the_header_sync_survives_being_called_before_the_header_exists(self):
         del self.win.console_input_btn
         self.win._sync_console_header_controls()
+
+
+@needs_display
+class TheBiosWarningsTests(WindowCase):
+    """A missing system file is shown before any launch fails (issue 911)."""
+
+    def _core(self, path):
+        return mock.patch.object(
+            self.win.runtime_manager.retroarch_launcher, "resolve_core_path", return_value=path
+        )
+
+    def test_the_console_is_checked_against_the_core_a_launch_would_run(self):
+        with self._core("/cores/pcsx_rearmed_libretro.so"), mock.patch.object(
+            window_module, "find_missing_required_for_core", return_value=["scph5501.bin"]
+        ) as check:
+            self.assertEqual(self.win.missing_bios_for_console("SFC"), ["scph5501.bin"])
+        self.assertEqual(check.call_args[0][1:], ("SFC", "pcsx_rearmed_libretro.so"))
+
+    def test_a_console_with_no_core_or_no_such_console_needs_nothing(self):
+        with self._core(None):
+            self.assertEqual(self.win.missing_bios_for_console("SFC"), [])
+        self.assertEqual(self.win.missing_bios_for_console(ALL_CONSOLES_ID), [])
+
+    def test_the_sync_puts_the_icon_on_the_row_and_the_banner_on_the_page(self):
+        with mock.patch.object(
+            self.win, "missing_bios_for_console", side_effect=lambda c: ["bios.bin"] if c == "SFC" else []
+        ):
+            self.win.sync_bios_warnings()
+        self.assertTrue(self.win.sidebar.find_row("SFC").bios_warning.get_visible())
+        self.assertFalse(self.win.sidebar.find_row("FC").bios_warning.get_visible())
+        self.assertTrue(self.win.pages.page_for("SFC").bios_banner.get_visible())
+        self.assertIsNone(self.win.pages.page_for("FC").bios_banner)
+
+    def test_a_rebuilt_library_is_checked(self):
+        with mock.patch.object(self.win, "sync_bios_warnings") as sync:
+            self.win.refresh_library(force=True)
+            self.win.refresh_library()
+        self.assertEqual(sync.call_count, 2)
+
+    def test_the_banner_opens_preferences_on_the_consoles_bios_row(self):
+        dialog = mock.Mock()
+        with mock.patch.object(self.win, "_open_preferences") as open_prefs, mock.patch.object(
+            self.win, "_open_preferences_dialog", return_value=dialog
+        ):
+            self.win.open_bios_settings("SFC")
+        open_prefs.assert_called_once_with(page="bios")
+        dialog.show_bios_console.assert_called_once_with("SFC")
+        with mock.patch.object(self.win, "_open_preferences"), mock.patch.object(
+            self.win, "_open_preferences_dialog", return_value=None
+        ):
+            self.win.open_bios_settings("SFC")
 
 
 @needs_display
@@ -1044,6 +1253,15 @@ class PerRomOverridesTests(WindowCase):
         self.win.set_rom_core(rom, None)
         self.assertIn(self.said("toast.core.rom_auto", name=rom["name"]), self.toasts)
 
+    def test_a_core_whose_bios_is_missing_marks_the_console_too(self):
+        # Issue 911: the toast is for the moment; the sidebar icon and the
+        # page banner stay until the file arrives.
+        with mock.patch.object(
+            window_module, "find_missing_required_for_core", return_value=["scph5501.bin"]
+        ), mock.patch.object(self.win, "sync_bios_warnings") as sync:
+            self.win._warn_missing_bios_for_core("SFC", "snes9x_libretro.so")
+        sync.assert_called_once_with(["SFC"])
+
     def test_a_core_whose_bios_is_missing_warns_about_it(self):
         with mock.patch.object(
             window_module, "find_missing_required_for_core", return_value=["bios.bin"]
@@ -1242,6 +1460,31 @@ class TheRomsFolderPickerTests(WindowCase):
         dialog = mock.Mock()
         dialog.select_folder_finish.return_value = selected
         return dialog
+
+    def test_the_window_and_the_launcher_share_one_core_catalog(self):
+        # Issue 908: two catalogs scanned the info directory twice.
+        self.assertIs(self.win.runtime_manager.retroarch_launcher.core_catalog, self.win.core_catalog)
+        self.assertEqual(
+            self.win.core_catalog.cache_file, self.config.config_dir / "cores_catalog.json"
+        )
+
+    def test_the_core_catalog_is_warmed_on_a_worker(self):
+        with mock.patch.object(window_module, "Thread") as thread:
+            self.win._warm_core_catalog()
+        self.assertEqual(thread.call_args.kwargs["target"], self.win.core_catalog.warm_up)
+        self.assertTrue(thread.call_args.kwargs["daemon"])
+        thread.return_value.start.assert_called_once()
+
+    def test_the_incremental_flag_reaches_the_playlist_rebuild(self):
+        with mock.patch.object(
+            self.win.playlist_manager, "scan_and_rebuild_all_playlists",
+            return_value={"consoles": {}, "total_consoles": 0, "total_roms": 0, "failed": {}, "skipped": []},
+        ) as rebuild, mock.patch.object(
+            window_module, "Thread", side_effect=lambda target, daemon: mock.Mock(start=target)
+        ), mock.patch.object(window_module.GLib, "idle_add"):
+            self.win._rescan_all_consoles(show_toast=False, only_changed=True)
+        self.assertTrue(rebuild.call_args.kwargs["only_changed"])
+        self.win._scan_running = False
 
     def test_choosing_a_folder_repoints_the_library_at_it(self):
         new_root = self.tmp / "elsewhere"
@@ -1499,12 +1742,13 @@ class TheRescanPlumbingTests(WindowCase):
             self.win._rescan_single_console(ALL_CONSOLES_ID)
         rescan.assert_called_once()
 
-    def test_the_startup_scan_is_a_silent_whole_library_rescan(self):
+    def test_the_startup_scan_is_a_silent_incremental_rescan(self):
         # The method itself is held back during construction (it is a thread),
-        # so it is called here against the real implementation.
+        # so it is called here against the real implementation. Only the
+        # consoles whose folders moved are walked (issue 901).
         with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
             REAL_STARTUP_SCAN(self.win)
-        rescan.assert_called_once_with(show_toast=False)
+        rescan.assert_called_once_with(show_toast=False, only_changed=True)
 
     def test_the_refresh_button_rescans_the_console_it_is_on(self):
         self.win.sidebar.select("SFC")
@@ -2112,12 +2356,225 @@ class BootstrapReportingTests(WindowCase):
 
 
 @needs_display
+class TheFirstLibraryTests(WindowCase):
+    """Issue 909: the covers offer after the folder is chosen, the offline notice."""
+
+    def _scan_done(self, total_roms):
+        self.win._on_rescan_all_done_ui(
+            "task", {"consoles": {}, "total_consoles": 1, "total_roms": total_roms, "failed": {}},
+            False, None,
+        )
+
+    def test_a_chosen_folder_asks_for_covers_once_the_scan_counted_the_games(self):
+        self.win._offer_covers_after_scan = True
+        self._scan_done(3)
+        self.assertTrue(self.win.covers_banner.get_revealed())
+        self.assertEqual(
+            self.win.covers_banner.get_title(), self.said("banner.covers.offer", count=3)
+        )
+        self.assertFalse(self.win._offer_covers_after_scan)
+        with mock.patch.object(self.win, "_start_cover_sync") as sync:
+            self.win.covers_banner.emit("button-clicked")
+        sync.assert_called_once_with(scope="all", selected_console=None)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_a_scan_that_found_nothing_or_was_not_asked_for_offers_nothing(self):
+        self._scan_done(3)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+        self.win._offer_covers_after_scan = True
+        self._scan_done(0)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_starting_a_sync_any_other_way_answers_the_offer(self):
+        self.win.covers_banner.set_revealed(True)
+        with mock.patch.object(self.win, "_start_artwork_sync"):
+            self.win._start_cover_sync(scope="all", selected_console=None)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_the_folder_picker_arms_the_offer(self):
+        self.assertFalse(self.win._offer_covers_after_scan)
+        chosen = mock.Mock()
+        chosen.get_path.return_value = str(self.tmp / "elsewhere")
+        dialog = mock.Mock()
+        dialog.select_folder_finish.return_value = chosen
+        with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
+            self.win._on_roms_path_chosen(dialog, None)
+        self.assertTrue(self.win._offer_covers_after_scan)
+        rescan.assert_called_once()
+
+    def test_a_background_download_that_failed_leaves_a_notice_with_retry(self):
+        self.win._on_deferred_assets_done_ui("task", {"failed": 3, "cancelled": False})
+        self.assertTrue(self.win.assets_banner.get_revealed())
+        self.assertEqual(self.win.assets_banner.get_title(), self.said("banner.assets.failed"))
+        with mock.patch.object(self.win, "_start_deferred_asset_download") as retry:
+            self.win.assets_banner.emit("button-clicked")
+        retry.assert_called_once()
+        self.assertFalse(self.win.assets_banner.get_revealed())
+
+    def test_a_clean_or_cancelled_download_leaves_no_notice(self):
+        self.win._on_deferred_assets_done_ui("task", {"failed": 0, "cancelled": False})
+        self.assertFalse(self.win.assets_banner.get_revealed())
+        self.win._on_deferred_assets_done_ui("task", {"failed": 2, "cancelled": True})
+        self.assertFalse(self.win.assets_banner.get_revealed())
+        self.win._on_deferred_assets_done_ui("task", {"error": "boom"})
+        self.assertTrue(self.win.assets_banner.get_revealed())
+
+
+@needs_display
+class PreparingAConsoleCoreTests(WindowCase):
+    """Issue 909: a launch that found no core fetches the console's first."""
+
+    def test_a_console_with_a_core_is_ready_at_once(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        with mock.patch.object(launcher, "resolve_core_path", return_value="/cores/x.so"), mock.patch.object(
+            window_module.FirstBootBootstrapper, "download_console_core"
+        ) as download:
+            self.assertEqual(self.win.prepare_console_core("SFC"), "ready")
+        download.assert_not_called()
+
+    def test_a_missing_core_is_downloaded_and_the_catalog_told(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        with mock.patch.object(launcher, "resolve_core_path", return_value=None), mock.patch.object(
+            window_module.FirstBootBootstrapper, "download_console_core", return_value="ready"
+        ) as download, mock.patch.object(self.win.core_catalog, "refresh") as refresh:
+            self.assertEqual(self.win.prepare_console_core("SFC", on_progress=None), "ready")
+        self.assertEqual(download.call_args[0][0], "SFC")
+        refresh.assert_called_once()
+
+    def test_a_failed_or_cancelled_download_is_passed_on_untouched(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        for state in ("failed", "cancelled"):
+            with mock.patch.object(launcher, "resolve_core_path", return_value=None), mock.patch.object(
+                window_module.FirstBootBootstrapper, "download_console_core", return_value=state
+            ), mock.patch.object(self.win.core_catalog, "refresh") as refresh:
+                self.assertEqual(self.win.prepare_console_core("SFC"), state)
+            refresh.assert_not_called()
+
+
+@needs_display
 class TheGameAndInputHandoffTests(WindowCase):
+    def test_the_launcher_shares_the_windows_cached_shader_index(self):
+        # Issue 904: one preset index per process, cached beside the config.
+        launcher = self.win.runtime_manager.retroarch_launcher
+        self.assertIs(launcher.shader_catalog, self.win.shader_catalog)
+        self.assertEqual(
+            self.win.shader_catalog.cache_file, self.config.config_dir / "shaders_index.json"
+        )
+
+    def test_a_starting_game_is_shown_on_its_card(self):
+        grid = self.show_with_cards("SFC")
+        entry = grid.entries()[0]
+        card = grid.card_for(entry)
+        self.win.set_rom_launching(entry.rom, True)
+        self.assertTrue(card.launching)
+        self.win.set_rom_launching(entry.rom, False)
+        self.assertFalse(card.launching)
+
     def test_launching_a_rom_goes_through_the_session(self):
         rom = self.rom()
         with mock.patch.object(self.win.game, "launch") as launch:
             self.win.on_launch_game(rom)
         launch.assert_called_once_with(rom)
+
+    def test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up(self):
+        # Issue 914: F11 or the pad's Guide button.
+        self.assertFalse(self.win.tv_mode)
+        self.config.set_zoom(1.0)
+        with mock.patch.object(self.win, "fullscreen") as full, mock.patch.object(
+            self.win, "unfullscreen"
+        ) as unfull:
+            self.assertTrue(self.win.toggle_tv_mode())
+            self.assertTrue(self.win.has_css_class("tv-mode"))
+            self.assertTrue(self.win.split_view.get_collapsed())
+            self.assertEqual(self.win._zoom, window_module.TV_MODE_MIN_ZOOM)
+            full.assert_called_once()
+            self.assertIn(self.said("toast.tv_mode.on"), self.toasts)
+            self.assertFalse(self.win.toggle_tv_mode())
+            unfull.assert_called_once()
+        self.assertFalse(self.win.has_css_class("tv-mode"))
+        self.assertEqual(self.win._zoom, 1.0)
+
+    def test_escape_leaves_tv_mode_before_it_looks_for_the_sidebar(self):
+        # With the split view collapsed, stepping back to the sidebar would
+        # show it as a full-screen page with no games on it.
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(self.win, "unfullscreen"):
+            self.win.toggle_tv_mode()
+            with mock.patch.object(
+                self.win.navigation, "escape_to_sidebar", return_value=True
+            ) as to_sidebar:
+                self.assertTrue(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+            to_sidebar.assert_not_called()
+            self.assertFalse(self.win.tv_mode)
+            with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
+                self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+
+    def test_the_capture_handler_leaves_tv_mode_before_the_split_view_pops(self):
+        # Collapsed, the split view pops its content page on Escape before the
+        # bubble handler runs; the capture handler gets there first.
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None):
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.win.toggle_tv_mode()
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_a, 0, 0))
+            self.assertTrue(self.win.tv_mode)
+            self.assertTrue(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.assertFalse(self.win.tv_mode)
+
+    def test_the_capture_handler_leaves_a_dialog_a_popover_and_the_search_box_their_escape(self):
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None) as popover:
+            self.win.toggle_tv_mode()
+            with mock.patch.object(self.win, "get_visible_dialog", return_value=mock.Mock()):
+                self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            popover.return_value = mock.Mock()
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            popover.return_value = None
+            self.win.search_bar.set_search_mode(True)
+            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.win.search_bar.set_search_mode(False)
+            self.assertTrue(self.win.tv_mode)
+            self.win.toggle_tv_mode()
+
+    def test_the_on_screen_keyboard_opens_over_a_searchable_page(self):
+        from openemux.ui.onscreen_keyboard import OnScreenKeyboard
+
+        self.win.sidebar.select("SFC")
+        with mock.patch.object(OnScreenKeyboard, "present") as present:
+            dialog = self.win.open_onscreen_keyboard()
+        self.assertIsNotNone(dialog)
+        present.assert_called_once_with(self.win)
+        dialog.force_close()
+        self.win._set_search_enabled(False)
+        self.assertIsNone(self.win.open_onscreen_keyboard())
+
+    def test_the_controller_preferences_reach_the_reader_and_the_hints(self):
+        self.config.set_swap_confirm_cancel(True)
+        with mock.patch.object(self.win.navigation, "refresh_hints") as refresh:
+            self.win.apply_controller_preferences()
+        self.assertTrue(self.win.gamepad_navigator.swap_confirm_cancel)
+        refresh.assert_called_once_with(force=True)
+
+    def test_the_card_transitions_follow_the_desktops_animation_setting(self):
+        # Issue 915: the CSS keys the lift on .animated, which follows
+        # gtk-enable-animations like the Adwaita widgets do.
+        settings = self.win._gtk_settings
+        self.assertIsNotNone(settings)
+        settings.set_property("gtk-enable-animations", True)
+        self.assertTrue(self.win.has_css_class("animated"))
+        settings.set_property("gtk-enable-animations", False)
+        self.assertFalse(self.win.has_css_class("animated"))
+        settings.set_property("gtk-enable-animations", True)
+        self.assertTrue(self.win._sync_animations_class())
+
+    def test_the_game_details_dialog_opens_for_a_game(self):
+        # Issue 913: from the menu, Alt+Return or the pad's X.
+        from openemux.ui.game_details import GameDetailsDialog
+
+        with mock.patch.object(GameDetailsDialog, "present") as present:
+            self.win.open_game_details(self.rom())
+        present.assert_called_once_with(self.win)
 
     def test_launching_at_a_state_slot_goes_through_the_session(self):
         rom = self.rom()
@@ -2147,6 +2604,14 @@ class TheGameAndInputHandoffTests(WindowCase):
     def test_closing_stops_the_gamepad_reader(self):
         self.assertFalse(self.win._on_close_stop_gamepad())
         self.win.gamepad_navigator.stop.assert_called_once()
+
+    def test_closing_flushes_a_setting_still_waiting_for_its_write(self):
+        # Issue 905: the zoom chosen a moment before the close is the zoom
+        # the next start opens with.
+        self.config.set_zoom(1.5)
+        self.assertTrue(self.config.has_pending_save())
+        self.assertFalse(self.win._on_close_flush_config())
+        self.assertFalse(self.config.has_pending_save())
 
     def test_closing_takes_the_running_game_with_it(self):
         with mock.patch.object(
@@ -2204,6 +2669,26 @@ class SortingTests(WindowCase):
         size, added = OpenEmuxWindow._rom_file_stat(rom["path"])
         self.assertGreater(size, 0)
         self.assertGreater(added, 0)
+
+    def test_the_date_and_size_orders_read_the_index_not_the_disk(self):
+        # Issue 901: "Recently added" on "All" was a stat of the whole
+        # library per render.
+        roms = [
+            {"name": "A", "path": "/nowhere/a.sfc", "console": "SFC", "size": 5, "added": 10.0},
+            {"name": "B", "path": "/nowhere/b.sfc", "console": "SFC", "size": 9, "added": 20.0},
+        ]
+        from openemux.core.library_view import SORT_FILE_SIZE, SORT_RECENTLY_ADDED
+
+        with mock.patch.object(window_module.os, "stat", side_effect=AssertionError("stat")):
+            by_size = self.win._sorted_roms(roms, order=SORT_FILE_SIZE)
+            by_date = self.win._sorted_roms(roms, order=SORT_RECENTLY_ADDED)
+        self.assertEqual([rom["name"] for rom in by_size], ["B", "A"])
+        self.assertEqual([rom["name"] for rom in by_date], ["B", "A"])
+
+    def test_a_game_the_index_does_not_know_is_still_stat_ed(self):
+        rom = self.rom()
+        lookup = OpenEmuxWindow._file_stat_from_index([{"path": rom["path"]}])
+        self.assertEqual(lookup(rom["path"]), OpenEmuxWindow._rom_file_stat(rom["path"]))
 
     def test_a_rom_that_is_gone_sorts_as_unknown(self):
         self.assertEqual(
@@ -2362,7 +2847,7 @@ class TheRescanWorkersTests(WindowCase):
         with mock.patch.object(
             self.win.playlist_manager,
             "scan_and_rebuild_all_playlists",
-            lambda on_progress=None: progress.append(
+            lambda on_progress=None, only_changed=False: progress.append(
                 on_progress({"current": 1, "total": 2})
             )
             or {"consoles": {}, "total_consoles": 0, "total_roms": 0, "failed": {}},
@@ -2604,7 +3089,7 @@ class TheConsoleDropdownRowsTests(WindowCase):
     def test_a_console_row_shows_its_icon_and_full_name(self):
         dropdown = self.win._build_console_dropdown(["SFC"])
         row = self._bound_rows(dropdown, ["SFC"])[0]
-        self.assertTrue(self._label_of(row).startswith("SFC - "))
+        self.assertEqual(self._label_of(row), window_module.get_system_display_name("SFC"))
 
     def test_the_all_row_is_labelled_after_the_sidebar_by_default(self):
         dropdown = self.win._build_console_dropdown(["SFC"], include_all=True)
@@ -2748,11 +3233,13 @@ class TheDeferredAssetDownloadTests(WindowCase):
         self.config.mark_deferred_assets_pending()
         refreshed = []
         launcher = self.win.runtime_manager.retroarch_launcher
+        # One core catalog for the window and the launcher (issue 908); the
+        # shader catalogs are still two.
+        self.assertIs(launcher.core_catalog, self.win.core_catalog)
+        self.assertIs(launcher.shader_catalog, self.win.shader_catalog)
         for name, catalog in (
             ("core", self.win.core_catalog),
             ("shader", self.win.shader_catalog),
-            ("launcher core", launcher.core_catalog),
-            ("launcher shader", launcher.shader_catalog),
         ):
             patcher = mock.patch.object(
                 catalog, "refresh", lambda name=name: refreshed.append(name)
@@ -2780,9 +3267,7 @@ class TheDeferredAssetDownloadTests(WindowCase):
     def test_owed_assets_download_under_the_banner_and_refresh_the_catalogs(self):
         fake, refreshed, updates = self._start()
         self.assertEqual(len(self.win.tasks), 0)
-        self.assertEqual(
-            sorted(refreshed), ["core", "launcher core", "launcher shader", "shader"]
-        )
+        self.assertEqual(sorted(refreshed), ["core", "shader"])
         self.assertEqual([args[1:] for args in updates], [(3, 7)])
         self.assertIsNotNone(fake.cancel_event)
 
@@ -2840,15 +3325,13 @@ class TheMissingCoreRepairTests(WindowCase):
     def _catalog_spy(self):
         refreshed = []
         launcher = self.win.runtime_manager.retroarch_launcher
-        for name, catalog in (
-            ("core", self.win.core_catalog),
-            ("launcher core", launcher.core_catalog),
-        ):
-            patcher = mock.patch.object(
-                catalog, "refresh", lambda name=name: refreshed.append(name)
-            )
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        # One catalog for the window and the launcher (issue 908).
+        self.assertIs(launcher.core_catalog, self.win.core_catalog)
+        patcher = mock.patch.object(
+            self.win.core_catalog, "refresh", lambda: refreshed.append("core")
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         return refreshed
 
     def _run(self, summary=None, manual=False, missing=("a_libretro.so",), crash=None):
@@ -2894,7 +3377,7 @@ class TheMissingCoreRepairTests(WindowCase):
         self.assertEqual(seen["labels"], [self.said("status.cores.restoring")])
         self.assertEqual(seen["updates"], [(1, 1)])
         self.assertEqual(len(self.win.tasks), 0)
-        self.assertEqual(sorted(seen["refreshed"]), ["core", "launcher core"])
+        self.assertEqual(seen["refreshed"], ["core"])
         self.assertEqual(self.toasts, [self.said("toast.cores.restored.one")])
         self.assertIsNotNone(seen["fake"].cancel_event)
         self.assertFalse(seen["fake"].repair_missing_cores.call_args.kwargs["manual"])
@@ -3085,6 +3568,170 @@ class TheMissingCoreRepairTests(WindowCase):
         dialog._toast.assert_not_called()
         dialog.set_core_job_running.assert_not_called()
         self.assertEqual(self.toasts, ["hello"])
+
+
+@needs_display
+class TheRecentlyPlayedPageTests(WindowCase):
+    """Issue 910: the page, the caption under a card and the resume badge."""
+
+    def _played(self, rom, seconds=0):
+        self.win.play_history.record_launch(rom["path"])
+        if seconds:
+            self.win.play_history.record_play_time(rom["path"], seconds)
+
+    def _auto_state_for(self, rom):
+        states_dir = self.config.get_console_states_dir(rom["console"])
+        states_dir.mkdir(parents=True, exist_ok=True)
+        path = states_dir / f"{save_states.rom_state_stem(rom['path'])}.state.auto"
+        path.write_bytes(b"state")
+        return path
+
+    def test_the_page_is_titled_after_its_row(self):
+        self.win._update_window_title(RECENT_ID)
+        self.assertEqual(self.win.window_title.get_title(), self.said("sidebar.recent"))
+
+    def test_a_library_with_history_opens_on_the_page(self):
+        # The start-up view, over the one the session stored (issue #383).
+        self.config.session.set_last_view("SFC")
+        self.assertEqual(self.win._startup_view(), "SFC")
+        self._played(self.rom())
+        self.assertEqual(self.win._startup_view(), RECENT_ID)
+        self.win.refresh_library(preferred_view=self.win._startup_view(), force=True)
+        self.assertEqual(self.win.current_console, RECENT_ID)
+        self.assertEqual(self.win.sidebar.selected_id(), RECENT_ID)
+
+    def test_a_view_that_is_gone_falls_back_to_the_page_when_there_is_history(self):
+        self._played(self.rom())
+        self.win.refresh_library(preferred_view="N64", force=True)
+        self.assertEqual(self.win.current_console, RECENT_ID)
+
+    def test_a_library_never_played_does_not(self):
+        self.win.refresh_library(preferred_view="N64", force=True)
+        self.assertNotEqual(self.win.current_console, RECENT_ID)
+        self.assertIsNone(self.win.sidebar.find_row(RECENT_ID))
+
+    def test_a_cheap_refresh_re_syncs_the_row(self):
+        self.win.refresh_library(force=True)
+        self._played(self.rom())
+        self.win.refresh_library()
+        self.assertIsNotNone(self.win.sidebar.find_row(RECENT_ID))
+
+    def test_selecting_the_row_loads_the_page(self):
+        self._played(self.rom())
+        self.win.sidebar.sync_recent_row()
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as load:
+            self.win.sidebar.select(RECENT_ID)
+        load.assert_called_once()
+        self.assertEqual(self.win.current_console, RECENT_ID)
+
+    def test_a_game_never_played_has_no_caption(self):
+        self.assertIsNone(self.win.play_caption(self.rom()))
+        self.assertIsNone(self.win.play_caption({}))
+
+    def test_the_caption_says_when_and_for_how_long(self):
+        rom = self.rom()
+        self._played(rom, seconds=80 * 60)
+        self.assertEqual(
+            self.win.play_caption(rom),
+            self.said(
+                "play.caption",
+                ago=self.said("play.ago.now"),
+                played=self.said("play.time.hours", hours=1, minutes=20),
+            ),
+        )
+
+    def test_minutes_alone_under_an_hour(self):
+        rom = self.rom()
+        self._played(rom, seconds=12 * 60)
+        self.assertIn(self.said("play.time.minutes", minutes=12), self.win.play_caption(rom))
+
+    def test_under_a_minute_played_the_caption_only_says_when(self):
+        rom = self.rom()
+        self._played(rom, seconds=30)
+        self.assertEqual(self.win.play_caption(rom), self.said("play.ago.now"))
+
+    def test_how_long_ago_takes_the_coarsest_unit_that_says_something(self):
+        now = 1_700_000_000.0
+
+        def ago(delta):
+            return self.win._played_ago(now - delta, now=now)
+
+        self.assertEqual(ago(30), self.said("play.ago.now"))
+        self.assertEqual(ago(5 * 60), self.said("play.ago.minutes", minutes=5))
+        self.assertEqual(ago(3 * 3600), self.said("play.ago.hours", hours=3))
+        self.assertEqual(ago(2 * 86400), self.said("play.ago.days", days=2))
+        self.assertEqual(
+            ago(30 * 86400),
+            window_module.datetime.fromtimestamp(now - 30 * 86400).strftime("%d/%m/%Y"),
+        )
+
+    def test_the_resume_badge_needs_the_setting_and_the_state(self):
+        rom = self.rom()
+        self._auto_state_for(rom)
+        # The file alone is not enough: with the setting off the launch
+        # ignores it, and the badge would promise what Play does not do.
+        self.assertFalse(self.win.has_auto_state(rom))
+        self.config.set_auto_resume(True)
+        self.assertTrue(self.win.has_auto_state(rom))
+        self.assertFalse(self.win.has_auto_state(self.rom(index=1)))
+        self.assertFalse(self.win.has_auto_state({"console": "SFC"}))
+
+    def test_a_game_that_ended_rebuilds_the_page_once_it_exists(self):
+        rom = self.rom()
+        self._played(rom)
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win.on_game_ended(rom)
+        reload.assert_not_called()
+        self.assertIsNotNone(self.win.sidebar.find_row(RECENT_ID))
+        self.win.pages.ensure_recent_loaded()
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win.on_game_ended(rom)
+        reload.assert_called_once()
+
+    def test_a_game_that_ended_re_reads_its_card(self):
+        grid = self.show_with_cards("SFC")
+        entry = grid.entries()[0]
+        card = grid.card_for(entry)
+        with mock.patch.object(card, "sync_play_state") as sync:
+            self.win.on_game_ended(entry.rom)
+        sync.assert_called_once()
+        self.assertFalse(grid.refresh_rom_play_state({"path": "/nowhere.sfc"}))
+
+    def test_the_refresh_button_on_the_page_only_reloads_it(self):
+        self.win.current_console = RECENT_ID
+        with mock.patch.object(
+            self.win.sidebar, "selected_id", return_value=RECENT_ID
+        ), mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._on_refresh_clicked(None)
+        reload.assert_called_once()
+
+    def test_a_library_change_reloads_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._reload_current_page()
+        reload.assert_called_once()
+
+    def test_a_finished_cover_sync_reloads_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        summary = {"downloaded": 1, "skipped": 0, "errors": 0}
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._on_cover_sync_done_ui("task", summary)
+        reload.assert_called_once()
+
+    def test_a_cover_revealed_mid_sync_reaches_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        self.win._reveal_pending = [self.rom()]
+        with mock.patch.object(self.win, "refresh_rom_artwork") as refresh:
+            self.win._flush_cover_reveal()
+        refresh.assert_called_once()
+
+    def test_deleting_a_game_re_syncs_the_row(self):
+        rom = self.rom()
+        self._played(rom)
+        self.win.sidebar.sync_recent_row()
+        with mock.patch.object(window_module, "delete_rom"):
+            self.win._delete_roms([rom])
+        self.assertIsNone(self.win.sidebar.find_row(RECENT_ID))
 
 
 if __name__ == "__main__":

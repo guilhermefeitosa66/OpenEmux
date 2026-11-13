@@ -402,6 +402,50 @@ class FavoriteLookupTests(unittest.TestCase):
                 builtins.open = real_open
             self.assertEqual(len(reads), 1, reads)
 
+    def test_a_page_of_cards_stats_the_file_once_not_per_card(self):
+        # Issue 907: the stamp is compared at most every FAVORITES_STAMP_TTL_S,
+        # so a page of stars costs no syscall per card.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base, favorites=[rom])
+            self.assertTrue(manager.is_favorite(rom))
+            with unittest.mock.patch.object(Path, "stat", side_effect=AssertionError("stat")):
+                for _ in range(200):
+                    self.assertTrue(manager.is_favorite(rom))
+
+    def test_an_edit_made_outside_the_app_is_seen_after_the_grace_period(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base)
+            self.assertFalse(manager.is_favorite(rom))
+            other = self._manager(base)
+            other.toggle_favorite({"path": str(rom)})
+            self.assertFalse(manager.is_favorite(rom))
+            from openemux.core.playlist_manager import FAVORITES_STAMP_TTL_S
+
+            manager._favorites_checked_at -= FAVORITES_STAMP_TTL_S
+            self.assertTrue(manager.is_favorite(rom))
+
+    def test_after_the_grace_period_an_unchanged_file_is_not_parsed_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base, favorites=[rom])
+            self.assertTrue(manager.is_favorite(rom))
+            from openemux.core.playlist_manager import FAVORITES_STAMP_TTL_S
+
+            manager._favorites_checked_at -= FAVORITES_STAMP_TTL_S
+            with unittest.mock.patch(
+                "openemux.core.playlist_manager.read_path_lines",
+                side_effect=AssertionError("parsed"),
+            ):
+                self.assertTrue(manager.is_favorite(rom))
+
     def test_a_write_invalidates_the_parse(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -454,7 +498,9 @@ class WhatAPlaylistFileMayContainTests(unittest.TestCase):
             self.assertTrue(manager.ensure_playlist("SFC"))
             self.assertFalse(manager.ensure_playlist("SFC"))
 
-    def test_blank_lines_and_games_that_left_the_disk_are_skipped(self):
+    def test_blank_lines_are_skipped_and_a_list_without_an_index_still_loads(self):
+        # A list written by an older version has no meta index beside it:
+        # the names are derived from the files, as they always were.
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             manager = self._manager(base)
@@ -462,14 +508,29 @@ class WhatAPlaylistFileMayContainTests(unittest.TestCase):
             present.write_bytes(b"rom")
             playlist = manager.get_playlist_path("SFC")
             playlist.parent.mkdir(parents=True, exist_ok=True)
-            playlist.write_text(
-                f"\n{present}\n\n{base / 'roms' / 'SFC' / 'Gone.sfc'}\n",
-                encoding="utf-8",
-            )
+            playlist.write_text(f"\n{present}\n\n", encoding="utf-8")
 
             entries = manager.load_playlist("SFC")
 
         self.assertEqual([entry["name"] for entry in entries], ["Chrono Trigger"])
+
+    def test_a_game_that_left_the_disk_stays_listed_until_the_next_scan(self):
+        # Issue 901: a load is a parse, with no exists() per game. The scan
+        # is what decides what is on the disk, and the next start's rescan
+        # sees the folder's mtime move and drops the game.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            rom.write_bytes(b"rom")
+            manager.scan_and_rebuild_playlist("SFC")
+            rom.unlink()
+            with unittest.mock.patch.object(Path, "exists", side_effect=AssertionError("stat")):
+                names = [entry["name"] for entry in manager.load_playlist("SFC")]
+            self.assertEqual(names, ["Chrono Trigger"])
+            self.assertFalse(manager.playlist_is_current("SFC"))
+            manager.scan_and_rebuild_all_playlists(consoles=["SFC"], only_changed=True)
+            self.assertEqual(manager.load_playlist("SFC"), [])
 
     def test_an_archive_the_core_cannot_open_is_not_a_game(self):
         # PlayStation cores need a real file; the importer extracts these, so
@@ -499,6 +560,153 @@ class WhatAPlaylistFileMayContainTests(unittest.TestCase):
             playlist.write_text(f"{stray}\n", encoding="utf-8")
 
             self.assertEqual(manager.load_playlist("SFC"), [])
+
+
+class TheMetaIndexTests(unittest.TestCase):
+    """What the scan writes beside the list, and what a load reads from it (issue 901)."""
+
+    def _manager(self, base):
+        roms_dir = base / "roms"
+        (roms_dir / "SFC").mkdir(parents=True, exist_ok=True)
+        return PlaylistManager(
+            _DummyConfig(base / "playlists", roms_path=roms_dir), RomScanner(roms_dir)
+        )
+
+    def test_a_scan_writes_the_names_sizes_dates_and_the_fingerprint(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Chrono Trigger.sfc"
+            rom.write_bytes(b"rom-data")
+            manager.scan_and_rebuild_playlist("SFC")
+            meta = manager._read_meta("SFC")
+        self.assertIn(".", meta["dirs"])
+        self.assertEqual(meta["roms"][str(rom)]["name"], "Chrono Trigger")
+        self.assertEqual(meta["roms"][str(rom)]["size"], 8)
+        self.assertGreater(meta["roms"][str(rom)]["added"], 0)
+
+    def test_a_load_is_a_parse_and_opens_no_archive(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "FC").mkdir()
+            archive = base / "roms" / "FC" / "pack.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("Mega Man 2.nes", b"rom")
+            manager.scan_and_rebuild_playlist("FC")
+            size = archive.stat().st_size
+            with unittest.mock.patch.object(zipfile, "ZipFile", side_effect=AssertionError("opened")):
+                entries = manager.load_playlist("FC")
+        self.assertEqual([entry["name"] for entry in entries], ["Mega Man 2"])
+        self.assertEqual(entries[0]["size"], size)
+
+    def test_an_unchanged_library_is_not_written_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "SFC" / "Game.sfc").write_bytes(b"x")
+            manager.scan_and_rebuild_playlist("SFC")
+            with unittest.mock.patch(
+                "openemux.core.playlist_manager.write_path_lines", side_effect=AssertionError("written")
+            ), unittest.mock.patch("openemux.core.atomic_write.os.fsync", side_effect=AssertionError("fsync")):
+                manager.scan_and_rebuild_playlist("SFC")
+
+    def test_the_startup_scan_skips_the_consoles_whose_folders_did_not_move(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "SFC" / "Game.sfc").write_bytes(b"x")
+            (base / "roms" / "FC").mkdir()
+            (base / "roms" / "FC" / "Game.nes").write_bytes(b"x")
+            manager.scan_and_rebuild_all_playlists(consoles=["SFC", "FC"])
+            # The FC folder moves: a ROM lands in it.
+            import os, time
+            old = time.time() - 100
+            os.utime(base / "roms" / "SFC", (old, old))
+            manager.scan_and_rebuild_playlist("SFC")  # stamps the old time
+            (base / "roms" / "FC" / "Another.nes").write_bytes(b"x")
+            with unittest.mock.patch.object(
+                manager.scanner, "scan_console", wraps=manager.scanner.scan_console
+            ) as scan:
+                summary = manager.scan_and_rebuild_all_playlists(
+                    consoles=["SFC", "FC"], only_changed=True
+                )
+        self.assertEqual([call.args[0] for call in scan.call_args_list], ["FC"])
+        self.assertEqual(summary["skipped"], ["SFC"])
+        self.assertEqual(summary["consoles"], {"SFC": 1, "FC": 2})
+
+    def test_a_console_with_no_index_yet_is_never_current(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(Path(tmp_dir))
+            self.assertFalse(manager.playlist_is_current("SFC"))
+
+    def test_a_broken_index_is_set_aside_and_the_list_still_loads(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Game.sfc"
+            rom.write_bytes(b"x")
+            manager.scan_and_rebuild_playlist("SFC")
+            manager.get_meta_path("SFC").write_text("[1, 2]", encoding="utf-8")
+            self.assertEqual([e["name"] for e in manager.load_playlist("SFC")], ["Game"])
+            self.assertFalse(manager.get_meta_path("SFC").exists())
+            manager.get_meta_path("SFC").write_text("{broken json", encoding="utf-8")
+            self.assertEqual([e["name"] for e in manager.load_playlist("SFC")], ["Game"])
+
+    def test_a_rename_and_a_removal_follow_in_the_index(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            rom = base / "roms" / "SFC" / "Game.sfc"
+            rom.write_bytes(b"x")
+            manager.scan_and_rebuild_playlist("SFC")
+            renamed = rom.with_name("Renamed.sfc")
+            rom.rename(renamed)
+            manager.repath_rom("SFC", rom, renamed)
+            self.assertEqual(manager.name_for_path("SFC", renamed), "Renamed")
+            self.assertIsNone(manager.name_for_path("SFC", rom))
+            manager.forget_rom("SFC", renamed)
+            self.assertIsNone(manager.name_for_path("SFC", renamed))
+            # A path the index never knew changes nothing.
+            manager.repath_rom("SFC", base / "roms" / "SFC" / "nope.sfc", renamed)
+
+    def test_a_renamed_archive_keeps_its_inner_name(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "FC").mkdir()
+            archive = base / "roms" / "FC" / "pack.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("Mega Man 2.nes", b"rom")
+            manager.scan_and_rebuild_playlist("FC")
+            moved = archive.with_name("moved.zip")
+            archive.rename(moved)
+            manager.repath_rom("FC", archive, moved)
+            self.assertEqual(manager.name_for_path("FC", moved), "Mega Man 2")
+
+    def test_favorites_take_their_names_from_the_index(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "FC").mkdir()
+            archive = base / "roms" / "FC" / "pack.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("Mega Man 2.nes", b"rom")
+            manager.scan_and_rebuild_playlist("FC")
+            manager.toggle_favorite({"path": str(archive)})
+            with unittest.mock.patch.object(zipfile, "ZipFile", side_effect=AssertionError("opened")):
+                names = [e["name"] for e in manager.load_favorites_playlist()]
+        self.assertEqual(names, ["Mega Man 2"])
+
+    def test_a_console_folder_that_vanished_is_not_current(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            manager = self._manager(base)
+            (base / "roms" / "SFC" / "Game.sfc").write_bytes(b"x")
+            manager.scan_and_rebuild_playlist("SFC")
+            import shutil
+            shutil.rmtree(base / "roms" / "SFC")
+            self.assertFalse(manager.playlist_is_current("SFC"))
 
 
 class TurningPathsIntoEntriesTests(unittest.TestCase):

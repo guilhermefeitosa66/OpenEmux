@@ -20,12 +20,33 @@ from openemux.core.library_view import (
     scale_length,
 )
 
-# The composite is rendered above the logical card size so it stays sharp on
-# HiDPI displays; GTK scales the texture down when it is not needed.
-CARTRIDGE_RENDER_SCALE = 2
+# The composite used to be rendered at twice the logical card size on every
+# monitor, so it stayed sharp on HiDPI -- and held four times the pixels the
+# card draws everywhere else (issue 902). The scale now follows the display:
+# this is the fallback for a widget that cannot say.
+CARTRIDGE_RENDER_SCALE = 1
+
+
+def cartridge_render_scale(widget):
+    """The composite scale for ``widget``: 1 on a 1x display, 2 on a 2x one.
+
+    An unrealized widget answers with the display's largest monitor scale,
+    which is the right guess for a grid built before its window shows.
+    """
+    try:
+        scale = int(widget.get_scale_factor())
+    except Exception:  # noqa: BLE001 - a widget with no display to ask
+        return CARTRIDGE_RENDER_SCALE
+    return max(1, scale)
 
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
+
+#: The transparent margin a cartridge composite carries on every side for
+#: its baked shadow (issue 903), in logical pixels. The card's picture slot
+#: grows by it, and the grid gives the same back on the gaps and the edges,
+#: so the cartridges sit where they always did.
+CARTRIDGE_SHADOW_PAD = cartridge_render.SHADOW_PAD
 
 #: Gap between cards, and the grid's padding inside the viewport.
 #: How long after a launch the same card's activation is treated as the
@@ -165,7 +186,7 @@ class FixedSizePicture(Gtk.Picture):
     set_size_request only raises the minimum. Two places need the slot to win
     instead:
 
-    * the cartridge composite is rendered at CARTRIDGE_RENDER_SCALE for HiDPI,
+    * the cartridge composite is rendered at the display's scale for HiDPI,
       and would blow the card up by that factor;
     * a list thumbnail asked to fit a fixed height reports the width its aspect
       implies, so each console would indent its titles differently.

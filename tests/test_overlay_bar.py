@@ -1,3 +1,4 @@
+import os
 import re
 import tempfile
 import unittest
@@ -161,7 +162,14 @@ class StageAssetsTests(unittest.TestCase):
         staged = overlay_bar.stage_assets(self.runtime)
         self.assertEqual(staged, self.runtime / overlay_bar.STAGED_DIR_NAME)
         shipped = sorted(p.name for p in overlay_bar.OVERLAY_DIR.iterdir() if p.is_file())
-        self.assertEqual(sorted(p.name for p in staged.iterdir()), shipped)
+        # Plus the stamp saying which OpenEmux staged them (issue 904).
+        self.assertEqual(
+            sorted(p.name for p in staged.iterdir() if not p.name.startswith(".")), shipped
+        )
+        self.assertEqual(
+            (staged / overlay_bar.STAGED_VERSION_FILE).read_text(encoding="utf-8"),
+            overlay_bar.__version__,
+        )
         for name in shipped:
             self.assertEqual((staged / name).read_bytes(),
                              (overlay_bar.OVERLAY_DIR / name).read_bytes(), name)
@@ -187,13 +195,42 @@ class StageAssetsTests(unittest.TestCase):
                          [("margin.glsl", stale)])
         self.assertTrue(same.is_file())
 
+    def test_a_copy_from_another_version_is_made_again_whatever_its_size(self):
+        # Issue 904: the staleness check is size and mtime, which a new
+        # release's files can share with the old; the version stamp is what
+        # catches that.
+        staged = overlay_bar.stage_assets(self.runtime)
+        (staged / overlay_bar.STAGED_VERSION_FILE).write_text("0.0.1", encoding="utf-8")
+        with patch("openemux.core.overlay_bar.shutil.copyfile") as copy:
+            overlay_bar.stage_assets(self.runtime)
+        shipped = sorted(p.name for p in overlay_bar.OVERLAY_DIR.iterdir() if p.is_file())
+        self.assertEqual(sorted(Path(dst).name for (_src, dst), _ in copy.call_args_list), shipped)
+        self.assertEqual(
+            (staged / overlay_bar.STAGED_VERSION_FILE).read_text(encoding="utf-8"),
+            overlay_bar.__version__,
+        )
+
+    def test_a_copy_older_than_its_source_is_refreshed_even_at_the_same_size(self):
+        staged = overlay_bar.stage_assets(self.runtime)
+        copy_path = staged / "margin.glsl"
+        os.utime(copy_path, (1, 1))
+        with patch("openemux.core.overlay_bar.shutil.copyfile") as copy:
+            overlay_bar.stage_assets(self.runtime)
+        self.assertEqual([Path(dst) for (_src, dst), _ in copy.call_args_list], [copy_path])
+
+    def test_a_copy_that_cannot_be_stated_is_made_again(self):
+        self.assertFalse(
+            overlay_bar._copy_is_current(self.runtime / "nope", overlay_bar.OVERLAY_DIR / "margin.glsl")
+        )
+        self.assertIsNone(overlay_bar._read_stamp(self.runtime / "nope"))
+
     def test_only_files_are_copied(self):
         shipped = Path(self._tmp.name) / "shipped"
         (shipped / "sub").mkdir(parents=True)
         (shipped / "bar.cfg").write_text("x", encoding="utf-8")
         with patch.object(overlay_bar, "OVERLAY_DIR", shipped):
             staged = overlay_bar.stage_assets(self.runtime)
-        self.assertEqual([p.name for p in staged.iterdir()], ["bar.cfg"])
+        self.assertEqual([p.name for p in staged.iterdir() if not p.name.startswith(".")], ["bar.cfg"])
 
     def test_falls_back_to_the_package_when_the_copy_fails(self):
         self.runtime.parent.mkdir(parents=True, exist_ok=True)

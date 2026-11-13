@@ -13,6 +13,7 @@ rename follows the ROM, delete forgets it.
 """
 
 import copy
+import time
 from pathlib import Path
 
 import yaml
@@ -23,6 +24,13 @@ from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 
 DEFAULT_CARTRIDGE_COLORS_FILE = store_path("cartridge_colors")
+
+#: How long a parse is trusted before the file is stat-ed again for a change
+#: made behind the app's back. The app's own writes bypass this (``save``
+#: drops the parse), so the only thing the delay costs is noticing an edit
+#: made with a text editor half a second late -- and what it buys is a page
+#: of cards that binds without one syscall per card (issue 907).
+STAMP_TTL_S = 0.5
 
 #: The shell as authored -- the absence of a color, not a color of its own.
 DEFAULT_COLOR_ID = "default"
@@ -99,6 +107,8 @@ class CartridgeColorStore:
         # YAML parses on the GTK main thread, repeated on every zoom, sort and
         # view-mode change (issue #231). Same key shape as the cover cache.
         self._cache = (None, None)
+        # When the stamp was last compared; see STAMP_TTL_S.
+        self._checked_at = None
 
     def _stamp(self):
         try:
@@ -107,16 +117,35 @@ class CartridgeColorStore:
             return None
         return (stat.st_mtime_ns, stat.st_size)
 
-    def load(self):
-        stamp = self._stamp()
+    def _current(self):
+        """The parsed file, for readers: shared, never copied, never edited.
+
+        ``get_effective_color`` is asked on every card bind, on the main
+        thread. It used to go through :meth:`load` twice -- two stats and two
+        deep copies of the whole mapping per card, 22,000 copies over one
+        zoom round-trip on a 3000-game library (issue 907). Readers get the
+        cached mapping itself; writers still take :meth:`load`, which copies.
+        """
         cached_stamp, cached = self._cache
+        now = time.monotonic()
+        if (
+            cached is not None
+            and self._checked_at is not None
+            and now - self._checked_at < STAMP_TTL_S
+        ):
+            return cached
+        stamp = self._stamp()
+        self._checked_at = now
         if stamp is not None and cached_stamp == stamp and cached is not None:
-            # A deep copy on the way out, for the same reason the parse takes
-            # one: a caller that mutates the result must not edit the cache.
-            return copy.deepcopy(cached)
+            return cached
         data = self._load_uncached()
-        self._cache = (stamp, copy.deepcopy(data))
+        self._cache = (stamp, data)
         return data
+
+    def load(self):
+        # A deep copy on the way out: a caller that mutates the result must
+        # not edit the cache.
+        return copy.deepcopy(self._current())
 
     def _load_uncached(self):
         # Deep copies for the same reason the shader store takes them: the
@@ -173,12 +202,13 @@ class CartridgeColorStore:
         # Our own writes are the one case the stamp cannot be trusted for: a
         # rewrite of the same length inside one filesystem clock tick.
         self._cache = (None, None)
+        self._checked_at = None
         return payload
 
     # -- per-console defaults ---------------------------------------------
     def get_console_color(self, console_id):
         canonical = resolve_system_id(console_id)
-        return self.load().get("console_defaults", {}).get(canonical, DEFAULT_COLOR_ID)
+        return self._current().get("console_defaults", {}).get(canonical, DEFAULT_COLOR_ID)
 
     def set_console_color(self, console_id, color_id):
         canonical = resolve_system_id(console_id)
@@ -196,14 +226,20 @@ class CartridgeColorStore:
     # -- per-ROM overrides -------------------------------------------------
     def get_rom_color(self, rom_path):
         """The ROM's own color override, or ``None`` to follow the console."""
-        return self.load().get("rom_overrides", {}).get(str(rom_path))
+        return self._current().get("rom_overrides", {}).get(str(rom_path))
 
     def get_effective_color(self, rom_path, console_id):
-        """The shell that will actually draw: per-ROM first, then per-console."""
-        override = self.get_rom_color(rom_path)
+        """The shell that will actually draw: per-ROM first, then per-console.
+
+        One read of the parsed mapping for both lookups: this is the per-card
+        call, and it costs two dictionary lookups and no copy.
+        """
+        data = self._current()
+        override = data.get("rom_overrides", {}).get(str(rom_path))
         if override:
             return override
-        return self.get_console_color(console_id)
+        canonical = resolve_system_id(console_id)
+        return data.get("console_defaults", {}).get(canonical, DEFAULT_COLOR_ID)
 
     def set_rom_color(self, rom_path, console_id, color_id):
         """Set (or with ``color_id=None`` clear) a ROM's shell color.

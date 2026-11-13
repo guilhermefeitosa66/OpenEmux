@@ -196,6 +196,11 @@ UPDATER_DEFAULTS = {
     "request_timeout_sec": 30,
     "retries": 3,
     "parallel_downloads": 8,
+    # The deferred sweep after the first boot fetches only the cores some
+    # picker would list -- the curated ones and those whose .info names a
+    # supported system (issue 908). The other ~200 the buildbot builds are
+    # an opt-in, from Preferences.
+    "download_all_cores": False,
 }
 
 # Bumped when a UI default changes in a way that should reach configs written
@@ -514,6 +519,10 @@ class ConfigManager:
         # One writer at a time: save_config runs from the GTK main thread, the
         # volume-persist timer, the bootstrap worker and atexit (issue #208).
         self._save_lock = threading.RLock()
+        # The debounced write (issue 905): a timer that saves on a worker
+        # thread, and whether anything is waiting for it.
+        self._save_timer = None
+        self._save_pending = False
         self.input_profiles = InputProfileManager(self.store_path("input"))
         self.shaders = ShaderConfigStore(self.store_path("shaders"))
         self.cores = CoreConfigStore(self.store_path("cores"))
@@ -776,11 +785,61 @@ class ConfigManager:
         with self._save_lock:
             if config:
                 self.config = config
+            self._cancel_save_timer()
+            self._save_pending = False
             snapshot = stored_config(self.config)
             try:
                 atomic_write_text(self.config_file, yaml.safe_dump(snapshot))
             except Exception as e:
                 logger.error("config not saved: %s", e)
+
+    #: How long a setting change may wait before it reaches the disk. Ten
+    #: zoom steps inside this window are one YAML dump and two fsyncs, not
+    #: twenty; a crash inside it loses at most these settings and never the
+    #: file, which is still written atomically.
+    SAVE_DEBOUNCE_S = 0.4
+
+    def save_config_soon(self):
+        """Save on a worker thread, after the changes stop for a moment.
+
+        For the settings the user changes with a key or a click while
+        looking at the result -- zoom, view mode, sort order, theme, the log
+        panel -- where the in-memory config is what the UI reads and the disk
+        can wait (issue 905). :meth:`flush` writes at once; the window flushes
+        on close and before a launch, and :meth:`save_config` itself flushes
+        whatever is pending along with its own write.
+        """
+        with self._save_lock:
+            self._save_pending = True
+            self._cancel_save_timer()
+            timer = threading.Timer(self.SAVE_DEBOUNCE_S, self._save_from_timer)
+            timer.daemon = True
+            timer.name = "openemux-config-save"
+            self._save_timer = timer
+            timer.start()
+
+    def _cancel_save_timer(self):
+        timer, self._save_timer = self._save_timer, None
+        if timer is not None:
+            timer.cancel()
+
+    def _save_from_timer(self):
+        with self._save_lock:
+            if not self._save_pending:
+                return
+            self.save_config()
+
+    def has_pending_save(self):
+        return self._save_pending
+
+    def flush(self):
+        """Write a debounced save now, if one is waiting. Returns whether it did."""
+        with self._save_lock:
+            if not self._save_pending:
+                self._cancel_save_timer()
+                return False
+            self.save_config()
+            return True
 
     def get_roms_path(self):
         return Path(self.config.get("roms_path", DEFAULT_ROMS_PATH))
@@ -875,7 +934,7 @@ class ConfigManager:
     def set_theme(self, theme):
         ui = self.config.setdefault("ui", {})
         ui["theme"] = normalize_theme(theme)
-        self.save_config()
+        self.save_config_soon()
         return ui["theme"]
 
     def get_update_settings(self):
@@ -914,7 +973,7 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["view_mode"] = normalize_view_mode(view_mode)
         ui["render_cartridge_overlay"] = renders_cartridge(ui["view_mode"])
-        self.save_config()
+        self.save_config_soon()
 
     def get_zoom(self):
         return normalize_zoom(self.config.get("ui", {}).get("zoom", DEFAULT_ZOOM))
@@ -922,7 +981,7 @@ class ConfigManager:
     def set_zoom(self, zoom):
         ui = self.config.setdefault("ui", {})
         ui["zoom"] = normalize_zoom(zoom)
-        self.save_config()
+        self.save_config_soon()
 
     def get_sort_order(self):
         return normalize_sort_order(self.config.get("ui", {}).get("sort_order"))
@@ -930,7 +989,7 @@ class ConfigManager:
     def set_sort_order(self, order):
         ui = self.config.setdefault("ui", {})
         ui["sort_order"] = normalize_sort_order(order)
-        self.save_config()
+        self.save_config_soon()
 
     def set_render_cartridge_overlay(self, enabled):
         """Legacy entry point: the cartridge frame is a view mode now."""
@@ -970,20 +1029,20 @@ class ConfigManager:
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         entry = overrides.setdefault(str(scope), {})
         entry[key] = normalize_display_value(key, value)
-        self.save_config()
+        self.save_config_soon()
 
     def enable_scope_override(self, scope):
         """Start a scope's own layout, seeded from the current global values."""
         base = self.get_ui_settings()
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         overrides[str(scope)] = {key: base[key] for key in DISPLAY_KEYS}
-        self.save_config()
+        self.save_config_soon()
 
     def clear_scope_override(self, scope):
         """Drop a scope's override so it follows the global layout again."""
         overrides = self.config.setdefault("ui", {}).setdefault("scope_overrides", {})
         if overrides.pop(str(scope), None) is not None:
-            self.save_config()
+            self.save_config_soon()
 
     def set_show_tips(self, enabled):
         ui = self.config.setdefault("ui", {})
@@ -1081,14 +1140,43 @@ class ConfigManager:
         self.set_bezel_for_console(console, bezels.CUSTOM)
         return None
 
+    def get_auto_resume(self):
+        """Whether a launch loads the game's automatic save state (issue 910)."""
+        return bool(self.config.get("runtime", {}).get("retroarch", {}).get("auto_resume", False))
+
+    def set_auto_resume(self, enabled):
+        retroarch = self.config.setdefault("runtime", {}).setdefault("retroarch", {})
+        retroarch["auto_resume"] = bool(enabled)
+        self.save_config()
+        return retroarch["auto_resume"]
+
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_log_panel"] = bool(enabled)
-        self.save_config()
+        self.save_config_soon()
 
     def set_gamepad_navigation(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["gamepad_navigation"] = bool(enabled)
+        self.save_config()
+
+    # ----- the controller's button labels (issue 914) ----------------------
+    def get_controller_glyph_family(self):
+        """``"auto"`` or a family name: which pad's letters the hint bar draws."""
+        value = str(self.config.get("ui", {}).get("controller_glyphs", "auto") or "auto")
+        return value if value in ("auto", "xbox", "playstation", "nintendo", "generic") else "auto"
+
+    def set_controller_glyph_family(self, family):
+        ui = self.config.setdefault("ui", {})
+        ui["controller_glyphs"] = str(family or "auto")
+        self.save_config()
+
+    def get_swap_confirm_cancel(self):
+        return bool(self.config.get("ui", {}).get("swap_confirm_cancel", False))
+
+    def set_swap_confirm_cancel(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["swap_confirm_cancel"] = bool(enabled)
         self.save_config()
 
     def get_console_order(self):
@@ -1292,9 +1380,27 @@ class ConfigManager:
         # The three the caller relies on being the right type: a hand-edited
         # config can put a string where a number belongs.
         resolved["enabled"] = bool(resolved["enabled"])
+        resolved["download_all_cores"] = bool(resolved["download_all_cores"])
         for key in ("request_timeout_sec", "retries", "parallel_downloads"):
             resolved[key] = int(resolved[key])
         return resolved
+
+    def set_download_all_cores(self, enabled):
+        """Opt in to (or out of) the full core sweep after the first boot.
+
+        Turning it on owes the sweep again, so the next start fetches what
+        the pickable-only sweep left out (issue 908).
+        """
+        updater = (
+            self.config.setdefault("runtime", {})
+            .setdefault("retroarch", {})
+            .setdefault("updater", {})
+        )
+        updater["download_all_cores"] = bool(enabled)
+        if enabled:
+            self.mark_deferred_assets_pending()
+        self.save_config()
+        return updater["download_all_cores"]
 
     def get_shaders_config_file(self):
         return self.shaders.config_file

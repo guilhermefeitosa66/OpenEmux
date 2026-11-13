@@ -27,7 +27,8 @@ if HAVE_DISPLAY:
 
     from openemux.ui import console_sidebar as sidebar_module
     from openemux.ui.context_menu import SEPARATOR, Submenu
-    from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, collection_scope
+    from openemux.core.systems import get_system_display_name
+    from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID, collection_scope
 
 
 class _SidebarCase(WindowCase):
@@ -66,8 +67,32 @@ class TheRowsTests(_SidebarCase):
     def test_a_console_that_is_not_there_has_no_row(self):
         self.assertIsNone(self.sidebar.find_row("N64"))
 
-    def test_a_row_is_labelled_by_its_console_id_and_full_name(self):
-        self.assertTrue(self.sidebar.label_for("SFC").startswith("SFC - "))
+    def test_a_row_is_labelled_by_the_consoles_name_alone(self):
+        # Issue 912: "SFC" is the folder, not what a player reads.
+        self.assertEqual(self.sidebar.label_for("SFC"), get_system_display_name("SFC"))
+        self.assertNotIn("SFC", self.sidebar.label_for("SFC"))
+
+    def test_a_row_warns_about_a_missing_bios_and_names_the_files(self):
+        # Issue 911: before the first launch fails.
+        row = self.sidebar.find_row("SFC")
+        self.assertFalse(row.bios_warning.get_visible())
+        self.assertTrue(self.sidebar.set_bios_warning("SFC", ["scph5501.bin"]))
+        self.assertTrue(row.bios_warning.get_visible())
+        self.assertEqual(
+            row.bios_warning.get_tooltip_text(),
+            self.said("sidebar.bios.tooltip", names="scph5501.bin"),
+        )
+        self.assertTrue(self.sidebar.set_bios_warning("SFC", []))
+        self.assertFalse(row.bios_warning.get_visible())
+        self.assertFalse(self.sidebar.set_bios_warning(ALL_CONSOLES_ID, ["x"]))
+        self.assertFalse(self.sidebar.set_bios_warning("N64", ["x"]))
+
+    def test_a_console_row_keeps_the_folder_id_in_its_tooltip(self):
+        row = self.sidebar.find_row("SFC")
+        self.assertEqual(row.get_tooltip_text(), self.said("sidebar.console.tooltip", id="SFC"))
+        self.assertIsNone(self.sidebar.tooltip_for(ALL_CONSOLES_ID))
+        self.assertIsNone(self.sidebar.tooltip_for(FAVORITES_ID))
+        self.assertIsNone(self.sidebar.tooltip_for("col:best"))
 
     def test_the_virtual_views_are_labelled_after_their_own_strings(self):
         self.assertEqual(self.sidebar.label_for(ALL_CONSOLES_ID), self.said("sidebar.all"))
@@ -150,6 +175,51 @@ class TheFavoritesRowTests(_SidebarCase):
         self.win.playlist_manager.toggle_favorite(self.rom())
         self.sidebar.sync_favorites_row()
         self.assertIsNone(self.sidebar.find_row(FAVORITES_ID))
+
+
+@needs_display
+class TheRecentlyPlayedRowTests(_SidebarCase):
+    """Issue 910: the row comes with the first launch, right under "All"."""
+
+    def test_a_library_never_played_gets_no_row(self):
+        self.assertIsNone(self.sidebar.find_row(RECENT_ID))
+
+    def test_the_first_launch_puts_the_row_right_under_all(self):
+        self.win.play_history.record_launch(self.rom()["path"])
+        self.sidebar.sync_recent_row()
+        self.assertEqual(self.rows()[:2], [ALL_CONSOLES_ID, RECENT_ID])
+        self.assertEqual(self.sidebar.label_for(RECENT_ID), self.said("sidebar.recent"))
+        self.assertIsNone(self.sidebar.tooltip_for(RECENT_ID))
+
+    def test_favorites_takes_the_place_below_it(self):
+        self.win.play_history.record_launch(self.rom()["path"])
+        self.sidebar.sync_recent_row()
+        self.win._toggle_favorite_from_ui(self.rom())
+        self.assertEqual(self.rows()[:3], [ALL_CONSOLES_ID, RECENT_ID, FAVORITES_ID])
+
+    def test_a_rebuild_keeps_the_row(self):
+        self.win.play_history.record_launch(self.rom()["path"])
+        self.sidebar.rebuild(self.win.visible_consoles)
+        self.assertEqual(self.rows()[1], RECENT_ID)
+
+    def test_the_row_stays_while_the_user_is_standing_on_the_page(self):
+        rom = self.rom()
+        self.win.play_history.record_launch(rom["path"])
+        self.sidebar.sync_recent_row()
+        self.win.current_console = RECENT_ID
+        self.win.play_history.forget(rom["path"])
+        self.sidebar.sync_recent_row()
+        self.assertIsNotNone(self.sidebar.find_row(RECENT_ID))
+        # ...and goes with the next navigation away.
+        self.win.current_console = "SFC"
+        self.sidebar.sync_recent_row()
+        self.assertIsNone(self.sidebar.find_row(RECENT_ID))
+
+    def test_an_empty_library_gets_no_recent_row_either(self):
+        self.sidebar.rebuild([])
+        self.win.play_history.record_launch(self.rom()["path"])
+        self.sidebar.sync_recent_row()
+        self.assertIsNone(self.sidebar.find_row(RECENT_ID))
 
 
 @needs_display

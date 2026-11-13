@@ -181,6 +181,10 @@ class _StubScanner:
     def scan_console(self, console):
         return self.roms
 
+    def fingerprint(self, console):
+        # The directory stamps a rebuild records (issue 901); none here.
+        return {}
+
 
 class _StubConfigManager:
     def __init__(self, playlists_dir):
@@ -216,7 +220,11 @@ class PlaylistAtomicWriteTests(unittest.TestCase):
             with patch("openemux.core.atomic_write.os.replace", _peek_then_replace):
                 manager.scan_and_rebuild_playlist("SFC")
 
-            self.assertEqual(seen, ["/roms/a.sfc\n/roms/b.sfc\n"])
+            # Two files go through the swap: the list, then its index sidecar
+            # (issue 901); each is complete before it replaces the old one.
+            self.assertEqual(seen[0], "/roms/a.sfc\n/roms/b.sfc\n")
+            self.assertEqual(len(seen), 2)
+            self.assertIn('"/roms/a.sfc"', seen[1])
             self.assertEqual(playlist.read_text(encoding="utf-8"), "/roms/c.sfc\n")
 
     def test_a_failed_favorite_toggle_keeps_the_favorites_file(self):

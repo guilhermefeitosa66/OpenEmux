@@ -45,6 +45,19 @@ class BiosManagerTests(unittest.TestCase):
             missing_after = find_missing_required_for_core(cfg, "PS", "mednafen_psx_libretro.so")
             self.assertEqual(missing_after, [])
 
+    def test_a_look_at_the_missing_files_creates_no_folder(self):
+        # Issue 911: the sidebar checks every console at start-up; only a
+        # launch earns the console its BIOS folder.
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _DummyConfig(tmp_dir)
+            missing = find_missing_required_for_core(
+                cfg, "PS", "mednafen_psx_libretro.so", ensure_dir=False
+            )
+            self.assertTrue(missing)
+            self.assertFalse(cfg.get_console_bios_dir("PS").exists())
+            find_missing_required_for_core(cfg, "PS", "mednafen_psx_libretro.so")
+            self.assertTrue(cfg.get_console_bios_dir("PS").is_dir())
+
     def test_required_mapping_exists_for_known_core(self):
         required = get_required_for_core("SATURN", "kronos_libretro.so")
         self.assertTrue(required)

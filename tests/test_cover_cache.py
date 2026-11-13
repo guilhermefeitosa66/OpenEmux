@@ -4,6 +4,7 @@ import threading
 import time
 from contextlib import contextmanager
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -223,6 +224,141 @@ class PoolTests(unittest.TestCase):
 
     def test_the_pool_is_shared(self):
         self.assertIs(cover_cache.pool(), cover_cache.pool())
+
+
+class ThePriorityQueueTests(unittest.TestCase):
+    """A card on screen jumps the queue; a stale job costs nothing (issue 899)."""
+
+    def _held_pool(self):
+        """A one-worker pool whose first job blocks until released."""
+        pool = cover_cache.DecodePool(1)
+        self.addCleanup(pool.shutdown, False)
+        release = threading.Event()
+        gate = threading.Event()
+
+        def _block():
+            gate.set()
+            release.wait(5)
+
+        pool.submit(_block)
+        self.assertTrue(gate.wait(5))
+        return pool, release
+
+    def test_a_promoted_job_runs_before_the_ones_queued_ahead_of_it(self):
+        pool, release = self._held_pool()
+        order = []
+        jobs = [pool.submit(order.append, name) for name in ("first", "second", "third")]
+        self.assertTrue(jobs[2].promote())
+        release.set()
+        for job in jobs:
+            job.result(5)
+        self.assertEqual(order[0], "third")
+        self.assertEqual(sorted(order), ["first", "second", "third"])
+
+    def test_a_promoted_job_still_runs_only_once(self):
+        pool, release = self._held_pool()
+        runs = []
+        job = pool.submit(runs.append, 1)
+        job.promote()
+        release.set()
+        job.result(5)
+        pool.shutdown(wait=True)
+        self.assertEqual(runs, [1])
+        self.assertEqual(pool.pending(), 0)
+
+    def test_a_finished_job_cannot_be_promoted(self):
+        job = cover_cache.submit(lambda: 42)
+        self.assertEqual(job.result(5), 42)
+        self.assertFalse(job.promote())
+        self.assertTrue(job.done())
+
+    def test_a_pending_job_can_be_cancelled_and_then_never_runs(self):
+        pool, release = self._held_pool()
+        runs = []
+        job = pool.submit(runs.append, 1)
+        self.assertTrue(job.cancel())
+        self.assertTrue(job.cancelled())
+        self.assertFalse(job.cancel())
+        release.set()
+        pool.shutdown(wait=True)
+        self.assertEqual(runs, [])
+
+    def test_a_failing_job_re_raises_on_result_and_is_logged(self):
+        def _boom():
+            raise ValueError("decode went wrong")
+
+        with self.assertLogs("openemux.core.cover_cache", level="ERROR"):
+            job = cover_cache.submit(_boom)
+            with self.assertRaises(ValueError):
+                job.result(5)
+
+    def test_waiting_on_a_job_that_never_finishes_times_out(self):
+        pool, release = self._held_pool()
+        job = pool.submit(lambda: None)
+        with self.assertRaises(cover_cache.FutureTimeoutError):
+            job.result(0.05)
+        release.set()
+
+    def test_a_pool_that_was_shut_down_takes_no_more_work(self):
+        pool = cover_cache.DecodePool(1)
+        pool.shutdown(wait=True)
+        self.assertFalse(pool.requeue(cover_cache.Job(lambda: None, (), {}), 0))
+
+    def test_an_idle_worker_is_reused_rather_than_a_new_one_started(self):
+        pool = cover_cache.DecodePool(4)
+        self.addCleanup(pool.shutdown, True)
+        pool.submit(lambda: None).result(5)
+        # Let the worker go back to waiting before the next submission.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not any(
+            getattr(thread, "idle", False) for thread in pool._threads
+        ):
+            time.sleep(0.005)
+        pool.submit(lambda: None).result(5)
+        self.assertEqual(len(pool._threads), 1)
+
+    def test_shutting_down_without_waiting_drops_the_queue(self):
+        pool, release = self._held_pool()
+        job = pool.submit(lambda: None)
+        pool.shutdown(wait=False)
+        release.set()
+        self.assertFalse(job.done())
+        self.assertEqual(pool.pending(), 0)
+
+
+class RememberedKeysTests(unittest.TestCase):
+    """A card that keeps its key binds without a stat (issue 907)."""
+
+    def setUp(self):
+        cover_cache.cache_clear()
+
+    def test_the_public_key_is_what_the_load_files_the_cover_under(self):
+        with TemporaryDirectory() as tmp_dir:
+            cover = _write_png(Path(tmp_dir) / "cover.png")
+            key = cover_cache.cache_key(cover, 32, 32)
+            pixbuf = cover_cache.load_cover(cover, 32, 32)
+            self.assertIs(cover_cache._cache_get(key), pixbuf)
+
+    def test_a_load_with_a_remembered_key_does_not_stat_the_file(self):
+        with TemporaryDirectory() as tmp_dir:
+            cover = _write_png(Path(tmp_dir) / "cover.png")
+            key = cover_cache.cache_key(cover, 32, 32)
+            first = cover_cache.load_cover(cover, 32, 32, key=key)
+            with mock.patch.object(cover_cache.Path, "stat", side_effect=AssertionError("stat")):
+                self.assertIs(cover_cache.load_cover(cover, 32, 32, key=key), first)
+
+    def test_a_remembered_key_whose_entry_was_evicted_decodes_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            cover = _write_png(Path(tmp_dir) / "cover.png", 16, 16)
+            key = cover_cache.cache_key(cover)
+            first = cover_cache.load_cover(cover, key=key)
+            cover_cache.cache_clear()
+            second = cover_cache.load_cover(cover, key=key)
+            self.assertIsNot(first, second)
+            self.assertEqual(second.get_width(), 16)
+
+    def test_a_missing_file_has_no_public_key(self):
+        self.assertIsNone(cover_cache.cache_key("/nowhere/at/all.png"))
 
 
 class ACoverThatCannotBeKeyedTests(unittest.TestCase):

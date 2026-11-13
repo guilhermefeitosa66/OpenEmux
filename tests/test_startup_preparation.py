@@ -36,29 +36,96 @@ class _EnvironmentCase(unittest.TestCase):
 
 
 class TheRendererPickTests(_EnvironmentCase):
-    """GTK4's GL renderer can hard-crash on a mismatched host driver."""
+    """GTK4's GL renderer can hard-crash on a mismatched host driver (issue 903).
 
-    def test_the_appimage_falls_back_to_the_software_renderer(self):
-        with mock.patch.object(
-            main_module, "is_running_in_appimage", return_value=True
-        ):
-            main_module._configure_gtk_renderer()
+    The AppImage tries it anyway, behind a probe file: written before GTK
+    comes up, removed after the first frame, and found at the next start when
+    the attempt crashed -- then, and only then, the software renderer.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.addCleanup(setattr, main_module, "_renderer_probe", None)
+
+    def _in_appimage(self):
+        return mock.patch.object(main_module, "is_running_in_appimage", return_value=True)
+
+    def test_the_appimage_tries_gtks_own_renderer_and_leaves_a_probe(self):
+        with self._in_appimage():
+            main_module._configure_gtk_renderer(self.tmp)
+        self.assertNotIn("GSK_RENDERER", os.environ)
+        probe = main_module.renderer_probe_path(self.tmp)
+        self.assertTrue(probe.exists())
+        self.assertIn(str(os.getpid()), probe.read_text(encoding="utf-8"))
+
+    def test_a_probe_left_by_a_crashed_start_means_the_software_renderer(self):
+        probe = main_module.renderer_probe_path(self.tmp)
+        probe.parent.mkdir(parents=True)
+        probe.write_text("pid=1\n", encoding="utf-8")
+        with self._in_appimage(), self.assertLogs("openemux.main", level="WARNING") as logs:
+            main_module._configure_gtk_renderer(self.tmp)
         self.assertEqual(os.environ["GSK_RENDERER"], "cairo")
+        self.assertTrue(any("did not reach its first frame" in line for line in logs.output))
+        self.assertIsNone(main_module._renderer_probe)
+
+    def test_a_probe_that_cannot_be_written_means_the_software_renderer(self):
+        unwritable = self.tmp / "file-not-a-dir"
+        unwritable.write_text("x", encoding="utf-8")
+        with self._in_appimage(), self.assertLogs("openemux.main", level="WARNING"):
+            main_module._configure_gtk_renderer(unwritable)
+        self.assertEqual(os.environ["GSK_RENDERER"], "cairo")
+
+    def test_the_first_frame_drawn_removes_the_probe_and_names_the_renderer(self):
+        with self._in_appimage():
+            main_module._configure_gtk_renderer(self.tmp)
+        window = mock.Mock()
+        window.get_renderer.return_value = mock.Mock(spec=[])
+        with self.assertLogs("openemux.main", level="INFO") as logs:
+            self.assertTrue(main_module.clear_renderer_probe(window))
+        self.assertFalse(main_module.renderer_probe_path(self.tmp).exists())
+        self.assertTrue(any("gsk renderer in use: Mock" in line for line in logs.output))
+        self.assertIsNone(main_module._renderer_probe)
+
+    def test_clearing_with_no_probe_and_no_window_is_harmless(self):
+        main_module._renderer_probe = None
+        self.assertFalse(main_module.clear_renderer_probe())
+        window = mock.Mock()
+        window.get_renderer.return_value = None
+        self.assertFalse(main_module.clear_renderer_probe(window))
+        window.get_renderer.side_effect = RuntimeError("not realized")
+        self.assertIsNone(main_module._renderer_name(window))
+
+    def test_a_probe_that_will_not_delete_is_reported(self):
+        with self._in_appimage():
+            main_module._configure_gtk_renderer(self.tmp)
+        with mock.patch.object(Path, "unlink", side_effect=OSError("busy")), self.assertLogs(
+            "openemux.main", level="WARNING"
+        ):
+            self.assertFalse(main_module.clear_renderer_probe())
 
     def test_a_source_run_leaves_gtk_to_pick_for_itself(self):
         with mock.patch.object(
             main_module, "is_running_in_appimage", return_value=False
         ):
-            main_module._configure_gtk_renderer()
+            main_module._configure_gtk_renderer(self.tmp)
         self.assertNotIn("GSK_RENDERER", os.environ)
+        self.assertFalse(main_module.renderer_probe_path(self.tmp).exists())
 
     def test_a_renderer_the_user_chose_is_never_overridden(self):
         os.environ["GSK_RENDERER"] = "ngl"
-        with mock.patch.object(
-            main_module, "is_running_in_appimage", return_value=True
-        ):
-            main_module._configure_gtk_renderer()
+        with self._in_appimage(), self.assertLogs("openemux.main", level="INFO"):
+            main_module._configure_gtk_renderer(self.tmp)
         self.assertEqual(os.environ["GSK_RENDERER"], "ngl")
+        self.assertFalse(main_module.renderer_probe_path(self.tmp).exists())
+
+    def test_the_probe_lives_under_the_apps_own_config_directory(self):
+        with mock.patch.object(main_module, "default_config_dir", return_value=self.tmp):
+            self.assertEqual(
+                main_module.renderer_probe_path(),
+                self.tmp / "runtime" / main_module.RENDERER_PROBE_NAME,
+            )
 
 
 class TheVendoredTypelibsTests(_EnvironmentCase):
@@ -243,9 +310,11 @@ class ThePreparationRunsOnceTests(unittest.TestCase):
                 "apply_portable_environment",
                 "_redirect_bytecode_cache",
                 "_apply_pending_portable_import",
-                "_configure_gtk_renderer",
                 "migrate_legacy_config_dir",
                 "configure_startup_logging",
+                # After the migration and the log: the renderer probe lives in
+                # the config dir and the pick goes on record (issue 903).
+                "_configure_gtk_renderer",
                 "_declare_windows_app_id",
                 "_ensure_gtk_typelibs",
                 "_ensure_pixbuf_loaders",

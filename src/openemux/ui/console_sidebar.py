@@ -17,7 +17,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GObject, Gtk
+from gi.repository import Pango, Adw, Gdk, Gio, GObject, Gtk
 
 from openemux.core.library_view import VIEW_MODES, normalize_view_mode
 from openemux.core.shaders import normalize_shader_id
@@ -35,12 +35,18 @@ from openemux.ui.context_menu import (
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
+    RECENT_ID,
     collection_slug,
     is_collection_scope,
     sidebar_row_ids,
 )
 
 logger = logging.getLogger(__name__)
+
+
+#: The views over the library that are not a console (issue 910 added the
+#: third): no folder, no per-console actions, no drag.
+VIRTUAL_VIEWS = (ALL_CONSOLES_ID, RECENT_ID, FAVORITES_ID)
 
 
 class ConsoleSidebar:
@@ -160,17 +166,30 @@ class ConsoleSidebar:
             return t("sidebar.all")
         if console_id == FAVORITES_ID:
             return t("sidebar.favorites")
+        if console_id == RECENT_ID:
+            return t("sidebar.recent")
         if is_collection_scope(console_id):
             slug = collection_slug(console_id)
             return self.win.collection_manager.get_name(slug) or slug
-        return f"{console_id} - {get_system_display_name(console_id)}"
+        # The name a player reads, not the folder's (issue 912): "FC",
+        # "SFC", "MD" are the ids the library is laid out by, and they stay
+        # in the row's tooltip and wherever the folder matters.
+        return get_system_display_name(console_id)
+
+    def tooltip_for(self, console_id):
+        """The row's tooltip: the console's folder id, where it went."""
+        if console_id in VIRTUAL_VIEWS or is_collection_scope(console_id):
+            return None
+        return self.win.t("sidebar.console.tooltip", id=console_id)
 
     def rebuild(self, consoles):
         while child := self.list_box.get_first_child():
             self.list_box.remove(child)
 
         slugs = [c["slug"] for c in self.win.collection_manager.list_collections()]
-        for row_id in sidebar_row_ids(consoles, slugs, self._wants_favorites_row()):
+        for row_id in sidebar_row_ids(
+            consoles, slugs, self._wants_favorites_row(), self._wants_recent_row()
+        ):
             self._append_row(row_id)
 
     def _wants_favorites_row(self):
@@ -184,6 +203,29 @@ class ConsoleSidebar:
         if self.win.playlist_manager.has_favorites():
             return True
         return self.win.current_console == FAVORITES_ID
+
+    def _wants_recent_row(self):
+        """Whether the "Recently played" row belongs in the list (issue 910).
+
+        Once anything was launched; and while the user stands on the page,
+        as with Favorites.
+        """
+        if self.win.play_history.has_history():
+            return True
+        return self.win.current_console == RECENT_ID
+
+    def sync_recent_row(self):
+        """Insert or remove just the "Recently played" row, keeping the selection."""
+        wanted = self._wants_recent_row()
+        row = self.find_row(RECENT_ID)
+        if wanted == (row is not None):
+            return
+        if not wanted:
+            self.list_box.remove(row)
+            return
+        if self.find_row(ALL_CONSOLES_ID) is None:
+            return
+        self._append_row(RECENT_ID, position=1)
 
     def sync_favorites_row(self):
         """Insert or remove just the "Favorites" row, keeping the selection.
@@ -203,7 +245,9 @@ class ConsoleSidebar:
         if self.find_row(ALL_CONSOLES_ID) is None:
             # No "All" row means an empty library, which has no rows at all.
             return
-        self._append_row(FAVORITES_ID, position=1)
+        # After "Recently played" when that row is there (issue 910).
+        position = 2 if self.find_row(RECENT_ID) is not None else 1
+        self._append_row(FAVORITES_ID, position=position)
 
     def _append_row(self, console_id, position=None):
         row = Gtk.ListBoxRow()
@@ -218,11 +262,26 @@ class ConsoleSidebar:
         name = Gtk.Label(label=self.label_for(console_id))
         name.set_halign(Gtk.Align.START)
         name.set_hexpand(True)
+        name.set_ellipsize(Pango.EllipsizeMode.END)
         box.append(name)
+        tooltip = self.tooltip_for(console_id)
+        if tooltip:
+            row.set_tooltip_text(tooltip)
 
-        # All and Favorites are virtual views: no per-console actions apply, so
-        # they get neither the button nor the right-click menu.
-        if console_id not in (ALL_CONSOLES_ID, FAVORITES_ID):
+        # A console whose core needs a system file the BIOS folder lacks
+        # says so here, before the first launch fails (issue 911). Hidden
+        # until the window has checked.
+        if self._is_console_row(console_id):
+            warning = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+            warning.add_css_class("warning")
+            warning.set_valign(Gtk.Align.CENTER)
+            warning.set_visible(False)
+            box.append(warning)
+            row.bios_warning = warning
+
+        # All, Recently played and Favorites are virtual views: no per-console
+        # actions apply, so they get neither the button nor the right-click menu.
+        if console_id not in VIRTUAL_VIEWS:
             menu_button = Gtk.Button.new_from_icon_name("view-more-symbolic")
             menu_button.add_css_class("flat")
             menu_button.add_css_class("sidebar-menu-button")
@@ -253,6 +312,19 @@ class ConsoleSidebar:
             self.list_box.append(row)
         else:
             self.list_box.insert(row, position)
+
+    def set_bios_warning(self, console_id, missing):
+        """Show (with the file names) or hide the row's BIOS warning."""
+        row = self.find_row(console_id)
+        warning = getattr(row, "bios_warning", None) if row is not None else None
+        if warning is None:
+            return False
+        warning.set_visible(bool(missing))
+        if missing:
+            warning.set_tooltip_text(
+                self.win.t("sidebar.bios.tooltip", names=", ".join(missing))
+            )
+        return True
 
     # ----- dragging a console into place (issue #386) ----------------------
     #
@@ -428,7 +500,7 @@ class ConsoleSidebar:
 
     def _install_context_menu(self, row, console_id):
         # "All" and "Favorites" are virtual views: none of the actions apply.
-        if console_id in (ALL_CONSOLES_ID, FAVORITES_ID):
+        if console_id in VIRTUAL_VIEWS:
             return
         gesture = Gtk.GestureClick()
         gesture.set_button(Gdk.BUTTON_SECONDARY)
@@ -712,7 +784,7 @@ class ConsoleSidebar:
     def _act_refresh(self, _action, _param):
         console = self._menu_console
         logger.info("sidebar context action: refresh console=%s", console)
-        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
+        if console in VIRTUAL_VIEWS:
             self.win._rescan_all_consoles(show_toast=True)
         else:
             self.win._rescan_single_console(console, show_toast=True)
@@ -724,7 +796,7 @@ class ConsoleSidebar:
     def _act_sync_covers(self, _action, _param):
         console = self._menu_console
         logger.info("sidebar context action: sync_covers console=%s", console)
-        if console in (ALL_CONSOLES_ID, FAVORITES_ID):
+        if console in VIRTUAL_VIEWS:
             self.win._start_cover_sync(scope="all", selected_console=None)
         else:
             self.win._start_cover_sync(scope="console", selected_console=console)

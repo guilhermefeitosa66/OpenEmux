@@ -35,6 +35,8 @@ if HAVE_DISPLAY:
     from openemux.ui import context_menu
     from openemux.ui import rom_card as rom_card_module
     from openemux.ui.rom_card import RomEntry, RomItem, entry_matches, item_for_widget
+    from openemux.ui.scopes import RECENT_ID
+    from openemux.core.systems import get_system_display_name
 
 
 class _CardCase(WindowCase):
@@ -56,6 +58,169 @@ class _CardCase(WindowCase):
         )
         pixbuf.fill(0x00FF00FF)
         return pixbuf
+
+
+@needs_display
+class WhatAScreenReaderHearsTests(_CardCase):
+    """Issue 915: names on the card and on every icon-only button."""
+
+    def _label(self, widget):
+        return widget.get_accessible_role(), widget
+
+    def test_the_card_is_a_named_list_item_with_a_description(self):
+        self.assertEqual(self.card.get_accessible_role(), Gtk.AccessibleRole.LIST_ITEM)
+        # The description names the console, and states what the badges show.
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        labels = {call.args[0][0]: call.args[1][0] for call in update.call_args_list}
+        self.assertEqual(labels[Gtk.AccessibleProperty.LABEL], self.entry.display_name)
+        self.assertIn(
+            get_system_display_name(self.entry.rom["console"]),
+            labels[Gtk.AccessibleProperty.DESCRIPTION],
+        )
+        self.assertNotIn(self.said("a11y.card.favorite"), labels[Gtk.AccessibleProperty.DESCRIPTION])
+
+    def test_the_description_says_favorite_missing_art_and_resume(self):
+        self.card._sync_favorite_button(True)
+        self.entry.has_artwork = False
+        self.card.ctx.has_auto_state = lambda rom: True
+        self.card.sync_play_state()
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        description = [c.args[1][0] for c in update.call_args_list if c.args[0][0] == Gtk.AccessibleProperty.DESCRIPTION][0]
+        for part in (
+            self.said("a11y.card.favorite"),
+            self.said("rom.artwork.missing"),
+            self.said("card.resume.tooltip"),
+        ):
+            self.assertIn(part, description)
+
+    def test_an_unbound_card_describes_nothing(self):
+        self.card.unbind()
+        with mock.patch.object(self.card, "update_property") as update:
+            self.card._sync_accessible_description()
+        update.assert_not_called()
+
+    def test_the_star_is_named_for_what_it_will_do(self):
+        with mock.patch.object(self.card.favorite_button, "update_property") as update:
+            self.card._sync_favorite_button(False)
+            self.card._sync_favorite_button(True)
+        self.assertEqual(
+            [c.args[1][0] for c in update.call_args_list],
+            [self.said("context.favorite.add"), self.said("context.favorite.remove")],
+        )
+
+    def test_the_position_in_the_set_is_told_to_the_reader(self):
+        with mock.patch.object(self.card, "update_relation") as relation:
+            self.card.set_position_in_set(2, 10)
+            self.card.set_position_in_set(None, 10)
+            self.card.set_position_in_set(0, 0)
+        relation.assert_called_once()
+        self.assertEqual(relation.call_args.args[1], [3, 10])
+
+    def test_the_badges_are_named_images(self):
+        self.assertEqual(self.card.artwork_badge.get_accessible_role(), Gtk.AccessibleRole.IMG)
+        self.assertEqual(self.card.resume_badge.get_accessible_role(), Gtk.AccessibleRole.IMG)
+
+
+@needs_display
+class TheStartingStateTests(_CardCase):
+    """Issue 904: the card answers the click before the process is up."""
+
+    def test_starting_swaps_the_play_icon_for_a_spinner_over_a_dimmed_cover(self):
+        self.card.set_launching(True)
+        self.assertTrue(self.card.launching)
+        self.assertTrue(self.card.launch_spinner.get_visible())
+        self.assertTrue(self.card.launch_spinner.get_spinning())
+        self.assertFalse(self.card.play_icon.get_visible())
+        self.assertTrue(self.card.play_overlay.get_visible())
+        self.assertLess(self.card.cover_overlay.get_opacity(), 1.0)
+        self.card.set_launching(False)
+        self.assertFalse(self.card.launching)
+        self.assertTrue(self.card.play_icon.get_visible())
+        self.assertFalse(self.card.launch_spinner.get_visible())
+        self.assertFalse(self.card.play_overlay.get_visible())
+        self.assertEqual(self.card.cover_overlay.get_opacity(), 1.0)
+
+    def test_leaving_the_card_keeps_the_state_showing(self):
+        self.card.set_launching(True)
+        self.card._on_hover_enter(None, 0, 0)
+        self.card._on_hover_leave(None)
+        self.assertTrue(self.card.play_overlay.get_visible())
+        self.card.set_focus_visual(True)
+        self.card.set_focus_visual(False)
+        self.assertTrue(self.card.play_overlay.get_visible())
+        # Clearing the state while the pointer is still there leaves hover in charge.
+        self.card._on_hover_enter(None, 0, 0)
+        self.card.set_launching(False)
+        self.assertTrue(self.card.play_overlay.get_visible())
+
+    def test_setting_the_same_state_twice_changes_nothing(self):
+        self.card.set_launching(False)
+        self.assertFalse(self.card.launch_spinner.get_visible())
+
+    def test_a_recycled_card_starts_clean(self):
+        self.card.set_launching(True)
+        self.card.bind(self.entry)
+        self.assertFalse(self.card.launching)
+
+
+@needs_display
+class OpeningTheDetailsTests(_CardCase):
+    """Issue 913: the menu row and Alt+Return both reach the window's dialog."""
+
+    def test_the_menu_action_opens_the_dialog_for_the_cards_game(self):
+        with mock.patch.object(self.win, "open_game_details") as open_details:
+            self.card._act_details(None, None)
+        open_details.assert_called_once_with(self.card.rom)
+
+    def test_without_a_game_or_a_window_nothing_opens(self):
+        with mock.patch.object(self.win, "open_game_details") as open_details:
+            with mock.patch.object(self.card, "context_services", None):
+                self.card.open_details()
+            self.card.unbind()
+            self.card.open_details()
+        open_details.assert_not_called()
+
+
+@needs_display
+class ThePlayStateTests(_CardCase):
+    """Issue 910: the resume badge and the caption follow the game's history."""
+
+    def test_a_console_page_card_shows_no_badge(self):
+        self.assertFalse(self.card.resume_badge.get_visible())
+        # ...and, not being a mixed page, has no line under the title at all.
+        self.assertIsNone(self.card.console_label)
+
+    def test_the_badge_lights_when_play_would_resume(self):
+        self.card.ctx.has_auto_state = lambda rom: True
+        self.card.sync_play_state()
+        self.assertTrue(self.card.resume_badge.get_visible())
+        self.card.ctx.has_auto_state = lambda rom: False
+        self.card.sync_play_state()
+        self.assertFalse(self.card.resume_badge.get_visible())
+
+    def test_an_unbound_card_has_no_play_state_to_sync(self):
+        self.card.unbind()
+        self.card.sync_play_state()
+        self.assertFalse(self.card.resume_badge.get_visible())
+
+    def test_the_caption_replaces_the_console_name_on_the_recent_page(self):
+        rom = self.entry.rom
+        self.win.play_history.record_launch(rom["path"])
+        self.win.play_history.record_play_time(rom["path"], 600)
+        self.win.sidebar.sync_recent_row()
+        self.win.sidebar.select(RECENT_ID)
+        group = self.win.pages.grid_for(RECENT_ID)
+        grid = group.grids()[0]
+        entry = grid.entries()[0]
+        self.pump_until(lambda: grid.card_for(entry) is not None)
+        card = grid.card_for(entry)
+        self.assertEqual(card.console_label.get_label(), self.win.play_caption(rom))
+        # Off the history, the line falls back to the console's name.
+        self.win.play_history.forget(rom["path"])
+        card.sync_play_state()
+        self.assertEqual(card.console_label.get_label(), get_system_display_name(rom["console"]))
 
 
 @needs_display
@@ -138,6 +303,48 @@ class TheCoverArrivingTests(_CardCase):
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
         self.assertIsNotNone(self.card.cover_image.get_paintable())
 
+    def test_the_same_pixbuf_is_attached_as_the_same_texture_every_time(self):
+        # Issue 902: a recycled card re-uploaded the cached cartridge on
+        # every bind.
+        pixbuf = self.pixbuf()
+        self.card._apply_cover_pixbuf(self.card._generation, pixbuf, True)
+        first = self.card.cover_image.get_paintable()
+        self.card._apply_cover_pixbuf(self.card._generation, pixbuf, True)
+        self.assertIs(self.card.cover_image.get_paintable(), first)
+        self.assertIs(rom_card_module.texture_for(pixbuf), first)
+
+    def test_a_plain_cover_gets_its_texture_the_same_way(self):
+        self.card.cartridge_frame_path = None
+        pixbuf = self.pixbuf()
+        with mock.patch.object(Gdk.Texture, "new_for_pixbuf", wraps=Gdk.Texture.new_for_pixbuf) as make:
+            self.card._apply_cover_pixbuf(self.card._generation, pixbuf, False)
+            self.card._apply_cover_pixbuf(self.card._generation, pixbuf, False)
+        self.assertEqual(make.call_count, 1)
+        self.assertIsNotNone(self.card.cover_image.get_paintable())
+
+    def test_the_composite_is_rendered_at_the_cards_display_scale(self):
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        self.entry.forget_artwork()
+        with mock.patch.object(self.card.ctx, "render_scale", 2), mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        self.assertEqual(render.call_args[1]["scale"], 2)
+
+    def test_the_cartridge_is_rendered_at_the_slot_width_less_the_shadow_margin(self):
+        # Issue 903: the slot holds the margin, the cartridge is drawn between.
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        self.entry.forget_artwork()
+        with mock.patch.object(self.card.ctx, "shadow_pad", 8), mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        self.assertEqual(render.call_args[1]["width"], self.card.cover_width - 16)
+
     def test_a_cartridge_composite_casts_its_shadow_from_its_outline(self):
         # issue 725: `.rom-cover` is a box shadow plus rounded corners, which
         # drew a rectangle around every cartridge.
@@ -179,7 +386,7 @@ class TheCoverArrivingTests(_CardCase):
 
     def test_art_that_will_not_attach_is_logged_rather_than_raised(self):
         with mock.patch.object(
-            self.card.cover_image, "set_pixbuf", side_effect=RuntimeError("bad")
+            self.card.cover_image, "set_paintable", side_effect=RuntimeError("bad")
         ):
             self.assertFalse(
                 self.card._apply_cover_pixbuf(
@@ -260,9 +467,81 @@ class TheCoverArrivingTests(_CardCase):
 
     def test_an_unbound_card_starts_no_fetch(self):
         self.card.entry = None
-        with mock.patch.object(rom_card_module, "fetch_cover") as fetch:
+        with mock.patch.object(rom_card_module.cover_cache, "submit") as submit:
             self.card._start_cover_fetch()
-        fetch.assert_not_called()
+        submit.assert_not_called()
+
+    def _run_fetch_now(self):
+        """Run the fetch the card would queue, on this thread."""
+        with mock.patch.object(
+            rom_card_module.cover_cache, "submit", side_effect=lambda fn: fn() or mock.Mock()
+        ):
+            self.card._start_cover_fetch()
+
+    def test_the_fetch_resolves_the_art_once_and_remembers_it_on_the_entry(self):
+        # Issue 907: the directory probes used to run on every bind.
+        self.entry.forget_artwork()  # the real fetch may have answered already
+        with mock.patch.object(
+            rom_card_module, "resolve_local_art", return_value="/roms/SFC/covers/Game.png"
+        ) as resolve, mock.patch.object(self.card, "_on_cover_fetched") as fetched:
+            self._run_fetch_now()
+            self._run_fetch_now()
+        resolve.assert_called_once()
+        self.assertEqual(self.entry.art_path, "/roms/SFC/covers/Game.png")
+        self.assertEqual(fetched.call_count, 2)
+        self.assertEqual(fetched.call_args[0][3], "/roms/SFC/covers/Game.png")
+
+    def test_a_fetch_queued_for_a_game_the_card_has_left_does_no_disk_work(self):
+        self.entry.forget_artwork()
+        with mock.patch.object(rom_card_module.cover_cache, "submit") as submit:
+            self.card._start_cover_fetch()
+        worker = submit.call_args[0][0]
+        self.card._generation += 1
+        with mock.patch.object(rom_card_module, "resolve_local_art") as resolve:
+            worker()
+        resolve.assert_not_called()
+        self.assertIs(self.entry.art_path, rom_card_module.ART_UNRESOLVED)
+
+    def test_a_refresh_forgets_what_was_remembered(self):
+        self.entry.art_path = "/roms/SFC/covers/Game.png"
+        self.entry.cover_key = ("key",)
+        with mock.patch.object(self.card, "_start_cover_fetch"):
+            self.card._refresh_cover_after_change()
+        self.assertIs(self.entry.art_path, rom_card_module.ART_UNRESOLVED)
+        self.assertIsNone(self.entry.cover_key)
+
+    def test_a_decoded_cover_remembers_its_cache_key(self):
+        self.card.cartridge_frame_path = None
+        pixbuf = self.pixbuf()
+        with mock.patch.object(
+            rom_card_module.cover_cache, "cache_key", return_value=("the", "key")
+        ), mock.patch.object(
+            rom_card_module.cover_cache, "load_cover", return_value=pixbuf
+        ) as load, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/tmp/a.png"
+            )
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/tmp/a.png"
+            )
+        self.assertEqual(self.entry.cover_key, ("the", "key"))
+        self.assertEqual(load.call_args[1]["key"], ("the", "key"))
+
+    def test_a_pending_fetch_can_be_promoted_to_the_front_of_the_pool(self):
+        job = mock.Mock()
+        job.done.return_value = False
+        job.promote.return_value = True
+        self.card._fetch_job = job
+        self.assertTrue(self.card.promote_pending_fetch())
+        job.promote.assert_called_once()
+
+    def test_a_finished_fetch_is_not_promoted_and_is_let_go(self):
+        job = mock.Mock()
+        job.done.return_value = True
+        self.card._fetch_job = job
+        self.assertFalse(self.card.promote_pending_fetch())
+        self.assertIsNone(self.card._fetch_job)
+        self.assertFalse(self.card.promote_pending_fetch())
 
     def test_the_cross_fade_runs_when_the_new_art_lands(self):
         # Issue #187: what separates covers filling in during a sync from
@@ -301,6 +580,58 @@ class WhatACartridgeLabelShowsTests(_CardCase):
         # every game whose only art is its box.
         self._composite_with("/roms/SFC/covers/Game.png")
         self.assertTrue(self.entry.has_artwork)
+
+
+@needs_display
+class RememberingTheCompositeTests(_CardCase):
+    """A rebind of the same game neither re-renders nor re-stats (issue 907)."""
+
+    def _fetch(self, render, load, cache_key=("composite", "key")):
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        with mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", side_effect=render
+        ) as rendered, mock.patch.object(
+            rom_card_module.cover_cache, "load_cover", side_effect=load
+        ) as loaded, mock.patch.object(
+            rom_card_module.cover_cache, "cache_key", return_value=cache_key
+        ), mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        return rendered, loaded
+
+    def test_the_second_bind_reuses_the_composite_and_its_key(self):
+        pixbuf = self.pixbuf()
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: pixbuf)
+        self.assertEqual(rendered.call_count, 1)
+        self.assertEqual(self.entry.composite_path, "/cache/SFC/Game.abc.png")
+        self.assertEqual(self.entry.composite_pixbuf_key, ("composite", "key"))
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/other.png"), lambda *a, **k: pixbuf)
+        rendered.assert_not_called()
+        self.assertEqual(loaded.call_args[1]["key"], ("composite", "key"))
+
+    def test_a_remembered_composite_that_is_gone_is_rendered_once_more(self):
+        pixbuf = self.pixbuf()
+        self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: pixbuf)
+        answers = iter([None, pixbuf])
+        rendered, loaded = self._fetch(
+            lambda *a, **k: Path("/cache/SFC/Game.def.png"), lambda *a, **k: next(answers)
+        )
+        self.assertEqual(rendered.call_count, 1)
+        self.assertEqual(self.entry.composite_path, "/cache/SFC/Game.def.png")
+        self.assertEqual(loaded.call_count, 2)
+
+    def test_a_composite_that_will_not_decode_falls_back_to_the_cover(self):
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: None)
+        self.assertEqual(rendered.call_count, 1)
+        self.assertIsNone(self.entry.composite_pixbuf_key)
+
+    def test_a_render_that_fails_is_remembered_as_no_cartridge(self):
+        rendered, loaded = self._fetch(lambda *a, **k: None, lambda *a, **k: None)
+        self.assertIsNone(self.entry.composite_path)
+        self.assertIsNotNone(self.entry.composite_key)
+        rendered, loaded = self._fetch(lambda *a, **k: None, lambda *a, **k: None)
+        rendered.assert_not_called()
 
 
 @needs_display
@@ -866,11 +1197,21 @@ class TheCartridgeShadowRuleTests(unittest.TestCase):
         start = css.index(selector + " {")
         return css[start:css.index("}", start)]
 
-    def test_the_cartridge_shadow_follows_the_alpha_not_the_box(self):
+    def test_the_cartridge_node_draws_no_shadow_of_its_own(self):
+        # Issue 903: the shadow that follows the outline (issue 725) is baked
+        # into the composite; a drop-shadow filter here was a software blur
+        # of every card on every scroll frame under the cairo renderer.
         rule = self.rule(".rom-cartridge")
-        self.assertIn("filter: drop-shadow(", rule)
-        self.assertNotIn("box-shadow", rule)
+        self.assertNotIn("filter", rule)
+        self.assertIn("box-shadow: none", rule)
         self.assertNotIn("border-radius", rule)
+
+    def test_no_card_node_carries_a_css_filter(self):
+        css = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "openemux" / "ui" / "style.css"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("filter:", css)
 
     def test_covers_keep_their_box_shadow(self):
         self.assertIn("box-shadow", self.rule(".rom-cover"))

@@ -35,6 +35,7 @@ class _ConfigCase(unittest.TestCase):
 
 
 class NormalisingWhatWasStoredTests(unittest.TestCase):
+
     def test_a_provider_entry_that_is_not_a_mapping_is_dropped(self):
         # A hand-edited config, or one from a version that stored strings.
         providers = normalize_artwork_providers(["screenscraper", {"id": "libretro"}])
@@ -97,6 +98,18 @@ class WhereTheArtworkLivesTests(_ConfigCase):
 
 
 class TheUpdateSettingsTests(_ConfigCase):
+    def test_opting_in_to_every_core_owes_the_sweep_again(self):
+        # Issue 908: the sweep fetches the pickable cores only; the switch
+        # fetches the rest, starting with the next sweep.
+        self.assertFalse(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.config.mark_deferred_assets_done()
+        self.assertTrue(self.config.set_download_all_cores(True))
+        self.assertTrue(self.config.get_retroarch_updater_settings()["download_all_cores"])
+        self.assertTrue(self.config.deferred_assets_pending())
+        self.config.mark_deferred_assets_done()
+        self.assertFalse(self.config.set_download_all_cores(False))
+        self.assertFalse(self.config.deferred_assets_pending())
+
     def test_a_timeout_that_is_not_a_number_falls_back_to_the_default(self):
         self.config.config.setdefault("updates", {})["timeout_seconds"] = "soon"
         self.assertEqual(

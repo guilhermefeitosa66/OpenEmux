@@ -185,6 +185,27 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn("Missing required BIOS", error)
         popen_mock.assert_not_called()
 
+    def test_launch_anyway_runs_without_the_bios(self):
+        # Issue 904: the window named the missing files and the user chose
+        # to let RetroArch try; the launcher's own check steps aside.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core)
+            launcher = RetroArchLauncher(base, cfg)
+
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                proc, error = launcher.launch_process("/tmp/game.cue", "PS", check_bios=False)
+                _close_log(proc)
+
+        self.assertIsNotNone(proc)
+        self.assertIsNone(error)
+        popen_mock.assert_called_once()
+
     def test_launch_writes_system_directory_and_runs_when_bios_present(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
@@ -516,6 +537,58 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertTrue(any("/states/GBA" in line for line in lines))
         self.assertIn('savestate_thumbnail_enable = "true"', lines)
         self.assertIn('state_slot = "0"', lines)
+
+    def test_the_users_cfg_is_parsed_again_only_when_it_changed(self):
+        # Issue 904: the override note used to parse the whole retroarch.cfg
+        # on every launch.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            launcher = RetroArchLauncher(base, cfg)
+            user_cfg = base / "retroarch.cfg"
+            user_cfg.write_text('input_player1_a = "x"\n', encoding="utf-8")
+            with patch.object(
+                retroarch_launcher.input_baseline,
+                "read_cfg_values",
+                wraps=retroarch_launcher.input_baseline.read_cfg_values,
+            ) as read:
+                first = launcher._user_cfg_values(user_cfg)
+                second = launcher._user_cfg_values(user_cfg)
+                self.assertEqual(read.call_count, 1)
+                self.assertIs(first, second)
+                user_cfg.write_text('input_player1_a = "y"\ninput_player1_b = "z"\n', encoding="utf-8")
+                self.assertEqual(launcher._user_cfg_values(user_cfg)["input_player1_b"], "z")
+                self.assertEqual(read.call_count, 2)
+                # A file that is not there reads as empty, and is re-read next time.
+                self.assertEqual(launcher._user_cfg_values(base / "missing.cfg"), {})
+                self.assertEqual(launcher._user_cfg_values(base / "missing.cfg"), {})
+                self.assertEqual(read.call_count, 3)
+
+    def test_override_leaves_the_automatic_state_alone_by_default(self):
+        # "Resume where I left off" is opt-in (issue 910): without it the
+        # override says nothing about auto save or auto load, so RetroArch's
+        # own setting stands.
+        lines = self._override_lines(None)
+        self.assertFalse(any(line.startswith("savestate_auto_") for line in lines))
+
+    def _resume_override_lines(self, resume=True):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
+            cfg.get_auto_resume = lambda: True
+            launcher = RetroArchLauncher(base, cfg)
+            path = launcher._write_runtime_override("GBA", resume=resume)
+            return Path(path).read_text(encoding="utf-8").splitlines()
+
+    def test_resume_saves_the_state_on_exit_and_loads_it_on_launch(self):
+        lines = self._resume_override_lines()
+        self.assertIn('savestate_auto_save = "true"', lines)
+        self.assertIn('savestate_auto_load = "true"', lines)
+
+    def test_start_fresh_still_saves_on_exit_but_does_not_load(self):
+        lines = self._resume_override_lines(resume=False)
+        self.assertIn('savestate_auto_save = "true"', lines)
+        self.assertIn('savestate_auto_load = "false"', lines)
 
     def _window_override_lines(self, display=":0"):
         env = {"DISPLAY": display} if display else {}

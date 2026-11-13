@@ -20,11 +20,13 @@ display. Converting the pixbuf into a texture and handing it to a widget is
 the caller's job and the only part that must run on the main loop.
 """
 
+import heapq
+import itertools
 import logging
 import os
 import threading
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from pathlib import Path
 
 import gi
@@ -52,6 +54,11 @@ MAX_CACHE_BYTES = 128 * 1024 * 1024
 #: one OS thread per ROM, which is what pinned a core on a big library.
 MAX_WORKERS = max(2, os.cpu_count() or 2)
 
+#: Job priorities, lowest number first. A card that is on screen promotes its
+#: fetch to URGENT (issue 899); everything else queues in arrival order.
+PRIORITY_URGENT = 0
+PRIORITY_NORMAL = 1
+
 _pool = None
 _pool_lock = threading.Lock()
 
@@ -60,20 +67,169 @@ _cache_bytes = 0
 _cache_lock = threading.Lock()
 
 
+class Job:
+    """One unit of work on the pool: a Future that can jump the queue.
+
+    ``promote()`` re-queues a job that has not started yet at the front. The
+    old FIFO executor could not do that: after a zoom, the hundreds of fetches
+    queued for cards that no longer existed ran before the fetches of the
+    cards actually on screen, which showed placeholders for seconds (issue
+    899). ``cancel()`` drops a job that has not started; a running one is
+    left to finish.
+    """
+
+    __slots__ = ("fn", "args", "kwargs", "_pool", "_state", "_lock", "_done", "_result", "_exception")
+
+    PENDING, RUNNING, FINISHED, CANCELLED = range(4)
+
+    def __init__(self, fn, args, kwargs, pool=None):
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        #: The pool the job was submitted to: a promotion re-queues it there,
+        #: not on the shared pool, which a private pool's job used to land on.
+        self._pool = pool
+        self._state = self.PENDING
+        self._lock = threading.Lock()
+        self._done = threading.Event()
+        self._result = None
+        self._exception = None
+
+    def _claim(self):
+        """Mark the job running, once. False when another entry already did."""
+        with self._lock:
+            if self._state != self.PENDING:
+                return False
+            self._state = self.RUNNING
+            return True
+
+    def _run(self):
+        try:
+            self._result = self.fn(*self.args, **self.kwargs)
+        except BaseException as exc:  # noqa: BLE001 - surfaced through result()
+            self._exception = exc
+            logger.exception("cover pool: job failed")
+        finally:
+            with self._lock:
+                self._state = self.FINISHED
+            self._done.set()
+
+    def cancel(self):
+        """Drop the job if it has not started. Returns whether it was dropped."""
+        with self._lock:
+            if self._state != self.PENDING:
+                return False
+            self._state = self.CANCELLED
+        self._done.set()
+        return True
+
+    def promote(self):
+        """Move a pending job to the front of its pool's queue."""
+        if self._state != self.PENDING:
+            return False
+        return (self._pool or pool()).requeue(self, PRIORITY_URGENT)
+
+    def done(self):
+        return self._done.is_set()
+
+    def cancelled(self):
+        return self._state == self.CANCELLED
+
+    def result(self, timeout=None):
+        """Wait for the job; re-raises what it raised."""
+        if not self._done.wait(timeout):
+            raise FutureTimeoutError()
+        if self._exception is not None:
+            raise self._exception
+        return self._result
+
+
+class DecodePool:
+    """A bounded pool of workers over a priority queue."""
+
+    def __init__(self, max_workers, thread_name_prefix="openemux-cover"):
+        self.max_workers = max(1, int(max_workers))
+        self._prefix = thread_name_prefix
+        self._heap = []
+        self._sequence = itertools.count()
+        self._condition = threading.Condition()
+        self._threads = []
+        self._shutdown = False
+
+    def submit(self, fn, *args, priority=PRIORITY_NORMAL, **kwargs):
+        job = Job(fn, args, kwargs, pool=self)
+        self.requeue(job, priority)
+        return job
+
+    def requeue(self, job, priority):
+        """Put ``job`` on the queue at ``priority``; the first pop claims it."""
+        with self._condition:
+            if self._shutdown:
+                return False
+            heapq.heappush(self._heap, (priority, next(self._sequence), job))
+            self._ensure_worker()
+            self._condition.notify()
+        return True
+
+    def _ensure_worker(self):
+        """Start a worker when every one is busy and the cap allows another."""
+        if len(self._threads) >= self.max_workers:
+            return
+        idle = sum(1 for thread in self._threads if getattr(thread, "idle", False))
+        if idle > 0:
+            return
+        thread = threading.Thread(
+            target=self._work,
+            name=f"{self._prefix}-{len(self._threads)}",
+            daemon=True,
+        )
+        thread.idle = False
+        self._threads.append(thread)
+        thread.start()
+
+    def _work(self):
+        thread = threading.current_thread()
+        while True:
+            with self._condition:
+                while not self._heap and not self._shutdown:
+                    thread.idle = True
+                    self._condition.wait()
+                thread.idle = False
+                if not self._heap:
+                    return
+                _priority, _seq, job = heapq.heappop(self._heap)
+            if job._claim():
+                job._run()
+
+    def pending(self):
+        """How many queue entries are waiting (promotions count twice)."""
+        with self._condition:
+            return len(self._heap)
+
+    def shutdown(self, wait=True):
+        """Stop taking work; with ``wait``, finish what is queued first."""
+        with self._condition:
+            if not wait:
+                self._heap.clear()
+            self._shutdown = True
+            self._condition.notify_all()
+        if wait:
+            for thread in list(self._threads):
+                thread.join()
+
+
 def pool():
     """The process-wide decode pool, created on first use."""
     global _pool
     with _pool_lock:
         if _pool is None:
-            _pool = ThreadPoolExecutor(
-                max_workers=MAX_WORKERS, thread_name_prefix="openemux-cover"
-            )
+            _pool = DecodePool(MAX_WORKERS)
         return _pool
 
 
-def submit(fn, *args, **kwargs):
-    """Run ``fn`` on the shared decode pool. Returns a Future."""
-    return pool().submit(fn, *args, **kwargs)
+def submit(fn, *args, priority=PRIORITY_NORMAL, **kwargs):
+    """Run ``fn`` on the shared decode pool. Returns a :class:`Job`."""
+    return pool().submit(fn, *args, priority=priority, **kwargs)
 
 
 def _cache_key(path, target_w, target_h):
@@ -151,7 +307,16 @@ def cache_bytes():
         return _cache_bytes
 
 
-def load_cover(path, target_w=None, target_h=None):
+def cache_key(path, target_w=None, target_h=None):
+    """The key :func:`load_cover` would file ``path`` under, or None.
+
+    A caller that keeps it can hand it back to ``load_cover`` and skip the
+    stat on every later bind of the same card (issue 907).
+    """
+    return _cache_key(path, target_w, target_h)
+
+
+def load_cover(path, target_w=None, target_h=None, key=None):
     """Decode ``path``, scaled to fit ``target_w`` x ``target_h``.
 
     Safe to call from a worker thread -- that is the entire point. Pass no
@@ -159,12 +324,19 @@ def load_cover(path, target_w=None, target_h=None):
     composite wants (it is already the card's shape, and the full-resolution
     art is what keeps it sharp on HiDPI).
 
+    ``key`` is a key from :func:`cache_key` remembered from an earlier load:
+    with it, a hit costs a dictionary lookup and no syscall at all. The
+    caller owns its freshness -- the card drops it whenever the artwork is
+    changed through the app -- so a cover replaced *behind* the app's back is
+    seen on the next page build rather than on the next bind.
+
     Returns ``None`` rather than raising: a cover can be missing, truncated
     or not an image at all, and none of those should take down a card.
     """
     if not path:
         return None
-    key = _cache_key(path, target_w, target_h)
+    if key is None:
+        key = _cache_key(path, target_w, target_h)
     if key is None:
         # Not on disk at all. That is the ordinary "no artwork" case, which
         # the placeholder already expresses -- no need to log it.

@@ -151,14 +151,22 @@ def x11_only_env(env):
 
 
 class RetroArchLauncher:
-    def __init__(self, project_root, config_manager):
+    def __init__(self, project_root, config_manager, core_catalog=None, shader_catalog=None):
         self.project_root = Path(project_root).expanduser()
         self.config_manager = config_manager
-        self.shader_catalog = ShaderCatalog(
+        # The window's own catalog when it has one (issue 904): one preset
+        # index per process, cached on disk, instead of a walk over the
+        # shader packs at the first launch.
+        self.shader_catalog = shader_catalog or ShaderCatalog(
             runtime_dir=self.config_manager.get_runtime_dir(),
             project_root=self.project_root,
         )
-        self.core_catalog = CoreCatalog(project_root=self.project_root)
+        #: The user's ``retroarch.cfg`` as last read, with the file's stamp:
+        #: the override note re-reads it only when the file changed (issue 904).
+        self._user_cfg_cache = None
+        # The window hands its own catalog in, so the process scans the core
+        # directories once rather than once per holder (issue 908).
+        self.core_catalog = core_catalog or CoreCatalog(project_root=self.project_root)
         #: Why the last launch has no shader, or ``None``. Set on every launch
         #: so the UI can say it out loud instead of leaving the only trace in a
         #: log file (issue #366).
@@ -446,7 +454,7 @@ class RetroArchLauncher:
             overlay_dir, image, translucent=translucent, margin_active=margin_active
         )
 
-    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR, overlay_cfg=None):
+    def _write_runtime_override(self, console, core_filename=None, shader_path=None, shader_enabled=False, state_slot=None, network_cmd_port=None, shader_dir=None, video_driver=None, overlay_dir=overlay_bar.OVERLAY_DIR, overlay_cfg=None, resume=True):
         """Assemble this launch's ``--appendconfig`` file and return its path.
 
         Seven concerns, one file. They used to be one 170-line function whose
@@ -480,7 +488,12 @@ class RetroArchLauncher:
             # The driver this core will make RetroArch switch to, started on
             # so nothing switches (see hw_driver).
             overrides["video_driver"] = f'"{video_driver}"'
-        overrides.update(self._savestate_overrides(states_dir, state_slot))
+        auto_resume = bool(
+            getattr(self.config_manager, "get_auto_resume", lambda: False)()
+        )
+        overrides.update(
+            self._savestate_overrides(states_dir, state_slot, auto_resume=auto_resume, resume=resume)
+        )
         overrides.update(self._window_overrides())
         overrides.update(self._launch_mode_overrides())
         # The game's controls are drawn by RetroArch itself (issue #469).
@@ -840,7 +853,7 @@ class RetroArchLauncher:
         """
         user_cfg = self._user_retroarch_cfg(launch_prefix, extra_flags)
         names = input_baseline.overridden_user_keys(
-            input_baseline.read_cfg_values(user_cfg),
+            self._user_cfg_values(user_cfg),
             self.last_runtime_overrides,
         )
         if names:
@@ -850,6 +863,20 @@ class RetroArchLauncher:
             )
         listed = ", ".join(names) if names else "none"
         return f"[openemux] input overrides from {cfg_path(user_cfg)}: {listed}\n"
+
+    def _user_cfg_values(self, user_cfg):
+        """The user's cfg as ``{key: value}``, parsed again only when it changed."""
+        try:
+            info = Path(user_cfg).stat()
+            stamp = (str(user_cfg), info.st_mtime_ns, info.st_size)
+        except OSError:
+            stamp = (str(user_cfg), None, None)
+        cached = self._user_cfg_cache
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
+        values = input_baseline.read_cfg_values(user_cfg)
+        self._user_cfg_cache = (stamp, values)
+        return values
 
     @staticmethod
     def _log_header(console, video_driver, shader_id, shader_path):
@@ -876,7 +903,7 @@ class RetroArchLauncher:
         return getter() if callable(getter) else VIDEO_DRIVER_AUTO
 
     @staticmethod
-    def _savestate_overrides(states_dir, state_slot):
+    def _savestate_overrides(states_dir, state_slot, auto_resume=False, resume=True):
         """Park the states in OpenEmux's own tree, on the asked-for slot.
 
         Thumbnails give the state manager something to show. The slot is the
@@ -884,12 +911,21 @@ class RetroArchLauncher:
         it; every other launch starts at 0 and moves from there with the slot
         hotkeys, which is why the setting that used to pin it is gone
         (issue #198).
+
+        ``auto_resume`` is the "Resume where I left off" setting (issue
+        910): RetroArch saves a ``.state.auto`` on exit and loads it on the
+        next start. ``resume=False`` is "Start fresh": the state is still
+        saved on exit, but not loaded now.
         """
-        return {
+        overrides = {
             "savestate_directory": f'"{cfg_path(states_dir)}"',
             "savestate_thumbnail_enable": '"true"',
             "state_slot": f'"{int(state_slot or 0)}"',
         }
+        if auto_resume:
+            overrides["savestate_auto_save"] = '"true"'
+            overrides["savestate_auto_load"] = '"true"' if resume else '"false"'
+        return overrides
 
     @staticmethod
     def _window_overrides():
@@ -984,9 +1020,16 @@ class RetroArchLauncher:
                 return values
         return {}
 
-    def launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
-                       force_extract=False):
+    def launch_process(
+        self, rom_path, console, state_slot=None, network_cmd_port=None,
+        force_extract=False, resume=True,
+        check_bios=True,
+    ):
         """Start the game, or say why it could not start.
+
+        ``check_bios=False`` is "Launch anyway" (issue 904): the UI already
+        told the user which system files are missing and they chose to let
+        RetroArch try without them.
 
         Everything before the ``Popen`` writes to disk -- the states dir, the
         runtime dir, the ``--appendconfig`` override, an input profile being
@@ -998,14 +1041,18 @@ class RetroArchLauncher:
         """
         try:
             return self._launch_process(
-                rom_path, console, state_slot, network_cmd_port, force_extract
+                rom_path, console, state_slot, network_cmd_port, force_extract, resume,
+                check_bios=check_bios,
             )
         except Exception as exc:
             logger.exception("retroarch launch failed before starting the process")
             return None, f"Could not start the game: {exc}"
 
-    def _launch_process(self, rom_path, console, state_slot=None, network_cmd_port=None,
-                        force_extract=False):
+    def _launch_process(
+        self, rom_path, console, state_slot=None, network_cmd_port=None,
+        force_extract=False, resume=True,
+        check_bios=True,
+    ):
         system_id = resolve_system_id(console)
         launch_prefix, prefix_error = self._launch_prefix(force_extract=force_extract)
         if prefix_error:
@@ -1034,7 +1081,11 @@ class RetroArchLauncher:
             return None, message
         core_filename = Path(core_path).name
         self.last_core_path = core_path
-        missing_bios = find_missing_required_for_core(self.config_manager, system_id, core_filename)
+        missing_bios = (
+            find_missing_required_for_core(self.config_manager, system_id, core_filename)
+            if check_bios
+            else []
+        )
         if missing_bios:
             bios_dir = self.config_manager.get_console_bios_dir(system_id)
             missing_str = ", ".join(missing_bios)
@@ -1099,6 +1150,7 @@ class RetroArchLauncher:
             video_driver=video_driver if video_driver != configured_driver else None,
             overlay_dir=overlay_dir,
             overlay_cfg=overlay_cfg,
+            resume=resume,
         )
         cmd.extend(["--appendconfig", runtime_override])
         if shader_path:

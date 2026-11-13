@@ -100,6 +100,26 @@ def list_states(states_dir, rom_path):
     return sorted(by_slot.values(), key=lambda state: state.slot)
 
 
+def has_auto_state(states_dir, rom_path):
+    """Whether RetroArch left a ``.state.auto`` for ``rom_path`` (issue 910).
+
+    The file ``savestate_auto_save`` writes on exit, in the console directory
+    or a per-core subdirectory, like the numbered slots.
+    """
+    directory = Path(states_dir)
+    if not directory.is_dir():
+        return False
+    name = f"{rom_state_stem(rom_path)}.state.auto"
+    for scan_dir in _scan_dirs(directory):
+        candidate = scan_dir / name
+        try:
+            if candidate.is_file():
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def slot_entries(states_dir, rom_path, max_slot=9):
     """``(slot, mtime-or-None)`` for every slot up to ``max_slot``.
 

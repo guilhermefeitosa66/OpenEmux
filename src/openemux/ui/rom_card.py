@@ -26,14 +26,34 @@ from openemux.core.library_view import (
     normalize_zoom,
     scale_length,
 )
+from openemux.core.library_search import fold, matches
 from openemux.core.paths import display_text
-from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover, is_label_art
+from openemux.core.scraper import COVER_ART, LABEL_ART, is_label_art, resolve_local_art
 from openemux.core.systems import get_system_display_name
 from openemux.ui.card_layout import (
     CARTRIDGE_RENDER_SCALE,
     FixedSizePicture,
     cartridge_frame_svg,
 )
+
+#: Gdk.Texture objects are immutable and GTK keeps their upload, so one is
+#: made per decoded pixbuf and kept on it: a recycled card scrolling back to
+#: a cached cover re-attaches the same texture instead of uploading it again
+#: (issue 902). The attribute lives as long as the cover cache holds the
+#: pixbuf, and goes with it.
+_TEXTURE_ATTR = "_openemux_texture"
+
+
+def texture_for(pixbuf):
+    """The one Gdk.Texture for ``pixbuf``, made on the first ask."""
+    texture = getattr(pixbuf, _TEXTURE_ATTR, None)
+    if texture is None:
+        texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+        try:
+            setattr(pixbuf, _TEXTURE_ATTR, texture)
+        except AttributeError:  # pragma: no cover - a pixbuf stand-in with slots
+            pass
+    return texture
 from openemux.ui.context_menu import (
     build_context_popover,
     present_context_popover,
@@ -42,6 +62,10 @@ from openemux.ui.context_menu import (
 from openemux.ui.rom_context import card_menu_entries
 
 logger = logging.getLogger(__name__)
+
+#: The artwork of an entry nobody has looked for yet. Distinct from None,
+#: which is the resolved answer "this game has no artwork".
+ART_UNRESOLVED = object()
 
 
 class RomEntry(GObject.Object):
@@ -55,6 +79,12 @@ class RomEntry(GObject.Object):
 
     The lowercased name is precomputed because it is what the search filter
     compares against, once per keystroke per ROM.
+
+    The resolved artwork is remembered here too (issue 907): the path the
+    lookup found, the cache key its decode was filed under, and the cartridge
+    composite rendered for it. A card scrolling back to this game is then a
+    few dictionary lookups, where it used to repeat the directory probes, the
+    cache stat and the composite's own stat on every bind.
     """
 
     __gtype_name__ = "OpenEmuxRomEntry"
@@ -66,21 +96,41 @@ class RomEntry(GObject.Object):
         # Escaped where GTK can see it: rom["name"] keeps the filesystem's own
         # bytes for the lookups that need them (issue #214).
         self.display_name = display_text(rom.get("name", ""))
-        self.search_name = self.display_name.lower()
+        # Folded once here, so a keystroke compares against it directly
+        # (issue 906): lowercase, accents stripped.
+        self.search_name = fold(self.display_name)
         self.selected = False
         # None until the cover fetch resolves; the "without artwork" filter
         # and the badge only act on False (issue #127).
         self.has_artwork = None
+        self.forget_artwork()
+
+    def forget_artwork(self):
+        """Drop what was remembered about the artwork, so the next bind looks again.
+
+        Every path that changes a game's art through the app ends here: the
+        picker, the manager, a sync, a shell colour change.
+        """
+        self.has_artwork = None
+        #: ART_UNRESOLVED, None (no art) or the path of the first kind found.
+        self.art_path = ART_UNRESOLVED
+        #: The cover cache key of the cover decoded at the card's size.
+        self.cover_key = None
+        #: ``(frame_path, width, scale)`` the composite below was rendered for.
+        self.composite_key = None
+        #: The composite's path (None when the render failed), and the cover
+        #: cache key its decode was filed under.
+        self.composite_path = None
+        self.composite_pixbuf_key = None
 
 
-def entry_matches(entry, query="", only_missing_artwork=False):
+def entry_matches(entry, query=(), only_missing_artwork=False):
     """Whether a ROM survives the search box and the "no artwork" filter.
 
-    ``query`` is expected already lowercased -- it is compared against the
-    name the entry precomputed, once per ROM instead of once per keystroke
-    per ROM.
+    ``query`` is the parsed query (``library_search.parse_query``): words in
+    any order, each a substring of the entry's folded name (issue 906).
     """
-    if query and query not in entry.search_name:
+    if query and not matches(query, entry.search_name):
         return False
     if only_missing_artwork and entry.has_artwork is not False:
         # `None` means the fetch has not resolved yet: hide it rather than
@@ -134,6 +184,10 @@ class CardContext:
         cartridge,
         frame_for_rom,
         context_services,
+        render_scale=CARTRIDGE_RENDER_SCALE,
+        shadow_pad=0,
+        play_caption=None,
+        has_auto_state=None,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -156,6 +210,17 @@ class CardContext:
         # Whether this page draws cards as cartridges at all. The shell of an
         # individual ROM (its color variant) comes from frame_for_rom.
         self.cartridge = cartridge
+        # The composite's pixel scale: the display's, so a 1x monitor holds
+        # 1x composites (issue 902).
+        self.render_scale = max(1, int(render_scale))
+        # The transparent margin the composite carries for its shadow (issue
+        # 903): the picture slot includes it, the cartridge width does not.
+        self.shadow_pad = max(0, int(shadow_pad))
+        # ``play_caption(rom)``: the line under the title on the Recently
+        # played page; ``has_auto_state(rom)``: whether the card shows the
+        # resume badge (issue 910). Both optional.
+        self.play_caption = play_caption
+        self.has_auto_state = has_auto_state
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -191,6 +256,9 @@ class RomItem(Gtk.Box):
         )
         self.ctx = ctx
         self.entry = None
+        # One named item per game for a screen reader (issue 915); GTK's list
+        # item wrapper around it is what carries the position in the set.
+        self.set_accessible_role(Gtk.AccessibleRole.LIST_ITEM)
         # Bumped on every bind and every manual refresh: a cover fetch that
         # was in flight when the card moved to another game answers with a
         # stale token and is dropped.
@@ -307,17 +375,28 @@ class RomItem(Gtk.Box):
         self.play_overlay.add_css_class("play-overlay")
         self.play_overlay.set_visible(False)
 
-        play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        play_icon.set_pixel_size(scale_length(40, self.zoom))
-        play_icon.set_halign(Gtk.Align.CENTER)
-        play_icon.set_valign(Gtk.Align.CENTER)
-        play_icon.add_css_class("play-icon")
+        self.play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+        self.play_icon.set_pixel_size(scale_length(40, self.zoom))
+        self.play_icon.set_halign(Gtk.Align.CENTER)
+        self.play_icon.set_valign(Gtk.Align.CENTER)
+        self.play_icon.add_css_class("play-icon")
         play_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         play_center.set_hexpand(True)
         play_center.set_vexpand(True)
         play_center.set_halign(Gtk.Align.CENTER)
         play_center.set_valign(Gtk.Align.CENTER)
-        play_center.append(play_icon)
+        play_center.append(self.play_icon)
+        # "Starting…": the spinner takes the icon's place from the click to
+        # the process, over a dimmed cover (issue 904).
+        self.launch_spinner = Gtk.Spinner()
+        spinner_size = scale_length(36, self.zoom)
+        self.launch_spinner.set_size_request(spinner_size, spinner_size)
+        self.launch_spinner.set_halign(Gtk.Align.CENTER)
+        self.launch_spinner.set_valign(Gtk.Align.CENTER)
+        self.launch_spinner.add_css_class("play-icon")
+        self.launch_spinner.set_visible(False)
+        play_center.append(self.launch_spinner)
+        self._launching = False
         self.play_overlay.append(play_center)
 
         self.cover_overlay.add_overlay(self.play_overlay)
@@ -341,6 +420,12 @@ class RomItem(Gtk.Box):
             self.favorite_button.set_margin_start(6)
         self.favorite_button.connect("clicked", self._on_favorite_button_clicked)
         self._is_favorite_now = False
+        # A tooltip is not an accessible name (issue 915): Orca read these
+        # buttons as unnamed. The star's name follows its state in
+        # _sync_favorite_button.
+        self.favorite_button.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("context.favorite.add")]
+        )
         if not compact:
             self.cover_overlay.add_overlay(self.favorite_button)
 
@@ -351,6 +436,11 @@ class RomItem(Gtk.Box):
         self.artwork_badge = Gtk.Image.new_from_icon_name("image-missing-symbolic")
         self.artwork_badge.add_css_class("artwork-missing-badge")
         self.artwork_badge.set_tooltip_text(self.t("rom.artwork.missing"))
+        # Named, so the state the icon conveys is not conveyed by the icon alone.
+        self.artwork_badge.set_accessible_role(Gtk.AccessibleRole.IMG)
+        self.artwork_badge.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("rom.artwork.missing")]
+        )
         self.artwork_badge.set_visible(False)
         self.artwork_badge.set_halign(Gtk.Align.END)
         self.artwork_badge.set_valign(Gtk.Align.END)
@@ -374,10 +464,30 @@ class RomItem(Gtk.Box):
             self.menu_button.set_margin_top(6)
             self.menu_button.set_margin_end(6)
         self.menu_button.set_tooltip_text(self.t("context.more_options"))
+        self.menu_button.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("context.more_options")]
+        )
         self.menu_button.set_visible(False)
         self.menu_button.connect("clicked", self._on_menu_button_clicked)
         if not compact:
             self.cover_overlay.add_overlay(self.menu_button)
+
+        # A game with an automatic save state says Play will pick it up
+        # where it was left (issue 910). Bottom-left, where nothing else sits.
+        self.resume_badge = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+        self.resume_badge.add_css_class("resume-badge")
+        self.resume_badge.set_tooltip_text(self.t("card.resume.tooltip"))
+        self.resume_badge.set_accessible_role(Gtk.AccessibleRole.IMG)
+        self.resume_badge.update_property(
+            [Gtk.AccessibleProperty.LABEL], [self.t("card.resume.tooltip")]
+        )
+        self.resume_badge.set_visible(False)
+        self.resume_badge.set_halign(Gtk.Align.START)
+        self.resume_badge.set_valign(Gtk.Align.END)
+        if not compact:
+            self.resume_badge.set_margin_bottom(6)
+            self.resume_badge.set_margin_start(6)
+            self.cover_overlay.add_overlay(self.resume_badge)
 
         # List rows carry the inbox idiom: a checkbox at the start of the row,
         # always visible, reflecting and driving this ROM's selection
@@ -417,7 +527,7 @@ class RomItem(Gtk.Box):
         text_box.append(self.name_label)
 
         self.console_label = None
-        if self.mixed_consoles or compact:
+        if self.mixed_consoles or compact or ctx.play_caption is not None:
             self.console_label = Gtk.Label()
             self.console_label.set_halign(label_align)
             self.console_label.set_xalign(0.0 if compact else 0.5)
@@ -443,6 +553,9 @@ class RomItem(Gtk.Box):
         self._context_popover = None
         self._action_group = None
         self._fade_next_apply = False
+        # The pool job fetching this card's art, while one is pending: the
+        # grid promotes it when the card is on screen (issue 899).
+        self._fetch_job = None
 
     # -- binding -----------------------------------------------------------
 
@@ -465,6 +578,8 @@ class RomItem(Gtk.Box):
         self.entry = entry
         self._generation += 1
         rom = entry.rom
+        # A recycled card may have been mid-launch for another game.
+        self.set_launching(False)
         self.cartridge_frame_path = self.ctx.frame_for_rom(rom)
 
         full_name = entry.display_name
@@ -473,11 +588,11 @@ class RomItem(Gtk.Box):
             full_name if self.compact else self._truncate_name(full_name, self._preview_limit)
         )
         self.name_label.set_tooltip_text(full_name)
-        if self.console_label is not None:
-            self.console_label.set_label(get_system_display_name(rom["console"]))
+        self.sync_play_state()
 
         self._sync_favorite_button(self.is_favorite(rom))
         self.artwork_badge.set_visible(entry.has_artwork is False)
+        self._sync_accessible_description()
         self.set_selected(entry.selected)
         # Any hover/focus affordance belongs to the card that just left.
         self.remove_css_class("rom-card-hover")
@@ -515,12 +630,36 @@ class RomItem(Gtk.Box):
         if entry is None:
             return
         token = self._generation
-        fetch_cover(
-            entry.rom,
-            self.roms_dir,
-            lambda rom, cover_path: self._on_cover_fetched(entry, token, rom, cover_path),
-            kinds=self._art_kinds,
-        )
+        rom = entry.rom
+        roms_dir = self.roms_dir
+        kinds = self._art_kinds
+
+        def _worker():
+            # First thing, before any disk work: a job queued for a card that
+            # has since moved on (a zoom replaces every card on the page)
+            # costs a token compare and nothing else (issue 899).
+            if self._is_stale(token):
+                return
+            path = entry.art_path
+            if path is ART_UNRESOLVED:
+                path = resolve_local_art(rom, roms_dir, kinds)
+                entry.art_path = path
+            self._on_cover_fetched(entry, token, rom, path)
+
+        self._fetch_job = cover_cache.submit(_worker)
+
+    def promote_pending_fetch(self):
+        """Move this card's fetch, if still queued, to the front of the pool.
+
+        Called by the grid for the cards that are actually on screen after a
+        layout pass, so they get their art before the rows GTK keeps around
+        them (issue 899). Returns whether a job was promoted.
+        """
+        job = self._fetch_job
+        if job is None or job.done():
+            self._fetch_job = None
+            return False
+        return job.promote()
 
     def _is_stale(self, token):
         return token != self._generation
@@ -567,6 +706,9 @@ class RomItem(Gtk.Box):
             search_btn.set_focusable(False)
             search_btn.set_can_focus(False)
             search_btn.set_halign(Gtk.Align.CENTER)
+            search_btn.update_property(
+                [Gtk.AccessibleProperty.LABEL], [self.t("rom.artwork.search")]
+            )
             search_btn.connect("clicked", self._on_search_artwork_clicked)
             placeholder_center.append(search_btn)
 
@@ -613,38 +755,73 @@ class RomItem(Gtk.Box):
             # be thrown away, so it is not started at all.
             return
         if self.cartridge_frame_path:
-            # Compose the label into the cartridge (cached on disk, so this
-            # only costs anything the first time). A ROM with no label renders
-            # as a blank cartridge instead of the generic icon, keeping the
-            # shelf consistent -- and that includes a ROM that has box art:
-            # cropped into the sticker, a box cover is not a label, it is a
-            # broken-looking cartridge (issue #457).
-            label_path = cover_path if is_label_art(cover_path) else None
-            composite = cartridge_render.render_cartridge(
-                label_path,
-                self.cartridge_frame_path,
-                rom["console"],
-                rom["name"],
-                width=self.cover_width,
-                scale=CARTRIDGE_RENDER_SCALE,
-            )
-            if composite:
-                # Full resolution: the composite is already the card's shape,
-                # and the full-size art is what keeps it sharp on HiDPI.
-                pixbuf = cover_cache.load_cover(str(composite))
-                if pixbuf is not None:
-                    GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, True)
-                    return
+            pixbuf = self._cartridge_pixbuf(entry, rom, cover_path)
+            if pixbuf is not None:
+                GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, True)
+                return
         if cover_path:
             width, height = self._cover_target_size()
-            pixbuf = cover_cache.load_cover(cover_path, width, height)
+            key = entry.cover_key or cover_cache.cache_key(cover_path, width, height)
+            pixbuf = cover_cache.load_cover(cover_path, width, height, key=key)
             if pixbuf is not None:
+                entry.cover_key = key
                 GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, False)
                 return
         # No cover, or one that would not decode -- cover_cache logs the
         # latter, so a corrupt file is no longer indistinguishable from a
         # missing one.
         GLib.idle_add(self._restore_placeholder, token)
+
+    def _cartridge_pixbuf(self, entry, rom, cover_path):
+        """The decoded cartridge composite for this game, or None.
+
+        Compose the label into the cartridge (cached on disk, so this only
+        costs anything the first time). A ROM with no label renders as a
+        blank cartridge instead of the generic icon, keeping the shelf
+        consistent -- and that includes a ROM that has box art: cropped into
+        the sticker, a box cover is not a label, it is a broken-looking
+        cartridge (issue #457).
+
+        The composite's path and its decode key are kept on the entry, so a
+        rebind of the same game neither re-checks the disk cache nor stats
+        the composite (issue 907). A remembered composite that will not
+        decode any more -- pruned from the disk cache -- is rendered again
+        once before the card gives up on the cartridge.
+        """
+        label_path = cover_path if is_label_art(cover_path) else None
+        scale = self.ctx.render_scale
+        # The slot holds the shadow margin; the cartridge is drawn between.
+        width = self.cover_width - 2 * self.ctx.shadow_pad
+        wanted = (str(self.cartridge_frame_path), width, scale)
+        for attempt in (0, 1):
+            if entry.composite_key != wanted:
+                composite = cartridge_render.render_cartridge(
+                    label_path,
+                    self.cartridge_frame_path,
+                    rom["console"],
+                    rom["name"],
+                    width=width,
+                    scale=scale,
+                )
+                entry.composite_key = wanted
+                entry.composite_path = str(composite) if composite else None
+                entry.composite_pixbuf_key = None
+            composite = entry.composite_path
+            if not composite:
+                return None
+            # Full resolution: the composite is already the card's shape, and
+            # the full-size art is what keeps it sharp on HiDPI.
+            key = entry.composite_pixbuf_key or cover_cache.cache_key(composite)
+            pixbuf = cover_cache.load_cover(composite, key=key)
+            if pixbuf is not None:
+                entry.composite_pixbuf_key = key
+                return pixbuf
+            if attempt == 0 and entry.composite_pixbuf_key is not None:
+                # Remembered from before and gone from the disk since.
+                entry.composite_key = None
+                continue
+            return None
+        return None  # pragma: no cover - the loop returns on both attempts
 
     def _restore_placeholder(self, token):
         if self._is_stale(token) or self._is_abandoned():
@@ -686,12 +863,12 @@ class RomItem(Gtk.Box):
         if self._is_stale(token) or self._is_abandoned():
             return False
         try:
-            if full_resolution:
-                self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-            else:
-                if self._backdrop is not None:
-                    self._fit_cover_to(pixbuf)
-                self.cover_image.set_pixbuf(pixbuf)
+            if not full_resolution and self._backdrop is not None:
+                self._fit_cover_to(pixbuf)
+            # One texture per cached pixbuf, cover or composite: a rebind to
+            # art the cache still holds re-attaches it rather than uploading
+            # it again (issue 902).
+            self.cover_image.set_paintable(texture_for(pixbuf))
             # Set on every apply, either way: the grid recycles cards, and one
             # that last showed a cartridge must not hand its look to a cover.
             # Only once the art is attached, so a failed attach leaves the
@@ -803,6 +980,10 @@ class RomItem(Gtk.Box):
         self.favorite_button.set_visible(
             self._is_favorite_now or self.has_css_class("rom-card-hover")
         )
+        self.favorite_button.update_property(
+            [Gtk.AccessibleProperty.LABEL],
+            [self.t("context.favorite.remove" if is_favorite else "context.favorite.add")],
+        )
 
     def _on_favorite_button_clicked(self, _button):
         self.toggle_favorite()
@@ -837,7 +1018,8 @@ class RomItem(Gtk.Box):
         self.add_css_class("rom-card-hover")
 
     def _on_hover_leave(self, controller):
-        self.play_overlay.set_visible(False)
+        if not self._launching:
+            self.play_overlay.set_visible(False)
         # Keep the button around while its own menu is open, otherwise it
         # vanishes from under the pointer the moment the popover takes over.
         if self._context_popover is None:
@@ -861,10 +1043,35 @@ class RomItem(Gtk.Box):
             return
         if self.has_css_class("rom-card-hover"):
             return  # the pointer is still on the card; leave hover in charge
-        self.play_overlay.set_visible(False)
+        if not self._launching:
+            self.play_overlay.set_visible(False)
         if self._context_popover is None:
             self.menu_button.set_visible(False)
         self.favorite_button.set_visible(self._is_favorite_now)
+
+    def set_launching(self, launching):
+        """Show or clear the "Starting…" state (issue 904).
+
+        Set on the click, cleared when the process is up or the launch
+        failed: the spinner over a dimmed cover is the one-frame answer to
+        the click, where nothing used to change until RetroArch's window.
+        """
+        launching = bool(launching)
+        if launching == self._launching:
+            return
+        self._launching = launching
+        self.play_icon.set_visible(not launching)
+        self.launch_spinner.set_visible(launching)
+        self.launch_spinner.set_spinning(launching)
+        self.cover_overlay.set_opacity(0.55 if launching else 1.0)
+        if launching:
+            self.play_overlay.set_visible(True)
+        elif not self.has_css_class("rom-card-hover"):
+            self.play_overlay.set_visible(False)
+
+    @property
+    def launching(self):
+        return self._launching
 
     def _on_menu_button_clicked(self, button):
         # Anchor the menu under the button. Coordinates are relative to the
@@ -913,6 +1120,51 @@ class RomItem(Gtk.Box):
         if self.on_launch_callback:
             self.on_launch_callback(rom)
 
+    def _sync_accessible_description(self):
+        """What a screen reader says for this card (issue 915).
+
+        The name is the game's title; the description carries the console,
+        the favorite and artwork states and the play time, so nothing the
+        badges show is conveyed by an icon alone.
+        """
+        entry = self.entry
+        if entry is None:
+            return
+        rom = entry.rom
+        self.update_property([Gtk.AccessibleProperty.LABEL], [entry.display_name])
+        parts = [get_system_display_name(rom["console"])]
+        if self._is_favorite_now:
+            parts.append(self.t("a11y.card.favorite"))
+        if entry.has_artwork is False:
+            parts.append(self.t("rom.artwork.missing"))
+        if self.resume_badge.get_visible():
+            parts.append(self.t("card.resume.tooltip"))
+        caption = self.ctx.play_caption(rom) if self.ctx.play_caption else None
+        if caption:
+            parts.append(caption)
+        self.update_property([Gtk.AccessibleProperty.DESCRIPTION], [", ".join(parts)])
+
+    def set_position_in_set(self, position, total):
+        """Tell the screen reader "item n of m" (issue 915); the grid knows the order."""
+        if position is None or total <= 0:
+            return
+        self.update_relation(
+            [Gtk.AccessibleRelation.POS_IN_SET, Gtk.AccessibleRelation.SET_SIZE],
+            [int(position) + 1, int(total)],
+        )
+
+    def sync_play_state(self):
+        """The caption under the title and the resume badge, from the game's history (issue 910)."""
+        rom = self.rom
+        if rom is None:
+            return
+        if self.console_label is not None:
+            caption = self.ctx.play_caption(rom) if self.ctx.play_caption else None
+            self.console_label.set_label(caption or get_system_display_name(rom["console"]))
+        self.resume_badge.set_visible(
+            bool(self.ctx.has_auto_state and self.ctx.has_auto_state(rom))
+        )
+
     def supports_label(self):
         """Whether this ROM's console has a cartridge to put a sticker on.
 
@@ -939,6 +1191,7 @@ class RomItem(Gtk.Box):
             ("manage-label", self._act_manage_label),
             ("rename", self._act_rename),
             ("delete", self._act_delete),
+            ("details", self._act_details),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -1002,6 +1255,17 @@ class RomItem(Gtk.Box):
         if not self.has_css_class("rom-card-hover"):
             self.menu_button.set_visible(False)
         unparent_when_idle(popover)
+
+    def _act_details(self, _action, _param):
+        self.open_details()
+
+    def open_details(self):
+        """The game details dialog (issue 913), through the window that owns it."""
+        rom = self.rom
+        if rom is None or self.context_services is None:
+            return
+        logger.info("rom context action: details rom=%s", rom.get("name"))
+        self.context_services.win.open_game_details(rom)
 
     def _act_toggle_favorite(self, _action, _param):
         rom = self.rom
@@ -1099,6 +1363,8 @@ class RomItem(Gtk.Box):
         # popping. Off for every other refresh path.
         if self.entry is None:
             return
+        # Whatever was remembered about the art is what just changed.
+        self.entry.forget_artwork()
         self._fade_next_apply = bool(fade)
         self._generation += 1
         self._start_cover_fetch()

@@ -46,7 +46,11 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(resolve(CTX_GRID, "left"), ("move-or-sidebar",))
         self.assertEqual(resolve(CTX_GRID, "confirm"), ("activate",))
         self.assertEqual(resolve(CTX_GRID, "back"), ("focus-sidebar",))
-        self.assertEqual(resolve(CTX_GRID, "context"), ("context-menu",))
+        # The pad's X opens the game details (issue 913).
+        self.assertEqual(resolve(CTX_GRID, "context"), ("details",))
+        # Guide and Start work from anywhere in the main window (issue 914).
+        self.assertEqual(resolve(CTX_GRID, "tv_mode"), ("tv-mode",))
+        self.assertEqual(resolve(CTX_SIDEBAR, "search"), ("osk",))
         self.assertEqual(resolve(CTX_GRID, "favorite"), ("favorite",))
 
     def test_sidebar(self):

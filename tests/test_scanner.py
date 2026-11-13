@@ -1,8 +1,10 @@
 import unittest
+from unittest import mock
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from openemux.core import scanner as scanner_module
 from openemux.core.scanner import RomScanner
 from tests.platform_marks import posix_only
 
@@ -89,6 +91,57 @@ class ScannerTests(unittest.TestCase):
         self.assertIn(str(ps_dir / "Game.cue"), paths)
         self.assertIn(str(ps_dir / "Standalone.bin"), paths)
         self.assertNotIn(str(ps_dir / "Track.bin"), paths)
+
+
+class OneWalkOneStatTests(unittest.TestCase):
+    """The scan walks a console once and stats each file once (issue 901)."""
+
+    def _library(self, base):
+        console = base / "roms" / "PS"
+        console.mkdir(parents=True)
+        (console / "Game.cue").write_text('FILE "Game.bin" BINARY\n', encoding="utf-8")
+        (console / "Game.bin").write_bytes(b"0" * 10)
+        (console / "Loose.bin").write_bytes(b"0" * 20)
+        return base / "roms"
+
+    def test_the_tree_is_walked_once_and_the_cue_still_hides_its_bin(self):
+        with TemporaryDirectory() as tmp:
+            roms = self._library(Path(tmp))
+            with mock.patch("openemux.core.scanner.walk_entries", wraps=scanner_module.walk_entries) as walk:
+                found = RomScanner(roms).scan_console("PS")
+        self.assertEqual(walk.call_count, 1)
+        self.assertEqual(sorted(rom["name"] for rom in found), ["Game", "Loose"])
+
+    def test_no_file_is_stat_ed_twice(self):
+        with TemporaryDirectory() as tmp:
+            roms = self._library(Path(tmp))
+            real_stat = Path.stat
+
+            def files_only_once(self, *args, **kwargs):
+                if self.suffix in (".bin", ".cue"):
+                    raise AssertionError(f"stat-ed again: {self}")
+                return real_stat(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "is_file", side_effect=AssertionError("is_file")), mock.patch.object(
+                Path, "stat", files_only_once
+            ):
+                found = RomScanner(roms).scan_console("PS")
+        self.assertEqual(len(found), 2)
+
+    def test_each_rom_carries_its_size_and_arrival_time(self):
+        with TemporaryDirectory() as tmp:
+            roms = self._library(Path(tmp))
+            found = {rom["name"]: rom for rom in RomScanner(roms).scan_console("PS")}
+        self.assertEqual(found["Loose"]["size"], 20)
+        self.assertGreater(found["Loose"]["added"], 0)
+
+    def test_the_fingerprint_is_the_consoles_directory_stamps(self):
+        with TemporaryDirectory() as tmp:
+            roms = self._library(Path(tmp))
+            scanner = RomScanner(roms)
+            stamps = scanner.fingerprint("PS")
+            self.assertIn(".", stamps)
+            self.assertEqual(scanner.fingerprint("GBA"), {})
 
 
 class ArchiveScannerTests(unittest.TestCase):

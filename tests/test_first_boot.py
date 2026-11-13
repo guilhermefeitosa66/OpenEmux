@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from openemux.core import first_boot
 from openemux.core.first_boot import FirstBootBootstrapper
-from openemux.core.systems import curated_core_filenames
+from openemux.core.systems import curated_core_filenames, get_runtime_core_candidates
 
 
 class _FakeConfigManager:
@@ -127,29 +127,21 @@ class FirstBootBootstrapperTests(unittest.TestCase):
         # The updater is off here, so nothing is owed for the background.
         self.assertFalse(cfg.deferred_assets_pending())
 
-    def test_run_allows_download_failures_when_local_assets_exist(self):
+    def test_run_downloads_nothing_and_owes_everything_to_the_background(self):
+        # Issue 909: the window used to wait on the curated cores; now the
+        # gate is the cheap steps only, and every download is owed.
         with TemporaryDirectory() as tmp_dir:
             cfg = _FakeConfigManager(tmp_dir)
             cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = True
             bootstrapper = FirstBootBootstrapper(cfg)
-            bootstrapper.updater.download_all = lambda on_progress=None, **_kwargs: {
-                "total": 1,
-                "downloaded": 0,
-                "failed": 1,
-                "failures": [{"artifact": "core", "error": "network"}],
-            }
-            bootstrapper.updater.download_shader_packs_if_missing = lambda on_progress=None, **_kwargs: {
-                "total": 1,
-                "downloaded": 0,
-                "failed": 1,
-                "failures": [{"artifact": "shader", "error": "network"}],
-            }
-            bootstrapper.updater.has_local_runtime_assets = lambda: True
-
-            result = bootstrapper.run()
+            recorder = _RecordingUpdater(bootstrapper.updater)
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
+                result = bootstrapper.run()
 
         self.assertTrue(result["success"])
         self.assertEqual(cfg.state["status"], "completed")
+        self.assertEqual(recorder.calls, {})
+        self.assertTrue(cfg.deferred_assets_pending())
 
 
 class ResumingAnInterruptedBootstrapTests(unittest.TestCase):
@@ -202,20 +194,20 @@ class TheCoreDownloadStepTests(unittest.TestCase):
                 )
 
     def test_the_download_progress_is_passed_on_to_the_caller(self):
+        # The downloads moved to the background sweep (issue 909); it is
+        # the sweep that passes each step's progress on to the banner.
         with TemporaryDirectory() as tmp_dir:
             bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
             bootstrapper.updater.download_all = (
-                lambda on_progress=None, **_kwargs: on_progress({"type": "core"}) or {"failures": []}
+                lambda on_progress=None, **_kwargs: on_progress({"type": "core"}) or _clean()
             )
+            bootstrapper.updater.install_core_info = lambda on_progress=None, **_kwargs: _clean()
             bootstrapper.updater.download_shader_packs_if_missing = (
-                lambda on_progress=None, **_kwargs: {"failures": []}
+                lambda on_progress=None, **_kwargs: on_progress({"type": "shader"}) or _clean()
             )
             seen = []
-            with patch(
-                "openemux.core.first_boot.is_running_in_flatpak", return_value=False
-            ):
-                bootstrapper._step_retroarch_cores(on_event=seen.append)
-        self.assertEqual(seen, [{"type": "core"}])
+            bootstrapper.download_deferred_assets(on_progress=seen.append)
+        self.assertEqual(seen, [{"type": "core"}, {"type": "core"}, {"type": "shader"}])
 
 
 def _clean(**extra):
@@ -244,54 +236,34 @@ class _RecordingUpdater:
         return _call
 
 
-class TheFirstBootWaitsForThePlayableSetTests(unittest.TestCase):
-    """Only what makes every console playable holds the window (issue #442)."""
+class TheFirstBootWaitsForNoDownloadTests(unittest.TestCase):
+    """The cores step owes everything and holds the window for nothing (issue 909)."""
 
-    def _step(self, tmp_dir, video_driver="gl", **outcomes):
+    def _step(self, tmp_dir, enabled=True):
         cfg = _FakeConfigManager(tmp_dir)
-        cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = True
-        cfg.video_driver = video_driver
+        cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = enabled
         bootstrapper = FirstBootBootstrapper(cfg)
-        recorder = _RecordingUpdater(bootstrapper.updater, **outcomes)
+        recorder = _RecordingUpdater(bootstrapper.updater)
         with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
             detail = bootstrapper._step_retroarch_cores()
         return cfg, recorder, detail
 
-    def test_it_fetches_the_curated_cores_only(self):
-        with TemporaryDirectory() as tmp_dir:
-            _, recorder, _ = self._step(tmp_dir)
-        self.assertEqual(recorder.calls["download_all"]["only"], curated_core_filenames())
-        self.assertNotIn("skip", recorder.calls["download_all"])
-
-    def test_it_fetches_the_shader_pack_the_driver_reads(self):
-        for driver, pack in (("gl", "shaders_glsl"), ("vulkan", "shaders_slang")):
-            with self.subTest(driver=driver), TemporaryDirectory() as tmp_dir:
-                _, recorder, _ = self._step(tmp_dir, video_driver=driver)
-                self.assertEqual(recorder.calls["shaders"]["packs"], [pack])
-
-    def test_a_driver_with_no_shaders_waits_for_no_pack(self):
-        with TemporaryDirectory() as tmp_dir:
-            _, recorder, _ = self._step(tmp_dir, video_driver="sdl2")
-        self.assertEqual(recorder.calls["shaders"]["packs"], [])
-
-    def test_it_installs_the_core_info_files(self):
+    def test_it_downloads_nothing_itself(self):
         with TemporaryDirectory() as tmp_dir:
             _, recorder, detail = self._step(tmp_dir)
-        self.assertIn("core_info", recorder.calls)
-        self.assertIn("core_info", detail)
+        self.assertEqual(recorder.calls, {})
+        self.assertTrue(detail["deferred"])
+        self.assertIsNone(detail["warning"])
 
-    def test_the_rest_is_recorded_as_owed(self):
+    def test_everything_is_recorded_as_owed(self):
         with TemporaryDirectory() as tmp_dir:
             cfg, _, _ = self._step(tmp_dir)
         self.assertTrue(cfg.deferred_assets_pending())
 
-    def test_missing_core_info_does_not_fail_the_step(self):
-        info = _clean(failed=1, failures=[{"artifact": "core_info", "error": "404"}])
+    def test_with_the_updater_off_nothing_is_owed(self):
         with TemporaryDirectory() as tmp_dir:
-            with self.assertLogs("openemux.core.first_boot", "WARNING") as logs:
-                _, _, detail = self._step(tmp_dir, info=info)
-        self.assertIsNone(detail["warning"])
-        self.assertIn("core_info: 404", "\n".join(logs.output))
+            cfg, _, _ = self._step(tmp_dir, enabled=False)
+        self.assertFalse(cfg.deferred_assets_pending())
 
     def test_inside_a_flatpak_nothing_is_owed(self):
         with TemporaryDirectory() as tmp_dir:
@@ -314,16 +286,91 @@ class TheDeferredDownloadTests(unittest.TestCase):
         result = bootstrapper.download_deferred_assets(cancel_event=cancel_event)
         return cfg, recorder, result
 
-    def test_it_fetches_every_core_but_the_curated_ones(self):
+    def test_it_fetches_only_the_cores_a_picker_would_list(self):
+        # Issue 908: the sweep used to fetch all ~240 cores the buildbot
+        # builds; the ~200 no picker shows are an opt-in now.
         with TemporaryDirectory() as tmp_dir:
-            _, recorder, _ = self._run(tmp_dir)
+            with patch(
+                "openemux.core.first_boot.pickable_core_filenames",
+                return_value=["extra_libretro.so"] + curated_core_filenames()[:1],
+            ):
+                _, recorder, _ = self._run(tmp_dir)
         self.assertEqual(recorder.calls["download_all"]["skip"], curated_core_filenames())
-        self.assertNotIn("only", recorder.calls["download_all"])
+        self.assertEqual(recorder.calls["download_all"]["only"], ["extra_libretro.so"])
 
-    def test_it_fetches_the_other_shader_pack(self):
+    def test_the_playable_set_comes_first(self):
+        # Issue 909: the first boot no longer waits for the curated cores,
+        # the core info and the driver's shader pack; the sweep fetches them
+        # before anything else.
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.mark_deferred_assets_pending()
+            # "auto" resolves to the platform's driver (gl here, d3d11 on
+            # Windows), and the driver decides which pack comes first.
+            cfg.video_driver = "gl"
+            bootstrapper = FirstBootBootstrapper(cfg)
+            order = []
+            recorder = _RecordingUpdater(bootstrapper.updater)
+            real = {name: getattr(bootstrapper.updater, name) for name in
+                    ("download_all", "install_core_info", "download_shader_packs_if_missing")}
+            for name, fn in real.items():
+                def _noting(fn=fn, name=name, **kwargs):
+                    order.append((name, kwargs.get("only"), kwargs.get("packs")))
+                    return fn(**kwargs)
+                setattr(bootstrapper.updater, name, _noting)
+            bootstrapper.download_deferred_assets()
+        self.assertEqual(order[0], ("download_all", curated_core_filenames(), None))
+        self.assertEqual(order[1][0], "install_core_info")
+        self.assertEqual(order[2][0], "download_all")
+        self.assertEqual(order[3], ("download_shader_packs_if_missing", None, ["shaders_glsl", "shaders_slang"]))
+        self.assertIn("download_all", recorder.calls)
+
+    def test_a_failure_in_the_playable_set_leaves_the_debt_owed(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.mark_deferred_assets_pending()
+            bootstrapper = FirstBootBootstrapper(cfg)
+            failing = _clean(failed=3, failures=[{"artifact": "manifest", "error": "offline"}])
+            bootstrapper.updater.download_all = lambda **_kw: failing
+            bootstrapper.updater.install_core_info = lambda **_kw: _clean()
+            bootstrapper.updater.download_shader_packs_if_missing = lambda **_kw: _clean()
+            with self.assertLogs("openemux.core.first_boot", "WARNING"):
+                result = bootstrapper.download_deferred_assets()
+        self.assertTrue(cfg.deferred_assets_pending())
+        self.assertEqual(result["failed"], 6)
+        self.assertEqual(result["playable"], failing)
+
+    def test_missing_core_info_is_only_a_warning(self):
+        with TemporaryDirectory() as tmp_dir:
+            info = _clean(failed=1, failures=[{"artifact": "core_info", "error": "404"}])
+            with self.assertLogs("openemux.core.first_boot", "WARNING") as logs:
+                cfg, _, result = self._run(tmp_dir, info=info)
+        self.assertFalse(cfg.deferred_assets_pending())
+        self.assertEqual(result["failed"], 0)
+        self.assertIn("core_info: 404", "\n".join(logs.output))
+
+    def test_opting_in_fetches_every_core(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg = _FakeConfigManager(tmp_dir)
+            cfg.config["runtime"]["retroarch"]["updater"]["download_all_cores"] = True
+            cfg.mark_deferred_assets_pending()
+            bootstrapper = FirstBootBootstrapper(cfg)
+            recorder = _RecordingUpdater(bootstrapper.updater)
+            bootstrapper.download_deferred_assets()
+        self.assertIsNone(recorder.calls["download_all"]["only"])
+        self.assertEqual(recorder.calls["download_all"]["skip"], curated_core_filenames())
+
+    def test_the_info_files_are_looked_for_in_the_updaters_core_dir_first(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = FirstBootBootstrapper(_FakeConfigManager(tmp_dir))
+            dirs = bootstrapper._core_info_dirs()
+        self.assertEqual(dirs[0], bootstrapper.updater.core_dir)
+        self.assertGreater(len(dirs), 1)
+
+    def test_it_fetches_the_drivers_shader_pack_first_and_the_other_after(self):
         for driver, packs in (
-            ("gl", ["shaders_slang"]),
-            ("vulkan", ["shaders_glsl"]),
+            ("gl", ["shaders_glsl", "shaders_slang"]),
+            ("vulkan", ["shaders_slang", "shaders_glsl"]),
             ("sdl2", ["shaders_glsl", "shaders_slang"]),
         ):
             with self.subTest(driver=driver), TemporaryDirectory() as tmp_dir:
@@ -342,9 +389,10 @@ class TheDeferredDownloadTests(unittest.TestCase):
             with self.assertLogs("openemux.core.first_boot", "WARNING"):
                 cfg, _, result = self._run(tmp_dir, cores=cores)
         self.assertTrue(cfg.deferred_assets_pending())
-        self.assertEqual(result["failed"], 1)
+        # The fake answers both core sweeps (the playable set and the rest).
+        self.assertEqual(result["failed"], 2)
 
-    def test_a_cancelled_sweep_leaves_it_owed_and_skips_the_shaders(self):
+    def test_a_cancelled_sweep_leaves_it_owed_and_skips_the_rest(self):
         cancel = threading.Event()
         cancel.set()
         with TemporaryDirectory() as tmp_dir:
@@ -354,7 +402,10 @@ class TheDeferredDownloadTests(unittest.TestCase):
                 )
         self.assertTrue(cfg.deferred_assets_pending())
         self.assertTrue(result["cancelled"])
+        # Only the playable set was asked for before the event was seen.
         self.assertIs(recorder.calls["download_all"]["cancel_event"], cancel)
+        self.assertEqual(recorder.calls["download_all"]["only"], curated_core_filenames())
+        self.assertNotIn("core_info", recorder.calls)
         self.assertNotIn("shaders", recorder.calls)
 
     def test_cores_cancelled_without_the_event_still_count(self):
@@ -621,52 +672,93 @@ class OfflineFirstBootTests(unittest.TestCase):
         )
         return cfg, FirstBootBootstrapper(cfg)
 
-    def test_offline_falls_back_to_the_bundled_cores(self):
+    def test_offline_the_first_boot_completes_and_owes_the_downloads(self):
+        # Issue 909: the app opens without a connection; the debt is for the
+        # background sweep, which fails quietly and tries again next start.
         with TemporaryDirectory() as tmp_dir:
             cfg, bootstrapper = self._bootstrapper(tmp_dir)
-            bootstrapper.updater.has_local_runtime_assets = lambda: True
             with patch(
                 "urllib.request.urlopen",
                 side_effect=urllib.error.URLError("Network is unreachable"),
-            ):
+            ), patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
                 result = bootstrapper.run()
+                self.assertTrue(cfg.deferred_assets_pending())
+                with self.assertLogs("openemux.core.first_boot", "WARNING") as logs:
+                    sweep = bootstrapper.download_deferred_assets()
 
         self.assertTrue(result["success"])
         self.assertEqual(cfg.state["status"], "completed")
         self.assertIn("retroarch_download_all_cores", cfg.state["completed_steps"])
+        self.assertGreater(sweep["failed"], 0)
+        self.assertTrue(cfg.deferred_assets_pending())
+        self.assertIn("unreachable", "\n".join(logs.output))
 
-    def test_offline_without_bundled_cores_fails_with_the_real_reason(self):
+    def test_an_empty_listing_leaves_the_debt_owed(self):
         with TemporaryDirectory() as tmp_dir:
             cfg, bootstrapper = self._bootstrapper(tmp_dir)
-            bootstrapper.updater.has_local_runtime_assets = lambda: False
-            with patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.URLError("Network is unreachable"),
-            ):
-                result = bootstrapper.run()
-
-        self.assertFalse(result["success"])
-        self.assertEqual(result["failed_step"], "retroarch_download_all_cores")
-        self.assertIn("unreachable", result["error"])
-        # Not recorded as done, so a retry actually retries it.
-        self.assertNotIn("retroarch_download_all_cores", cfg.state["completed_steps"])
-
-    def test_an_empty_listing_does_not_complete_the_step(self):
-        with TemporaryDirectory() as tmp_dir:
-            cfg, bootstrapper = self._bootstrapper(tmp_dir)
-            bootstrapper.updater.has_local_runtime_assets = lambda: False
+            cfg.mark_deferred_assets_pending()
             bootstrapper.updater.download_shader_packs_if_missing = (
+                lambda on_progress=None, **_kwargs: {"total": 0, "downloaded": 0, "failed": 0, "failures": []}
+            )
+            bootstrapper.updater.install_core_info = (
                 lambda on_progress=None, **_kwargs: {"total": 0, "downloaded": 0, "failed": 0, "failures": []}
             )
             with patch(
                 "urllib.request.urlopen",
                 return_value=_FakeListing(b"<html>the layout changed</html>"),
-            ):
-                result = bootstrapper.run()
+            ), self.assertLogs("openemux.core.first_boot", "WARNING"):
+                sweep = bootstrapper.download_deferred_assets()
 
-        self.assertFalse(result["success"])
-        self.assertNotIn("retroarch_download_all_cores", cfg.state["completed_steps"])
-        self.assertIn("listing", result["error"])
+        self.assertGreater(sweep["failed"], 0)
+        self.assertTrue(cfg.deferred_assets_pending())
+
+
+class DownloadingACoreOnDemandTests(unittest.TestCase):
+    """A launch that found no core fetches the console's (issue 909)."""
+
+    def _bootstrapper(self, tmp_dir, enabled=True):
+        cfg = _FakeConfigManager(tmp_dir)
+        cfg.config["runtime"]["retroarch"]["updater"]["enabled"] = enabled
+        return FirstBootBootstrapper(cfg)
+
+    def test_it_asks_for_the_consoles_candidates_and_reports_ready(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = self._bootstrapper(tmp_dir)
+            recorder = _RecordingUpdater(bootstrapper.updater, cores=_clean(downloaded=1))
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
+                state = bootstrapper.download_console_core("SFC")
+        self.assertEqual(state, "ready")
+        self.assertEqual(
+            recorder.calls["download_all"]["only"], get_runtime_core_candidates("SFC")
+        )
+
+    def test_nothing_downloaded_is_a_failure(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = self._bootstrapper(tmp_dir)
+            _RecordingUpdater(bootstrapper.updater, cores=_clean(failed=2))
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
+                self.assertEqual(bootstrapper.download_console_core("SFC"), "failed")
+
+    def test_a_set_event_is_a_cancellation(self):
+        cancel = threading.Event()
+        cancel.set()
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = self._bootstrapper(tmp_dir)
+            _RecordingUpdater(bootstrapper.updater, cores=_clean(cancelled=2))
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
+                state = bootstrapper.download_console_core("SFC", cancel_event=cancel)
+        self.assertEqual(state, "cancelled")
+
+    def test_inside_a_flatpak_or_with_the_updater_off_the_launcher_decides(self):
+        with TemporaryDirectory() as tmp_dir:
+            bootstrapper = self._bootstrapper(tmp_dir)
+            recorder = _RecordingUpdater(bootstrapper.updater)
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=True):
+                self.assertEqual(bootstrapper.download_console_core("SFC"), "ready")
+            off = self._bootstrapper(tmp_dir, enabled=False)
+            with patch("openemux.core.first_boot.is_running_in_flatpak", return_value=False):
+                self.assertEqual(off.download_console_core("SFC"), "ready")
+        self.assertEqual(recorder.calls, {})
 
 
 class _FakeListing:

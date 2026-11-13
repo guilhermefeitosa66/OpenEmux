@@ -12,15 +12,18 @@ page nobody could reach -- exactly the class of bug that having one owner
 removes rather than fixes (issue #237).
 """
 
+import ctypes
 import logging
+import sys
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from openemux.core.library_groups import group_roms_by_console
+from openemux.core.library_view import SORT_RECENTLY_PLAYED
 from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
 from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
@@ -30,6 +33,7 @@ from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
+    RECENT_ID,
     collection_scope,
     collection_slug,
     is_collection_scope,
@@ -43,9 +47,46 @@ def is_mixed_scope(scope):
     console (issue #384); a console page has one group by definition and is
     left exactly as it was.
     """
-    return scope in (ALL_CONSOLES_ID, FAVORITES_ID) or is_collection_scope(scope)
+    return scope in (ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID) or is_collection_scope(scope)
 
 logger = logging.getLogger(__name__)
+
+#: How many games the "Recently played" page shows (issue 910).
+RECENT_LIMIT = 20
+
+
+def _teardown(grid):
+    """Release a grid or a group the pages no longer show, if it is one."""
+    release = getattr(grid, "teardown", None)
+    if callable(release):
+        release()
+        GLib.idle_add(_return_freed_heap)
+
+
+_libc = None
+
+
+def _return_freed_heap():
+    """Hand the heap a torn-down page freed back to the OS (issue 900).
+
+    Thousands of small objects -- cards, their widgets, the entries -- are
+    freed at once when a page is rebuilt, and glibc keeps the arenas they
+    sat in: RSS stayed where the biggest page had put it, however little was
+    live. ``malloc_trim`` is the one call that returns those arenas, and it
+    costs a few milliseconds on an idle. Linux glibc only; elsewhere this is
+    a no-op.
+    """
+    global _libc
+    if not sys.platform.startswith("linux"):
+        return GLib.SOURCE_REMOVE
+    try:
+        if _libc is None:
+            _libc = ctypes.CDLL("libc.so.6")
+        _libc.malloc_trim(0)
+    except (OSError, AttributeError) as exc:  # pragma: no cover - a libc without it
+        logger.debug("malloc_trim unavailable: %s", exc)
+        _libc = False
+    return GLib.SOURCE_REMOVE
 
 
 class LibraryPages:
@@ -72,10 +113,14 @@ class LibraryPages:
         self._grids = {}
         #: scope id -> what its cards were last built from; see _signature
         self._signatures = {}
+        #: Consoles whose BIOS banner was dismissed this session (issue 911).
+        self._dismissed_bios = set()
 
     # ----- the registry ---------------------------------------------------
     def reset(self):
         """Forget every page. The caller empties the content stack itself."""
+        for grid in self._grids.values():
+            _teardown(grid)
         self._pages = {}
         self._loaded = {}
         self._grids = {}
@@ -99,7 +144,7 @@ class LibraryPages:
         refreshes for a page that was no longer in the stack.
         """
         self._loaded.pop(scope, None)
-        self._grids.pop(scope, None)
+        _teardown(self._grids.pop(scope, None))
         self._signatures.pop(scope, None)
         return self._pages.pop(scope, None)
 
@@ -185,8 +230,68 @@ class LibraryPages:
         page.header = header
         page.master_check = check
         page.master_guard = [False]
+        page.bios_banner = None
         check.connect("toggled", lambda _c, p=page: self._on_master_check_toggled(p))
         return page
+
+    # ----- the BIOS banner (issue 911) -------------------------------------
+    def set_bios_banner(self, console, missing):
+        """Show the console page's "needs system files" banner, or take it down.
+
+        Above the grid, in plain language with the real file names, and one
+        step from the fix: "Import BIOS" opens Preferences on this console's
+        row. Dismissed, it stays down for the session; the next import or
+        core change brings it back if the files are still missing.
+        """
+        page = self.page_for(console)
+        if page is None:
+            return False
+        if not missing or console in self._dismissed_bios:
+            if page.bios_banner is not None:
+                page.bios_banner.set_visible(False)
+            return False
+        if page.bios_banner is None:
+            page.bios_banner = self._build_bios_banner(console)
+            page.prepend(page.bios_banner)
+        page.bios_banner.label.set_label(
+            self.win.t(
+                "bios.banner.title",
+                console=get_system_display_name(console),
+                names=", ".join(missing),
+            )
+        )
+        page.bios_banner.set_visible(True)
+        return True
+
+    def _build_bios_banner(self, console):
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        banner.add_css_class("bios-banner")
+        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
+        icon.add_css_class("warning")
+        banner.append(icon)
+        label = Gtk.Label(xalign=0)
+        label.set_wrap(True)
+        label.set_hexpand(True)
+        banner.append(label)
+        banner.label = label
+        import_button = Gtk.Button(label=self.win.t("bios.banner.import"))
+        import_button.add_css_class("suggested-action")
+        import_button.set_valign(Gtk.Align.CENTER)
+        import_button.connect("clicked", lambda _b, c=console: self.win.open_bios_settings(c))
+        banner.append(import_button)
+        banner.import_button = import_button
+        dismiss = Gtk.Button.new_from_icon_name("window-close-symbolic")
+        dismiss.add_css_class("flat")
+        dismiss.set_valign(Gtk.Align.CENTER)
+        dismiss.set_tooltip_text(self.win.t("bios.banner.dismiss"))
+        dismiss.connect("clicked", lambda _b, c=console: self.dismiss_bios_banner(c))
+        banner.append(dismiss)
+        banner.dismiss_button = dismiss
+        return banner
+
+    def dismiss_bios_banner(self, console):
+        self._dismissed_bios.add(console)
+        self.set_bios_banner(console, [])
 
     def _on_master_check_toggled(self, page):
         if page.master_guard[0]:
@@ -235,6 +340,9 @@ class LibraryPages:
         if console == FAVORITES_ID:
             self.ensure_favorites_loaded()
             return
+        if console == RECENT_ID:
+            self.ensure_recent_loaded()
+            return
         if is_collection_scope(console):
             self.ensure_collection_loaded(collection_slug(console))
             return
@@ -274,6 +382,15 @@ class LibraryPages:
             self.win.sidebar.sync_favorites_row()
         self.render(FAVORITES_ID, playlists.load_favorites_playlist())
         self.mark_loaded(FAVORITES_ID)
+
+    def ensure_recent_loaded(self):
+        """The last games played, most recent first (issue 910)."""
+        if not self.has(RECENT_ID):
+            return
+        paths = self.win.play_history.recent(RECENT_LIMIT)
+        entries = self.win.playlist_manager.entries_for_paths(paths)
+        self.render(RECENT_ID, entries)
+        self.mark_loaded(RECENT_ID)
 
     def ensure_all_loaded(self, force_rescan=False):
         if not self.has(ALL_CONSOLES_ID):
@@ -321,6 +438,9 @@ class LibraryPages:
         scroll = page.scroll
         # Each page follows its own scope's layout, not the one on screen now.
         display_settings = win.config_manager.get_display_settings(console)
+        if console == RECENT_ID:
+            # The page's whole point is the order: the last game first.
+            display_settings = dict(display_settings, sort_order=SORT_RECENTLY_PLAYED)
         roms = win._sorted_roms(roms, order=display_settings["sort_order"])
         signature = self._signature(roms, display_settings)
         if (
@@ -339,9 +459,12 @@ class LibraryPages:
             return
         self._signatures[console] = signature
         page.header.set_visible(False)
+        # Whatever the page showed before is let go of explicitly, textures
+        # and entries included, rather than left for the garbage collector
+        # to find the cycle (issue 900).
+        _teardown(self._grids.pop(console, None))
         if not roms:
             scroll.set_child(self._empty_page_for(console))
-            self._grids.pop(console, None)
             if console == win.current_console:
                 win._update_window_title(console)
             return
@@ -370,6 +493,8 @@ class LibraryPages:
         mixed_consoles=False,
         on_selection_changed=None,
         band_host_is_self=False,
+        dormant=False,
+        play_caption=None,
     ):
         win = self.win
         grid = RomGrid(
@@ -391,7 +516,13 @@ class LibraryPages:
             on_selection_changed=on_selection_changed or win._on_selection_changed,
             context_services=win._rom_context_services,
             frame_color_for_rom=win._cartridge_color_for_rom,
+            dormant=dormant,
+            play_caption=play_caption,
+            has_auto_state=win.has_auto_state,
         )
+        # An incremental filter settles over frames; the title's count and
+        # the empty state follow it (issue 906).
+        grid.connect_count_changed(win._on_grid_count_changed)
         if band_host_is_self:
             grid.band_host = grid
         return grid
@@ -415,13 +546,22 @@ class LibraryPages:
         win = self.win
         body = GroupedScroll()
         group = GridGroup(on_selection_changed=win._on_selection_changed)
+        if scope == RECENT_ID:
+            # One group, in play order: grouping by console would hide which
+            # game was last (issue 910). The caption under each card says
+            # when and for how long.
+            return self._build_recent(scope, roms, display_settings, body, group)
         for console, group_roms in group_roms_by_console(roms, win.visible_consoles):
+            # Asleep until the page lays it out near the viewport (issue
+            # 899): a group built awake would realize up to thirty rows of
+            # cards in the first allocation, whether on screen or not.
             grid = self._build_grid(
                 console,
                 group_roms,
                 display_settings,
                 on_selection_changed=group.on_child_selection_changed,
                 band_host_is_self=True,
+                dormant=True,
             )
             header, set_count = self._group_header(console, len(group_roms), grid.compact)
             body.add_section(header, grid)
@@ -429,6 +569,23 @@ class LibraryPages:
         # Every group follows the scope's own layout, so the first one answers
         # for the page: list view pins the master checkbox above the scroller.
         group.compact = bool(group.sections) and group.sections[0].grid.compact
+        return group, body
+
+    def _build_recent(self, scope, roms, display_settings, body, group):
+        win = self.win
+        grid = self._build_grid(
+            scope,
+            roms,
+            display_settings,
+            mixed_consoles=True,
+            on_selection_changed=group.on_child_selection_changed,
+            band_host_is_self=True,
+            play_caption=win.play_caption,
+        )
+        header, set_count = self._group_header(scope, len(roms), grid.compact)
+        body.add_section(header, grid)
+        group.add_section(GridSection(scope, grid, header, set_count=set_count))
+        group.compact = grid.compact
         return group, body
 
     def _group_header(self, console, count, compact):
@@ -479,11 +636,13 @@ class LibraryPages:
         set_count(count)
         return row, set_count
 
-    @staticmethod
-    def _group_title(console):
+    def _group_title(self, console):
         if not console:
             return "?"
-        return f"{console} - {get_system_display_name(console)}"
+        if console == RECENT_ID:
+            return self.win.t("sidebar.recent")
+        # The console's name alone (issue 912); the id is the folder's.
+        return get_system_display_name(console)
 
     def _empty_page_for(self, console):
         t = self.win.t
@@ -492,6 +651,12 @@ class LibraryPages:
                 icon_name="starred-symbolic",
                 title=t("favorites.empty.title"),
                 description=t("favorites.empty.body"),
+            )
+        if console == RECENT_ID:
+            return Adw.StatusPage(
+                icon_name="document-open-recent-symbolic",
+                title=t("recent.empty.title"),
+                description=t("recent.empty.body"),
             )
         if console == ALL_CONSOLES_ID:
             return Adw.StatusPage(

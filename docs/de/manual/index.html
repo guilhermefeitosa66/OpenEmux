@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favoriten</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Zuletzt gespielt</a></summary></details></li>
+        <li><details open><summary><a href="#details">Spieldetails</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">TV-Modus</a></summary></details></li>
         <li><details open><summary><a href="#cores">Kerne und Shader</a></summary>
             <ul>
               <li><a href="#cores-game">Für ein Spiel</a></li>
@@ -783,6 +786,8 @@
           <p>Die Seitenleiste listet die Seiten deiner Bibliothek, von oben nach unten:</p>
           <ul>
             <li><span class="ui">Alle</span>: jedes Spiel, nach Konsole gruppiert.</li>
+            <li><span class="ui">Zuletzt gespielt</span>: die zuletzt gestarteten Spiele, das jüngste zuerst. Die Zeile
+              erscheint nach dem ersten Start. Siehe <a href="#recent">Zuletzt gespielt</a>.</li>
             <li><span class="ui">Favoriten</span>: die Spiele, die du mit einem Stern markiert hast. Die Zeile erscheint erst, wenn etwas markiert ist. Siehe <a href="#favorites">Favoriten</a>.</li>
             <li>Deine Playlists, falls du welche angelegt hast. Hier <span class="ui">Couch co-op</span>. Siehe <a href="#playlists">Playlists</a>.</li>
             <li>Eine Zeile pro Konsole mit Spielen, mit ihrer Kurz-ID und ihrem Namen, etwa <span class="ui">SFC - Super Nintendo</span>.</li>
@@ -917,7 +922,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">Der erste Start</h3>
-          <p>Beim ersten Start zeigt OpenEmux ein Fenster <span class="ui">Ersteinrichtung wird vorbereitet</span>, während es seine Konfiguration anlegt, die Ordner für ROMs, BIOS und Cover erstellt, Eingabeprofile und Playlists vorbereitet und die libretro-Kerne herunterlädt, die deine Konsolen brauchen. Das dauert meist etwa zehn Sekunden; die übrigen Kerne werden im Hintergrund weiter geladen, während du die App benutzt, und ein Banner unter der Kopfleiste zeigt den Fortschritt.</p>
+          <p>Beim ersten Start zeigt OpenEmux kurz das Fenster <span class="ui">Ersteinrichtung wird vorbereitet</span>, während es seine Konfiguration anlegt, die Ordner für ROMs, BIOS und Cover erstellt und
+            Eingabeprofile und Playlists vorbereitet. Gleich danach öffnet sich die Bibliothek: die libretro-Cores und
+            die Shader-Pakete laden im Hintergrund, mit ihrem Fortschritt in einem Banner unter der Kopfzeile, zuerst
+            die Cores deiner Konsolen. Ein Spiel, das du vor der Ankunft seines Cores startest, holt diesen Core sofort.
+            Offline öffnet sich die App trotzdem, und das Banner sagt, was beim nächsten Start geholt wird.</p>
           <p>Deine Einstellungen liegen in <code>~/.openemux/</code> und deine Spiele in <code>~/games/roms/</code>, ein Ordner pro Konsole.</p>
 
           <h3 id="install-source">Aus dem Quellcode bauen</h3>
@@ -1125,6 +1134,61 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </div>
           <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="Die Seite Favoriten nach Konsole gruppiert, mit eingerahmter Zeile" /></figure>
           <p>Die Seite <span class="ui">Favoriten</span> sammelt sie, nach Konsole gruppiert. Ihre Zeile erscheint in der Seitenleiste, sobald du ein Spiel markiert hast, und OpenEmux öffnet auf ihr, wenn es sonst nichts gibt, wohin es zurückkehren kann.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Zuletzt gespielt</h2>
+          <p>Jeder Start wird gemerkt. Sobald du etwas gespielt hast, erscheint eine Zeile
+            <span class="ui">Zuletzt gespielt</span> unter <span class="ui">Alle</span>, und OpenEmux öffnet sich
+            darauf: die letzten zwanzig Spiele, das jüngste zuerst, jede Karte mit der Angabe, wann und wie lange du
+            gespielt hast.</p>
+          <p>Die Zeit läuft vom Start des Spiels bis zu seinem Ende und summiert sich über die Sitzungen. Es ist dieselbe
+            Uhr, die hinter der Sortierung <span class="ui">Zuletzt gespielt</span> auf jeder anderen Seite steckt.</p>
+          <p>Um ein Spiel dort fortzusetzen, wo du aufgehört hast, schalte
+            <span class="ui">Dort weitermachen, wo ich aufgehört habe</span> unter
+            <span class="ui">Einstellungen › Video</span> ein. RetroArch speichert das Spiel dann beim Beenden und
+            lädt diesen Stand beim nächsten Start; eine Karte mit so einem Stand trägt ein kleines
+            Wiedergabe-Abzeichen in der Ecke, und <span class="ui">Neu beginnen</span> in ihrem Menü überspringt ihn
+            einmal.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>Spieldetails</h2>
+          <p>Jedes Spiel hat eine Detailseite: wähle <span class="ui">Spieldetails…</span> in seinem Menü, drücke
+            <kbd>Alt</kbd>+<kbd>Eingabe</kbd> auf der Karte oder Ⓧ am Gamepad. Sie zeigt das Cover, wann und wie lange du
+            gespielt hast, die Datei und <span class="ui">Spielen</span>.</p>
+          <p>Darunter stehen die Zeilen <span class="ui">Kern</span>, <span class="ui">Shader</span> und <span class="ui">Modulfarbe</span>
+            mit dem geltenden Wert und seiner Herkunft (der Konsolenstandard oder dieses Spiel); ein kleiner Pfeil setzt eine
+            Zeile auf den Konsolenstandard zurück. Dann die Spielstände mit <span class="ui">Laden</span>, die
+            Artwork-Aktionen, die Playlists des Spiels sowie <span class="ui">Im Dateimanager anzeigen</span>,
+            <span class="ui">Umbenennen…</span> und <span class="ui">ROM löschen…</span>.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">Bibliothek</span>
+          <h2>TV-Modus</h2>
+          <p>Drücke <kbd>F11</kbd> oder die Guide-Taste eines Gamepads, und die Bibliothek geht in den Vollbildmodus fürs Sofa:
+            die Seitenleiste verschwindet, das Regal wird größer gezeichnet, Titel und Hinweise wachsen und die fokussierte
+            Karte bekommt einen dickeren Rahmen. Dieselbe Taste, oder <kbd>Esc</kbd>, bringt das Desktop-Layout zurück. Dein
+            Zoom bleibt unangetastet.</p>
+          <p>Mit einem Pad in der Hand zeigen die Hinweise unten die Buchstaben dieses Pads (A B X Y auf einem Xbox-Pad, B A Y X auf
+            einem Nintendo-Pad, die vier Symbole auf einem PlayStation-Pad); <span class="ui">Tastenbeschriftung des Controllers</span> unter Einstellungen › System erzwingt eine Familie, und <span class="ui">Bestätigen und Abbrechen tauschen</span> legt Bestätigen auf die rechte Taste. Die Belegung, mit den Xbox-Buchstaben:</p>
+          <ul>
+            <li><strong>A</strong> startet das fokussierte Spiel; gedrückt halten beginnt eine Auswahl.</li>
+            <li><strong>B</strong> geht zurück zur Konsolenliste; <strong>X</strong> öffnet die Spieldetails; <strong>Y</strong> schaltet
+              den Favoriten um.</li>
+            <li><strong>LB/RB</strong> wechseln die Konsole und springen auf <span class="ui">Alle</span> zwischen den Konsolengruppen.</li>
+            <li><strong>Menu</strong> (Start) öffnet die Bildschirmtastatur: ein Buchstabenraster fürs Steuerkreuz, das die Bibliothek
+              beim Tippen filtert; Fertig landet auf dem ersten Treffer.</li>
+            <li><strong>View</strong> (Select) öffnet das Hauptmenü; die <strong>Guide</strong>-Taste schaltet den TV-Modus um.</li>
+            <li><strong>LT/RT</strong> mit dem Steuerkreuz gehalten erweitern eine Auswahl.</li>
+          </ul>
+          <p>Reduzierte Bewegung und große Schrift folgen hier wie überall deinen GNOME-Einstellungen.</p>
         </section>
 
         <!-- ============================================================ -->

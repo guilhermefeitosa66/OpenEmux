@@ -273,16 +273,16 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** none.
 - **Steps:** As a QA person: install the `.deb`/`.rpm`/AppImage on a machine with no network and
   launch it for the first time.
-- **Expected:** First boot completes on the cores the package already ships. It used to end at
-  "bootstrap failed": the manifest fetch raised straight out of the download step, so the
-  bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
-  fails — but the message names the real reason (`URLError: Network is unreachable`, not
-  "something failed") and the step is **not** recorded as completed, so a retry retries it.
-  Offline, the background download of the remaining cores (RT-316) fails quietly and stays owed
-  for the next launch; it never turns the completed first boot into a failure.
+- **Expected:** The first boot completes and the library opens with its empty state (issue 909): no
+  download gates the window any more, so there is no "bootstrap failed" to hit offline. The
+  background sweep (RT-316) fails quietly, stays owed for the next launch, and the window shows a
+  banner, "Some cores and shaders could not be downloaded…", with "Retry". A package that ships
+  cores plays on them meanwhile; one that does not says so at the first launch of a game (the core
+  download for that console fails with "Could not download the core for …").
 - **Check:** suite files `tests/test_first_boot.py`
-  (`test_offline_falls_back_to_the_bundled_cores`,
-  `test_offline_without_bundled_cores_fails_with_the_real_reason`),
+  (`test_offline_the_first_boot_completes_and_owes_the_downloads`,
+  `test_an_empty_listing_leaves_the_debt_owed`), `tests/test_window.py`
+  (`test_a_background_download_that_failed_leaves_a_notice_with_retry`),
   `tests/test_retroarch_buildbot_updater.py`
   (`test_an_offline_manifest_is_a_counted_failure_not_a_crash`).
   Run as a probe it would seed the real `~/.openemux` and ROM tree, which is why it stays in the
@@ -378,20 +378,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
 
-### RT-316 — First boot waits only for the cores the consoles use
+### RT-316 — First boot waits for no download: the cores come down under the banner, playable set first
 - **Area:** Startup
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
-- **Steps:** As a QA person: launch first boot and watch the "Downloading cores" counter.
-- **Expected:** The counter stops at the number of distinct cores the console table names (35 on
-  x86_64 Linux), not at the ~240 the buildbot lists, and the shader pack the video driver reads
-  comes down with them (`shaders_glsl` for Linux's `gl`, `shaders_slang` for Windows' `d3d11`).
-  Every console is playable when the main window opens. The first boot used to block on every core
-  and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
-  (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
-  pending`); inside Flatpak, or with the updater off, nothing is owed. Cores that later go
-  missing from disk are restored at start-up without re-running the first boot (RT-370).
-- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
+- **Steps:** As a QA person: launch first boot, time the main window, and watch the banner.
+- **Expected:** The first-boot window shows the cheap steps only (configuration, folders, input
+  profiles, playlists, runtime folders) and the main window is up within seconds (issue 909; it used
+  to wait on the 35 curated cores, the core info and a shader pack, issue #442). The whole download
+  is recorded as owed (`setup.bootstrap.deferred_assets: pending`) and the banner's "Downloading
+  cores" sweep fetches it: the curated cores first, then the core info, then the other cores a
+  picker lists, then the shader pack the video driver reads (`shaders_glsl` for Linux's `gl`,
+  `shaders_slang` for Windows' `d3d11`) and the other one. A game launched before its core arrived
+  fetches that console's core on the spot ("Preparing Super Nintendo… (1/2)" on the banner, Stop
+  cancels it) and then starts. Inside Flatpak, or with the updater off, nothing is owed. Cores that
+  later go missing from disk are restored at start-up without re-running the first boot (RT-370).
+- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForNoDownloadTests`,
+  `TheDeferredDownloadTests`, `DownloadingACoreOnDemandTests`), `tests/test_window.py`
+  (`PreparingAConsoleCoreTests`), `tests/test_game_session.py` (`ACoreFetchedOnLaunchTests`),
   `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
   `OneShaderPackOfTwoTests`).
@@ -1167,10 +1171,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** App running, a console whose library contains a known title.
 - **Steps:**
   1. Press `Ctrl+F`; the search bar appears.
-  2. Type a word from a title that exists (e.g. "Mario").
-  3. Press `Escape`.
-- **Expected:** While typing, the grid shows only matching games; `Escape` closes the bar and
-  restores the full grid.
+  2. Type a word from a title that exists (e.g. "Mario"); then two words of another title in the
+     wrong order ("link zelda").
+  3. Press `Enter` while several games match; clear, type until one matches, press `Enter`.
+  4. Press `Escape`.
+- **Expected:** The placeholder names the scope ("Search Super Nintendo…" on a console, "Search
+  your library…" on All) and a console page offers "Search everywhere" beside the box. While
+  typing, the grid shows only matching games; words match in any order and without accents
+  ("link zelda" finds "The Legend of Zelda - A Link to the Past"), and on a 3000-game page the
+  filter runs in slices so typing stays fluid (issue 906). `Enter` focuses the first match, or
+  launches the game when it is the only one. `Escape` closes the bar, clears the query, restores
+  the full grid and puts the focus back on the games.
 - **Check:** Screenshot of the filtered grid (only matching titles visible) and of the restored one.
 
 ### RT-022 — Empty search shows the empty state
@@ -1178,8 +1189,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running.
 - **Steps:**
-  1. Press `Ctrl+F` and type a string that matches nothing (e.g. "zzzzqqqq").
-- **Expected:** An empty-state page (no leftover cards, no crash).
+  1. On a console page press `Ctrl+F` and type a string that matches nothing (e.g. "zzzzqqqq").
+  2. Click "Search everywhere".
+  3. Click "Clear search".
+- **Expected:** 1: a status page "No games match “zzzzqqqq”" over the empty grid, with "Clear
+  search" and "Search everywhere" (issue 906); no leftover cards, no crash. 2: the All page opens
+  with the query kept in the box; with still no match, the page offers only "Clear search".
+  3: the box empties and the page comes back whole.
 - **Check:** Screenshot shows the empty state; log gained no `Traceback`.
 - **Restore:** Press `Escape`.
 
@@ -1430,10 +1446,9 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   cards is the same on both (issue #219). Before virtualization the page held one live card and
   one decoded cover texture per ROM, for as long as it existed.
   The guarantee is per *grid*. Since issue #384 a mixed page ("All", "Favorites", a collection) is
-  one grid per console stacked in the page's scroller, and each of those is allocated its natural
-  height — so a mixed page builds a card per ROM. Grouping and virtualizing across sections at the
-  same time needs a layout GtkGridView does not have; the console pages, where a single console's
-  thousands of ROMs live, are unaffected.
+  one grid per console stacked in the page's scroller; since issue 899 a group further than a
+  page from the viewport sleeps (no model, so no cards, but the height of its rows), so a mixed
+  page builds a few screens of cards and not one per ROM — see RT-1029.
 - **Check:**
   ```bash
   Xephyr :9 -screen 900x650 >/dev/null 2>&1 &
@@ -2342,10 +2357,14 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Double-click (or press Enter on) a game.
   2. Play for ~30 s, then close the game with the bar's power button.
-- **Expected:** The game opens in RetroArch's own window — **with its title bar and borders** —
-  and the in-game bar sits across the bottom edge (RT-327). Sound plays, input responds, and the
-  power button ends the game and returns to the library cleanly. No OpenEmux window wraps the game
-  and no "game window" notice is shown (issue #469).
+- **Expected:** The card shows a spinner over a dimmed cover from the click until RetroArch is up,
+  and the window's banner reads "Starting <game>…" with a "Stop" button, then "Playing <game>"
+  while the game runs (issue 904). The game opens in RetroArch's own window — **with its title bar
+  and borders** — and the in-game bar sits across the bottom edge (RT-327). Sound plays, input
+  responds, and the power button ends the game and returns to the library cleanly: the banner
+  goes and a toast reads "Played <game> for N min" (the game's title, never the file name; no exit
+  code when it is zero). No OpenEmux window wraps the game and no "game window" notice is shown
+  (issue #469).
 - **Check:** human only (grabbing the keyboard for the emulator makes automation unsafe).
 
 ### RT-327 — The in-game bar sits on the bottom edge and does not cover the game
@@ -16805,6 +16824,457 @@ has no Android device, so these are `MANUAL`.
   text of the section, the steps and the dates are in that language. The release skill rewrites
   the section for every release.
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheNewsTests`).
+
+## Desktop — Library performance
+
+### RT-1028 — A card bound to a game it already resolved touches no file
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console with a few hundred games, scroll to the bottom and
+  back to the top, and watch for stutter on a slow disk (an HDD, an SD card or a network home).
+- **Expected:** The second pass is smooth: scrolling back over a card the grid already showed
+  re-binds it from what the entry remembers — the artwork path, the cover's cache key and the
+  cartridge composite — with no directory probe, no stat of the cover and no stat of the
+  composite, on either thread (issue 907). The first pass finds each console's art through one
+  directory listing per art kind rather than eight `exists()` probes per card. The favourite star
+  and the shell colour read a parse that is stat-ed at most twice a second, and nothing in the
+  bind path deep-copies the colour mapping any more. Choosing, removing or syncing a game's art
+  still refreshes its card: every one of those paths forgets what the entry remembered.
+- **Check:** suite files `tests/test_scraper.py` (`TheArtworkIndexTests`),
+  `tests/test_cover_cache.py` (`RememberedKeysTests`), `tests/test_cartridge_colors.py`
+  (`test_a_page_of_lookups_stats_the_file_once_not_per_card`), `tests/test_playlist_manager.py`
+  (`test_a_page_of_cards_stats_the_file_once_not_per_card`), `tests/test_rom_card_widget.py`
+  (`test_the_fetch_resolves_the_art_once_and_remembers_it_on_the_entry`,
+  `RememberingTheCompositeTests`), `tests/test_grid_widget.py`
+  (`test_a_shell_colour_is_resolved_once_per_grid`).
+
+### RT-1029 — "All" on a big library builds a few screens of cards, and a zoom rebuilds only them
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox up with the 3000-game synthetic library
+  (`tools/perf/gen_library.py`, see `tools/perf/README.md`) and the config pointed at it
+  (`tools/perf/library_bench.sh --use ~/games/big`).
+- **Steps:**
+  1. Start the app on a console page and click "All".
+  2. Press Ctrl+plus, then Ctrl+minus.
+  3. Scroll "All" to the bottom with Page Down and quit.
+- **Expected:** "All" opens with its first groups filled and the window answering at once: the
+  groups further than a page below the viewport hold no cards (they sleep, and the page keeps
+  their height, so the scrollbar is right from the start); they wake as the page scrolls near
+  them. A zoom step updates the cards on screen within half a second and builds nothing for the
+  sleeping groups. The cards on screen get their cover before the rows below them: the grid
+  moves the fetches of the cards that overlap its allocation to the front of the decode pool
+  after every layout, and a fetch queued for a card that has moved on returns before touching
+  the disk. Favorites and the collections behave the same, since they share the page body.
+  Before issue 899, opening "All" built 1843 cards for a viewport showing nine, blocked the
+  main loop for two seconds and added 140 MB; a zoom step rebuilt every group.
+- **Check:** `./devbox/devbox.sh exec env DEVBOX_REPO=$PWD tools/perf/library_bench.sh all`
+  prints `all_main_cpu_s` below `0.3` and `zoom_in_main_cpu_s` below `0.5` (the main thread's
+  own CPU time for the switch and for the zoom: what the window is blocked for; the
+  `*_main_settle_s` beside them also count the trickle of covers landing on the main loop
+  afterwards), and a `cards_built` for the whole session (start, "All", search, zoom in, zoom
+  out, a scroll, ten consoles, "All" again) below `2000` — GTK still keeps up to thirty rows of
+  each awake group, so a page shown is a few hundred cards, not the 1843 one "All" used to build
+  (6304 for this session before issue 899).
+  Unit-level:
+  `tests/test_grouped_scroll.py` (`test_only_the_groups_near_the_viewport_hold_cards`,
+  `test_the_page_builds_a_few_screens_of_cards_not_the_library`,
+  `WhoIsNearTheViewportTests`), `tests/test_grid_widget.py` (`SleepingAndWakingTests`),
+  `tests/test_cover_cache.py` (`ThePriorityQueueTests`).
+
+### RT-1030 — Memory comes back after a zoom round-trip and does not grow with the pages visited
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-UI
+- **Preconditions:** as RT-1029.
+- **Steps:**
+  1. Start on a console page, open "All", zoom in and back out.
+  2. Visit ten consoles in the sidebar, then come back to "All".
+  3. Leave a console page and come back to it after scrolling it halfway.
+- **Expected:** 1: the RSS after the zoom out is within 10% of the RSS before the zoom in: the
+  re-rendered page tears the previous grids down (entries, cards, textures, selection) instead
+  of leaving them for the garbage collector. 2: each console page sleeps when it is left — it
+  keeps its entries and its scroll position, not its cards — so ten visits add a few MB in
+  total, not 9 MB each, and the RSS back on "All" stays below 400 MB on that library (850 MB
+  before issue 900). 3: the page comes back at the same scroll position with its cards rebuilt.
+- **Check:** `./devbox/devbox.sh exec env DEVBOX_REPO=$PWD tools/perf/library_bench.sh mem`:
+  `rss_kb` at `zoom_out` is within 10% of `rss_kb` at `all`; `rss_kb` at `all_again` is below
+  `400000`. Unit-level: `tests/test_grid_widget.py`
+  (`test_leaving_the_page_puts_the_grid_to_sleep_and_coming_back_wakes_it`,
+  `test_waking_puts_the_page_back_where_it_was`, `test_tearing_down_lets_go_of_the_entries_and_the_cards`),
+  `tests/test_library_pages.py` (`test_a_rebuilt_page_tears_the_previous_grid_down`,
+  `test_forgetting_and_resetting_tear_the_grids_down`).
+
+### RT-1031 — A cartridge is rendered once per size at the display's scale, and never uploaded twice
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console in the cartridge shelf on a 1x monitor and on a 2x one,
+  step the zoom in and back out, and scroll the shelf up and down.
+- **Expected:** On a 1x monitor the composites on disk (`~/.openemux/cache/cartridges/<console>/`)
+  are the size of the card, on a 2x monitor twice that: the scale follows the display instead of
+  being 2x everywhere, so a 1x card holds a quarter of the pixels it used to. The first render of
+  a cartridge writes one PNG, the one in the disk cache: the label reaches cairo straight from its
+  pixels, decoded at the sticker's size rather than in full and rescaled, and the frame and the
+  label stencil are rasterized through librsvg once per size and reused, so the decode pool
+  composes several cartridges at once instead of one at a time. Stepping the zoom in and back out
+  renders nothing twice: every size keeps its own composite, and the start-up housekeeping prunes
+  the cache by age (60 days unread) and size (512 MB) instead of the render deleting the other
+  sizes. A card scrolling back to a cartridge the cover cache still holds re-attaches the same
+  `Gdk.Texture` rather than uploading the pixels again (issue 902).
+- **Check:** suite files `tests/test_cartridge_render.py` (`PixbufToSurfaceTests`,
+  `TheFrameIsRasterizedOnceTests`, `test_a_zoom_round_trip_renders_nothing_twice`,
+  `test_the_display_scale_sets_the_pixel_size_and_its_own_file`), `tests/test_housekeeping.py`
+  (`PruneCartridgeCacheTests`), `tests/test_rom_card_widget.py`
+  (`test_the_same_pixbuf_is_attached_as_the_same_texture_every_time`,
+  `test_the_composite_is_rendered_at_the_cards_display_scale`), `tests/test_grid_widget.py`
+  (`test_the_cards_render_their_composites_at_the_display_scale`).
+
+### RT-1032 — The AppImage tries the GPU renderer and falls back to software only after a crash
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start the AppImage on a machine whose GPU driver works, read the
+  start-up log; then start it on one where GTK's GPU renderer crashes at the first window, and
+  start it a second time.
+- **Expected:** The AppImage no longer forces `GSK_RENDERER=cairo`. It writes a probe file
+  (`~/.openemux/runtime/renderer-probe`) before GTK comes up and removes it one second after the
+  first window (the library or the first-boot screen) is presented; the log says
+  `gsk renderer: trying GTK's default` and then `gsk renderer in use: <the GSK renderer class>`.
+  When the renderer crashes the process before that second, the probe stays, and the next start
+  logs `gsk renderer: cairo -- the last attempt at the GPU renderer did not reach its first
+  frame` and runs on the software renderer from then on; deleting the probe file is how to try
+  the GPU again after a driver update. `GSK_RENDERER` set by the user is honoured as it was, and
+  a probe that cannot be written picks cairo rather than guessing (issue 903).
+- **Check:** suite files `tests/test_startup_preparation.py` (`TheRendererPickTests`),
+  `tests/test_app_bootstrap.py` (`test_the_first_window_settles_the_renderer_probe_a_moment_later`,
+  `test_the_first_boot_window_settles_the_renderer_probe_too`).
+
+### RT-1033 — Settings changed with a gesture reach the disk once the gesture stops, and survive a close
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: press Ctrl+plus ten times quickly, switch the sort order, toggle the
+  theme, open and close the log panel, click through ten consoles in the sidebar; then close the
+  window right after a zoom step and start the app again.
+- **Expected:** Nothing stalls on the gesture: the zoom, view mode, sort order, theme, log panel
+  and per-page layout setters change the config in memory, which is what the window reads, and
+  write it on a worker thread 0.4 s after the last change — ten rapid zoom steps are one YAML dump
+  and one atomic write, not ten, and no fsync runs on the main thread. The session file written
+  on every sidebar click keeps its atomic rename and drops its two fsyncs (it is rebuilt by the
+  next click). Closing the window, quitting with Ctrl+Q or launching a game flushes whatever is
+  waiting, so the zoom chosen a moment before the close is the zoom the next start opens with;
+  a crash inside the 0.4 s window loses only those last settings and never the file, which is
+  still written atomically (issue 905).
+- **Check:** suite files `tests/test_config_save_debounce.py`, `tests/test_window.py`
+  (`test_closing_flushes_a_setting_still_waiting_for_its_write`), `tests/test_game_session.py`
+  (`test_a_launch_flushes_a_setting_still_waiting_for_its_write`), `tests/test_app_bootstrap.py`
+  (`test_quitting_flushes_a_setting_still_waiting_for_its_write`).
+
+### RT-1034 — A second launch of an unchanged library writes no playlist and walks no folder
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start the app twice on the same library and watch the "Scanning
+  ROMs" banner and the disk light; then add a ROM to one console's folder with the app closed and
+  start it again; sort "All" by "Recently added" and by "File size".
+- **Expected:** The first start scans each console in one walk, with one stat per file (no second
+  pass for the cue sheets, no `is_file()` on top of what the directory entry already said), and
+  writes beside each `<CONSOLE>.list` a `<CONSOLE>.meta.json` holding the display name (an
+  archive's inner title), the size, the arrival time of every game and the fingerprint of the
+  console's folders (their mtimes). The second start compares each console's fingerprint with the
+  stored one and walks nothing: no playlist is rewritten, no fsync runs, and the banner finishes
+  at once. The console that received a ROM has a folder whose mtime moved, so it alone is walked
+  and rewritten; the others still answer from their index. Loading a page is a parse of the two
+  files: no `exists()` per game and no archive opened for its name, on the main thread or
+  anywhere (a game deleted outside the app stays listed until the next start's scan drops it).
+  Sorting by date added or file size reads the sizes and dates from the index instead of stat-ing
+  the library on every render (issue 901). "Refresh" and the scan dialog still walk everything.
+- **Check:** suite files `tests/test_playlist_manager.py` (`TheMetaIndexTests`,
+  `test_a_game_that_left_the_disk_stays_listed_until_the_next_scan`), `tests/test_scanner.py`
+  (`OneWalkOneStatTests`), `tests/test_dir_walk.py` (`WalkEntriesTests`, `DirectoryStampsTests`),
+  `tests/test_window.py` (`test_the_startup_scan_is_a_silent_incremental_rescan`,
+  `test_the_date_and_size_orders_read_the_index_not_the_disk`).
+
+### RT-1035 — A fresh install downloads only the cores a picker would list, and the catalog is ready before the first menu
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: finish a first boot on a fresh install, watch the "Downloading the
+  remaining cores" banner, then right-click a card; open Preferences → Cores and turn on
+  "Download every libretro core".
+- **Expected:** The sweep after the first boot fetches only the cores some picker would list: the
+  curated candidates of every console plus each core whose `.info` names a supported system —
+  about a sixth of the ~240 the buildbot builds. The rest are the opt-in switch on the Cores page;
+  turning it on owes the sweep again and starts it at once. The first context menu opens without
+  parsing the `.info` directory on the main thread: the window and the launcher share one core
+  catalog, scanned on a worker right after the window is up and cached as
+  `~/.openemux/cores_catalog.json`, keyed by the core directories' mtimes, so the next start loads
+  it with one read. A core that lands later (the sweep, Verify cores) refreshes the catalog and
+  warms it again (issue 908).
+- **Check:** suite files `tests/test_cores.py` (`PickableCoresTests`, `TheCatalogCacheTests`),
+  `tests/test_first_boot.py` (`test_it_fetches_only_the_cores_a_picker_would_list`,
+  `test_opting_in_fetches_every_core`), `tests/test_config_accessors.py`
+  (`test_opting_in_to_every_core_owes_the_sweep_again`), `tests/test_preferences.py`
+  (`test_the_download_every_core_switch_stores_the_choice_and_starts_the_sweep`),
+  `tests/test_window.py` (`test_the_window_and_the_launcher_share_one_core_catalog`,
+  `test_the_core_catalog_is_warmed_on_a_worker`).
+
+### RT-1036 — The cartridge's shadow is part of the composite, and no card node carries a CSS filter
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console in the cartridge shelf and look at the shadow under
+  each cartridge, at the gaps between them and at the page edges; step the zoom; switch to the
+  cover grid.
+- **Expected:** Every cartridge still casts the soft shadow that follows its outline (offset
+  down, blurred), but it is drawn once into the composite: the composite carries a transparent
+  margin of 8 logical pixels on every side (16 on a 2x display), the shadow is rendered once per
+  size with the frame and the stencil and reused for every game, and `style.css` applies no
+  `filter` to any card node — under the cairo renderer the old `drop-shadow` was a software blur
+  of every card on every scroll frame. The card's picture slot grows by the margin and the grid
+  gives the same back on the gaps and the edges, so the cartridges sit exactly where they did
+  and the lattice is unchanged at every zoom. Covers keep their box-shadow (issue 903).
+- **Check:** suite files `tests/test_cartridge_render.py` (`TheBakedShadowTests`,
+  `test_cover_lands_inside_the_label_and_never_outside`), `tests/test_rom_card_widget.py`
+  (`TheCartridgeShadowRuleTests`), `tests/test_grid_widget.py`
+  (`test_a_cartridge_grid_grows_its_slot_by_the_shadow_margin_and_gives_it_back`).
+
+## Desktop — Console names
+
+### RT-1037 — The sidebar, the group headers, the window title and the launch toast name the console, never its folder id
+- **Area:** Desktop — Console names
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: look at the sidebar, open "All" and read the group headers, select a
+  console and read the window title, launch a game and read the toast; hover a console row;
+  open Preferences → Cores and the import dialog.
+- **Expected:** "Super Nintendo", "Mega Drive", "Nintendo (NES)" and so on, with no "SFC - ",
+  "MD - " or "FC - " in front: the id is the folder's name, not what a player reads, and the
+  prefix doubled the width of the sidebar rows. The id stays where the folder matters: the row's
+  tooltip says "Folder: SFC", the import flow's console choice, the ROM-folder hints and the
+  Preferences pages still name it (issue 912).
+- **Check:** suite files `tests/test_console_sidebar.py`
+  (`test_a_row_is_labelled_by_the_consoles_name_alone`,
+  `test_a_console_row_keeps_the_folder_id_in_its_tooltip`), `tests/test_library_pages.py`
+  (`test_a_group_header_names_the_console`), `tests/test_window.py`
+  (`test_the_title_names_the_console_and_counts_its_games`), `tests/test_game_session.py`
+  (`test_a_launch_records_the_play_and_says_it_is_running`).
+
+## Desktop — BIOS warnings
+
+### RT-1038 — A console whose core needs a missing system file says so before any launch
+- **Area:** Desktop — BIOS warnings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console whose selected core needs a BIOS (PlayStation, Saturn) and an
+  empty BIOS folder for it.
+- **Steps:**
+  1. Start the app and look at that console's row in the sidebar; hover it.
+  2. Select the console and read the top of its page; click "Import BIOS…".
+  3. Import the file, come back to the page.
+  4. On a console whose core needs no BIOS, look at the row and the page.
+- **Expected:** 1: a warning icon on the row, with the tooltip "Needs system files: scph5501.bin"
+  (the real file names, never a path). 2: a banner over the grid, "Sony PlayStation needs
+  scph5501.bin to run games", with "Import BIOS…" and a close button; the button opens
+  Preferences on the BIOS page with that console's row expanded; the close button hides the
+  banner for the session. 3: the icon and the banner clear without a restart; they also re-check
+  after a core change and after a Share nearby transfer, since both refresh the library.
+  4: nothing is shown (issue 911).
+- **Check:** suite files `tests/test_window.py` (`TheBiosWarningsTests`),
+  `tests/test_console_sidebar.py` (`test_a_row_warns_about_a_missing_bios_and_names_the_files`),
+  `tests/test_library_pages.py` (`TheBiosBannerTests`), `tests/test_preferences.py`
+  (`test_the_bios_page_can_open_on_a_console`, `test_an_import_re_checks_the_window_warnings`).
+
+### RT-1039 — Recently played: the row, the play time under each card, and resuming from the automatic save state
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with games on two consoles; nothing launched yet (a fresh
+  `~/.openemux/play_history.json`); "Resume where I left off" off (the default).
+- **Steps:**
+  1. Start the app and read the sidebar.
+  2. Launch a game on one console, quit it after two minutes; launch a game on the other console,
+     quit it. Read the sidebar and the window title.
+  3. Open "Recently played" and read the cards; press F5 on the page.
+  4. In Preferences › Video, turn on "Resume where I left off". Launch a game, play a little,
+     quit it. Look at its card; right-click it.
+  5. Pick "Start fresh" on that card; then quit and launch it again with a plain click.
+  6. Delete the only game ever played, and leave the page.
+- **Expected:** 1: no "Recently played" row (issue 910). 2: the row appears right under "All",
+  above "Favorites"; the app opens on that page at the next start; the title reads "Recently
+  played". 3: one group, the last game first, every card captioned with when and for how long
+  ("2 h ago · 1 h 20 min played"; only the time when under a minute was played; a date past a
+  week); F5 only re-reads the page, no rescan. 4: the card shows a small play badge at the
+  bottom-left corner with the tooltip "Play picks up where you left off"; the menu offers "Start
+  fresh" right after "Load state", and the runtime override carries `savestate_auto_save = "true"`
+  and `savestate_auto_load = "true"`. 5: "Start fresh" writes `savestate_auto_load = "false"` for
+  that one launch; the plain launch resumes. With the setting off, no badge and no "Start fresh",
+  whatever is on disk. 6: the row goes with the next navigation away, like Favorites.
+- **Check:** suite files `tests/test_play_history.py` (`ThePlayTimeTests`,
+  `FormattingPlayTimeTests`), `tests/test_library_landing.py` (`TheRecentlyPlayedRowTests`),
+  `tests/test_save_states.py` (`TheAutomaticStateTests`), `tests/test_retroarch_launcher.py`
+  (`test_resume_saves_the_state_on_exit_and_loads_it_on_launch`,
+  `test_start_fresh_still_saves_on_exit_but_does_not_load`),
+  `tests/test_console_sidebar.py` (`TheRecentlyPlayedRowTests`), `tests/test_library_pages.py`
+  (`test_the_recent_page_lists_the_last_game_first_in_one_group`), `tests/test_window.py`
+  (`TheRecentlyPlayedPageTests`), `tests/test_game_session.py`
+  (`test_a_finished_game_adds_its_time_and_tells_the_window`,
+  `test_a_launch_resumes_unless_told_to_start_fresh`), `tests/test_rom_context.py`
+  (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
+  `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).
+
+### RT-1040 — Launching answers at once, runs off the main thread, and speaks the player's language when it ends
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a working core and ROM; for step 4 a PlayStation game with an empty BIOS
+  folder.
+- **Steps:**
+  1. Click Play on a game and watch the card and the banner during the second before RetroArch
+     appears; click the card again meanwhile.
+  2. Press the banner's "Stop" while the game runs; launch again and press "Stop" before the
+     RetroArch window is up.
+  3. Quit a game normally after a few minutes; then kill one from outside (`kill -9` its process).
+  4. Click Play on the PlayStation game.
+  5. Profile a launch on the host (`py-spy dump` or `python -X importtime` are not it: use
+     `GDK_DEBUG=frames` or a `cProfile` of the click handler) and look for file reads, globs or
+     subprocesses on the main thread before the process exists.
+- **Expected:** 1: the card dims under a spinner in the same frame as the click and the banner reads
+  "Starting <game>…" with a "Stop" button; the window stays responsive; the second click is ignored
+  (no "already running" toast). Once RetroArch is up the card recovers, the banner reads "Playing
+  <game>" and the "Running" toast appears (issue 904). 2: the game quits and the banner goes; a Stop
+  pressed while starting quits the game as soon as it is up. 3: "Played <game> for 12 min" (the
+  index's title, else the file stem); a non-zero exit says "Played <game> for N min · RetroArch
+  exited with code 139" with a "Show log" button that opens the log panel; a launch that died shows
+  its reason with the same button. 4: an alert, "Sony PlayStation needs system files", lists the
+  file names and offers "Open BIOS settings" (Preferences › BIOS at that console), "Launch anyway"
+  (RetroArch starts without the check) and "Cancel". 5: nothing but the config flush and the BIOS
+  stat runs on the main thread; the user's `retroarch.cfg` is parsed again only when its stamp
+  changed, the bar's assets compare by size and mtime under a version stamp, and the shader preset
+  index is read from `~/.openemux/shaders_index.json` when the shader directories' mtimes match.
+- **Check:** suite files `tests/test_game_session.py` (`TheStartingStateTests`, `TheBiosDialogTests`,
+  `NoticingTheGameEndedTests`), `tests/test_rom_card_widget.py` (`TheStartingStateTests`),
+  `tests/test_task_banner.py` (`test_the_button_can_be_named_for_the_task`), `tests/test_window.py`
+  (`test_the_launcher_shares_the_windows_cached_shader_index`,
+  `test_a_starting_game_is_shown_on_its_card`), `tests/test_shaders.py` (`TheIndexOnDiskTests`),
+  `tests/test_overlay_bar.py` (`test_a_copy_from_another_version_is_made_again_whatever_its_size`,
+  `test_a_copy_older_than_its_source_is_refreshed_even_at_the_same_size`),
+  `tests/test_retroarch_launcher.py` (`test_the_users_cfg_is_parsed_again_only_when_it_changed`,
+  `test_launch_anyway_runs_without_the_bios`), `tests/test_runtime_manager.py`
+  (`test_launch_anyway_skips_the_bios_check_at_the_launcher`).
+
+### RT-1041 — Search on a large library: incremental filtering, words in any order, scope, empty state and Enter
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the 3000-game synthetic library (`tools/perf/gen_library.py`) on the All page.
+- **Steps:**
+  1. Press `Ctrl+F`, type "alpha saga" letter by letter under a profiler.
+  2. Type "zelda link"; type "pokemon" against a game named "Pokémon".
+  3. Type a query that matches nothing; click "Clear search".
+  4. On a console page type a query, click "Search everywhere".
+  5. With one match showing, press `Enter`; with several, press `Enter`; press `Escape`.
+- **Expected:** 1: every keystroke's main-thread work stays under 50 ms: the filter runs
+  incrementally above 300 games, a query that only grew is MORE_STRICT (only the games still
+  showing are re-checked) and the group headers and the title's count follow the model as it
+  settles. 2: words match in any order, accents folded. 3: "No games match “…”" appears only once the
+  filter settled, with the way out. 4: the All page opens with the query kept. 5: the one match
+  launches; otherwise the first match takes the focus; Escape clears the query and the grid takes
+  the focus back.
+- **Check:** suite files `tests/test_library_search.py`, `tests/test_grid_widget.py`
+  (`test_words_match_in_any_order_whatever_the_accents`,
+  `test_typing_on_only_re_checks_what_still_shows`,
+  `test_a_small_page_filters_in_one_go_and_a_big_one_in_slices`), `tests/test_grid_group.py`
+  (`test_a_section_follows_its_grid_as_an_incremental_filter_settles`), `tests/test_window.py`
+  (`TheSearchFieldTests`).
+
+### RT-1042 — A new library: the folder first, the covers offered, the tour once there is something to tour
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a throwaway `HOME`, first boot done, no games.
+- **Steps:**
+  1. Read the empty state; click its suggested action and pick a folder of games.
+  2. When the scan ends, read the banner; click its button.
+  3. Note when the welcome tour appears.
+- **Expected:** 1: "Choose your ROM folder" is the suggested (blue) action and "Import files…" the
+  second pill (issue 909; it was the other way round). 2: the banner reads "Fetch covers for N
+  games?" with "Fetch covers", which starts the library-wide artwork sync and hides the offer; a
+  sync started any other way hides it too; a scan that finds nothing offers nothing. 3: the tour
+  opens only once the library has games (or on request from the menu), never over an empty library.
+- **Check:** suite files `tests/test_window.py` (`TheFirstLibraryTests`,
+  `test_choosing_the_folder_is_the_suggested_action_and_import_the_second`,
+  `test_the_tour_waits_for_the_first_games`).
+
+### RT-1043 — Game details: one dialog for a game's settings, save states, play stats and artwork
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a game with a cover, two cores installed for its console and a save state on
+  slot 3; a gamepad for step 5.
+- **Steps:**
+  1. Right-click the card and pick "Game details…"; close it and press Alt+Return on the focused
+     card.
+  2. Read the hero row and the three settings rows.
+  3. Pick another core in the Core row; read its subtitle; click the reset arrow.
+  4. Click "Load" on the slot 3 row.
+  5. With the gamepad on a card, press Ⓧ; move with the D-pad, Ⓐ on Play, Ⓑ to close.
+- **Expected:** 1: the same dialog both ways (issue 913): cover, title, console, when and for how
+  long it was played (or "Never played"), the file, "Play" and the favorite toggle. 2: Core, Shader
+  and (where the console has shells) Cartridge color rows show the value in effect; the subtitle
+  reads "Console default: X" while the game has no override of its own. 3: the subtitle changes to
+  "Set for this game" and a reset arrow appears; the arrow puts the row back on "Console default"
+  and clears the override in one step. 4: the game launches into slot 3 and the dialog closes.
+  5: the hint bar reads "Ⓧ Details"; the dialog is walked with the D-pad; Ⓐ on Play launches, Ⓑ
+  closes. The Artwork rows fetch, manage, choose or remove the cover; the Playlists switches add
+  or remove the game; Show in file manager, Rename and Delete sit at the bottom.
+- **Check:** suite files `tests/test_game_details.py`, `tests/test_rom_context.py`
+  (`TheDetailsRowTests`), `tests/test_navigation.py`, `tests/test_navigation_controller.py`
+  (`test_the_details_button_goes_through_the_focused_card`), `tests/test_grid_widget.py`
+  (`test_alt_return_opens_the_game_details`), `tests/test_window.py`
+  (`test_the_game_details_dialog_opens_for_a_game`).
+
+### RT-1044 — Every card and every icon-only button has an accessible name, and the lift honours the animation setting
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Orca or the GTK inspector (`GTK_DEBUG=interactive`) available; a favorite, a
+  game without artwork and one with an automatic save state.
+- **Steps:**
+  1. With Orca on, arrow across three cards; open the inspector's Accessibility tab on a card and on
+     its star, menu and "Search artwork…" buttons and on the badges.
+  2. In GNOME Settings › Accessibility turn animations off; hover a card.
+- **Expected:** 1: each card reads as "<title>, <console>, Favorite, No artwork found for this game,
+  Play picks up where you left off, item n of m" (only the parts that apply); every button and badge
+  has a label, never just a tooltip (issue 915). 2: no lift or tint animation runs on the card; the
+  window loses its `.animated` class and gets it back when animations are turned on again.
+- **Check:** suite files `tests/test_rom_card_widget.py` (`WhatAScreenReaderHearsTests`),
+  `tests/test_window.py` (`test_the_card_transitions_follow_the_desktops_animation_setting`).
+
+### RT-1045 — TV mode: fullscreen couch layout, the pad's own letters in the hints, an on-screen keyboard and shoulder jumps
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
+  pipeline's virtual pad), a library with several consoles.
+- **Steps:**
+  1. Press F11 (or the pad's Guide button); take a screenshot and scale it to 25%.
+  2. Press Start on the pad; type "mar" on the on-screen keyboard; press Done.
+  3. On "All", press RB/R1 twice, then LB/L1.
+  4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
+     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
+     card.
+  5. Press Escape; press F11 again.
+- **Expected:** 1: the window goes fullscreen with the sidebar hidden; the shelf is drawn at least at
+  150% zoom, titles and hints are larger (26 px or more at 1080p) and the focused card has a
+  4 px ring and a slight scale, still distinguishable at 25% (issue 914). The user's zoom setting
+  is untouched. 2: a letter grid the D-pad walks; each press filters the library at once; Done
+  closes it and the focus lands on the first match. 3: the focus jumps to the first card of the next
+  console group, then back. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family), never Ⓐ-style
+  glyphs; with the swap on, the east button confirms and the labels follow. 5: Escape leaves TV mode
+  (sidebar back, zoom back); F11 toggles it again. Reduced motion follows RT-1044's class; GNOME's
+  large text scales the labels as everywhere else.
+- **Check:** suite files `tests/test_controller_glyphs.py`, `tests/test_onscreen_keyboard.py`,
+  `tests/test_ui_gamepad.py` (`TheConfirmCancelSwapTests`), `tests/test_navigation.py`,
+  `tests/test_navigation_controller.py` (`test_the_hints_use_the_connected_pads_letters`,
+  `test_the_shoulders_walk_the_groups_of_a_grouped_page`), `tests/test_window.py`
+  (`test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up`,
+  `test_escape_leaves_tv_mode_when_nothing_else_wants_it`,
+  `test_the_on_screen_keyboard_opens_over_a_searchable_page`), `tests/test_preferences.py`
+  (`test_the_controller_label_family_and_the_swap_are_stored`).
 
 ## Android — Pause with the controller
 

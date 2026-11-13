@@ -14,6 +14,7 @@ an infinite descent.
 
 import logging
 import os
+import stat as stat_module
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,97 @@ def walk_files(root, follow_symlinks=True):
         base = Path(dirpath)
         for name in filenames:
             yield base / name
+
+
+def walk_entries(root, follow_symlinks=True):
+    """Yield ``(path, stat)`` for every file under ``root``, one stat each.
+
+    The same walk as :func:`walk_files`, with the one ``stat`` a scan needs
+    anyway -- the file's size and times go into the playlist index (issue
+    901) -- taken here from the directory entry, so the scanner never asks
+    ``is_file()`` and then stats again. A link pointing nowhere yields
+    ``None`` for its stat, which is how the caller knows it is not a game.
+    """
+    for dirpath, dirnames, filenames, entries in _walk_with_entries(root, follow_symlinks):
+        base = Path(dirpath)
+        for name in filenames:
+            entry = entries.get(name)
+            info = None
+            try:
+                info = entry.stat(follow_symlinks=follow_symlinks) if entry is not None else None
+            except OSError:
+                info = None
+            if info is not None and not stat_module.S_ISREG(info.st_mode):
+                info = None
+            yield base / name, info
+
+
+def _walk_with_entries(root, follow_symlinks):
+    """``os.walk`` with the directory entries of each level kept at hand.
+
+    ``os.walk`` throws its ``DirEntry`` objects away after splitting them
+    into names, and the stat each of them can answer with it. This walks the
+    tree the same way (same visited-inode guard, same unreadable-directory
+    skip) and keeps them, so the caller stats each file once.
+    """
+    root = Path(root)
+    visited = set()
+    stack = [os.fspath(root)]
+    while stack:
+        dirpath = stack.pop()
+        try:
+            with os.scandir(dirpath) as scan:
+                listed = list(scan)
+        except OSError as exc:
+            logger.debug("walk: skipping unreadable directory: %s", exc)
+            continue
+        if follow_symlinks:
+            key = _identity(dirpath)
+            if key is not None:
+                if key in visited:
+                    continue
+                visited.add(key)
+        dirnames, filenames, entries = [], [], {}
+        for entry in listed:
+            try:
+                is_dir = entry.is_dir(follow_symlinks=follow_symlinks)
+            except OSError:
+                is_dir = False
+            if is_dir:
+                if follow_symlinks:
+                    child = _identity(entry.path)
+                    if child is not None and child in visited:
+                        continue
+                dirnames.append(entry.name)
+            else:
+                filenames.append(entry.name)
+                entries[entry.name] = entry
+        dirnames.sort()
+        filenames.sort()
+        yield dirpath, dirnames, filenames, entries
+        # Depth first, in name order: pushed reversed so the stack pops a-z.
+        for name in reversed(dirnames):
+            stack.append(os.path.join(dirpath, name))
+
+
+def directory_stamps(root, follow_symlinks=True):
+    """``{relative dir: mtime_ns}`` for ``root`` and every directory under it.
+
+    A directory's mtime moves when a file is added to it, removed from it or
+    renamed in it, so this is the fingerprint the start-up scan compares to
+    decide whether a console's tree changed since the playlist was built
+    (issue 901): a listing of the directories, no stat of the files.
+    """
+    root = Path(root)
+    stamps = {}
+    for dirpath, _dirnames, _filenames, _entries in _walk_with_entries(root, follow_symlinks):
+        try:
+            mtime = os.stat(dirpath).st_mtime_ns
+        except OSError:
+            continue
+        relative = os.path.relpath(dirpath, root)
+        stamps["." if relative == os.curdir else relative] = mtime
+    return stamps
 
 
 def _identity(path):

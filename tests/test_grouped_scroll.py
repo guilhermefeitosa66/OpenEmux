@@ -22,7 +22,8 @@ if HAVE_DISPLAY:
     gi.require_version("Gtk", "4.0")
     from gi.repository import GLib, Gtk
 
-    from openemux.ui.grouped_scroll import GroupedScroll
+    from openemux.ui import grid as grid_module
+    from openemux.ui.grouped_scroll import GroupedScroll, _item_count, _near_viewport
     from openemux.ui.scopes import ALL_CONSOLES_ID
 
 
@@ -238,6 +239,34 @@ class TheWidgetTests(unittest.TestCase):
 
 
 @needs_display
+class WhoIsNearTheViewportTests(unittest.TestCase):
+    """The rule a group sleeps or wakes by (issue 899)."""
+
+    def test_a_child_inside_the_viewport_is_near(self):
+        self.assertTrue(_near_viewport(100, 50, 0, 600))
+
+    def test_a_child_within_a_page_above_or_below_is_near(self):
+        self.assertTrue(_near_viewport(-500, 50, 0, 600))
+        self.assertTrue(_near_viewport(1150, 50, 0, 600))
+
+    def test_a_child_further_than_a_page_away_is_not(self):
+        self.assertFalse(_near_viewport(-700, 50, 0, 600))
+        self.assertFalse(_near_viewport(1250, 50, 0, 600))
+
+    def test_a_plain_grid_view_is_counted_through_its_model(self):
+        store = Gtk.StringList.new(["a", "b", "c"])
+        self.assertEqual(_item_count(Gtk.GridView(model=Gtk.NoSelection(model=store))), 3)
+        self.assertEqual(_item_count(Gtk.GridView()), 0)
+
+    def test_a_grid_that_knows_its_count_is_asked(self):
+        class _Counting(Gtk.GridView):
+            def count(self):
+                return 7
+
+        self.assertEqual(_item_count(_Counting()), 7)
+
+
+@needs_display
 class WithNoScrollerTests(unittest.TestCase):
     """Allocated with no adjustments at all: nothing to scroll, nothing breaks."""
 
@@ -324,6 +353,42 @@ class TheAllPageTests(WindowCase):
         )
         self.scroll_into(self.fc, 0.999)
         self.assertIsNotNone(self.fc.card_for(self.fc.entries()[-1]))
+
+    def test_only_the_groups_near_the_viewport_hold_cards(self):
+        # Issue 899: every group used to realize up to thirty rows of cards
+        # around its anchor, on screen or not.
+        self.scroll_to(0)
+        self.assertFalse(self.fc.is_dormant())
+        # The second group starts more than a page below the first's 600
+        # games, so it sleeps until the page scrolls near it.
+        self.assertTrue(self.sfc.is_dormant())
+        self.assertIsNone(self.sfc.card_for(self.sfc.entries()[0]))
+        self.scroll_to(self.vadj.get_upper())
+        self.assertFalse(self.sfc.is_dormant())
+        self.assertTrue(self.fc.is_dormant())
+
+    def test_a_sleeping_group_keeps_its_height_on_the_page(self):
+        self.scroll_to(0)
+        body = self.sfc.get_parent()
+        asleep = body._layout[self.sfc][1]
+        self.scroll_to(self.vadj.get_upper())
+        self.assertTrue(self.pump_until(lambda: not self.sfc.is_dormant()))
+        self.assertEqual(body._layout[self.sfc][1], asleep)
+
+    def test_the_page_builds_a_few_screens_of_cards_not_the_library(self):
+        built = grid_module.cards_built()
+        self.win.sidebar.select("SFC")
+        self.pump()
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.assertTrue(self.pump_until(lambda: self.fc.card_for(self.fc.entries()[0]) is not None))
+        self.assertLess(grid_module.cards_built() - built, 640 // 2)
+
+    def test_revealing_a_card_of_a_sleeping_group_scrolls_to_it(self):
+        self.scroll_to(0)
+        body = self.sfc.get_parent()
+        self.assertTrue(body.reveal_position(self.sfc, 0))
+        _settle()
+        self.assertTrue(self.pump_until(lambda: self.sfc.card_for(self.sfc.entries()[0]) is not None))
 
     def test_a_search_that_hides_the_first_group_keeps_the_second_on_screen(self):
         self.scroll_to(self.vadj.get_upper())

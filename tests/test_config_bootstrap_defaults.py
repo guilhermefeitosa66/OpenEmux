@@ -66,6 +66,7 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertEqual(settings["view_mode"], "list")
             self.assertFalse(settings["render_cartridge_overlay"])
 
+            manager.flush()  # the view mode is written once the changes pause (issue 905)
             self.assertEqual(ConfigManager(config_file=cfg_path).get_view_mode(), "list")
 
     def test_zoom_defaults_to_100_percent_and_round_trips(self):
@@ -75,6 +76,7 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertEqual(manager.get_zoom(), 1.0)
 
             manager.set_zoom(1.5)
+            manager.flush()
             self.assertEqual(ConfigManager(config_file=cfg_path).get_zoom(), 1.5)
 
     def test_a_junk_zoom_does_not_break_the_library(self):
@@ -108,8 +110,48 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
 
             # Turning it back off has to stick: the flip happens only once.
             manager.set_render_cartridge_overlay(False)
+            manager.flush()  # a view-mode change is written once the changes pause (issue 905)
             reopened = ConfigManager(config_file=cfg_path)
             self.assertFalse(reopened.get_ui_settings()["render_cartridge_overlay"])
+
+
+class TheAutoResumeSettingTests(unittest.TestCase):
+    """"Resume where I left off" (issue 910): off until asked for."""
+
+    def test_it_is_off_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertFalse(manager.get_auto_resume())
+
+    def test_it_survives_a_restart(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            self.assertTrue(ConfigManager(config_file=cfg_path).set_auto_resume(1))
+            self.assertTrue(ConfigManager(config_file=cfg_path).get_auto_resume())
+            ConfigManager(config_file=cfg_path).set_auto_resume(False)
+            self.assertFalse(ConfigManager(config_file=cfg_path).get_auto_resume())
+
+
+class TheControllerLabelSettingsTests(unittest.TestCase):
+    """Issue 914: which pad's letters the hints draw, and the confirm/cancel swap."""
+
+    def test_defaults_follow_the_pad_and_keep_the_buttons_as_they_are(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertEqual(manager.get_controller_glyph_family(), "auto")
+            self.assertFalse(manager.get_swap_confirm_cancel())
+
+    def test_they_survive_a_restart_and_junk_reads_as_auto(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+            manager.set_controller_glyph_family("nintendo")
+            manager.set_swap_confirm_cancel(True)
+            reopened = ConfigManager(config_file=cfg_path)
+            self.assertEqual(reopened.get_controller_glyph_family(), "nintendo")
+            self.assertTrue(reopened.get_swap_confirm_cancel())
+            reopened.set_controller_glyph_family("sega")
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_controller_glyph_family(), "auto")
 
 
 class TheDeferredAssetDebtTests(unittest.TestCase):

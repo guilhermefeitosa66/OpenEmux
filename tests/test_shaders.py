@@ -1,4 +1,8 @@
 import unittest
+import tempfile
+from unittest import mock
+import os
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -275,6 +279,112 @@ class AnIndexThatOutlivesItsPacksTests(unittest.TestCase):
             self.assertEqual(
                 catalog.resolve_shader_path(shader_id, video_driver="vulkan"), str(preset)
             )
+
+
+class TheIndexOnDiskTests(unittest.TestCase):
+    """The preset index cached beside the config (issue 904)."""
+
+    def _packs(self, runtime_dir):
+        glsl = Path(runtime_dir) / "shaders_glsl" / "crt"
+        glsl.mkdir(parents=True)
+        (glsl / "crt-geom.glslp").write_text("x", encoding="utf-8")
+        return glsl
+
+    def test_the_second_catalog_reads_the_index_instead_of_walking(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            first = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            self.assertIn("crt-geom", first.list_available_shader_ids())
+            self.assertTrue(cache.is_file())
+            second = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            with mock.patch.object(second, "_build_index") as build:
+                self.assertEqual(
+                    second.resolve_shader_path("crt-geom", video_driver="gl"),
+                    first.resolve_shader_path("crt-geom", video_driver="gl"),
+                )
+            build.assert_not_called()
+
+    def test_a_directory_that_changed_rebuilds_the_index(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glsl = self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache).list_available_shader_ids()
+            (glsl.parent / "lcd").mkdir()
+            os.utime(glsl.parent, (1, 1))
+            (glsl.parent / "lcd" / "lcd-grid.glslp").write_text("x", encoding="utf-8")
+            later = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            self.assertIn("lcd-grid", later.list_available_shader_ids())
+
+    def test_a_refresh_walks_again_whatever_the_stamps_say(self):
+        # A pack extracted into a directory that already existed leaves its
+        # mtime alone; refresh() is the updater's way to insist.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            glsl = self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            catalog = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            catalog.list_available_shader_ids()
+            stamps = catalog._stamps()
+            (glsl / "crt-lottes.glslp").write_text("x", encoding="utf-8")
+            for base in stamps:
+                os.utime(base, ns=(stamps[base], stamps[base]))
+            catalog.refresh()
+            self.assertIn("crt-lottes", catalog.list_available_shader_ids())
+            # ...and the cache now knows it too.
+            again = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            with mock.patch.object(again, "_build_index") as build:
+                self.assertIn("crt-lottes", again.list_available_shader_ids())
+            build.assert_not_called()
+
+    def test_a_cache_that_cannot_be_read_is_set_aside(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            cache.write_text("{not json", encoding="utf-8")
+            catalog = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            self.assertIn("crt-geom", catalog.list_available_shader_ids())
+            self.assertTrue(list(Path(tmp_dir).glob("shaders_index.json.broken-*")))
+
+    def test_a_cache_of_another_shape_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            for raw in ('[]', '{"version": 99}', '{"version": 1, "stamps": {}, "presets": "x"}'):
+                cache.write_text(raw, encoding="utf-8")
+                catalog = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+                self.assertIn("crt-geom", catalog.list_available_shader_ids())
+
+    def test_junk_entries_inside_a_valid_cache_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            cache = Path(tmp_dir) / "shaders_index.json"
+            catalog = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            catalog.list_available_shader_ids()
+            raw = json.loads(cache.read_text(encoding="utf-8"))
+            raw["presets"]["junk"] = "not a mapping"
+            raw["presets"]["crt-geom"]["slang"] = 42
+            cache.write_text(json.dumps(raw), encoding="utf-8")
+            again = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=cache)
+            self.assertNotIn("junk", again.list_available_shader_ids())
+            self.assertIsNone(again.resolve_shader_path("crt-geom", video_driver="vulkan"))
+
+    def test_a_cache_that_cannot_be_written_is_only_a_warning(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            blocker = Path(tmp_dir) / "blocked"
+            blocker.write_text("a file, not a folder", encoding="utf-8")
+            catalog = ShaderCatalog(
+                runtime_dir=tmp_dir, project_root=tmp_dir, cache_file=blocker / "index.json"
+            )
+            with self.assertLogs("openemux.core.shaders", "WARNING"):
+                self.assertIn("crt-geom", catalog.list_available_shader_ids())
+
+    def test_without_a_cache_file_the_index_lives_in_memory_only(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._packs(tmp_dir)
+            catalog = ShaderCatalog(runtime_dir=tmp_dir, project_root=tmp_dir)
+            self.assertIn("crt-geom", catalog.list_available_shader_ids())
+            self.assertEqual(list(Path(tmp_dir).glob("*.json")), [])
 
 
 if __name__ == "__main__":

@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">お気に入り</a></summary></details></li>
+        <li><details open><summary><a href="#recent">最近プレイ</a></summary></details></li>
+        <li><details open><summary><a href="#details">ゲームの詳細</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">TV モード</a></summary></details></li>
         <li><details open><summary><a href="#cores">コアとシェーダー</a></summary>
             <ul>
               <li><a href="#cores-game">1つのゲームに対して</a></li>
@@ -783,6 +786,8 @@
           <p>サイドバーには、ライブラリのページが上から順に並んでいます。</p>
           <ul>
             <li><span class="ui">すべて</span>：すべてのゲームを、コンソールごとにまとめて表示します。</li>
+            <li><span class="ui">最近プレイ</span>：最後に起動したゲームが新しい順に並びます。この行は最初の起動後に現れます。
+              <a href="#recent">最近プレイ</a>を参照。</li>
             <li><span class="ui">お気に入り</span>：星を付けたゲームです。この行は、何かに星を付けたときにだけ表示されます。<a href="#favorites">お気に入り</a>を参照してください。</li>
             <li>作成したプレイリスト（ある場合）。ここでは <span class="ui">Couch co-op</span> です。<a href="#playlists">プレイリスト</a>を参照してください。</li>
             <li>ゲームがあるコンソールごとに1行ずつ、<span class="ui">SFC - Super Nintendo</span> のように短い ID と名前で表示されます。</li>
@@ -917,7 +922,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">初回起動</h3>
-          <p>初めて起動すると、OpenEmux は<span class="ui">初回セットアップを準備しています</span>というウィンドウを表示し、その間に設定を作成し、ROM・BIOS・カバーのフォルダーを作り、入力プロファイルとプレイリストを用意し、お使いのコンソールに必要な libretro コアをダウンロードします。通常は10秒ほどで終わります。残りのコアはアプリを使っている間もバックグラウンドでダウンロードが続き、ヘッダーの下のバナーに進行状況が表示されます。</p>
+          <p>初回起動時、OpenEmux は設定の作成、ROM・BIOS・カバーのフォルダーの作成、入力プロファイルとプレイリストの準備の間、
+            <span class="ui">初回セットアップを準備しています</span>のウィンドウを一瞬表示します。その直後にライブラリが開きます。
+            libretro コアとシェーダーパックはバックグラウンドでダウンロードされ、進行状況はヘッダー下のバナーに表示され、
+            お使いのコンソールのコアが先に届きます。コアが届く前に起動したゲームは、その場でコアを取得します。オフラインでも
+            アプリは同じように開き、バナーに次回の起動時に取得するものが表示されます。</p>
           <p>設定は <code>~/.openemux/</code> に、ゲームは <code>~/games/roms/</code> にコンソールごとのフォルダーで保存されます。</p>
 
           <h3 id="install-source">ソースからのビルド</h3>
@@ -1125,6 +1134,56 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </div>
           <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="コンソールごとにグループ化された「お気に入り」ページ。その行を枠で囲んでいる" /></figure>
           <p><span class="ui">お気に入り</span>ページには、星を付けたゲームがコンソールごとにまとめて表示されます。この行はゲームに星を付けるとサイドバーに現れ、ほかに戻る場所がないときは OpenEmux がこのページで開きます。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">ライブラリ</span>
+          <h2>最近プレイ</h2>
+          <p>起動はすべて記録されます。何かをプレイすると、<span class="ui">最近プレイ</span>の行が
+            <span class="ui">すべて</span>の下に現れ、OpenEmux はそのページで開くようになります。最新の 20
+            本が新しい順に並び、各カードにいつ、どれだけプレイしたかが表示されます。</p>
+          <p>時間はゲームの起動から終了までを数え、セッションをまたいで積み上がります。他のページの
+            <span class="ui">最近プレイ</span>の並び順も同じ時計を使っています。</p>
+          <p>前回の続きから遊ぶには、<span class="ui">前回の続きから再開</span>を
+            <span class="ui">設定 › ビデオ</span>でオンにします。RetroArch は終了時にゲームを保存し、次回の起動時にその
+            セーブを読み込みます。そのセーブがあるカードには角に小さな再生バッジが付き、カードのメニューの
+            <span class="ui">最初から始める</span>で一度だけスキップできます。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">ライブラリ</span>
+          <h2>ゲームの詳細</h2>
+          <p>どのゲームにも詳細ページがあります。メニューの<span class="ui">ゲームの詳細…</span>を選ぶか、カードで
+            <kbd>Alt</kbd>+<kbd>Enter</kbd>、またはゲームパッドの Ⓧ を押します。カバー、いつどれだけプレイしたか、ファイル、
+            <span class="ui">プレイ</span>が表示されます。</p>
+          <p>その下に<span class="ui">コア</span>、<span class="ui">シェーダー</span>、<span class="ui">カートリッジの色</span>の行があり、
+            有効な値とその出どころ（コンソールの既定か、このゲームか）を示します。小さな矢印で行をコンソールの既定に戻せます。
+            続いて<span class="ui">読み込む</span>付きのセーブステート、アートワークの操作、ゲームが入っているプレイリスト、そして
+            <span class="ui">ファイルマネージャーで表示</span>、<span class="ui">名前を変更…</span>、<span class="ui">ROM を削除…</span>です。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">ライブラリ</span>
+          <h2>TV モード</h2>
+          <p><kbd>F11</kbd>、またはゲームパッドのガイドボタンを押すと、ライブラリはソファ向けの全画面になります。サイドバーが消え、
+            棚は大きく描かれ、タイトルとヒントが大きくなり、フォーカスされたカードには太い枠が付きます。同じキーかボタン、
+            または <kbd>Esc</kbd> でデスクトップのレイアウトに戻ります。ズーム設定はそのままです。</p>
+          <p>パッドを手にしていると、下部のヒントはそのパッドの文字（Xbox なら A B X Y、Nintendo なら B A Y X、PlayStation なら
+            四つの記号）を使います。設定 › システムの<span class="ui">コントローラーのボタン表記</span>でファミリーを固定でき、
+            <span class="ui">決定とキャンセルを入れ替える</span>で決定を右のボタンにできます。Xbox の文字での対応表:</p>
+          <ul>
+            <li><strong>A</strong> はフォーカス中のゲームをプレイ。長押しで選択を開始。</li>
+            <li><strong>B</strong> はコンソール一覧へ戻る。<strong>X</strong> はゲームの詳細を開く。<strong>Y</strong> はお気に入りを切り替え。</li>
+            <li><strong>LB/RB</strong> はコンソールを切り替え、<span class="ui">すべて</span>ではコンソールのグループ間を移動。</li>
+            <li><strong>Menu</strong>（Start）はオンスクリーンキーボードを開く。十字キーで文字グリッドを移動し、入力に合わせてライブラリを
+              絞り込む。完了で最初の一致に移動。</li>
+            <li><strong>View</strong>（Select）はメインメニューを開く。<strong>ガイド</strong>ボタンは TV モードを切り替え。</li>
+            <li><strong>LT/RT</strong> を押しながら十字キーで選択範囲を広げる。</li>
+          </ul>
+          <p>視覚効果を減らす設定と大きな文字は、ここでも他と同じく GNOME の設定に従います。</p>
         </section>
 
         <!-- ============================================================ -->
