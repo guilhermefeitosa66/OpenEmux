@@ -1167,10 +1167,17 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** App running, a console whose library contains a known title.
 - **Steps:**
   1. Press `Ctrl+F`; the search bar appears.
-  2. Type a word from a title that exists (e.g. "Mario").
-  3. Press `Escape`.
-- **Expected:** While typing, the grid shows only matching games; `Escape` closes the bar and
-  restores the full grid.
+  2. Type a word from a title that exists (e.g. "Mario"); then two words of another title in the
+     wrong order ("link zelda").
+  3. Press `Enter` while several games match; clear, type until one matches, press `Enter`.
+  4. Press `Escape`.
+- **Expected:** The placeholder names the scope ("Search Super Nintendo…" on a console, "Search
+  your library…" on All) and a console page offers "Search everywhere" beside the box. While
+  typing, the grid shows only matching games; words match in any order and without accents
+  ("link zelda" finds "The Legend of Zelda - A Link to the Past"), and on a 3000-game page the
+  filter runs in slices so typing stays fluid (issue 906). `Enter` focuses the first match, or
+  launches the game when it is the only one. `Escape` closes the bar, clears the query, restores
+  the full grid and puts the focus back on the games.
 - **Check:** Screenshot of the filtered grid (only matching titles visible) and of the restored one.
 
 ### RT-022 — Empty search shows the empty state
@@ -1178,8 +1185,13 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** AUTO-UI
 - **Preconditions:** App running.
 - **Steps:**
-  1. Press `Ctrl+F` and type a string that matches nothing (e.g. "zzzzqqqq").
-- **Expected:** An empty-state page (no leftover cards, no crash).
+  1. On a console page press `Ctrl+F` and type a string that matches nothing (e.g. "zzzzqqqq").
+  2. Click "Search everywhere".
+  3. Click "Clear search".
+- **Expected:** 1: a status page "No games match “zzzzqqqq”" over the empty grid, with "Clear
+  search" and "Search everywhere" (issue 906); no leftover cards, no crash. 2: the All page opens
+  with the query kept in the box; with still no match, the page offers only "Clear search".
+  3: the box empties and the page comes back whole.
 - **Check:** Screenshot shows the empty state; log gained no `Traceback`.
 - **Restore:** Press `Escape`.
 
@@ -17138,6 +17150,31 @@ has no Android device, so these are `MANUAL`.
   `NoticingTheGameEndedTests`), `tests/test_rom_card_widget.py` (`TheStartingStateTests`),
   `tests/test_task_banner.py` (`test_the_button_can_be_named_for_the_task`), `tests/test_window.py`
   (`test_the_launcher_shares_the_windows_cached_shader_index`,
+  `test_a_starting_game_is_shown_on_its_card`), `tests/test_shaders.py` (`TheIndexOnDiskTests`),
+  `tests/test_overlay_bar.py` (`test_a_copy_from_another_version_is_made_again_whatever_its_size`,
+  `test_a_copy_older_than_its_source_is_refreshed_even_at_the_same_size`),
+  `tests/test_retroarch_launcher.py` (`test_the_users_cfg_is_parsed_again_only_when_it_changed`,
+  `test_launch_anyway_runs_without_the_bios`), `tests/test_runtime_manager.py`
+  (`test_launch_anyway_skips_the_bios_check_at_the_launcher`).
+
+  2. Type "zelda link"; type "pokemon" against a game named "Pokémon".
+  3. Type a query that matches nothing; click "Clear search".
+  4. On a console page type a query, click "Search everywhere".
+  5. With one match showing, press `Enter`; with several, press `Enter`; press `Escape`.
+- **Expected:** 1: every keystroke's main-thread work stays under 50 ms: the filter runs
+  incrementally above 300 games, a query that only grew is MORE_STRICT (only the games still
+  showing are re-checked) and the group headers and the title's count follow the model as it
+  settles. 2: words match in any order, accents folded. 3: "No games match “…”" appears only once the
+  filter settled, with the way out. 4: the All page opens with the query kept. 5: the one match
+  launches; otherwise the first match takes the focus; Escape clears the query and the grid takes
+  the focus back.
+- **Check:** suite files `tests/test_library_search.py`, `tests/test_grid_widget.py`
+  (`test_words_match_in_any_order_whatever_the_accents`,
+  `test_typing_on_only_re_checks_what_still_shows`,
+  `test_a_small_page_filters_in_one_go_and_a_big_one_in_slices`), `tests/test_grid_group.py`
+  (`test_a_section_follows_its_grid_as_an_incremental_filter_settles`), `tests/test_window.py`
+  (`TheSearchFieldTests`).
+
   long it was played (or "Never played"), the file, "Play" and the favorite toggle. 2: Core, Shader
   and (where the console has shells) Cartridge color rows show the value in effect; the subtitle
   reads "Console default: X" while the game has no override of its own. 3: the subtitle changes to

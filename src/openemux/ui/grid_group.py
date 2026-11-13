@@ -36,6 +36,15 @@ class GridSection:
         self.header = header
         #: Writes the header's game count; the search changes it.
         self._set_count = set_count
+        # An incremental filter settles over several frames (issue 906): the
+        # count and the header follow each step rather than one snapshot.
+        if hasattr(grid, "connect_count_changed"):
+            grid.connect_count_changed(lambda _grid: self.sync_to_filter())
+
+    def sync_to_filter(self):
+        """Show the count the filter lets through, and hide an emptied section."""
+        self.update_count()
+        self.set_visible(self.grid.count() > 0)
 
     def set_visible(self, visible):
         self.header.set_visible(bool(visible))
@@ -137,6 +146,9 @@ class GridGroup:
     def visible_entries(self):
         return [entry for grid in self.grids() for entry in grid.visible_entries()]
 
+    def filter_pending(self):
+        return sum(grid.filter_pending() for grid in self.grids())
+
     def count(self):
         return sum(grid.count() for grid in self.grids())
 
@@ -150,8 +162,7 @@ class GridGroup:
         """
         for section in self.sections:
             section.grid.set_filter(query, only_missing_artwork=only_missing_artwork)
-            section.update_count()
-            section.set_visible(bool(section.grid.visible_entries()))
+            section.sync_to_filter()
 
     # ----- selection ------------------------------------------------------
     def selected_roms(self):

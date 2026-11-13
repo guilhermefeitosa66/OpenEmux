@@ -522,6 +522,133 @@ class TheSearchFieldTests(WindowCase):
             self.win.apply_library_filters()
         self.assertEqual(set_filter.call_args[0][0], "metroid")
 
+    def test_enter_launches_the_one_match(self):
+        # Issue 906: the search entry had no activate handler.
+        self.win.sidebar.select("SFC")
+        rom = self.rom()
+        self.win.search_entry.set_text(rom["name"])
+        self.win.apply_library_filters()
+        with mock.patch.object(self.win, "on_launch_game") as launch:
+            self.win.search_entry.emit("activate")
+        launch.assert_called_once_with(rom)
+
+    def test_enter_on_several_matches_lands_on_the_first(self):
+        grid = self.show_with_cards("SFC")
+        self.win.search_entry.set_text("")
+        with mock.patch.object(grid, "focus_first_card") as focus:
+            self.win.search_entry.emit("activate")
+        focus.assert_called_once()
+
+    def test_enter_on_no_match_or_no_page_does_nothing(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        with mock.patch.object(self.win, "on_launch_game") as launch:
+            self.win.search_entry.emit("activate")
+            with mock.patch.object(self.win, "_visible_grid", return_value=None):
+                self.win.search_entry.emit("activate")
+        launch.assert_not_called()
+
+    def test_closing_the_bar_clears_the_query_and_goes_back_to_the_games(self):
+        grid = self.show_with_cards("SFC")
+        self.win.search_button.set_active(True)
+        self.win.search_entry.set_text("metroid")
+        with mock.patch.object(grid, "focus_first_card") as focus:
+            self.win.search_button.set_active(False)
+        self.assertEqual(self.win.search_entry.get_text(), "")
+        focus.assert_called_once()
+
+    def test_a_query_that_matches_nothing_shows_the_way_out(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        self.assertTrue(self.win.search_empty.get_visible())
+        self.assertEqual(
+            self.win.search_empty.get_title(),
+            self.said("search.empty.title", query="nothing matches this"),
+        )
+        self.assertEqual(
+            self.win.search_empty.get_description(), self.said("search.empty.body.scope")
+        )
+        self.assertTrue(self.win.search_empty_everywhere.get_visible())
+        self.win.search_empty_clear.emit("clicked")
+        self.assertEqual(self.win.search_entry.get_text(), "")
+        self.assertFalse(self.win.search_empty.get_visible())
+
+    def test_on_the_whole_library_the_empty_state_offers_no_wider_scope(self):
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.win.search_entry.set_text("nothing matches this")
+        self.win.apply_library_filters()
+        self.assertTrue(self.win.search_empty.get_visible())
+        self.assertEqual(
+            self.win.search_empty.get_description(), self.said("search.empty.body.library")
+        )
+        self.assertFalse(self.win.search_everywhere_button.get_visible())
+
+    def test_the_placeholder_names_the_scope(self):
+        self.win.sidebar.select("SFC")
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(),
+            self.said(
+                "search.placeholder.console",
+                console=window_module.get_system_display_name("SFC"),
+            ),
+        )
+        self.assertTrue(self.win.search_everywhere_button.get_visible())
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(), self.said("search.placeholder.library")
+        )
+        self.win.playlist_manager.toggle_favorite(self.rom())
+        self.win.sidebar.sync_favorites_row()
+        self.win.sidebar.select(FAVORITES_ID)
+        self.assertEqual(
+            self.win.search_entry.get_placeholder_text(),
+            self.said("search.placeholder.scope", scope=self.said("sidebar.favorites")),
+        )
+
+    def test_search_everywhere_keeps_the_query_on_the_all_page(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        self.win.search_everywhere_button.emit("clicked")
+        self.assertEqual(self.win.current_console, ALL_CONSOLES_ID)
+        self.assertEqual(self.win.search_entry.get_text(), "metroid")
+        self.assertTrue(self.win.search_button.get_active())
+        # Library-wide now: Metroid on the FC and Super Metroid on the SFC.
+        self.assertEqual(self.win.pages.grid_for(ALL_CONSOLES_ID).count(), 2)
+
+    def test_search_everywhere_with_no_all_page_changes_nothing(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        with mock.patch.object(self.win.sidebar, "select", return_value=False):
+            self.win._on_search_everywhere()
+        self.assertEqual(self.win.current_console, "SFC")
+        self.assertFalse(self.win._carrying_search_query)
+
+    def test_switching_console_still_clears_the_query(self):
+        self.win.sidebar.select("SFC")
+        self.win.search_entry.set_text("metroid")
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.search_entry.get_text(), "")
+
+    def test_a_count_change_on_another_page_is_ignored(self):
+        self.win.sidebar.select("SFC")
+        other = self.win.pages.grid_for("FC") or self.win.pages.grid_for(ALL_CONSOLES_ID)
+        with mock.patch.object(self.win, "_update_window_title") as update:
+            self.win._on_grid_count_changed(object())
+            self.win._on_grid_count_changed(self.win.pages.grid_for("SFC"))
+        update.assert_called_once_with("SFC")
+        self.assertIsNotNone(other)
+
+    def test_a_count_change_inside_the_visible_group_updates_the_title(self):
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        group = self.win.pages.grid_for(ALL_CONSOLES_ID)
+        with mock.patch.object(self.win, "_update_window_title") as update:
+            self.win._on_grid_count_changed(group.grids()[0])
+            self.win.content_stack.set_visible_child_name("SFC")
+            self.win._on_grid_count_changed(group.grids()[0])
+        update.assert_called_once_with(ALL_CONSOLES_ID)
+
     def test_the_artwork_filter_rides_along_with_the_query(self):
         # Issue #127: one place decides visibility, so the two filters cannot
         # fight over the same flag.

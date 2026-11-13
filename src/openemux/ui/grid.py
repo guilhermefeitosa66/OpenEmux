@@ -21,6 +21,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gdk, GLib, Gio, Gtk
 
 from openemux.core import cartridge_render
+from openemux.core.library_search import parse_query, refinement
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     is_grid_view,
@@ -64,6 +65,18 @@ from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
 )
 
 logger = logging.getLogger(__name__)
+
+#: Pages with more games than this filter incrementally (issue 906): the
+#: predicate is Python, and 3000 of them in one keystroke is a visible stall.
+INCREMENTAL_FILTER_THRESHOLD = 300
+
+#: How a parsed query's change maps to what GTK has to re-check.
+FILTER_CHANGES = {
+    "same": Gtk.FilterChange.DIFFERENT,
+    "stricter": Gtk.FilterChange.MORE_STRICT,
+    "looser": Gtk.FilterChange.LESS_STRICT,
+    "different": Gtk.FilterChange.DIFFERENT,
+}
 
 #: How many cards every grid in this process has built, for the probes and
 #: the test book: a grouped page on a big library used to build one card per
@@ -286,11 +299,16 @@ class RomGrid(Gtk.GridView):
         self._by_path = {entry.path: entry for entry in self._entries}
         self._store = Gio.ListStore.new(RomEntry)
         self._store.splice(0, 0, self._entries)
-        self._query = ""
+        self._query = ()
         self._only_missing_artwork = False
         self._filter = Gtk.CustomFilter.new(self._match_entry)
         self._filtered = Gtk.FilterListModel(model=self._store, filter=self._filter)
+        # Above a few hundred games the filter runs in slices on the idle
+        # loop rather than in one go per keystroke (issue 906); the count
+        # and the headers follow it through ``items-changed``.
+        self._filtered.set_incremental(len(self._entries) > INCREMENTAL_FILTER_THRESHOLD)
         self._visible_cache = None
+        self._count_listeners = []
         self._filtered.connect("items-changed", self._on_filtered_changed)
 
         factory = Gtk.SignalListItemFactory()
@@ -480,21 +498,36 @@ class RomGrid(Gtk.GridView):
 
         The window decides *what* the filter is; matching happens here, over
         the model, because a virtualized grid has no widget to hide for a ROM
-        that is off screen.
+        that is off screen. ``query`` is the box's text; it is parsed into
+        words here (issue 906), and a query that only grew tells GTK so, which
+        re-checks the entries still showing instead of the whole page.
         """
-        query = (query or "").lower()
+        tokens = parse_query(query)
         only_missing = bool(only_missing_artwork)
-        if (query, only_missing) == (self._query, self._only_missing_artwork):
+        if (tokens, only_missing) == (self._query, self._only_missing_artwork):
             # Still re-seed: a card's artwork state may have settled since.
             self.sync_visible_selection()
             return
-        self._query = query
+        change = refinement(self._query, tokens)
+        if only_missing != self._only_missing_artwork:
+            change = "stricter" if only_missing and change in ("same", "stricter") else "different"
+        self._query = tokens
         self._only_missing_artwork = only_missing
-        self._filter.changed(Gtk.FilterChange.DIFFERENT)
+        self._filter.changed(FILTER_CHANGES[change])
         self.sync_visible_selection()
+
+    def filter_pending(self):
+        """How many entries an incremental filter has still to look at; 0 when settled."""
+        return self._filtered.get_pending()
+
+    def connect_count_changed(self, callback):
+        """Call ``callback(grid)`` whenever the filter lets a different number through."""
+        self._count_listeners.append(callback)
 
     def _on_filtered_changed(self, *_args):
         self._visible_cache = None
+        for callback in self._count_listeners:
+            callback(self)
 
     def entries(self):
         """Every ROM on this page, in model order."""
@@ -502,7 +535,7 @@ class RomGrid(Gtk.GridView):
 
     def count(self):
         """How many ROMs this grid is showing -- what the filter lets through."""
-        return len(self.visible_entries())
+        return self._filtered.get_n_items()
 
     def visible_entries(self):
         """The ROMs the filter currently lets through, in visual order."""

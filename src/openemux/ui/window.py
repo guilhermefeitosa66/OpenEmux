@@ -699,12 +699,28 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Search revealed on demand (HIG: search is a mode, not a permanent field).
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_hexpand(True)
-        self._translatable(lambda: self.search_entry.set_placeholder_text(self.t("header.search")))
         self.search_entry.connect("search-changed", self._on_search_changed)
+        # Enter launches the one match or lands on the first (issue 906).
+        self.search_entry.connect("activate", self._on_search_activate)
+        # The scope is said in the placeholder; a console page offers the
+        # whole library one click away, with the query kept (issue 906).
+        self.search_everywhere_button = Gtk.Button()
+        self.search_everywhere_button.add_css_class("flat")
+        self.search_everywhere_button.set_visible(False)
+        self.search_everywhere_button.connect("clicked", self._on_search_everywhere)
+        self._translatable(
+            lambda: self.search_everywhere_button.set_label(self.t("search.everywhere"))
+        )
+        search_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        search_row.append(self.search_entry)
+        search_row.append(self.search_everywhere_button)
         self.search_bar = Gtk.SearchBar()
         self.search_bar.set_key_capture_widget(self)
         self.search_bar.connect_entry(self.search_entry)
-        self.search_bar.set_child(self.search_entry)
+        self.search_bar.set_child(search_row)
+        # Escape closes the bar: the query goes with it and the focus comes
+        # back to the games (issue 906).
+        self.search_bar.connect("notify::search-mode-enabled", self._on_search_mode_changed)
         self.search_button.bind_property(
             "active", self.search_bar, "search-mode-enabled",
             GObject.BindingFlags.BIDIRECTIONAL,
@@ -726,7 +742,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.update_banner.connect("button-clicked", self._on_update_banner_clicked)
         toolbar.add_top_bar(self.update_banner)
 
-        toolbar.set_content(self.content_stack)
+        # After the first scan: the covers are one click away (issue 909).
+        self.covers_banner = Adw.Banner()
+        self.covers_banner.set_revealed(False)
+        self._translatable(lambda: self.covers_banner.set_button_label(self.t("banner.covers.action")))
+        self.covers_banner.connect("button-clicked", self._on_covers_banner_clicked)
+        toolbar.add_top_bar(self.covers_banner)
+
+        # The background download could not finish (offline, most likely):
+        # say what will be fetched later, and offer to try now (issue 909).
+        self.assets_banner = Adw.Banner()
+        self.assets_banner.set_revealed(False)
+        self._translatable(lambda: self.assets_banner.set_title(self.t("banner.assets.failed")))
+        self._translatable(lambda: self.assets_banner.set_button_label(self.t("banner.assets.retry")))
+        self.assets_banner.connect("button-clicked", self._on_assets_banner_clicked)
+        toolbar.add_top_bar(self.assets_banner)
+
+        # A search that matches nothing says so, over whichever page is
+        # showing, with a way out (issue 906).
+        self.search_empty = Adw.StatusPage(icon_name="system-search-symbolic")
+        self.search_empty.set_visible(False)
+        empty_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        empty_actions.set_halign(Gtk.Align.CENTER)
+        self.search_empty_clear = Gtk.Button()
+        self.search_empty_clear.add_css_class("pill")
+        self.search_empty_clear.connect("clicked", lambda _b: self.search_entry.set_text(""))
+        self._translatable(lambda: self.search_empty_clear.set_label(self.t("search.empty.clear")))
+        empty_actions.append(self.search_empty_clear)
+        self.search_empty_everywhere = Gtk.Button()
+        self.search_empty_everywhere.add_css_class("pill")
+        self.search_empty_everywhere.add_css_class("suggested-action")
+        self.search_empty_everywhere.set_visible(False)
+        self.search_empty_everywhere.connect("clicked", self._on_search_everywhere)
+        self._translatable(
+            lambda: self.search_empty_everywhere.set_label(self.t("search.everywhere"))
+        )
+        empty_actions.append(self.search_empty_everywhere)
+        self.search_empty.set_child(empty_actions)
+        # Registered once both buttons exist: the placeholder and the offer
+        # are re-said on a language change too.
+        self._translatable(lambda: self._sync_search_scope(self.current_console))
+        content_overlay = Gtk.Overlay()
+        content_overlay.set_child(self.content_stack)
+        content_overlay.add_overlay(self.search_empty)
+        toolbar.set_content(content_overlay)
         # Installed on the stack rather than on each grid so that every page —
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
         self.imports.install_drop_target(self.content_stack)
@@ -1781,6 +1840,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.window_title.set_subtitle(subtitle)
         if hasattr(self, "content_page"):
             self.content_page.set_title(title)
+        self._sync_search_empty_state()
 
     def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
         ids = []
@@ -2221,6 +2281,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # this scope before its page is (re)rendered.
         self._refresh_scope_settings()
         self._set_search_enabled(True)
+        self._sync_search_scope(self.current_console)
         if self.current_console == ALL_CONSOLES_ID:
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
@@ -2232,7 +2293,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         else:
             self.pages.ensure_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
-        self.search_entry.set_text("")
+        if not self._carrying_search_query:
+            self.search_entry.set_text("")
         self._update_window_title(self.current_console)
         # Navigating away is when a "Favorites" row kept alive only to show
         # its empty state is dropped (issue #382). On idle: the list is
@@ -3382,6 +3444,84 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_search_changed(self, _entry):
         self.apply_library_filters()
 
+    def _visible_grid(self):
+        visible = self.content_stack.get_visible_child_name()
+        return self.pages.grid_for(visible) if visible else None
+
+    def _on_search_activate(self, _entry):
+        """Enter in the search box: launch the one match, or land on the first (issue 906)."""
+        grid = self._visible_grid()
+        if grid is None:
+            return
+        count = grid.count()
+        if count == 1:
+            self.on_launch_game(grid.visible_entries()[0].rom)
+        elif count > 1:
+            grid.focus_first_card()
+
+    def _on_search_mode_changed(self, bar, _pspec):
+        if bar.get_search_mode():
+            return
+        # Closing the bar (Escape, the button) clears the query so the page
+        # is whole again, and puts the focus back on the games.
+        self.search_entry.set_text("")
+        grid = self._visible_grid()
+        if grid is not None and self.get_mapped():
+            grid.focus_first_card()
+
+    def _sync_search_scope(self, scope):
+        """Say in the placeholder what the box searches, and offer the whole library."""
+        if scope in SYSTEM_IDS:
+            placeholder = self.t("search.placeholder.console", console=get_system_display_name(scope))
+        elif scope in (FAVORITES_ID, RECENT_ID) or is_collection_scope(scope):
+            placeholder = self.t("search.placeholder.scope", scope=self.sidebar.label_for(scope))
+        else:
+            placeholder = self.t("search.placeholder.library")
+        self.search_entry.set_placeholder_text(placeholder)
+        offer = bool(scope) and scope != ALL_CONSOLES_ID and self.pages.has(ALL_CONSOLES_ID)
+        self.search_everywhere_button.set_visible(offer)
+        self.search_empty_everywhere.set_visible(offer)
+
+    def _on_search_everywhere(self, *_args):
+        """Carry the query over to the "All" page (issue 906)."""
+        query = self.search_entry.get_text()
+        self._carrying_search_query = True
+        try:
+            if not self.sidebar.select(ALL_CONSOLES_ID):
+                return
+        finally:
+            self._carrying_search_query = False
+        self.search_entry.set_text(query)
+        self.search_button.set_active(True)
+        self.search_entry.grab_focus()
+        self.apply_library_filters()
+
+    def _on_grid_count_changed(self, grid):
+        """A grid's filter let a different number through (incremental, issue 906)."""
+        visible = self._visible_grid()
+        if visible is None:
+            return
+        if visible is not grid and not (
+            getattr(visible, "is_group", False) and grid in visible.grids()
+        ):
+            return
+        self._update_window_title(self.current_console)
+
+    def _sync_search_empty_state(self):
+        """The "No games match" page shows when a query leaves nothing, once the filter is done."""
+        query = self.search_entry.get_text().strip()
+        grid = self._visible_grid()
+        show = bool(query) and grid is not None and grid.count() == 0 and grid.filter_pending() == 0
+        if show:
+            self.search_empty.set_title(self.t("search.empty.title", query=query))
+            body_key = (
+                "search.empty.body.scope"
+                if self.search_everywhere_button.get_visible()
+                else "search.empty.body.library"
+            )
+            self.search_empty.set_description(self.t(body_key))
+        self.search_empty.set_visible(show)
+
     def apply_library_filters(self):
         """Decide card visibility from the search query and the artwork filter.
 
@@ -3414,6 +3554,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.search_entry.get_text(),
             only_missing_artwork=self._filter_missing_artwork,
         )
+        self._sync_search_empty_state()
 
     def _on_missing_artwork_action(self, action, _param):
         enabled = not action.get_state().get_boolean()

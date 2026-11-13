@@ -26,6 +26,7 @@ from openemux.core.library_view import (
     normalize_zoom,
     scale_length,
 )
+from openemux.core.library_search import fold, matches
 from openemux.core.paths import display_text
 from openemux.core.scraper import COVER_ART, LABEL_ART, is_label_art, resolve_local_art
 from openemux.core.systems import get_system_display_name
@@ -95,7 +96,9 @@ class RomEntry(GObject.Object):
         # Escaped where GTK can see it: rom["name"] keeps the filesystem's own
         # bytes for the lookups that need them (issue #214).
         self.display_name = display_text(rom.get("name", ""))
-        self.search_name = self.display_name.lower()
+        # Folded once here, so a keystroke compares against it directly
+        # (issue 906): lowercase, accents stripped.
+        self.search_name = fold(self.display_name)
         self.selected = False
         # None until the cover fetch resolves; the "without artwork" filter
         # and the badge only act on False (issue #127).
@@ -121,14 +124,13 @@ class RomEntry(GObject.Object):
         self.composite_pixbuf_key = None
 
 
-def entry_matches(entry, query="", only_missing_artwork=False):
+def entry_matches(entry, query=(), only_missing_artwork=False):
     """Whether a ROM survives the search box and the "no artwork" filter.
 
-    ``query`` is expected already lowercased -- it is compared against the
-    name the entry precomputed, once per ROM instead of once per keystroke
-    per ROM.
+    ``query`` is the parsed query (``library_search.parse_query``): words in
+    any order, each a substring of the entry's folded name (issue 906).
     """
-    if query and query not in entry.search_name:
+    if query and not matches(query, entry.search_name):
         return False
     if only_missing_artwork and entry.has_artwork is not False:
         # `None` means the fetch has not resolved yet: hide it rather than

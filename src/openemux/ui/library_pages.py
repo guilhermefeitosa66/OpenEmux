@@ -520,6 +520,9 @@ class LibraryPages:
             play_caption=play_caption,
             has_auto_state=win.has_auto_state,
         )
+        # An incremental filter settles over frames; the title's count and
+        # the empty state follow it (issue 906).
+        grid.connect_count_changed(win._on_grid_count_changed)
         if band_host_is_self:
             grid.band_host = grid
         return grid

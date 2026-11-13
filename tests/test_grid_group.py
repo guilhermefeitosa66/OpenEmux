@@ -53,6 +53,9 @@ class _Grid(_Widget):
     def visible_entries(self):
         return [e for e in self._entries if self._query in e.name.lower()]
 
+    def filter_pending(self):
+        return 0
+
     def count(self):
         return len(self.visible_entries())
 
@@ -169,6 +172,24 @@ class FilteringTests(unittest.TestCase):
         group, _ = _group(("FC", ["Contra", "Mario"]))
         group.set_filter("mario")
         self.assertEqual(group.count(), 1)
+
+    def test_a_section_follows_its_grid_as_an_incremental_filter_settles(self):
+        # Issue 906: the grid reports each step; the header and the count follow.
+        group, grids = _group(("FC", ["Contra", "Mario"]))
+        section = group.sections[0]
+        counts = []
+        section._set_count = counts.append
+        grids[0]._query = "nothing"
+        section.sync_to_filter()
+        self.assertFalse(section.is_visible())
+        grids[0]._query = ""
+        section.sync_to_filter()
+        self.assertTrue(section.is_visible())
+        self.assertEqual(counts, [0, 2])
+
+    def test_the_pending_count_sums_the_grids(self):
+        group, _ = _group(("FC", ["Contra"]), ("SFC", ["Mario Kart"]))
+        self.assertEqual(group.filter_pending(), 0)
 
 
 class SelectionTests(unittest.TestCase):

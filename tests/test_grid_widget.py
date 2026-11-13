@@ -64,6 +64,59 @@ class FindingACardTests(_GridCase):
         self.grid.set_filter("nothing matches this")
         self.assertEqual(self.grid.count(), 0)
 
+    def test_words_match_in_any_order_whatever_the_accents(self):
+        # Issue 906: "zelda link" finds "The Legend of Zelda - A Link to the Past".
+        name = self.entries[0].rom["name"]
+        words = name.split()
+        self.grid.set_filter(" ".join(reversed(words)).upper())
+        self.assertIn(self.entries[0], self.grid.visible_entries())
+
+    def test_typing_on_only_re_checks_what_still_shows(self):
+        # Issue 906: a query that grew is MORE_STRICT, one that shrank is
+        # LESS_STRICT; GTK re-runs the predicate on every entry only for a
+        # different query.
+        changes = []
+        with mock.patch.object(self.grid._filter, "changed", changes.append):
+            self.grid.set_filter("me")
+            self.grid.set_filter("met")
+            self.grid.set_filter("me")
+            self.grid.set_filter("mario")
+            self.grid.set_filter("mario", only_missing_artwork=True)
+            self.grid.set_filter("mario")
+        self.assertEqual(
+            changes,
+            [
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.LESS_STRICT,
+                Gtk.FilterChange.DIFFERENT,
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.DIFFERENT,
+            ],
+        )
+
+    def test_a_small_page_filters_in_one_go_and_a_big_one_in_slices(self):
+        self.assertFalse(self.grid._filtered.get_incremental())
+        roms = [{"name": f"Game {i}", "path": f"/roms/{i}.sfc", "console": "SFC"} for i in range(400)]
+        big = self.win.pages._build_grid("SFC", roms, self.config.get_display_settings("SFC"))
+        self.assertTrue(big._filtered.get_incremental())
+        big.set_filter("game 39")
+        self.assertGreaterEqual(big.filter_pending(), 0)
+        self.pump_until(lambda: big.filter_pending() == 0)
+        # "39" is a substring: Game 39, 139, 239, 339 and 390 … 399.
+        self.assertEqual(big.count(), 14)
+        big.teardown()
+
+    def test_the_count_is_asked_of_the_model_not_a_list(self):
+        self.assertEqual(self.grid.count(), self.grid._filtered.get_n_items())
+        self.assertEqual(self.grid.filter_pending(), 0)
+
+    def test_whoever_listens_hears_the_count_move(self):
+        heard = []
+        self.grid.connect_count_changed(heard.append)
+        self.grid.set_filter("nothing matches this")
+        self.assertEqual(heard, [self.grid])
+
     def test_an_entry_that_is_not_on_this_page_has_no_position(self):
         self.assertIsNone(self.grid._position_of(None))
 
