@@ -998,8 +998,9 @@ the generator (`tools/build_site.py`), the link-preview drawer
 asset they use (`public/`), which Vercel deploys on each push to its `main`.
 Its README and `DEVELOPMENT.md` cover building, the image pipeline and the
 page's animations. It was served by GitHub Pages from `docs/` here, at
-`guilhermefeitosa66.github.io/OpenEmux/`, until 2026-11; those URLs redirect
-to the new domain.
+`guilhermefeitosa66.github.io/OpenEmux/`, until 2026-11; those URLs now show
+a notice with a link to the new address (the `pages-redirect` branch), without
+redirecting on their own.
 
 The site speaks the app's languages (`LANGUAGE_META` in
 `src/openemux/i18n/__init__.py`, copied into its `site/languages.json`), its
