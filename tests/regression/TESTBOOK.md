@@ -9613,7 +9613,9 @@ or into an environment that cannot run the tests.
   fills the width (the Game Boy Advance and Nintendo DS slides show the landscape phone under the
   portrait one). Vertical swipes over a gallery scroll the page normally. The page never scrolls
   sideways. Every phone's screen sits in the middle of its black body, with the same border on all
-  four sides and rounded corners that follow the body's (issue 688).
+  four sides and rounded corners that follow the body's (issue 688). The same holds after loading
+  the page in a wide window and then narrowing it to 360 px (DevTools device mode): one slide per
+  view, nothing piled up.
 - **Check:**
   ```bash
   python3 - <<'EOF'
@@ -16790,12 +16792,16 @@ has no Android device, so these are `MANUAL`.
   5. Switch the page to Português and to 日本語 and read the section.
 - **Expected:** 1: the page scrolls to "What's new · v<the latest version>", with a headline, a
   short paragraph and four highlights. 2: on a loop of about nine seconds, the anchor key lights
-  up under a fingertip, the finger holds Y (Y lights) and slides onto B and back (B lights, the
-  character on the small screen jumps each time) while Y stays lit, then a "Y+B" button pops up
+  up under a fingertip, the finger holds Y (Y lights and a dashed amber ring appears a little
+  outside it, as the app draws it) and slides onto B and back (B lights, the character on the
+  small screen jumps each time) while Y stays lit and ringed, a dashed white line running from Y's
+  centre to the fingertip whenever the finger is off Y; the ring and the line go when Y is let go;
+  then a "Y+B" button pops up
   and is pressed (Y, B and the combo light together, the character jumps higher); the numbered
   step under the phone that matches the moment is bright and the others dim. 3: the notes of
   this version, the list of releases and the page of that earlier release open on GitHub. 4:
-  nothing moves: the anchor, Y and B lit and the combo shown, all three steps bright. 5: every
+  nothing moves: the anchor, Y and B lit, Y ringed with the line to B, and the combo shown, all
+  three steps bright. 5: every
   text of the section, the steps and the dates are in that language. The release skill rewrites
   the section for every release.
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheNewsTests`).

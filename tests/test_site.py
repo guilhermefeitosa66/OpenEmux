@@ -324,6 +324,16 @@ class TheGalleriesTests(unittest.TestCase):
             self.assertIn(needle, script)
         self.assertNotIn("setInterval", script)
 
+    def test_the_room_beside_the_slides_is_measured_without_the_old_room(self):
+        # Slides are sized in % of the track: measured with a wide window's
+        # padding still on, after narrowing it they came out 0px wide and
+        # piled up on each other.
+        page = build_site.TEMPLATE.read_text(encoding="utf-8")
+        pad = page[page.index("function pad() {"):page.index("function offsetOf(")]
+        reset = pad.index("track.style.setProperty('--pad-start', '0px');")
+        self.assertLess(reset, pad.index("slides[0].offsetWidth"))
+        self.assertIn("track.style.setProperty('--pad-end', '0px');", pad[:pad.index("slides[0].offsetWidth")])
+
     def test_reduced_motion_jumps_without_animation(self):
         page = build_site.TEMPLATE.read_text(encoding="utf-8")
         self.assertIn("behavior: reduceMotion.matches ? 'auto' : 'smooth'", page)
@@ -989,6 +999,22 @@ class TheNewsTests(unittest.TestCase):
                 for tag, label in past:
                     self.assertTrue(tag.startswith(label), (tag, label))
                     self.assertTrue((REPO / "release" / f"RELEASE_NOTES_v{tag}.md").exists(), tag)
+
+    def test_the_held_button_is_ringed_and_the_finger_tied_to_it_like_the_app(self):
+        # AnchorLayer.kt in the Android app: an amber (#F2A23A) dashed ring
+        # around the held button, a dashed white line from it to the finger.
+        css = _css(build_site.render("en"))
+        ring = _blocks(css, ".nd-ring {")[0]
+        self.assertIn("border: 2.5px dashed #f2a23a", ring)
+        self.assertIn("left: 74%;\n      top: 44%", ring)
+        guide = _blocks(css, ".nd-guide {")[0]
+        self.assertIn("dashed rgba(255, 255, 255, .7)", guide)
+        self.assertIn("left: 74%;\n      top: 44%", guide)
+        for name in ("nd-ring", "nd-guide"):
+            self.assertEqual(len(_blocks(css, f"@keyframes {name} ")), 1)
+        phone = re.search(r'<div class="nd-phone".*?<span class="nd-finger-track">', build_site.render("en"), re.S)
+        self.assertIn('<i class="nd-guide"></i>', phone.group(0))
+        self.assertIn('<i class="nd-ring"></i>', phone.group(0))
 
     def test_the_animation_is_labelled_and_moves_only_transform_and_opacity(self):
         css = _css(build_site.render("en"))

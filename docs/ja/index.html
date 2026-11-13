@@ -2917,6 +2917,38 @@
       background: rgba(255, 210, 30, .4)
     }
 
+    /* What the app draws over the game while anchor mode holds a button
+       (AnchorLayer.kt in the Android app): an amber dashed ring a little
+       outside it and, while the finger is off it, a dashed white line from
+       its centre to the finger. The line runs from Y to B, rotated into
+       place in the phone's 2.1:1 box, and grows and shrinks with the
+       finger (scaleX from Y). */
+    .nd-ring {
+      position: absolute;
+      left: 74%;
+      top: 44%;
+      width: 12.5%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      border: 2.5px dashed #f2a23a;
+      border-radius: 50%;
+      box-sizing: border-box;
+      pointer-events: none
+    }
+
+    .nd-guide {
+      position: absolute;
+      left: 74%;
+      top: 44%;
+      width: 14.18%;
+      height: 0;
+      margin-top: -1px;
+      border-top: 2px dashed rgba(255, 255, 255, .7);
+      transform-origin: 0 50%;
+      transform: rotate(50.6deg);
+      pointer-events: none
+    }
+
     /* The finger: a full-size layer translated in percentages of the phone,
        with the fingertip at its top-left corner. */
     .nd-finger-track {
@@ -2968,8 +3000,8 @@
       margin-bottom: 2px
     }
 
-    /* Still (reduced motion): the last frame. Anchor on, Y and B held, the
-       combo there; every step at full strength. */
+    /* Still (reduced motion): the last frame. Anchor on, Y and B held (Y
+       ringed, the line to B), the combo there; every step at full strength. */
     .nd-lit-anchor,
     .nd-lit-y,
     .nd-lit-b {
@@ -2979,6 +3011,8 @@
     @media (prefers-reduced-motion: no-preference) {
       .nd-lit-anchor { animation: nd-anchor var(--loop) linear infinite }
       .nd-lit-y { animation: nd-y var(--loop) linear infinite }
+      .nd-ring { animation: nd-ring var(--loop) linear infinite }
+      .nd-guide { animation: nd-guide var(--loop) linear infinite }
       .nd-lit-b { animation: nd-b var(--loop) linear infinite }
       .nd-lit-combo { animation: nd-combo-lit var(--loop) linear infinite }
       .nd-combo { animation: nd-combo-in var(--loop) linear infinite }
@@ -3003,6 +3037,23 @@
       61%, 75% { opacity: 0 }
       76%, 84% { opacity: 1 }
       85%, 100% { opacity: 0 }
+    }
+
+    /* The ring for as long as Y is held; the line while the finger is off
+       Y, its end on the fingertip (the same stops as nd-finger). */
+    @keyframes nd-ring {
+      0%, 21% { opacity: 0 }
+      22%, 60% { opacity: 1 }
+      61%, 100% { opacity: 0 }
+    }
+
+    @keyframes nd-guide {
+      0%, 29% { opacity: 0; transform: rotate(50.6deg) scaleX(0) }
+      30% { opacity: 1; transform: rotate(50.6deg) scaleX(0) }
+      35%, 42% { opacity: 1; transform: rotate(50.6deg) scaleX(1) }
+      46% { opacity: 1; transform: rotate(50.6deg) scaleX(0) }
+      50%, 58% { opacity: 1; transform: rotate(50.6deg) scaleX(1) }
+      60%, 100% { opacity: 0; transform: rotate(50.6deg) scaleX(1) }
     }
 
     @keyframes nd-b {
@@ -3349,6 +3400,8 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               <span class="nd-btn nd-a">A</span>
               <span class="nd-btn nd-b">B<i class="nd-lit nd-lit-b"></i></span>
               <span class="nd-combo">Y+B<i class="nd-lit nd-lit-combo"></i></span>
+              <i class="nd-guide"></i>
+              <i class="nd-ring"></i>
               <span class="nd-strip">
                 <i class="nd-key"></i><i class="nd-key"></i><i class="nd-key"></i>
                 <span class="nd-key nd-anchor"><svg viewBox="0 0 24 24"><path d="M12 3a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 3Zm0 4.4V21M8 11h8M4.5 13.5c0 4.2 3.4 7.5 7.5 7.5s7.5-3.3 7.5-7.5" /></svg><i class="nd-lit nd-lit-anchor"></i></span>
@@ -4110,8 +4163,13 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
       var current = 0, frame = 0, target = -1, width = 0;
 
       // Room before the first slide and after the last, so each can sit in
-      // the middle like the others.
+      // the middle like the others. Measured with the old room taken out:
+      // a slide sized in % of the track shrinks with that room, so after a
+      // wide-to-narrow resize the wide layout's padding left the slides 0px
+      // wide, and measuring them there kept them at 0.
       function pad() {
+        track.style.setProperty('--pad-start', '0px');
+        track.style.setProperty('--pad-end', '0px');
         var w = track.clientWidth;
         track.style.setProperty('--pad-start', Math.max(0, (w - slides[0].offsetWidth) / 2) + 'px');
         track.style.setProperty('--pad-end', Math.max(0, (w - slides[slides.length - 1].offsetWidth) / 2) + 'px');
