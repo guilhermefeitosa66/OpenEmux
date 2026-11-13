@@ -172,8 +172,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             project_root=self.project_root,
             cache_file=self.config_manager.config_dir / "cores_catalog.json",
         )
+        # One preset index per process, cached beside the config (issue
+        # 904): the launcher used to build its own by walking the shader
+        # packs on the first launch.
+        self.shader_catalog = ShaderCatalog(
+            runtime_dir=self.config_manager.get_runtime_dir(),
+            cache_file=self.config_manager.config_dir / "shaders_index.json",
+        )
         self.runtime_manager = RuntimeManager(
-            project_root, self.config_manager, core_catalog=self.core_catalog
+            project_root,
+            self.config_manager,
+            core_catalog=self.core_catalog,
+            shader_catalog=self.shader_catalog,
         )
         # Launch, the relaunch dance and the runtime poll: one collaborator,
         # because they only make sense together (issue #237).
@@ -318,10 +328,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks.finish(task_id)
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
-        # The core catalog is one object for the window and the launcher.
+        # Each catalog is one object for the window and the launcher (issues
+        # 908 and 904).
         self.core_catalog.refresh()
         self.shader_catalog.refresh()
-        self.runtime_manager.retroarch_launcher.shader_catalog.refresh()
         self._warm_core_catalog()
         logger.info(
             "deferred asset download finished: failed=%s cancelled=%s error=%s",

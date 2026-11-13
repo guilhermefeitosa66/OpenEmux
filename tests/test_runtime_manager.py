@@ -655,6 +655,7 @@ class UnpackedRetryTests(unittest.TestCase):
                     "console": console,
                     "state_slot": state_slot,
                     "force_extract": force_extract,
+                    "check_bios": check_bios,
                 }
             )
             proc = _FakeProcess()

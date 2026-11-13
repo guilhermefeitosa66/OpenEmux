@@ -2341,10 +2341,14 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Steps:**
   1. Double-click (or press Enter on) a game.
   2. Play for ~30 s, then close the game with the bar's power button.
-- **Expected:** The game opens in RetroArch's own window — **with its title bar and borders** —
-  and the in-game bar sits across the bottom edge (RT-327). Sound plays, input responds, and the
-  power button ends the game and returns to the library cleanly. No OpenEmux window wraps the game
-  and no "game window" notice is shown (issue #469).
+- **Expected:** The card shows a spinner over a dimmed cover from the click until RetroArch is up,
+  and the window's banner reads "Starting <game>…" with a "Stop" button, then "Playing <game>"
+  while the game runs (issue 904). The game opens in RetroArch's own window — **with its title bar
+  and borders** — and the in-game bar sits across the bottom edge (RT-327). Sound plays, input
+  responds, and the power button ends the game and returns to the library cleanly: the banner
+  goes and a toast reads "Played <game> for N min" (the game's title, never the file name; no exit
+  code when it is zero). No OpenEmux window wraps the game and no "game window" notice is shown
+  (issue #469).
 - **Check:** human only (grabbing the keyboard for the emulator makes automation unsafe).
 
 ### RT-327 — The in-game bar sits on the bottom edge and does not cover the game
@@ -17101,3 +17105,44 @@ has no Android device, so these are `MANUAL`.
   `test_a_launch_resumes_unless_told_to_start_fresh`), `tests/test_rom_context.py`
   (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
   `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).
+
+### RT-1040 — Launching answers at once, runs off the main thread, and speaks the player's language when it ends
+- **Area:** Launch
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a working core and ROM; for step 4 a PlayStation game with an empty BIOS
+  folder.
+- **Steps:**
+  1. Click Play on a game and watch the card and the banner during the second before RetroArch
+     appears; click the card again meanwhile.
+  2. Press the banner's "Stop" while the game runs; launch again and press "Stop" before the
+     RetroArch window is up.
+  3. Quit a game normally after a few minutes; then kill one from outside (`kill -9` its process).
+  4. Click Play on the PlayStation game.
+  5. Profile a launch on the host (`py-spy dump` or `python -X importtime` are not it: use
+     `GDK_DEBUG=frames` or a `cProfile` of the click handler) and look for file reads, globs or
+     subprocesses on the main thread before the process exists.
+- **Expected:** 1: the card dims under a spinner in the same frame as the click and the banner reads
+  "Starting <game>…" with a "Stop" button; the window stays responsive; the second click is ignored
+  (no "already running" toast). Once RetroArch is up the card recovers, the banner reads "Playing
+  <game>" and the "Running" toast appears (issue 904). 2: the game quits and the banner goes; a Stop
+  pressed while starting quits the game as soon as it is up. 3: "Played <game> for 12 min" (the
+  index's title, else the file stem); a non-zero exit says "Played <game> for N min · RetroArch
+  exited with code 139" with a "Show log" button that opens the log panel; a launch that died shows
+  its reason with the same button. 4: an alert, "Sony PlayStation needs system files", lists the
+  file names and offers "Open BIOS settings" (Preferences › BIOS at that console), "Launch anyway"
+  (RetroArch starts without the check) and "Cancel". 5: nothing but the config flush and the BIOS
+  stat runs on the main thread; the user's `retroarch.cfg` is parsed again only when its stamp
+  changed, the bar's assets compare by size and mtime under a version stamp, and the shader preset
+  index is read from `~/.openemux/shaders_index.json` when the shader directories' mtimes match.
+- **Check:** suite files `tests/test_game_session.py` (`TheStartingStateTests`, `TheBiosDialogTests`,
+  `NoticingTheGameEndedTests`), `tests/test_rom_card_widget.py` (`TheStartingStateTests`),
+  `tests/test_task_banner.py` (`test_the_button_can_be_named_for_the_task`), `tests/test_window.py`
+  (`test_the_launcher_shares_the_windows_cached_shader_index`,
+  long it was played (or "Never played"), the file, "Play" and the favorite toggle. 2: Core, Shader
+  and (where the console has shells) Cartridge color rows show the value in effect; the subtitle
+  reads "Console default: X" while the game has no override of its own. 3: the subtitle changes to
+  "Set for this game" and a reset arrow appears; the arrow puts the row back on "Console default"
+  and clears the override in one step. 4: the game launches into slot 3 and the dialog closes.
+  4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
+     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
+     card.

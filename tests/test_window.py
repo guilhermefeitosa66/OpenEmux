@@ -2202,6 +2202,23 @@ class BootstrapReportingTests(WindowCase):
 
 @needs_display
 class TheGameAndInputHandoffTests(WindowCase):
+    def test_the_launcher_shares_the_windows_cached_shader_index(self):
+        # Issue 904: one preset index per process, cached beside the config.
+        launcher = self.win.runtime_manager.retroarch_launcher
+        self.assertIs(launcher.shader_catalog, self.win.shader_catalog)
+        self.assertEqual(
+            self.win.shader_catalog.cache_file, self.config.config_dir / "shaders_index.json"
+        )
+
+    def test_a_starting_game_is_shown_on_its_card(self):
+        grid = self.show_with_cards("SFC")
+        entry = grid.entries()[0]
+        card = grid.card_for(entry)
+        self.win.set_rom_launching(entry.rom, True)
+        self.assertTrue(card.launching)
+        self.win.set_rom_launching(entry.rom, False)
+        self.assertFalse(card.launching)
+
     def test_launching_a_rom_goes_through_the_session(self):
         rom = self.rom()
         with mock.patch.object(self.win.game, "launch") as launch:
@@ -2868,10 +2885,10 @@ class TheDeferredAssetDownloadTests(WindowCase):
         # One core catalog for the window and the launcher (issue 908); the
         # shader catalogs are still two.
         self.assertIs(launcher.core_catalog, self.win.core_catalog)
+        self.assertIs(launcher.shader_catalog, self.win.shader_catalog)
         for name, catalog in (
             ("core", self.win.core_catalog),
             ("shader", self.win.shader_catalog),
-            ("launcher shader", launcher.shader_catalog),
         ):
             patcher = mock.patch.object(
                 catalog, "refresh", lambda name=name: refreshed.append(name)
@@ -2899,7 +2916,7 @@ class TheDeferredAssetDownloadTests(WindowCase):
     def test_owed_assets_download_under_the_banner_and_refresh_the_catalogs(self):
         fake, refreshed, updates = self._start()
         self.assertEqual(len(self.win.tasks), 0)
-        self.assertEqual(sorted(refreshed), ["core", "launcher shader", "shader"])
+        self.assertEqual(sorted(refreshed), ["core", "shader"])
         self.assertEqual([args[1:] for args in updates], [(3, 7)])
         self.assertIsNotNone(fake.cancel_event)
 

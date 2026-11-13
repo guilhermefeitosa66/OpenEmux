@@ -131,6 +131,11 @@ class CancellingTests(unittest.TestCase):
         self.registry.begin("scan", "Scanning")
         self.assertIsNone(self.banner.button_label)
 
+    def test_the_button_can_be_named_for_the_task(self):
+        # Issue 904: the running game's button says Stop, not Cancel.
+        self.registry.begin("launch", "Playing", on_cancel=self.stopped.append, cancel_label="Stop")
+        self.assertEqual(self.banner.button_label, "Stop")
+
     def test_a_cancellable_task_gets_the_button(self):
         self.registry.begin("covers", "Syncing", on_cancel=self.stopped.append)
         self.assertEqual(self.banner.button_label, "banner.cancel")

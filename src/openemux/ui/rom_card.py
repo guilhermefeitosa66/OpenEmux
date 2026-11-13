@@ -370,17 +370,28 @@ class RomItem(Gtk.Box):
         self.play_overlay.add_css_class("play-overlay")
         self.play_overlay.set_visible(False)
 
-        play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        play_icon.set_pixel_size(scale_length(40, self.zoom))
-        play_icon.set_halign(Gtk.Align.CENTER)
-        play_icon.set_valign(Gtk.Align.CENTER)
-        play_icon.add_css_class("play-icon")
+        self.play_icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+        self.play_icon.set_pixel_size(scale_length(40, self.zoom))
+        self.play_icon.set_halign(Gtk.Align.CENTER)
+        self.play_icon.set_valign(Gtk.Align.CENTER)
+        self.play_icon.add_css_class("play-icon")
         play_center = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         play_center.set_hexpand(True)
         play_center.set_vexpand(True)
         play_center.set_halign(Gtk.Align.CENTER)
         play_center.set_valign(Gtk.Align.CENTER)
-        play_center.append(play_icon)
+        play_center.append(self.play_icon)
+        # "Starting…": the spinner takes the icon's place from the click to
+        # the process, over a dimmed cover (issue 904).
+        self.launch_spinner = Gtk.Spinner()
+        spinner_size = scale_length(36, self.zoom)
+        self.launch_spinner.set_size_request(spinner_size, spinner_size)
+        self.launch_spinner.set_halign(Gtk.Align.CENTER)
+        self.launch_spinner.set_valign(Gtk.Align.CENTER)
+        self.launch_spinner.add_css_class("play-icon")
+        self.launch_spinner.set_visible(False)
+        play_center.append(self.launch_spinner)
+        self._launching = False
         self.play_overlay.append(play_center)
 
         self.cover_overlay.add_overlay(self.play_overlay)
@@ -544,6 +555,8 @@ class RomItem(Gtk.Box):
         self.entry = entry
         self._generation += 1
         rom = entry.rom
+        # A recycled card may have been mid-launch for another game.
+        self.set_launching(False)
         self.cartridge_frame_path = self.ctx.frame_for_rom(rom)
 
         full_name = entry.display_name
@@ -974,7 +987,8 @@ class RomItem(Gtk.Box):
         self.add_css_class("rom-card-hover")
 
     def _on_hover_leave(self, controller):
-        self.play_overlay.set_visible(False)
+        if not self._launching:
+            self.play_overlay.set_visible(False)
         # Keep the button around while its own menu is open, otherwise it
         # vanishes from under the pointer the moment the popover takes over.
         if self._context_popover is None:
@@ -998,10 +1012,35 @@ class RomItem(Gtk.Box):
             return
         if self.has_css_class("rom-card-hover"):
             return  # the pointer is still on the card; leave hover in charge
-        self.play_overlay.set_visible(False)
+        if not self._launching:
+            self.play_overlay.set_visible(False)
         if self._context_popover is None:
             self.menu_button.set_visible(False)
         self.favorite_button.set_visible(self._is_favorite_now)
+
+    def set_launching(self, launching):
+        """Show or clear the "Starting…" state (issue 904).
+
+        Set on the click, cleared when the process is up or the launch
+        failed: the spinner over a dimmed cover is the one-frame answer to
+        the click, where nothing used to change until RetroArch's window.
+        """
+        launching = bool(launching)
+        if launching == self._launching:
+            return
+        self._launching = launching
+        self.play_icon.set_visible(not launching)
+        self.launch_spinner.set_visible(launching)
+        self.launch_spinner.set_spinning(launching)
+        self.cover_overlay.set_opacity(0.55 if launching else 1.0)
+        if launching:
+            self.play_overlay.set_visible(True)
+        elif not self.has_css_class("rom-card-hover"):
+            self.play_overlay.set_visible(False)
+
+    @property
+    def launching(self):
+        return self._launching
 
     def _on_menu_button_clicked(self, button):
         # Anchor the menu under the button. Coordinates are relative to the

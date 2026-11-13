@@ -668,6 +668,16 @@ class RomGrid(Gtk.GridView):
             card.set_cartridge_frame(self._frame_path_for_rom(entry.rom))
         return True
 
+    def set_rom_launching(self, rom, launching):
+        """Put one card into, or out of, the "Starting…" state (issue 904)."""
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card.set_launching(launching)
+        return True
+
     def refresh_rom_play_state(self, rom):
         """Re-read one card's play caption and resume badge (issue 910).
 

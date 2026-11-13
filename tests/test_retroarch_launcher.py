@@ -185,6 +185,27 @@ class RetroArchLauncherTests(unittest.TestCase):
         self.assertIn("Missing required BIOS", error)
         popen_mock.assert_not_called()
 
+    def test_launch_anyway_runs_without_the_bios(self):
+        # Issue 904: the window named the missing files and the user chose
+        # to let RetroArch try; the launcher's own check steps aside.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            binary = base / "retroarch"
+            core = base / f"mednafen_psx_libretro{CORE_SUFFIX}"
+            binary.write_text("", encoding="utf-8")
+            core.write_text("", encoding="utf-8")
+            cfg = _DummyConfig(base, binary, core)
+            launcher = RetroArchLauncher(base, cfg)
+
+            with patch("openemux.core.retroarch_launcher.subprocess.Popen") as popen_mock:
+                popen_mock.return_value = Mock()
+                proc, error = launcher.launch_process("/tmp/game.cue", "PS", check_bios=False)
+                _close_log(proc)
+
+        self.assertIsNotNone(proc)
+        self.assertIsNone(error)
+        popen_mock.assert_called_once()
+
     def test_launch_writes_system_directory_and_runs_when_bios_present(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

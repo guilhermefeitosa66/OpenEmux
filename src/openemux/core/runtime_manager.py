@@ -41,7 +41,8 @@ class RuntimeManager:
     """
 
     def __init__(
-        self, project_root, config_manager, sleep=time.sleep, clock=time.monotonic, core_catalog=None
+        self, project_root, config_manager, sleep=time.sleep, clock=time.monotonic,
+        core_catalog=None, shader_catalog=None,
     ):
         self.config_manager = config_manager
         # Injectable so the stop escalation is assertable without real time.
@@ -51,7 +52,7 @@ class RuntimeManager:
         # from "it never came up" (issue #226).
         self._launched_at = None
         self.retroarch_launcher = RetroArchLauncher(
-            project_root, config_manager, core_catalog=core_catalog
+            project_root, config_manager, core_catalog=core_catalog, shader_catalog=shader_catalog
         )
         self.active_process = None
         self.active_rom = None
@@ -72,8 +73,13 @@ class RuntimeManager:
 
     def launch(
         self, rom_path, console, state_slot=None, force_extract=False, resume=True,
+        check_bios=True,
     ):
         """Start a game. ``force_extract`` is the FUSE retry, not a user option.
+
+        Runs on whatever thread calls it and touches no GTK: the window's
+        session calls it from a worker, so the click handler returns at once
+        (issue 904).
 
         See :meth:`_retry_unpacked`: when the AppImage runtime cannot mount
         itself the same launch is repeated unpacked, and that repeat comes
@@ -96,6 +102,7 @@ class RuntimeManager:
             proc, error_msg = self.retroarch_launcher.launch_process(
                 rom_path, system_id, state_slot=state_slot, network_cmd_port=port,
                 force_extract=force_extract, resume=resume,
+                check_bios=check_bios,
             )
             if not proc:
                 return False, error_msg
@@ -119,6 +126,7 @@ class RuntimeManager:
                 "path": rom_path,
                 "console": system_id,
                 "state_slot": state_slot,
+                "check_bios": check_bios,
             }
             self._fuse_retry_done = force_extract
             self._launched_at = self._clock()
@@ -445,6 +453,7 @@ class RuntimeManager:
             request["console"],
             state_slot=request.get("state_slot"),
             force_extract=True,
+            check_bios=request.get("check_bios", True),
         )
         if not started:
             logger.warning("unpacked retry did not start: %s", error)
