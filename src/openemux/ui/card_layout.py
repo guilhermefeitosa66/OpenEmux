@@ -42,6 +42,12 @@ def cartridge_render_scale(widget):
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
 
+#: The transparent margin a cartridge composite carries on every side for
+#: its baked shadow (issue 903), in logical pixels. The card's picture slot
+#: grows by it, and the grid gives the same back on the gaps and the edges,
+#: so the cartridges sit where they always did.
+CARTRIDGE_SHADOW_PAD = cartridge_render.SHADOW_PAD
+
 #: Gap between cards, and the grid's padding inside the viewport.
 #: How long after a launch the same card's activation is treated as the
 #: second half of a double-click rather than a new launch (issue #236).

@@ -33,6 +33,7 @@ from openemux.core.library_view import (
 from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     ACTIVATION_DEBOUNCE_US,
     CARTRIDGE_RENDER_SCALE,
+    CARTRIDGE_SHADOW_PAD,
     cartridge_render_scale,
     CONSOLE_COVER_ASPECTS,
     DEFAULT_COVER_ASPECT,
@@ -194,12 +195,23 @@ class RomGrid(Gtk.GridView):
         self._spacing = scale_spacing(
             LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
         )
+        # A cartridge composite carries its shadow in a transparent margin
+        # (issue 903): the card grows by it on every side, and the gaps and
+        # the edges give the same back, so the cartridges keep their place.
+        cartridge_frame_path = cartridge_frame_for(
+            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
+        )
+        self._shadow_pad = CARTRIDGE_SHADOW_PAD if cartridge_frame_path else 0
+        self._spacing = max(0, self._spacing - 2 * self._shadow_pad)
         # GtkGridView has no row/column spacing of its own: the horizontal gap
         # comes from a cell being one gap wider than the card centred in it,
         # and the vertical gap from half of it on each card. The grid's own
         # margin gives back the half-gap that leaves at the four edges.
         self._card_margin = self._spacing // 2
-        self._margin = max(0, (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin)
+        self._margin = max(
+            0,
+            (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin - self._shadow_pad,
+        )
 
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. Per console it follows that console's box-art
@@ -211,15 +223,14 @@ class RomGrid(Gtk.GridView):
             else cover_size_for_console(console, self.zoom)
         )
         # The card shape comes from the frame art itself: fixed width, and the
-        # height that keeps the cartridge's own proportions. Since issue #384 a
-        # mixed page is one grid per console, so this reaches "All", "Favorites"
-        # and the collections too (issue #385).
-        cartridge_frame_path = cartridge_frame_for(
-            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
-        )
+        # height that keeps the cartridge's own proportions, plus the shadow
+        # margin on every side. Since issue #384 a mixed page is one grid per
+        # console, so this reaches "All", "Favorites" and the collections too
+        # (issue #385).
         if cartridge_frame_path:
             frame = cartridge_render.load_frame(cartridge_frame_path)
-            cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+            width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+            cover_size = (width + 2 * self._shadow_pad, height + 2 * self._shadow_pad)
 
         if self.compact:
             # Rows show the box art itself, never a cartridge: a frame drawn at
@@ -247,6 +258,7 @@ class RomGrid(Gtk.GridView):
             # 1x on a 1x display: the composite used to be 2x everywhere,
             # four times the pixels the card draws (issue 902).
             render_scale=cartridge_render_scale(self),
+            shadow_pad=self._shadow_pad,
             frame_for_rom=self._frame_path_for_rom,
             context_services=context_services,
             on_launch=self._launch_rom,

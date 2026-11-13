@@ -631,6 +631,25 @@ class SleepingAndWakingTests(_GridCase):
         self.assertIsNone(self.grid._restore_source)
         self.assertIsNone(self.grid._probe)
 
+    def test_a_cartridge_grid_grows_its_slot_by_the_shadow_margin_and_gives_it_back(self):
+        # Issue 903: the composite carries its shadow in a transparent
+        # margin; the lattice must not move for it.
+        from openemux.core import cartridge_render
+        from openemux.core.library_view import scale_length
+        from openemux.ui.card_layout import FIXED_ITEM_WIDTH, GRID_MARGIN, GRID_SPACING
+
+        grid = self.grid
+        if not grid._base_frame_path:
+            self.skipTest("this page draws covers, not cartridges")
+        pad = grid_module.CARTRIDGE_SHADOW_PAD
+        self.assertEqual(grid._shadow_pad, pad)
+        frame = cartridge_render.load_frame(grid._base_frame_path)
+        width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, grid.zoom))
+        self.assertEqual(grid._card_ctx.cover_size, (width + 2 * pad, height + 2 * pad))
+        self.assertEqual(grid._card_ctx.shadow_pad, pad)
+        self.assertEqual(grid._spacing, max(0, GRID_SPACING - 2 * pad))
+        self.assertEqual(grid._margin, max(0, GRID_MARGIN - grid._card_margin - pad))
+
     def test_the_cards_render_their_composites_at_the_display_scale(self):
         # Issue 902: 2x on every monitor, four times the pixels of a 1x card.
         self.assertEqual(self.grid._card_ctx.render_scale, grid_module.cartridge_render_scale(self.grid))

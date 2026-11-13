@@ -16999,3 +16999,23 @@ has no Android device, so these are `MANUAL`.
   (`test_the_download_every_core_switch_stores_the_choice_and_starts_the_sweep`),
   `tests/test_window.py` (`test_the_window_and_the_launcher_share_one_core_catalog`,
   `test_the_core_catalog_is_warmed_on_a_worker`).
+
+### RT-1036 — The cartridge's shadow is part of the composite, and no card node carries a CSS filter
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console in the cartridge shelf and look at the shadow under
+  each cartridge, at the gaps between them and at the page edges; step the zoom; switch to the
+  cover grid.
+- **Expected:** Every cartridge still casts the soft shadow that follows its outline (offset
+  down, blurred), but it is drawn once into the composite: the composite carries a transparent
+  margin of 8 logical pixels on every side (16 on a 2x display), the shadow is rendered once per
+  size with the frame and the stencil and reused for every game, and `style.css` applies no
+  `filter` to any card node — under the cairo renderer the old `drop-shadow` was a software blur
+  of every card on every scroll frame. The card's picture slot grows by the margin and the grid
+  gives the same back on the gaps and the edges, so the cartridges sit exactly where they did
+  and the lattice is unchanged at every zoom. Covers keep their box-shadow (issue 903).
+- **Check:** suite files `tests/test_cartridge_render.py` (`TheBakedShadowTests`,
+  `test_cover_lands_inside_the_label_and_never_outside`), `tests/test_rom_card_widget.py`
+  (`TheCartridgeShadowRuleTests`), `tests/test_grid_widget.py`
+  (`test_a_cartridge_grid_grows_its_slot_by_the_shadow_margin_and_gives_it_back`).

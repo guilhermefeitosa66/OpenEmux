@@ -43,7 +43,16 @@ logger = logging.getLogger(__name__)
 
 # Bump whenever the frame art or the compositing logic changes so every cached
 # composite is regenerated.
-FRAME_CACHE_VERSION = 3
+FRAME_CACHE_VERSION = 4
+
+#: The shadow baked under the cartridge (issue 903): offset down, blur radius
+#: and opacity in logical pixels, like the CSS drop-shadow it replaces
+#: (``0 3px 6px rgba(0,0,0,0.45)``), and the transparent margin the composite
+#: grows by on every side to hold it. All scaled with the composite.
+SHADOW_OFFSET_Y = 3
+SHADOW_BLUR = 6
+SHADOW_ALPHA = 0.45
+SHADOW_PAD = 8
 
 # The name the frame author gives the label object, as an id or inkscape:label.
 CLIP_MARKER = "label-clip"
@@ -255,8 +264,9 @@ class CartridgeFrame:
         self._lock = threading.Lock()
         # Label geometry, stencil and the rasterized frame per output size,
         # computed once instead of once per ROM (they only depend on the
-        # frame and the size).
+        # frame and the size); the baked shadow likewise.
         self._label_cache = {}
+        self._shadow_cache = {}
 
         ok, width, height = self._full.get_intrinsic_size_in_pixels()
         if not ok or width <= 0 or height <= 0:
@@ -271,6 +281,12 @@ class CartridgeFrame:
 
     def size_for_width(self, width: int) -> tuple[int, int]:
         return int(width), max(1, int(round(width * self.height / self.width)))
+
+    def composite_size(self, width: int, scale=1) -> tuple[int, int]:
+        """The pixel size :meth:`render` produces: the cartridge plus the shadow margin."""
+        out_w, out_h = self.size_for_width(int(round(width * scale)))
+        pad = shadow_pad(scale)
+        return out_w + 2 * pad, out_h + 2 * pad
 
     def _label_bbox(self, out_w, out_h):
         """Label box in output pixels.
@@ -324,6 +340,44 @@ class CartridgeFrame:
             self._label_cache = {(out_w, out_h): entry}
             return entry
 
+    def _shadow(self, out_w, out_h, scale):
+        """The cartridge's shadow, as a surface the composite's size.
+
+        The silhouette (the frame's alpha plus the label window) is drawn in
+        black, blurred by drawing it a quarter size and back up with bilinear
+        filtering -- twice, which is close enough to a gaussian for a six
+        pixel radius -- and faded to SHADOW_ALPHA. Rendered once per size
+        with the frame and reused for every ROM (issue 903): the CSS
+        drop-shadow it replaces was a software blur of every card on every
+        scroll frame under the cairo renderer.
+        """
+        cached = self._shadow_cache.get((out_w, out_h))
+        if cached is not None:
+            return cached
+        (_bbox, mask, frame) = self._rasterized(out_w, out_h)
+        pad = shadow_pad(scale)
+        width, height = out_w + 2 * pad, out_h + 2 * pad
+        silhouette = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+        cr = cairo.Context(silhouette)
+        cr.set_source_rgb(0, 0, 0)
+        cr.mask_surface(mask, pad, pad)
+        cr.mask_surface(frame, pad, pad)
+        silhouette.flush()
+        # Down twice, up twice: each pass is a cheap box blur in cairo.
+        blurred = silhouette
+        for factor in (0.5, 0.5):
+            blurred = _scaled_copy(blurred, factor, cairo.FILTER_GOOD)
+        for _ in range(2):
+            blurred = _scaled_copy(blurred, 2.0, cairo.FILTER_BILINEAR)
+        shadow = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+        cr = cairo.Context(shadow)
+        cr.set_source_surface(blurred, 0, 0)
+        cr.get_source().set_filter(cairo.FILTER_BILINEAR)
+        cr.paint_with_alpha(SHADOW_ALPHA)
+        shadow.flush()
+        self._shadow_cache = {(out_w, out_h): shadow}
+        return shadow
+
     def render(self, cover_path=None, width=200, scale=1) -> cairo.ImageSurface:
         """Compose `cover_path` into the frame and return the finished surface.
 
@@ -338,10 +392,17 @@ class CartridgeFrame:
         out_w, out_h = self.size_for_width(int(round(width * scale)))
         (bx, by, bw, bh), mask, frame = self._rasterized(out_w, out_h)
         cover = self._scaled_cover(cover_path, bw, bh) if cover_path else None
+        with self._lock:
+            shadow = self._shadow(out_w, out_h, scale)
+        pad = shadow_pad(scale)
 
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, out_w, out_h)
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, out_w + 2 * pad, out_h + 2 * pad)
         cr = cairo.Context(surface)
         with self._lock:
+            # The shadow first, under everything, offset downwards.
+            cr.set_source_surface(shadow, 0, SHADOW_OFFSET_Y * scale)
+            cr.paint()
+            cr.translate(pad, pad)
             # The label shape is filled with a blank-sticker tone first: it is
             # what a cover-less cartridge shows, and it backs any anti-aliased
             # edge so the window never lets the page background through.
@@ -383,6 +444,25 @@ class CartridgeFrame:
             logger.warning("cartridge: unreadable cover %s", cover_path)
             return None
         return _pixbuf_to_surface(pixbuf), (box_w - dst_w) / 2, (box_h - dst_h) / 2
+
+
+def shadow_pad(scale=1):
+    """The transparent margin around a composite, in pixels at ``scale``."""
+    return int(round(SHADOW_PAD * max(1, scale)))
+
+
+def _scaled_copy(surface, factor, filter_mode):
+    """``surface`` drawn at ``factor`` of its size, with cairo's ``filter_mode``."""
+    width = max(1, int(round(surface.get_width() * factor)))
+    height = max(1, int(round(surface.get_height() * factor)))
+    copy = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    cr = cairo.Context(copy)
+    cr.scale(width / surface.get_width(), height / surface.get_height())
+    cr.set_source_surface(surface, 0, 0)
+    cr.get_source().set_filter(filter_mode)
+    cr.paint()
+    copy.flush()
+    return copy
 
 
 def _image_size(path):

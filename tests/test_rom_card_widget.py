@@ -168,6 +168,18 @@ class TheCoverArrivingTests(_CardCase):
             )
         self.assertEqual(render.call_args[1]["scale"], 2)
 
+    def test_the_cartridge_is_rendered_at_the_slot_width_less_the_shadow_margin(self):
+        # Issue 903: the slot holds the margin, the cartridge is drawn between.
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        self.entry.forget_artwork()
+        with mock.patch.object(self.card.ctx, "shadow_pad", 8), mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        self.assertEqual(render.call_args[1]["width"], self.card.cover_width - 16)
+
     def test_a_cartridge_composite_casts_its_shadow_from_its_outline(self):
         # issue 725: `.rom-cover` is a box shadow plus rounded corners, which
         # drew a rectangle around every cartridge.
@@ -1020,11 +1032,21 @@ class TheCartridgeShadowRuleTests(unittest.TestCase):
         start = css.index(selector + " {")
         return css[start:css.index("}", start)]
 
-    def test_the_cartridge_shadow_follows_the_alpha_not_the_box(self):
+    def test_the_cartridge_node_draws_no_shadow_of_its_own(self):
+        # Issue 903: the shadow that follows the outline (issue 725) is baked
+        # into the composite; a drop-shadow filter here was a software blur
+        # of every card on every scroll frame under the cairo renderer.
         rule = self.rule(".rom-cartridge")
-        self.assertIn("filter: drop-shadow(", rule)
-        self.assertNotIn("box-shadow", rule)
+        self.assertNotIn("filter", rule)
+        self.assertIn("box-shadow: none", rule)
         self.assertNotIn("border-radius", rule)
+
+    def test_no_card_node_carries_a_css_filter(self):
+        css = (
+            Path(__file__).resolve().parent.parent
+            / "src" / "openemux" / "ui" / "style.css"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("filter:", css)
 
     def test_covers_keep_their_box_shadow(self):
         self.assertIn("box-shadow", self.rule(".rom-cover"))

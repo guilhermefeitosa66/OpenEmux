@@ -119,13 +119,17 @@ class CartridgeFrameTests(unittest.TestCase):
             cover = _write_cover(Path(tmp) / "c.png", color=(255, 0, 0))
             frame = CartridgeFrame(FRAME)
             surface = frame.render(str(cover), width=177)
-            self.assertEqual((surface.get_width(), surface.get_height()), (177, 200))
+            pad = cartridge_render.shadow_pad()
+            self.assertEqual(
+                (surface.get_width(), surface.get_height()), (177 + 2 * pad, 200 + 2 * pad)
+            )
 
             data = surface.get_data()
             stride = surface.get_stride()
 
             def pixel(x, y):
-                offset = y * stride + x * 4
+                # In cartridge coordinates: the shadow margin is around it.
+                offset = (y + pad) * stride + (x + pad) * 4
                 b, g, r, a = data[offset:offset + 4]
                 return r, g, b, a
 
@@ -185,8 +189,9 @@ class CartridgeCacheTests(unittest.TestCase):
             frame = load_frame(FRAME)
             at_1x = frame.render(None, width=100, scale=1)
             at_2x = frame.render(None, width=100, scale=2)
-            self.assertEqual(at_1x.get_width(), 100)
-            self.assertEqual(at_2x.get_width(), 200)
+            self.assertEqual(at_1x.get_width(), 100 + 2 * cartridge_render.shadow_pad(1))
+            self.assertEqual(at_2x.get_width(), 200 + 2 * cartridge_render.shadow_pad(2))
+            self.assertEqual((at_2x.get_width(), at_2x.get_height()), frame.composite_size(100, 2))
             one = render_cartridge(None, FRAME, "GB", "Game", 100, scale=1, cache_dir=base)
             two = render_cartridge(None, FRAME, "GB", "Game", 100, scale=2, cache_dir=base)
             self.assertNotEqual(one, two)
@@ -480,13 +485,54 @@ class TheFrameIsRasterizedOnceTests(unittest.TestCase):
                 frame._full, "render_layer", side_effect=AssertionError("rasterized again")
             ):
                 surface = frame.render(str(cover), width=100)
-        self.assertEqual(surface.get_width(), 100)
+        self.assertEqual(surface.get_width(), 100 + 2 * cartridge_render.shadow_pad())
 
     def test_a_new_size_replaces_the_cached_one(self):
         frame = load_frame(FRAME)
         frame.render(None, width=100)
         frame.render(None, width=150)
         self.assertEqual(list(frame._label_cache), [frame.size_for_width(150)])
+        self.assertEqual(list(frame._shadow_cache), [frame.size_for_width(150)])
+
+
+@unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
+class TheBakedShadowTests(unittest.TestCase):
+    """The shadow under the cartridge is in the composite, not in CSS (issue 903)."""
+
+    def _alpha(self, surface, x, y):
+        return surface.get_data()[y * surface.get_stride() + x * 4 + 3]
+
+    def test_the_composite_carries_a_transparent_margin_with_the_shadow_below(self):
+        frame = load_frame(FRAME)
+        surface = frame.render(None, width=100)
+        pad = cartridge_render.shadow_pad()
+        w, h = frame.size_for_width(100)
+        # Above the cartridge the margin is clear; below it the shadow lands.
+        self.assertEqual(self._alpha(surface, pad + w // 2, 0), 0)
+        below = self._alpha(surface, pad + w // 2, pad + h + cartridge_render.SHADOW_OFFSET_Y)
+        self.assertGreater(below, 0)
+        self.assertLess(below, 255)
+        # The corners of the margin stay clear: the blur does not reach them.
+        self.assertEqual(self._alpha(surface, 0, 0), 0)
+
+    def test_the_shadow_is_rendered_once_per_size(self):
+        frame = load_frame(FRAME)
+        frame._shadow_cache = {}
+        frame.render(None, width=100)
+        with unittest.mock.patch.object(
+            cartridge_render, "_scaled_copy", side_effect=AssertionError("blurred again")
+        ):
+            frame.render(None, width=100)
+
+    def test_the_shadow_scales_with_the_composite(self):
+        self.assertEqual(cartridge_render.shadow_pad(1), cartridge_render.SHADOW_PAD)
+        self.assertEqual(cartridge_render.shadow_pad(2), 2 * cartridge_render.SHADOW_PAD)
+        self.assertEqual(cartridge_render.shadow_pad(0), cartridge_render.SHADOW_PAD)
+
+    def test_a_scaled_copy_is_never_smaller_than_a_pixel(self):
+        tiny = cartridge_render.cairo.ImageSurface(cartridge_render.cairo.FORMAT_ARGB32, 3, 3)
+        copy = cartridge_render._scaled_copy(tiny, 0.1, cartridge_render.cairo.FILTER_GOOD)
+        self.assertEqual((copy.get_width(), copy.get_height()), (1, 1))
 
     def test_two_threads_asking_at_once_rasterize_once(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -572,8 +618,12 @@ class EveryShippedFrameTests(unittest.TestCase):
                 with self.subTest(console=console):
                     frame = CartridgeFrame(cartridge_render.frame_asset_for(console))
                     surface = frame.render(str(cover), width=200)
-                    bx, by, bw, bh = frame._label_bbox(surface.get_width(), surface.get_height())
-                    offset = int(by + bh / 2) * surface.get_stride() + int(bx + bw / 2) * 4
+                    pad = cartridge_render.shadow_pad()
+                    bx, by, bw, bh = frame._label_bbox(*frame.size_for_width(200))
+                    offset = (
+                        (int(by + bh / 2) + pad) * surface.get_stride()
+                        + (int(bx + bw / 2) + pad) * 4
+                    )
                     b, g, r, _a = surface.get_data()[offset:offset + 4]
                     self.assertGreater(r, 200)
                     self.assertLess(g, 60)
@@ -610,10 +660,13 @@ class ReliefFrameTests(unittest.TestCase):
                     frame = CartridgeFrame(cartridge_render.frame_asset_for(console, color=color))
                     surface = frame.render(None, width=200)
                     data, stride = surface.get_data(), surface.get_stride()
-                    w, h = surface.get_width(), surface.get_height()
+                    pad = cartridge_render.shadow_pad()
+                    w, h = frame.size_for_width(200)
                     bx, by, bw, bh = frame._label_bbox(w, h)
+                    # The cartridge's own pixels: the shadow margin around it
+                    # is translucent by design.
                     outside = [
-                        data[y * stride + x * 4 + 3]
+                        data[(y + pad) * stride + (x + pad) * 4 + 3]
                         for y in range(0, h, 4)
                         for x in range(0, w, 4)
                         if not (bx <= x < bx + bw and by <= y < by + bh)

@@ -183,6 +183,7 @@ class CardContext:
         frame_for_rom,
         context_services,
         render_scale=CARTRIDGE_RENDER_SCALE,
+        shadow_pad=0,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -208,6 +209,9 @@ class CardContext:
         # The composite's pixel scale: the display's, so a 1x monitor holds
         # 1x composites (issue 902).
         self.render_scale = max(1, int(render_scale))
+        # The transparent margin the composite carries for its shadow (issue
+        # 903): the picture slot includes it, the cartridge width does not.
+        self.shadow_pad = max(0, int(shadow_pad))
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -727,7 +731,9 @@ class RomItem(Gtk.Box):
         """
         label_path = cover_path if is_label_art(cover_path) else None
         scale = self.ctx.render_scale
-        wanted = (str(self.cartridge_frame_path), self.cover_width, scale)
+        # The slot holds the shadow margin; the cartridge is drawn between.
+        width = self.cover_width - 2 * self.ctx.shadow_pad
+        wanted = (str(self.cartridge_frame_path), width, scale)
         for attempt in (0, 1):
             if entry.composite_key != wanted:
                 composite = cartridge_render.render_cartridge(
@@ -735,7 +741,7 @@ class RomItem(Gtk.Box):
                     self.cartridge_frame_path,
                     rom["console"],
                     rom["name"],
-                    width=self.cover_width,
+                    width=width,
                     scale=scale,
                 )
                 entry.composite_key = wanted
