@@ -2,8 +2,8 @@
 
 A small release about where OpenEmux lives on the web. The website moved to its own address,
 **https://openemux.libre-apps.org/**, part of [Libre Apps](https://libre-apps.org/), the home of our
-free apps. The old `guilhermefeitosa66.github.io/OpenEmux` links still work: they redirect to the
-new site. Both apps now point to the new address, so nothing depends on the redirect.
+free apps. The old `guilhermefeitosa66.github.io/OpenEmux` pages now show a notice with a link to
+the new address. Both apps point to the new address directly.
 
 `OpenEmux-mobile-1.23.5.apk` installs over 1.23.4, or over a beta, and keeps your library.
 
