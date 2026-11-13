@@ -125,6 +125,9 @@ class TheVolumeAGameEndedAtTests(unittest.TestCase):
     def test_a_game_that_never_touched_the_volume_has_none(self):
         self.assertIsNone(last_volume_db(["[INFO] [Audio] Started synchronous audio driver.\n"]))
 
+    def test_another_line_that_mentions_db_is_not_a_volume(self):
+        self.assertIsNone(last_volume_db(["[INFO] [Video] Gamma: 2.2 dB. (not audio)\n"]))
+
     def test_the_line_retroarch_writes_is_read(self):
         self.assertEqual(last_volume_db(["[INFO] [Audio] Audio volume: -3.0 dB.\n"]), -3.0)
 
