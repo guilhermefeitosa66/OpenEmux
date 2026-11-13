@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -197,7 +198,7 @@ class TheCatalogCacheTests(unittest.TestCase):
             self.assertFalse(catalog.is_ready())
             catalog.warm_up()
             self.assertTrue(catalog.is_ready())
-            self.assertEqual(sorted(Path(tmp).iterdir()), [base / "cores"])
+            self.assertEqual(os.listdir(tmp), ["cores"])
 
     def test_a_cache_that_cannot_be_written_is_not_an_error(self):
         with TemporaryDirectory() as tmp:
