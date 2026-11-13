@@ -2743,10 +2743,12 @@
       margin-top: 18px
     }
 
-    /* The demo: a phone on its side with an SNES-style pad. The anchor key
-       lights, a finger holds Y and slides onto B (the runner jumps each
-       time), then a Y+B combo button appears and is tapped. Everything is
-       placed in percentages of the phone, so it scales with the column. */
+    /* The demo: the desktop app on its first start. A ROM folder is
+       picked, and the library fills with cartridges at once while the
+       emulator download in the banner has barely moved; then a game is
+       clicked and starts, fetching only its own console's emulator.
+       Everything is placed in percentages of the window, so it scales
+       with the column. */
     .nd {
       padding: 18px;
       border-radius: 24px;
@@ -2754,221 +2756,238 @@
       border: 1px solid rgba(139, 92, 246, .28)
     }
 
-    .nd-phone {
+    .nd-win {
       position: relative;
-      aspect-ratio: 2.1 / 1;
-      border-radius: 28px;
-      background: linear-gradient(180deg, #1d1636, #120d24);
-      border: 1px solid rgba(255, 255, 255, .16);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, .6), inset 0 0 0 6px #0b0817;
+      aspect-ratio: 16 / 10;
+      border-radius: 14px;
+      background: #17112c;
+      border: 1px solid rgba(255, 255, 255, .14);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, .6);
       overflow: hidden
     }
 
-    .nd-screen {
+    .nd-head {
       position: absolute;
-      left: 24%;
-      top: 9%;
-      width: 41%;
-      height: 68%;
-      border-radius: 8px;
-      overflow: hidden;
-      background: linear-gradient(180deg, #4b3a9a, #8d6fe0 70%, #f2c46b)
+      inset: 0 0 auto;
+      height: 9%;
+      background: #201838;
+      border-bottom: 1px solid rgba(255, 255, 255, .06)
     }
 
-    .nd-sun {
+    .nd-head i {
       position: absolute;
-      right: 14%;
-      top: 14%;
-      width: 14%;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      background: var(--gold);
-      box-shadow: 0 0 24px rgba(255, 210, 30, .7)
-    }
-
-    .nd-hill {
-      position: absolute;
-      left: -10%;
-      bottom: 14%;
-      width: 70%;
+      top: 30%;
       height: 40%;
-      border-radius: 50% 50% 0 0;
-      background: #2f2466
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .1)
     }
 
-    .nd-ground {
+    .nd-head i:nth-child(1) { left: 2.5%; width: 3% }
+    .nd-head i:nth-child(2) { left: 44%; width: 16%; background: rgba(255, 255, 255, .18) }
+    .nd-head i:nth-child(3) { right: 2.5%; width: 3% }
+
+    .nd-side {
       position: absolute;
       left: 0;
+      top: 9%;
       bottom: 0;
-      width: 200%;
-      height: 16%;
-      background: repeating-linear-gradient(90deg, #1a1236 0 18px, #241a4a 18px 36px);
-      border-top: 2px solid #c4b5fd
+      width: 21%;
+      padding: 4% 2.2%;
+      background: #120d24;
+      display: grid;
+      align-content: start;
+      gap: 6%
     }
 
-    .nd-runner {
-      position: absolute;
-      left: 26%;
-      bottom: 16%;
-      width: 9%;
-      aspect-ratio: 3 / 4;
-      border-radius: 6px 6px 3px 3px;
-      background: linear-gradient(180deg, #ff6b6b 0 38%, #fff3e0 38% 60%, #3b82f6 60%);
-      box-shadow: 0 4px 0 rgba(0, 0, 0, .25)
-    }
-
-    .nd-dpad {
-      position: absolute;
-      left: 6%;
-      top: 32%;
-      width: 12%;
-      aspect-ratio: 1;
+    .nd-row {
+      height: 7%;
+      min-height: 6px;
+      border-radius: 5px;
       background:
-        linear-gradient(#2c2350, #2c2350) center / 34% 100% no-repeat,
-        linear-gradient(#2c2350, #2c2350) center / 100% 34% no-repeat
+        radial-gradient(circle at 12% 50%, var(--c, #8b5cf6) 0 9%, transparent 10%),
+        rgba(255, 255, 255, .06)
     }
 
-    .nd-btn,
-    .nd-combo {
+    .nd-row:first-child { background-color: rgba(139, 92, 246, .32) }
+    .nd-row:nth-child(2) { --c: #ffd21e }
+    .nd-row:nth-child(3) { --c: #34d399 }
+    .nd-row:nth-child(4) { --c: #f472b6 }
+    .nd-row:nth-child(5) { --c: #60a5fa }
+
+    /* The banner: the emulators coming down in the background. */
+    .nd-bar {
       position: absolute;
-      display: grid;
-      place-items: center;
-      transform: translate(-50%, -50%);
-      color: #e9e3ff;
-      font-weight: 800;
-      font-size: clamp(.6rem, 1.6vw, .95rem);
-      overflow: hidden
-    }
-
-    .nd-btn {
-      width: 9.5%;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      background: #2c2350;
-      border: 1px solid rgba(255, 255, 255, .14)
-    }
-
-    .nd-x { left: 83%; top: 21% }
-    .nd-y { left: 74%; top: 44% }
-    .nd-a { left: 92%; top: 44% }
-    .nd-b { left: 83%; top: 67% }
-
-    .nd-combo {
-      left: 71%;
-      top: 82%;
-      width: 11%;
-      height: 15%;
-      border-radius: 999px;
-      background: #3a2f6b;
-      border: 1px solid rgba(255, 210, 30, .6);
-      color: var(--gold);
-      font-size: clamp(.5rem, 1.2vw, .78rem)
-    }
-
-    /* A button held: lighter, the way the app draws it. */
-    .nd-lit {
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: rgba(255, 255, 255, .42);
-      opacity: 0
-    }
-
-    .nd-strip {
-      position: absolute;
-      left: 34%;
-      top: 84%;
-      width: 22%;
-      height: 10%;
+      left: 24%;
+      top: 13%;
+      width: 73%;
+      height: 8%;
       display: flex;
-      gap: 6%;
-      justify-content: center
+      align-items: center;
+      gap: 3%;
+      padding: 0 3%;
+      box-sizing: border-box;
+      border-radius: 8px;
+      background: rgba(139, 92, 246, .2);
+      border: 1px solid rgba(139, 92, 246, .35);
+      color: #c4b5fd
     }
 
-    .nd-key {
-      position: relative;
-      flex: 1;
-      border-radius: 6px;
-      background: #241c44;
-      border: 1px solid rgba(255, 255, 255, .08)
-    }
-
-    .nd-anchor {
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-      color: var(--gold)
-    }
-
-    .nd-anchor svg {
-      width: 70%;
-      height: 70%;
+    .nd-bar svg {
+      flex: none;
+      height: 64%;
+      aspect-ratio: 1;
       fill: none;
       stroke: currentColor;
       stroke-width: 2.4;
-      stroke-linecap: round
+      stroke-linecap: round;
+      stroke-linejoin: round
     }
 
-    .nd-lit-anchor {
-      background: rgba(255, 210, 30, .38)
+    .nd-track {
+      position: relative;
+      flex: 1;
+      height: 22%;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, .1);
+      overflow: hidden
     }
 
-    .nd-lit-combo {
-      background: rgba(255, 210, 30, .4)
-    }
-
-    /* What the app draws over the game while anchor mode holds a button
-       (AnchorLayer.kt in the Android app): an amber dashed ring a little
-       outside it and, while the finger is off it, a dashed white line from
-       its centre to the finger. The line runs from Y to B, rotated into
-       place in the phone's 2.1:1 box, and grows and shrinks with the
-       finger (scaleX from Y). */
-    .nd-ring {
+    .nd-fill {
       position: absolute;
-      left: 74%;
-      top: 44%;
-      width: 12.5%;
-      aspect-ratio: 1;
-      transform: translate(-50%, -50%);
-      border: 2.5px dashed #f2a23a;
-      border-radius: 50%;
-      box-sizing: border-box;
-      pointer-events: none
-    }
-
-    .nd-guide {
-      position: absolute;
-      left: 74%;
-      top: 44%;
-      width: 14.18%;
-      height: 0;
-      margin-top: -1px;
-      border-top: 2px dashed rgba(255, 255, 255, .7);
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #8b5cf6, #c4b5fd);
       transform-origin: 0 50%;
-      transform: rotate(50.6deg);
-      pointer-events: none
+      transform: scaleX(.45)
     }
 
-    /* The finger: a full-size layer translated in percentages of the phone,
-       with the fingertip at its top-left corner. */
-    .nd-finger-track {
+    .nd-grid {
+      position: absolute;
+      left: 24%;
+      top: 25%;
+      width: 73%;
+      height: 68%;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 4% 3%
+    }
+
+    .nd-card {
+      position: relative;
+      background: center / contain no-repeat
+    }
+
+    .nd-card:nth-child(2) { --i: 1 }
+    .nd-card:nth-child(3) { --i: 2 }
+    .nd-card:nth-child(4) { --i: 3 }
+    .nd-card:nth-child(5) { --i: 4 }
+    .nd-card:nth-child(6) { --i: 5 }
+    .nd-card:nth-child(7) { --i: 6 }
+    .nd-card:nth-child(8) { --i: 7 }
+    .nd-card:nth-child(9) { --i: 8 }
+
+    /* The game being launched: ringed, dimmed, a spinner, and the bar of
+       its own console's emulator. */
+    .nd-pick {
+      position: absolute;
+      inset: -6% -3%;
+      border-radius: 10px;
+      border: 2px solid var(--gold);
+      background: rgba(11, 8, 23, .55);
+      box-shadow: 0 0 18px rgba(255, 210, 30, .4);
+      display: grid;
+      place-items: center
+    }
+
+    .nd-spin {
+      width: 20%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, .2);
+      border-top-color: var(--gold);
+      box-sizing: border-box
+    }
+
+    .nd-pick-track {
+      position: absolute;
+      left: 22%;
+      right: 22%;
+      bottom: 14%;
+      height: 6%;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, .15);
+      overflow: hidden
+    }
+
+    .nd-pick-fill {
+      position: absolute;
+      inset: 0;
+      background: var(--gold);
+      transform-origin: 0 50%;
+      transform: scaleX(.7)
+    }
+
+    /* The first start's question: where are your games? */
+    .nd-dialog {
+      position: absolute;
+      left: 36%;
+      top: 30%;
+      width: 46%;
+      height: 44%;
+      border-radius: 12px;
+      background: #2a2150;
+      border: 1px solid rgba(255, 255, 255, .16);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, .55);
+      opacity: 0
+    }
+
+    .nd-dialog svg {
+      position: absolute;
+      left: 50%;
+      top: 14%;
+      width: 24%;
+      transform: translateX(-50%);
+      fill: var(--gold);
+      opacity: .95
+    }
+
+    .nd-dialog i {
+      position: absolute;
+      left: 22%;
+      right: 22%;
+      top: 54%;
+      height: 6%;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, .16)
+    }
+
+    .nd-ok {
+      position: absolute;
+      right: 8%;
+      bottom: 10%;
+      width: 34%;
+      height: 16%;
+      border-radius: 99px;
+      background: #8b5cf6
+    }
+
+    /* The pointer: a full-size layer translated in percentages of the
+       window, with the arrow's tip at its top-left corner. */
+    .nd-cursor-track {
       position: absolute;
       inset: 0;
       pointer-events: none;
       opacity: 0
     }
 
-    .nd-finger {
+    .nd-cursor {
       position: absolute;
       left: 0;
       top: 0;
-      width: 7%;
-      aspect-ratio: 1;
-      margin: -3.5% 0 0 -3.5%;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, .55);
-      border: 2px solid #fff;
-      box-shadow: 0 0 0 6px rgba(255, 255, 255, .14), 0 6px 18px rgba(0, 0, 0, .4)
+      width: 4.4%;
+      transform-origin: 0 0;
+      filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .5))
     }
 
     .nd-steps {
@@ -3000,140 +3019,115 @@
       margin-bottom: 2px
     }
 
-    /* Still (reduced motion): the last frame. Anchor on, Y and B held (Y
-       ringed, the line to B), the combo there; every step at full strength. */
-    .nd-lit-anchor,
-    .nd-lit-y,
-    .nd-lit-b {
-      opacity: 1
-    }
-
+    /* Still (reduced motion): the last frame. The library full, the banner
+       part of the way, the picked game starting; every step at full
+       strength. */
     @media (prefers-reduced-motion: no-preference) {
-      .nd-lit-anchor { animation: nd-anchor var(--loop) linear infinite }
-      .nd-lit-y { animation: nd-y var(--loop) linear infinite }
-      .nd-ring { animation: nd-ring var(--loop) linear infinite }
-      .nd-guide { animation: nd-guide var(--loop) linear infinite }
-      .nd-lit-b { animation: nd-b var(--loop) linear infinite }
-      .nd-lit-combo { animation: nd-combo-lit var(--loop) linear infinite }
-      .nd-combo { animation: nd-combo-in var(--loop) linear infinite }
-      .nd-finger-track { animation: nd-finger var(--loop) linear infinite }
-      .nd-finger { animation: nd-press var(--loop) linear infinite }
-      .nd-runner { animation: nd-runner var(--loop) linear infinite }
-      .nd-ground { animation: nd-ground 1.2s linear infinite }
+      .nd-side { animation: nd-side var(--loop) linear infinite }
+      .nd-bar { animation: nd-bar var(--loop) linear infinite }
+      .nd-fill { animation: nd-fill var(--loop) linear infinite }
+      .nd-card { animation: nd-card var(--loop) linear calc(var(--i, 0) * .1s) infinite backwards }
+      .nd-pick { animation: nd-pick var(--loop) linear infinite }
+      .nd-pick-fill { animation: nd-pick-fill var(--loop) linear infinite }
+      .nd-spin { animation: nd-spin .9s linear infinite }
+      .nd-dialog { animation: nd-dialog var(--loop) linear infinite }
+      .nd-ok { animation: nd-ok var(--loop) linear infinite }
+      .nd-cursor-track { animation: nd-cursor var(--loop) linear infinite }
+      .nd-cursor { animation: nd-click var(--loop) linear infinite }
       .nd-step-1 { animation: nd-step-1 var(--loop) linear infinite }
       .nd-step-2 { animation: nd-step-2 var(--loop) linear infinite }
       .nd-step-3 { animation: nd-step-3 var(--loop) linear infinite }
     }
 
-    @keyframes nd-anchor {
-      0%, 9% { opacity: 0 }
-      10%, 93% { opacity: 1 }
-      97%, 100% { opacity: 0 }
+    @keyframes nd-dialog {
+      0%, 3% { opacity: 0; transform: scale(.92) }
+      6%, 18% { opacity: 1; transform: scale(1) }
+      21%, 100% { opacity: 0; transform: scale(.96) }
     }
 
-    @keyframes nd-y {
-      0%, 21% { opacity: 0 }
-      22%, 60% { opacity: 1 }
-      61%, 75% { opacity: 0 }
-      76%, 84% { opacity: 1 }
-      85%, 100% { opacity: 0 }
+    @keyframes nd-ok {
+      0%, 15% { opacity: 1 }
+      16%, 18% { opacity: .6 }
+      19%, 100% { opacity: 1 }
     }
 
-    /* The ring for as long as Y is held; the line while the finger is off
-       Y, its end on the fingertip (the same stops as nd-finger). */
-    @keyframes nd-ring {
-      0%, 21% { opacity: 0 }
-      22%, 60% { opacity: 1 }
-      61%, 100% { opacity: 0 }
+    @keyframes nd-side {
+      0%, 20% { opacity: .25 }
+      23%, 93% { opacity: 1 }
+      97%, 100% { opacity: .25 }
     }
 
-    @keyframes nd-guide {
-      0%, 29% { opacity: 0; transform: rotate(50.6deg) scaleX(0) }
-      30% { opacity: 1; transform: rotate(50.6deg) scaleX(0) }
-      35%, 42% { opacity: 1; transform: rotate(50.6deg) scaleX(1) }
-      46% { opacity: 1; transform: rotate(50.6deg) scaleX(0) }
-      50%, 58% { opacity: 1; transform: rotate(50.6deg) scaleX(1) }
-      60%, 100% { opacity: 0; transform: rotate(50.6deg) scaleX(1) }
+    @keyframes nd-bar {
+      0%, 19% { opacity: 0; transform: translateY(-30%) }
+      22%, 93% { opacity: 1; transform: translateY(0) }
+      97%, 100% { opacity: 0; transform: translateY(0) }
     }
 
-    @keyframes nd-b {
-      0%, 35% { opacity: 0 }
-      36%, 41% { opacity: 1 }
-      42%, 50% { opacity: 0 }
-      51%, 56% { opacity: 1 }
-      57%, 75% { opacity: 0 }
-      76%, 84% { opacity: 1 }
-      85%, 100% { opacity: 0 }
+    /* The emulators come down slowly; the library does not wait. */
+    @keyframes nd-fill {
+      0%, 20% { transform: scaleX(.02) }
+      60% { transform: scaleX(.3) }
+      93%, 100% { transform: scaleX(.45) }
     }
 
-    @keyframes nd-combo-lit {
-      0%, 75% { opacity: 0 }
-      76%, 84% { opacity: 1 }
-      85%, 100% { opacity: 0 }
+    /* One wave for the nine cards, each a tenth of a second behind the one
+       before (animation-delay from --i), in and out. */
+    @keyframes nd-card {
+      0%, 21% { opacity: 0; transform: translateY(14%) scale(.86) }
+      24% { opacity: 1; transform: translateY(0) scale(1.04) }
+      26%, 91% { opacity: 1; transform: translateY(0) scale(1) }
+      93%, 100% { opacity: 0; transform: translateY(0) scale(1) }
     }
 
-    @keyframes nd-combo-in {
-      0%, 63% { opacity: 0; transform: translate(-50%, -50%) scale(.2) }
-      67% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) }
-      70%, 93% { opacity: 1; transform: translate(-50%, -50%) scale(1) }
-      97%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(1) }
+    @keyframes nd-pick {
+      0%, 67% { opacity: 0; transform: scale(1.08) }
+      69%, 90% { opacity: 1; transform: scale(1) }
+      92%, 100% { opacity: 0; transform: scale(1) }
     }
 
-    /* Anchor key (53.7%, 89%), Y (74%, 44%), B (83%, 67%), combo (71%, 82%). */
-    @keyframes nd-finger {
-      0% { opacity: 0; transform: translate(56%, 100%) }
-      5% { opacity: 1; transform: translate(53.7%, 89%) }
-      14% { opacity: 1; transform: translate(53.7%, 89%) }
-      20%, 30% { opacity: 1; transform: translate(74%, 44%) }
-      35%, 42% { opacity: 1; transform: translate(83%, 67%) }
-      46% { opacity: 1; transform: translate(74%, 44%) }
-      50%, 58% { opacity: 1; transform: translate(83%, 67%) }
-      62% { opacity: 0; transform: translate(83%, 67%) }
-      66% { opacity: 0; transform: translate(68%, 96%) }
-      72%, 85% { opacity: 1; transform: translate(71%, 82%) }
-      90%, 100% { opacity: 0; transform: translate(71%, 82%) }
+    @keyframes nd-pick-fill {
+      0%, 69% { transform: scaleX(0) }
+      88%, 100% { transform: scaleX(1) }
     }
 
-    @keyframes nd-press {
-      0%, 8% { transform: scale(1) }
-      10% { transform: scale(.8) }
-      12%, 20% { transform: scale(1) }
-      22%, 58% { transform: scale(.82) }
-      62%, 74% { transform: scale(1) }
-      76%, 84% { transform: scale(.82) }
-      87%, 100% { transform: scale(1) }
+    @keyframes nd-spin {
+      to { transform: rotate(1turn) }
     }
 
-    @keyframes nd-runner {
-      0%, 35% { transform: translateY(0) }
-      38% { transform: translateY(-120%) }
-      42%, 50% { transform: translateY(0) }
-      53% { transform: translateY(-120%) }
-      57%, 75% { transform: translateY(0) }
-      79% { transform: translateY(-150%) }
-      84%, 100% { transform: translateY(0) }
+    /* The OK button (72%, 66%), then the middle card (62%, 61%). */
+    @keyframes nd-cursor {
+      0%, 6% { opacity: 0; transform: translate(88%, 92%) }
+      8% { opacity: 1; transform: translate(88%, 92%) }
+      14%, 19% { opacity: 1; transform: translate(72%, 66%) }
+      22%, 56% { opacity: 0; transform: translate(72%, 66%) }
+      58% { opacity: 1; transform: translate(86%, 90%) }
+      65%, 72% { opacity: 1; transform: translate(62%, 61%) }
+      76%, 100% { opacity: 0; transform: translate(62%, 61%) }
     }
 
-    @keyframes nd-ground {
-      from { transform: translateX(0) }
-      to { transform: translateX(-36px) }
+    @keyframes nd-click {
+      0%, 15% { transform: scale(1) }
+      16.5% { transform: scale(.8) }
+      18%, 66% { transform: scale(1) }
+      67.5% { transform: scale(.8) }
+      69%, 100% { transform: scale(1) }
     }
 
     @keyframes nd-step-1 {
       0%, 2% { opacity: .3 }
-      5%, 17% { opacity: 1 }
-      20%, 100% { opacity: .3 }
+      4%, 19% { opacity: 1 }
+      22%, 100% { opacity: .3 }
     }
 
     @keyframes nd-step-2 {
-      0%, 17% { opacity: .3 }
-      20%, 60% { opacity: 1 }
-      63%, 100% { opacity: .3 }
+      0%, 19% { opacity: .3 }
+      22%, 56% { opacity: 1 }
+      59%, 100% { opacity: .3 }
     }
 
     @keyframes nd-step-3 {
-      0%, 60% { opacity: .3 }
-      63%, 93% { opacity: 1 }
+      0%, 56% { opacity: .3 }
+      59%, 93% { opacity: 1 }
       97%, 100% { opacity: .3 }
     }
 
@@ -3201,8 +3195,8 @@
         padding: 10px
       }
 
-      .nd-phone {
-        border-radius: 18px
+      .nd-win {
+        border-radius: 10px
       }
 
       .nd-steps {
@@ -3281,7 +3275,7 @@
         <aside class="get" id="downloads" aria-labelledby="getTitle">
           <div class="get-head">
             <h2 class="get-title" id="getTitle">Download OpenEmux</h2>
-            <a class="get-ver" href="#news"><span>Latest</span> <strong data-version>1.23.3</strong></a>
+            <a class="get-ver" href="#news"><span>Latest</span> <strong data-version>1.23.4</strong></a>
           </div>
           <div class="get-tabs" data-tablist aria-label="Platform" hidden>
             <button type="button" data-tab="linux"><svg class="os-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.5c-2.6 0-4 2.2-4 5 0 1.6-.6 2.6-1.6 4-1.3 1.8-2.6 3.8-2.6 6.2 0 1.1.4 2 1.2 2.6.6-.7 1.6-1 2.6-.9.9.1 1.6.6 2 1.3h4.8c.4-.7 1.1-1.2 2-1.3 1-.1 2 .2 2.6.9.8-.6 1.2-1.5 1.2-2.6 0-2.4-1.3-4.4-2.6-6.2-1-1.4-1.6-2.4-1.6-4 0-2.8-1.4-5-4-5Zm-1.6 4.2a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm3.2 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8ZM12 9.2l1.6 1.1-1.6 1-1.6-1Z" /></svg>Linux</button>
@@ -3295,7 +3289,7 @@
               <li class="get-row">
                 <span class="get-what"><strong>Flatpak <span class="get-tag">Recommended</span></strong>Any distro, sandboxed. Updates with <code>flatpak update</code>.</span>
                 <a class="get-dl" data-asset="^OpenEmux-[0-9.]+\.flatpak$" aria-label="Download: Flatpak"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3.flatpak"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.flatpak</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4.flatpak"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.flatpak</span></a>
                 <pre><code>flatpak install -y flathub org.libretro.RetroArch
 flatpak remote-add --if-not-exists --no-gpg-verify openemux https://guilhermefeitosa66.github.io/openemux-flatpak/repo
 flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
@@ -3303,25 +3297,25 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               <li class="get-row">
                 <span class="get-what"><strong>AppImage</strong>Any distro, one file. Nothing to install.</span>
                 <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-x86_64\.AppImage$" aria-label="Download: AppImage"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-x86_64.AppImage"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.AppImage</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-x86_64.AppImage"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.AppImage</span></a>
                 <pre><code>chmod +x OpenEmux-*-x86_64.AppImage &amp;&amp; ./OpenEmux-*-x86_64.AppImage</code></pre>
               </li>
               <li class="get-row">
                 <span class="get-what"><strong>Debian / Ubuntu</strong>Ubuntu 24.04 or newer, and the distros built on it.</span>
                 <a class="get-dl" data-asset="^openemux_[0-9.]+_amd64\.deb$" aria-label="Download: .deb"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux_1.23.3_amd64.deb"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.deb</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/openemux_1.23.4_amd64.deb"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.deb</span></a>
                 <pre><code>sudo apt install ./openemux_*_amd64.deb</code></pre>
               </li>
               <li class="get-row">
                 <span class="get-what"><strong>Fedora</strong>Fedora 40 or newer.</span>
                 <a class="get-dl" data-asset="^openemux-[0-9.]+-[0-9]+\.[a-z0-9]+\.x86_64\.rpm$" aria-label="Download: .rpm"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1.fc40.x86_64.rpm"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.rpm</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/openemux-1.23.4-1.fc40.x86_64.rpm"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.rpm</span></a>
                 <pre><code>sudo dnf install ./openemux-*.x86_64.rpm</code></pre>
               </li>
               <li class="get-row">
                 <span class="get-what"><strong>Arch Linux</strong>Rolling release: pacman pulls in the dependencies.</span>
                 <a class="get-dl" data-asset="^openemux-[0-9.]+-[0-9]+-x86_64\.pkg\.tar\.zst$" aria-label="Download: .pkg.tar.zst"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1-x86_64.pkg.tar.zst"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zst</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/openemux-1.23.4-1-x86_64.pkg.tar.zst"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zst</span></a>
                 <pre><code>sudo pacman -U ./openemux-*-x86_64.pkg.tar.zst</code></pre>
               </li>
             </ul>
@@ -3333,12 +3327,12 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               <li class="get-row">
                 <span class="get-what"><strong>Installer <span class="get-tag">Recommended</span></strong>Installs for your user only, no administrator prompt.</span>
                 <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-setup\.exe$" aria-label="Download: Installer"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-setup.exe"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.exe</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-setup.exe"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.exe</span></a>
               </li>
               <li class="get-row">
                 <span class="get-what"><strong>Portable <span class="get-tag get-tag-portable">Nothing installed</span></strong>Unzip it anywhere and run <code>OpenEmux.exe</code>. Settings and games stay in its folder, so it runs from a USB stick.</span>
                 <a class="get-dl" data-asset="^OpenEmux-[0-9.]+-windows-x86_64\.zip$" aria-label="Download: Portable"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-windows-x86_64.zip"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zip</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-windows-x86_64.zip"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.zip</span></a>
               </li>
             </ul>
             <p class="get-note"><span class="beta">Beta</span>Windows 10 or 11, 64-bit. Not code-signed yet: SmartScreen warns, and <em>More info → Run anyway</em> gets past it.</p>
@@ -3350,7 +3344,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
               <li class="get-row">
                 <span class="get-what"><strong>APK</strong>Android 8 or newer, 64-bit (arm64).</span>
                 <a class="get-dl" data-asset="^OpenEmux-mobile-[0-9.]+\.apk$" aria-label="Download: APK"
-                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-mobile-1.23.3.apk"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.apk</span></a>
+                  href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-mobile-1.23.4.apk"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg><span>.apk</span></a>
               </li>
             </ul>
             <p class="get-note">Not on the Play Store yet: open the file and allow installing apps when Android asks. Updates install over the version you have.</p>
@@ -3376,51 +3370,55 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
     <div class="wrap">
       <div class="news-grid">
         <div class="news-copy">
-          <span class="eyebrow">What's new · v1.23.3</span>
-          <h2>Buttons that hold, and buttons that combine.</h2>
-          <p class="lede">OpenEmux 1.23 is about the on-screen controls on Android: games that need two buttons at once can now be played on glass.</p>
-          <ul class="news-list"><li><strong>Anchor mode.</strong> Turn on the anchor key and the first button you press stays held while your finger slides onto the others. Hold Y, slide onto B, and you keep running while you jump.</li><li><strong>Combo buttons.</strong> Make a button that presses up to three at once, such as Y+B, L+R or L+R+A, and place it anywhere on the skin.</li><li><strong>Any shape, and a pressed look.</strong> Each button can be a circle, a pill, a rounded square or a triangle, and it lights up while it is held.</li><li><strong>A new pause menu.</strong> Continue, Restart, Save and Load on top, everything else as tiles, and the save slot remembered for each game.</li></ul>
+          <span class="eyebrow">What's new · v1.23.4</span>
+          <h2>A big library that stays fast, and your games before the downloads.</h2>
+          <p class="lede">OpenEmux 1.23.4 is about speed, on desktop and Android, and about the moments where the app used to leave you guessing.</p>
+          <ul class="news-list"><li><strong>A big library, fast.</strong> With 3000 games, “All” opens in under a second instead of three, and the app holds close to half the memory.</li><li><strong>Your games before the downloads.</strong> Pick your ROM folder and the library opens; a console’s emulator comes down the first time you play it. A launch shows “Starting…”, and then how long you played.</li><li><strong>Recently played, game details and TV mode.</strong> Resume where you left off, find a game’s core, shader, saves and play time in one place, and play from the couch with F11 or the Guide button.</li><li><strong>Android: smaller, faster, and pause with the pad.</strong> The APK is smaller and starts in about half the time, and holding Start on a controller opens the pause menu.</li></ul>
           <p class="news-links">
-            <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3">Read the release notes →</a>
+            <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.4">Read the release notes →</a>
             <a href="https://github.com/guilhermefeitosa66/OpenEmux/releases">Every release →</a>
           </p>
         </div>
         <figure class="news-demo">
-          <div class="nd" role="img" aria-label="Animation: the anchor key lights up, a finger holds Y and slides onto B while the character on the screen jumps, then a Y+B combo button appears and is pressed">
-            <div class="nd-phone" aria-hidden="true">
-              <div class="nd-screen">
-                <i class="nd-sun"></i>
-                <i class="nd-hill"></i>
-                <i class="nd-ground"></i>
-                <i class="nd-runner"></i>
-              </div>
-              <i class="nd-dpad"></i>
-              <span class="nd-btn nd-x">X</span>
-              <span class="nd-btn nd-y">Y<i class="nd-lit nd-lit-y"></i></span>
-              <span class="nd-btn nd-a">A</span>
-              <span class="nd-btn nd-b">B<i class="nd-lit nd-lit-b"></i></span>
-              <span class="nd-combo">Y+B<i class="nd-lit nd-lit-combo"></i></span>
-              <i class="nd-guide"></i>
-              <i class="nd-ring"></i>
-              <span class="nd-strip">
-                <i class="nd-key"></i><i class="nd-key"></i><i class="nd-key"></i>
-                <span class="nd-key nd-anchor"><svg viewBox="0 0 24 24"><path d="M12 3a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 3Zm0 4.4V21M8 11h8M4.5 13.5c0 4.2 3.4 7.5 7.5 7.5s7.5-3.3 7.5-7.5" /></svg><i class="nd-lit nd-lit-anchor"></i></span>
+          <div class="nd" role="img" aria-label="Animation: a ROM folder is picked, the library fills with game cartridges while the emulator download bar is still running, then a game is clicked and shows that it is starting">
+            <div class="nd-win" aria-hidden="true">
+              <span class="nd-head"><i></i><i></i><i></i></span>
+              <span class="nd-side"><i class="nd-row"></i><i class="nd-row"></i><i class="nd-row"></i><i class="nd-row"></i><i class="nd-row"></i></span>
+              <span class="nd-bar">
+                <svg viewBox="0 0 24 24"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" /></svg>
+                <span class="nd-track"><i class="nd-fill"></i></span>
               </span>
-              <span class="nd-finger-track"><i class="nd-finger"></i></span>
+              <span class="nd-grid">
+                <i class="nd-card" style="background-image:url(assets/carts/gba-cosmic-fox-pilot.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-castle-siege-tactics.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-super-kart-turbo.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-knight-of-hearts.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-crystal-sword-saga.webp)"><span class="nd-pick"><i class="nd-spin"></i><span class="nd-pick-track"><i class="nd-pick-fill"></i></span></span></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-go-kart-galaxy.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-zombie-night-out.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-space-cadet-zero.webp)"></i>
+                <i class="nd-card" style="background-image:url(assets/carts/gba-bounce-ball-hero.webp)"></i>
+              </span>
+              <span class="nd-dialog">
+                <svg viewBox="0 0 24 18"><path d="M1 3a2 2 0 0 1 2-2h6l2 2.5h10a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z" /></svg>
+                <i></i>
+                <span class="nd-ok"></span>
+              </span>
+              <span class="nd-cursor-track"><svg class="nd-cursor" viewBox="0 0 16 22"><path d="M1 1v17l4.5-4.2 3 6.6 3-1.4-3-6.4H15Z" fill="#fff" stroke="#120d24" stroke-width="1.4" stroke-linejoin="round" /></svg></span>
             </div>
           </div>
           <figcaption>
             <ol class="nd-steps">
-              <li class="nd-step nd-step-1">Turn on the anchor.</li>
-              <li class="nd-step nd-step-2">Hold Y and slide onto B.</li>
-              <li class="nd-step nd-step-3">Or press a Y+B combo.</li>
+              <li class="nd-step nd-step-1">Pick your ROM folder.</li>
+              <li class="nd-step nd-step-2">Your games show up at once.</li>
+              <li class="nd-step nd-step-3">Play, and its emulator comes down.</li>
             </ol>
           </figcaption>
         </figure>
       </div>
       <div class="news-earlier">
         <h3>Earlier releases</h3>
-        <ul class="news-past"><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0">1.22 <time datetime="2026-11-09">Nov 9, 2026</time></a>Change and edit the skin from the pause menu, save states with their whole picture, and keep playing while a game arrives.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.1">1.21.1 <time datetime="2026-11-07">Nov 7, 2026</time></a>Fixes the Android app closing when you picked a language in Settings.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.0">1.21 <time datetime="2026-11-07">Nov 7, 2026</time></a>Remap on a drawing of the controller, buttons that did nothing in game are back, and a Windows portable mode that really is portable.</li></ul>
+        <ul class="news-past"><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3">1.23.3 <time datetime="2026-11-12">Nov 12, 2026</time></a>Pick the shape of each on-screen button on Android, with rounded triangles and a pressed look.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.0">1.23 <time datetime="2026-11-12">Nov 12, 2026</time></a>Anchor mode and combo buttons for the on-screen controls on Android: games that need two buttons at once can be played on glass.</li><li><a href="https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0">1.22 <time datetime="2026-11-09">Nov 9, 2026</time></a>Change and edit the skin from the pause menu, save states with their whole picture, and keep playing while a game arrives.</li></ul>
       </div>
     </div>
   </section>
@@ -3745,7 +3743,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>Sandboxed, auto-updating</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+\.flatpak$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3.flatpak"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .flatpak</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4.flatpak"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .flatpak</a>
             </div>
             <ol class="install-steps">
               <li><p>Install RetroArch from Flathub:</p>
@@ -3767,7 +3765,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>Any distro</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-x86_64\.AppImage$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-x86_64.AppImage"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the AppImage</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-x86_64.AppImage"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the AppImage</a>
             </div>
             <ol class="install-steps">
               <li><p>Download it with the button above.</p></li>
@@ -3787,7 +3785,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
                 <div class="note"><p>Ubuntu 24.04 LTS or newer.</p></div>
               </div>
               <a class="btn btn-primary" data-asset="^openemux_[0-9.]+_amd64\.deb$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux_1.23.3_amd64.deb"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .deb</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/openemux_1.23.4_amd64.deb"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .deb</a>
             </div>
             <ol class="install-steps">
               <li><p>Download it with the button above.</p></li>
@@ -3805,7 +3803,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
                 <div class="note"><p>Fedora 40 or newer.</p></div>
               </div>
               <a class="btn btn-primary" data-asset="^openemux-[0-9.]+-[0-9]+\.[a-z0-9]+\.x86_64\.rpm$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/openemux-1.23.3-1.fc40.x86_64.rpm"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .rpm</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/openemux-1.23.4-1.fc40.x86_64.rpm"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .rpm</a>
             </div>
             <ol class="install-steps">
               <li><p>Download it with the button above.</p></li>
@@ -3831,7 +3829,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>The usual way</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-setup\.exe$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-setup.exe"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the installer</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-setup.exe"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the installer</a>
             </div>
             <ol class="install-steps">
               <li><p>Download it with the button above.</p></li>
@@ -3846,7 +3844,7 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
             <div class="format-head">
               <div><h3>Nothing installed</h3></div>
               <a class="btn btn-primary" data-asset="^OpenEmux-[0-9.]+-windows-x86_64\.zip$"
-                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.3/OpenEmux-1.23.3-windows-x86_64.zip"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .zip</a>
+                href="https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v1.23.4/OpenEmux-1.23.4-windows-x86_64.zip"><svg class="dl-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>Download the .zip</a>
             </div>
             <ol class="install-steps">
               <li><p>Download it with the button above.</p></li>

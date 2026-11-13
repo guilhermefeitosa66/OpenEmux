@@ -168,15 +168,15 @@
   "get.download": "Download",
   "get.all": "All versions and files →",
   "news.eyebrow": "What's new",
-  "news.title": "<h2>Buttons that hold, and buttons that combine.</h2>",
-  "news.lede": "<p class=\"lede\">OpenEmux 1.23 is about the on-screen controls on Android: games that need two buttons at once can now be played on glass.</p>",
-  "news.items": "<ul class=\"news-list\"><li><strong>Anchor mode.</strong> Turn on the anchor key and the first button you press stays held while your finger slides onto the others. Hold Y, slide onto B, and you keep running while you jump.</li><li><strong>Combo buttons.</strong> Make a button that presses up to three at once, such as Y+B, L+R or L+R+A, and place it anywhere on the skin.</li><li><strong>Any shape, and a pressed look.</strong> Each button can be a circle, a pill, a rounded square or a triangle, and it lights up while it is held.</li><li><strong>A new pause menu.</strong> Continue, Restart, Save and Load on top, everything else as tiles, and the save slot remembered for each game.</li></ul>",
+  "news.title": "<h2>A big library that stays fast, and your games before the downloads.</h2>",
+  "news.lede": "<p class=\"lede\">OpenEmux 1.23.4 is about speed, on desktop and Android, and about the moments where the app used to leave you guessing.</p>",
+  "news.items": "<ul class=\"news-list\"><li><strong>A big library, fast.</strong> With 3000 games, “All” opens in under a second instead of three, and the app holds close to half the memory.</li><li><strong>Your games before the downloads.</strong> Pick your ROM folder and the library opens; a console’s emulator comes down the first time you play it. A launch shows “Starting…”, and then how long you played.</li><li><strong>Recently played, game details and TV mode.</strong> Resume where you left off, find a game’s core, shader, saves and play time in one place, and play from the couch with F11 or the Guide button.</li><li><strong>Android: smaller, faster, and pause with the pad.</strong> The APK is smaller and starts in about half the time, and holding Start on a controller opens the pause menu.</li></ul>",
   "news.notes": "Read the release notes →",
   "news.all": "Every release →",
-  "news.anim_label": "Animation: the anchor key lights up, a finger holds Y and slides onto B while the character on the screen jumps, then a Y+B combo button appears and is pressed",
-  "news.step1": "Turn on the anchor.",
-  "news.step2": "Hold Y and slide onto B.",
-  "news.step3": "Or press a Y+B combo.",
+  "news.anim_label": "Animation: a ROM folder is picked, the library fills with game cartridges while the emulator download bar is still running, then a game is clicked and shows that it is starting",
+  "news.step1": "Pick your ROM folder.",
+  "news.step2": "Your games show up at once.",
+  "news.step3": "Play, and its emulator comes down.",
   "news.earlier_title": "<h3>Earlier releases</h3>",
-  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">Nov 9, 2026</time></a>Change and edit the skin from the pause menu, save states with their whole picture, and keep playing while a game arrives.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.1\">1.21.1 <time datetime=\"2026-11-07\">Nov 7, 2026</time></a>Fixes the Android app closing when you picked a language in Settings.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.0\">1.21 <time datetime=\"2026-11-07\">Nov 7, 2026</time></a>Remap on a drawing of the controller, buttons that did nothing in game are back, and a Windows portable mode that really is portable.</li></ul>"
+  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3\">1.23.3 <time datetime=\"2026-11-12\">Nov 12, 2026</time></a>Pick the shape of each on-screen button on Android, with rounded triangles and a pressed look.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.0\">1.23 <time datetime=\"2026-11-12\">Nov 12, 2026</time></a>Anchor mode and combo buttons for the on-screen controls on Android: games that need two buttons at once can be played on glass.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">Nov 9, 2026</time></a>Change and edit the skin from the pause menu, save states with their whole picture, and keep playing while a game arrives.</li></ul>"
 }
