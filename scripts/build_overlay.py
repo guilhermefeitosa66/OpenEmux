@@ -85,8 +85,11 @@ ICON = {
     "minus": '<path d="M6 12h12" stroke-width="2.4"/>',
     "plus": '<path d="M12 6v12M6 12h12" stroke-width="2.4"/>',
     "fullscreen": '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
-    "hide": '<path d="M6 9l6 6 6-6" stroke-width="2.2"/>',
-    "show": '<path d="M6 15l6-6 6 6" stroke-width="2.2"/>',
+    # The Android app's eye (Icons.Eye / Icons.EyeOff in openemux-android's
+    # ui/Components.kt), so both platforms draw it alike: the eye-slash hides
+    # the shown bar, the plain eye brings the hidden one back (issue 938).
+    "hide": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M4 4l16 16"/>',
+    "show": '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6"/>',
 }
 
 #: RetroArch hotkey per stateless button. The toggles are wired below.

@@ -69,6 +69,10 @@ the Android skins' controller art to the desktop, and the second,
 [#815](https://github.com/guilhermefeitosa66/OpenEmux/issues/815), draws that
 controller on the input page so a click on one of its buttons remaps it.
 
+Pointed out that the in-game bar's hide button, a down arrow, read as "more"
+or "minimize" rather than "hide this bar", which gave it the Android app's eye
+in [#938](https://github.com/guilhermefeitosa66/OpenEmux/issues/938).
+
 ### Marc Mader ([@marcmaderhome](https://github.com/marcmaderhome))
 
 Reported in [#179](https://github.com/guilhermefeitosa66/OpenEmux/issues/179) that no
