@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://guilhermefeitosa66.github.io/OpenEmux/">
+  <a href="https://openemux.libre-apps.org/">
     <img src="https://img.shields.io/badge/Website-openemux-8b5cf6?style=for-the-badge&logo=github" alt="OpenEmux website"/>
   </a>
   &nbsp;
@@ -75,7 +75,7 @@ OpenEmux exists to give that legitimate, personal-library experience the polishe
 
 ## Share Nearby
 
-Send games from one OpenEmux to another on the same Wi-Fi network: computer to phone, phone to computer, phone to tablet. Each game travels with its battery save, the save states the other device's core can load, its cover and cartridge label, with no account, no cloud and no cable. The receiving device shows who is sending and what, and nothing arrives until someone accepts there; both screens show the same six-digit code, so compare them first. See [Share Nearby in the manual](https://guilhermefeitosa66.github.io/OpenEmux/manual/#share), and if the devices don't see each other, [the troubleshooting list](https://guilhermefeitosa66.github.io/OpenEmux/manual/#share-trouble).
+Send games from one OpenEmux to another on the same Wi-Fi network: computer to phone, phone to computer, phone to tablet. Each game travels with its battery save, the save states the other device's core can load, its cover and cartridge label, with no account, no cloud and no cable. The receiving device shows who is sending and what, and nothing arrives until someone accepts there; both screens show the same six-digit code, so compare them first. See [Share Nearby in the manual](https://openemux.libre-apps.org/manual/#share), and if the devices don't see each other, [the troubleshooting list](https://openemux.libre-apps.org/manual/#share-trouble).
 
 ---
 

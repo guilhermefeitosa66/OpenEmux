@@ -10,7 +10,7 @@ one a cover in ``<roms>/<CONSOLE>/covers/`` and a cartridge label in
 
     demo_library.py <roms_dir>                     # ROMs, covers and labels
     demo_library.py <roms_dir> --configure         # ...and point the app at it
-    demo_library.py <roms_dir> --wall docs/assets/carts   # site cartridge wall
+    demo_library.py <roms_dir> --wall ../site-openemux-libre-apps-org/public/assets/carts   # site cartridge wall
 
 ``--wall`` composites the labels already in ``<roms_dir>`` and writes nothing
 else: the labels are drawn in the devbox, where the captures are taken, and the
@@ -230,7 +230,8 @@ FAVORITES = [
     ("PS", "Eternal Crystal Saga"),
 ]
 
-#: The consoles on the site's cartridge wall, which ``site/page.html`` lists.
+#: The consoles on the site's cartridge wall, which ``site/page.html`` lists
+#: (in the site repository, ``../site-openemux-libre-apps-org``).
 WALL = ["GBA", "SFC", "N64", "MD"]
 WALL_WIDTH = 400
 WALL_QUALITY = "80"
@@ -1264,7 +1265,7 @@ def wall(roms_dir, out_dir):
 
     Rendered by the app's own compositor at ``WALL_WIDTH`` and saved as WebP,
     named ``<console>-<slug>.webp``. Returns ``{console: [slug, ...]}``, the
-    ``games`` lists ``site/page.html`` needs.
+    ``games`` lists ``site/page.html`` (in the site repository) needs.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

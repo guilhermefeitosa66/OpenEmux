@@ -12,14 +12,15 @@ OpenEmux spans several repositories, all checked out next to this one (under `~/
 
 | Repository | Checkout | Base | What it is |
 |---|---|---|---|
-| `guilhermefeitosa66/OpenEmux` | `.` | `develop` | The desktop app, the GitHub Pages site (`docs/`, served from `main`), the packaging and the release. |
+| `guilhermefeitosa66/OpenEmux` | `.` | `develop` | The desktop app, the packaging and the release. |
+| `guilhermefeitosa66/site-openemux-libre-apps-org` (private) | `../site-openemux-libre-apps-org` | `main` | The website, https://openemux.libre-apps.org: its source (`site/`), the generator (`tools/build_site.py`), its tests and the generated pages with every asset they use (`public/`). Vercel deploys each push to `main`. |
 | `guilhermefeitosa66/openemux-android` | `../openemux-android` | `openemux-mobile` | The Android app (see below). |
 | `guilhermefeitosa66/openemux-artwork` | `../openemux-artwork` | `main` | Self-hosted cover-art mirror: reduced-size WebP synced from libretro-thumbnails, which cover sync downloads from. |
 | `guilhermefeitosa66/openemux-flatpak` | `../openemux-flatpak` | `main` | Flatpak distribution repo (ostree on `gh-pages`); its `publish.yml` is dispatched after each release (step 8 below). |
 | `guilhermefeitosa66/openemux-builds` | `../openemux-builds` | `main` | Android beta APKs, one pre-release per finished `repo-mobile` issue (`beta-<version>`), linked from the issue. Signed with the release key, patch number only bumped. Published by the pipeline after QA merges. |
 | `guilhermefeitosa66/openemux-evidence` | `../openemux-evidence` | `main` | Images embedded in issue comments: `qa/issue-<N>/<run>/` (QA screenshots) and `design/issue-<N>/` (design specs). Nothing is built or shipped from it. |
 | `guilhermefeitosa66/openemux-ops` (private) | `../openemux-ops` | `main` | Maintainer notes; `pipeline/PIPELINE.md` documents the autonomous issue pipeline. |
-| `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`docs/assets/openemux-promo.mp4` and its poster). |
+| `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`public/assets/openemux-promo.mp4` and its poster, in the site repository). |
 
 Satellite repositories are named `openemux-<name>`; only this one keeps `OpenEmux`. Pipeline worktrees go in `../OpenEmux-wt/`, `../openemux-android-wt/` and `../openemux-video-wt/`, never inside a checkout. Every one of these repositories uses the personal git identity and key (`~/.ssh/id_ed25519` with `IdentitiesOnly=yes`).
 
@@ -285,8 +286,8 @@ When the user asks for a new release, run the whole sequence — no confirmation
    - `packaging/rpm/openemux.spec` → a new `%changelog` entry (the `Version:` field itself is templated)
    - `packaging/common/io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` → a new `<release>` entry at the top of `<releases>` (AppStream shows it in software centers)
 3. Write `release/RELEASE_NOTES_v<X.Y.Z>.md`, following the previous file in that folder. Only the English notes are committed.
-   Then update the site's "What's new" section from those notes: the `news.*` strings in all eight `site/strings/*.json` (headline, four highlights, the three earlier releases), and the CSS animation in `site/page.html` when the headline feature changed. The download links follow the bumped `__version__` by themselves. Rebuild with `tools/build_site.py` and run `tests.test_site`; the `release` skill (phase 3.5) has the details. The site goes live with the merge to `main` in step 6.
-4. Commit as `[no-issue] chore: release <X.Y.Z>` (the bump, the notes and the rebuilt `site/` and `docs/`).
+   Then prepare the site's "What's new" in the site repository (`../site-openemux-libre-apps-org`, on a local branch): the version in `site/version.txt`, the `news.*` strings in all eight `site/strings/*.json` (headline, four highlights, the three earlier releases), and the CSS animation in `site/page.html` when the headline feature changed. The download links follow `site/version.txt`. Rebuild with `make build` and run `make test` there; the `release` skill (phase 3.5) has the details. The site goes live in step 10, once the release exists.
+4. Commit as `[no-issue] chore: release <X.Y.Z>` (the bump and the notes).
 5. Build every artifact into `dist/`: `make packages-clean && make packages` (or `make appimage` / `make deb` / `make rpm` / `make flatpak` individually). Clean first — `dist/` keeps the previous version's artifacts, and step 7 uploads everything in there. Builds run in Docker containers and need an x86_64 host; see `docs/DEVELOPMENT.md`.
    `make packages` ends with `make checksums`, which writes **`dist/SHA256SUMS`** over every artifact so users can run `sha256sum -c SHA256SUMS`. Never ship a release without it, and never swap it for per-file `.md5`: MD5 collisions are practical, so an MD5 proves nothing against a tampered download.
 6. Open the PR from the release branch **to `main`**: `gh pr create --base main`, then merge it (squash, delete branch).
@@ -295,5 +296,6 @@ When the user asks for a new release, run the whole sequence — no confirmation
 8. Publish the Flatpak to the distribution repo so `flatpak update` sees the new version: dispatch the workflow in the satellite repo with the release tag —
    `gh workflow run publish.yml --repo guilhermefeitosa66/openemux-flatpak -f ref=v<X.Y.Z>` — and confirm it succeeded.
 9. Merge `main` back into `develop` so the version bump is not stranded on the release branch, and push.
+10. Publish the site: merge the branch from step 3 into `main` of the site repository and push. Vercel deploys it; check that https://openemux.libre-apps.org/ names the new version and that its download buttons fetch files of the release from step 7.
 
 The `release/v<X.Y.Z>` branch is **kept** — it is not deleted with the PR, unlike a feature branch.
