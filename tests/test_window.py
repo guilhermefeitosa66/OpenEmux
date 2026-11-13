@@ -41,9 +41,11 @@ if HAVE_DISPLAY:
         ALL_CONSOLES_ID,
         FAVORITES_ID,
         LIBRARY_EMPTY_ID,
+        RECENT_ID,
         collection_scope,
     )
     from openemux.ui.window import OpenEmuxWindow
+    from openemux.core import save_states
 
 
 def _walk(widget):
@@ -3198,6 +3200,170 @@ class TheMissingCoreRepairTests(WindowCase):
         dialog._toast.assert_not_called()
         dialog.set_core_job_running.assert_not_called()
         self.assertEqual(self.toasts, ["hello"])
+
+
+@needs_display
+class TheRecentlyPlayedPageTests(WindowCase):
+    """Issue 910: the page, the caption under a card and the resume badge."""
+
+    def _played(self, rom, seconds=0):
+        self.win.play_history.record_launch(rom["path"])
+        if seconds:
+            self.win.play_history.record_play_time(rom["path"], seconds)
+
+    def _auto_state_for(self, rom):
+        states_dir = self.config.get_console_states_dir(rom["console"])
+        states_dir.mkdir(parents=True, exist_ok=True)
+        path = states_dir / f"{save_states.rom_state_stem(rom['path'])}.state.auto"
+        path.write_bytes(b"state")
+        return path
+
+    def test_the_page_is_titled_after_its_row(self):
+        self.win._update_window_title(RECENT_ID)
+        self.assertEqual(self.win.window_title.get_title(), self.said("sidebar.recent"))
+
+    def test_a_library_with_history_opens_on_the_page(self):
+        # The start-up view, over the one the session stored (issue #383).
+        self.config.session.set_last_view("SFC")
+        self.assertEqual(self.win._startup_view(), "SFC")
+        self._played(self.rom())
+        self.assertEqual(self.win._startup_view(), RECENT_ID)
+        self.win.refresh_library(preferred_view=self.win._startup_view(), force=True)
+        self.assertEqual(self.win.current_console, RECENT_ID)
+        self.assertEqual(self.win.sidebar.selected_id(), RECENT_ID)
+
+    def test_a_view_that_is_gone_falls_back_to_the_page_when_there_is_history(self):
+        self._played(self.rom())
+        self.win.refresh_library(preferred_view="N64", force=True)
+        self.assertEqual(self.win.current_console, RECENT_ID)
+
+    def test_a_library_never_played_does_not(self):
+        self.win.refresh_library(preferred_view="N64", force=True)
+        self.assertNotEqual(self.win.current_console, RECENT_ID)
+        self.assertIsNone(self.win.sidebar.find_row(RECENT_ID))
+
+    def test_a_cheap_refresh_re_syncs_the_row(self):
+        self.win.refresh_library(force=True)
+        self._played(self.rom())
+        self.win.refresh_library()
+        self.assertIsNotNone(self.win.sidebar.find_row(RECENT_ID))
+
+    def test_selecting_the_row_loads_the_page(self):
+        self._played(self.rom())
+        self.win.sidebar.sync_recent_row()
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as load:
+            self.win.sidebar.select(RECENT_ID)
+        load.assert_called_once()
+        self.assertEqual(self.win.current_console, RECENT_ID)
+
+    def test_a_game_never_played_has_no_caption(self):
+        self.assertIsNone(self.win.play_caption(self.rom()))
+        self.assertIsNone(self.win.play_caption({}))
+
+    def test_the_caption_says_when_and_for_how_long(self):
+        rom = self.rom()
+        self._played(rom, seconds=80 * 60)
+        self.assertEqual(
+            self.win.play_caption(rom),
+            self.said(
+                "play.caption",
+                ago=self.said("play.ago.now"),
+                played=self.said("play.time.hours", hours=1, minutes=20),
+            ),
+        )
+
+    def test_minutes_alone_under_an_hour(self):
+        rom = self.rom()
+        self._played(rom, seconds=12 * 60)
+        self.assertIn(self.said("play.time.minutes", minutes=12), self.win.play_caption(rom))
+
+    def test_under_a_minute_played_the_caption_only_says_when(self):
+        rom = self.rom()
+        self._played(rom, seconds=30)
+        self.assertEqual(self.win.play_caption(rom), self.said("play.ago.now"))
+
+    def test_how_long_ago_takes_the_coarsest_unit_that_says_something(self):
+        now = 1_700_000_000.0
+
+        def ago(delta):
+            return self.win._played_ago(now - delta, now=now)
+
+        self.assertEqual(ago(30), self.said("play.ago.now"))
+        self.assertEqual(ago(5 * 60), self.said("play.ago.minutes", minutes=5))
+        self.assertEqual(ago(3 * 3600), self.said("play.ago.hours", hours=3))
+        self.assertEqual(ago(2 * 86400), self.said("play.ago.days", days=2))
+        self.assertEqual(
+            ago(30 * 86400),
+            window_module.datetime.fromtimestamp(now - 30 * 86400).strftime("%d/%m/%Y"),
+        )
+
+    def test_the_resume_badge_needs_the_setting_and_the_state(self):
+        rom = self.rom()
+        self._auto_state_for(rom)
+        # The file alone is not enough: with the setting off the launch
+        # ignores it, and the badge would promise what Play does not do.
+        self.assertFalse(self.win.has_auto_state(rom))
+        self.config.set_auto_resume(True)
+        self.assertTrue(self.win.has_auto_state(rom))
+        self.assertFalse(self.win.has_auto_state(self.rom(index=1)))
+        self.assertFalse(self.win.has_auto_state({"console": "SFC"}))
+
+    def test_a_game_that_ended_rebuilds_the_page_once_it_exists(self):
+        rom = self.rom()
+        self._played(rom)
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win.on_game_ended(rom)
+        reload.assert_not_called()
+        self.assertIsNotNone(self.win.sidebar.find_row(RECENT_ID))
+        self.win.pages.ensure_recent_loaded()
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win.on_game_ended(rom)
+        reload.assert_called_once()
+
+    def test_a_game_that_ended_re_reads_its_card(self):
+        grid = self.show_with_cards("SFC")
+        entry = grid.entries()[0]
+        card = grid.card_for(entry)
+        with mock.patch.object(card, "sync_play_state") as sync:
+            self.win.on_game_ended(entry.rom)
+        sync.assert_called_once()
+        self.assertFalse(grid.refresh_rom_play_state({"path": "/nowhere.sfc"}))
+
+    def test_the_refresh_button_on_the_page_only_reloads_it(self):
+        self.win.current_console = RECENT_ID
+        with mock.patch.object(
+            self.win.sidebar, "selected_id", return_value=RECENT_ID
+        ), mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._on_refresh_clicked(None)
+        reload.assert_called_once()
+
+    def test_a_library_change_reloads_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._reload_current_page()
+        reload.assert_called_once()
+
+    def test_a_finished_cover_sync_reloads_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        summary = {"downloaded": 1, "skipped": 0, "errors": 0}
+        with mock.patch.object(self.win.pages, "ensure_recent_loaded") as reload:
+            self.win._on_cover_sync_done_ui("task", summary)
+        reload.assert_called_once()
+
+    def test_a_cover_revealed_mid_sync_reaches_the_page_on_screen(self):
+        self.win.current_console = RECENT_ID
+        self.win._reveal_pending = [self.rom()]
+        with mock.patch.object(self.win, "refresh_rom_artwork") as refresh:
+            self.win._flush_cover_reveal()
+        refresh.assert_called_once()
+
+    def test_deleting_a_game_re_syncs_the_row(self):
+        rom = self.rom()
+        self._played(rom)
+        self.win.sidebar.sync_recent_row()
+        with mock.patch.object(window_module, "delete_rom"):
+            self.win._delete_roms([rom])
+        self.assertIsNone(self.win.sidebar.find_row(RECENT_ID))
 
 
 if __name__ == "__main__":

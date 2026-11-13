@@ -70,7 +70,9 @@ class RuntimeManager:
         self._launch_request = None
         self._fuse_retry_done = False
 
-    def launch(self, rom_path, console, state_slot=None, force_extract=False):
+    def launch(
+        self, rom_path, console, state_slot=None, force_extract=False, resume=True,
+    ):
         """Start a game. ``force_extract`` is the FUSE retry, not a user option.
 
         See :meth:`_retry_unpacked`: when the AppImage runtime cannot mount
@@ -93,7 +95,7 @@ class RuntimeManager:
             port = None if uses_stdin_channel() else self._resolve_network_cmd_port()
             proc, error_msg = self.retroarch_launcher.launch_process(
                 rom_path, system_id, state_slot=state_slot, network_cmd_port=port,
-                force_extract=force_extract,
+                force_extract=force_extract, resume=resume,
             )
             if not proc:
                 return False, error_msg

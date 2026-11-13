@@ -1965,6 +1965,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         self._start_fullscreen_row.connect("notify::active", self._on_start_fullscreen_changed)
         launch_mode.add(self._start_fullscreen_row)
+        # RetroArch's automatic save state, on exit and on the next launch
+        # (issue 910). Off by default: it changes what Play does.
+        self._auto_resume_row = Adw.SwitchRow(
+            title=self.t("settings.launch_mode.resume.title"),
+            subtitle=self.t("settings.launch_mode.resume.subtitle"),
+        )
+        self._auto_resume_row.set_active(self.config.get_auto_resume())
+        self._auto_resume_row.connect("notify::active", self._on_auto_resume_changed)
+        launch_mode.add(self._auto_resume_row)
         page.add(launch_mode)
 
         # The in-game bar RetroArch draws (issue #469). Read at each launch, so
@@ -2727,6 +2736,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_start_fullscreen_changed(self, row, *_a):
         self.config.set_start_games_fullscreen(row.get_active())
+
+    def _on_auto_resume_changed(self, row, *_a):
+        self.config.set_auto_resume(row.get_active())
+        # The resume badges follow the setting, so the page on screen
+        # re-reads its cards (issue 910).
+        self.win._reload_current_page()
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())

@@ -719,6 +719,7 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favorites</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Recently played</a></summary></details></li>
         <li><details open><summary><a href="#cores">Cores and shaders</a></summary>
             <ul>
               <li><a href="#cores-game">For one game</a></li>
@@ -788,6 +789,8 @@
           <p>The sidebar lists the pages of your library, top to bottom:</p>
           <ul>
             <li><span class="ui">All</span>: every game, grouped by console.</li>
+            <li><span class="ui">Recently played</span>: the last games you launched, the latest first. The row
+              appears after the first launch. See <a href="#recent">Recently played</a>.</li>
             <li><span class="ui">Favorites</span>: the games you starred. The row only appears once something is
               starred. See <a href="#favorites">Favorites</a>.</li>
             <li>Your playlists, if you made any. Here, <span class="ui">Couch co-op</span>. See
@@ -1240,6 +1243,21 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <p>The <span class="ui">Favorites</span> page gathers them, grouped by console. Its row shows up in the
             sidebar once you have starred a game, and OpenEmux opens on it when there is nothing else to come back
             to.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Library</span>
+          <h2>Recently played</h2>
+          <p>Every launch is remembered. Once you have played something, a <span class="ui">Recently played</span>
+            row appears under <span class="ui">All</span>, and OpenEmux opens on it: the last twenty games, the
+            latest first, each card saying when you played it and for how long.</p>
+          <p>The time counts from when the game starts to when it closes, and adds up across sessions. It is the
+            same clock behind the <span class="ui">Recently played</span> sort order on every other page.</p>
+          <p>To pick a game up where you left it, turn on <span class="ui">Resume where I left off</span> under
+            <span class="ui">Settings › Video</span>. RetroArch then saves the game when you quit and loads that save
+            on the next launch; a card with such a save carries a small play badge in its corner, and
+            <span class="ui">Start fresh</span> in its menu skips the save once.</p>
         </section>
 
         <!-- ============================================================ -->

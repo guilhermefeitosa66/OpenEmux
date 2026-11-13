@@ -719,6 +719,7 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">お気に入り</a></summary></details></li>
+        <li><details open><summary><a href="#recent">最近プレイ</a></summary></details></li>
         <li><details open><summary><a href="#cores">コアとシェーダー</a></summary>
             <ul>
               <li><a href="#cores-game">1つのゲームに対して</a></li>
@@ -783,6 +784,8 @@
           <p>サイドバーには、ライブラリのページが上から順に並んでいます。</p>
           <ul>
             <li><span class="ui">すべて</span>：すべてのゲームを、コンソールごとにまとめて表示します。</li>
+            <li><span class="ui">最近プレイ</span>：最後に起動したゲームが新しい順に並びます。この行は最初の起動後に現れます。
+              <a href="#recent">最近プレイ</a>を参照。</li>
             <li><span class="ui">お気に入り</span>：星を付けたゲームです。この行は、何かに星を付けたときにだけ表示されます。<a href="#favorites">お気に入り</a>を参照してください。</li>
             <li>作成したプレイリスト（ある場合）。ここでは <span class="ui">Couch co-op</span> です。<a href="#playlists">プレイリスト</a>を参照してください。</li>
             <li>ゲームがあるコンソールごとに1行ずつ、<span class="ui">SFC - Super Nintendo</span> のように短い ID と名前で表示されます。</li>
@@ -1125,6 +1128,21 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </div>
           <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="コンソールごとにグループ化された「お気に入り」ページ。その行を枠で囲んでいる" /></figure>
           <p><span class="ui">お気に入り</span>ページには、星を付けたゲームがコンソールごとにまとめて表示されます。この行はゲームに星を付けるとサイドバーに現れ、ほかに戻る場所がないときは OpenEmux がこのページで開きます。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">ライブラリ</span>
+          <h2>最近プレイ</h2>
+          <p>起動はすべて記録されます。何かをプレイすると、<span class="ui">最近プレイ</span>の行が
+            <span class="ui">すべて</span>の下に現れ、OpenEmux はそのページで開くようになります。最新の 20
+            本が新しい順に並び、各カードにいつ、どれだけプレイしたかが表示されます。</p>
+          <p>時間はゲームの起動から終了までを数え、セッションをまたいで積み上がります。他のページの
+            <span class="ui">最近プレイ</span>の並び順も同じ時計を使っています。</p>
+          <p>前回の続きから遊ぶには、<span class="ui">前回の続きから再開</span>を
+            <span class="ui">設定 › ビデオ</span>でオンにします。RetroArch は終了時にゲームを保存し、次回の起動時にその
+            セーブを読み込みます。そのセーブがあるカードには角に小さな再生バッジが付き、カードのメニューの
+            <span class="ui">最初から始める</span>で一度だけスキップできます。</p>
         </section>
 
         <!-- ============================================================ -->

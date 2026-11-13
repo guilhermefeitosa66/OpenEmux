@@ -431,6 +431,17 @@ button.controller-target.current.lit {
     background-color: alpha(black, 0.75);
 }
 
+/* A game with an automatic save state: Play resumes it (issue 910). Bottom
+   left of the cover, the one corner nothing else uses. */
+.resume-badge {
+    color: white;
+    background-color: alpha(@accent_bg_color, 0.9);
+    border-radius: 999px;
+    padding: 4px;
+    min-width: 16px;
+    min-height: 16px;
+}
+
 .sidebar-menu-button {
     padding: 2px;
     min-width: 24px;

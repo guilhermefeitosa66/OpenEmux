@@ -129,6 +129,8 @@ class RomGrid(Gtk.GridView):
         frame_color_for_rom=None,
         band_host=None,
         dormant=False,
+        play_caption=None,
+        has_auto_state=None,
     ):
         # Before anything else: the GObject has to exist before this widget
         # can be configured. The model and the factory are attached at the
@@ -259,6 +261,11 @@ class RomGrid(Gtk.GridView):
             # four times the pixels the card draws (issue 902).
             render_scale=cartridge_render_scale(self),
             shadow_pad=self._shadow_pad,
+            # "2 h ago, 1 h 20 min played" under the title on the Recently
+            # played page, and the resume badge on a game with an automatic
+            # state (issue 910).
+            play_caption=play_caption,
+            has_auto_state=has_auto_state,
             frame_for_rom=self._frame_path_for_rom,
             context_services=context_services,
             on_launch=self._launch_rom,
@@ -659,6 +666,20 @@ class RomGrid(Gtk.GridView):
         card = self._bound.get(entry)
         if card is not None:
             card.set_cartridge_frame(self._frame_path_for_rom(entry.rom))
+        return True
+
+    def refresh_rom_play_state(self, rom):
+        """Re-read one card's play caption and resume badge (issue 910).
+
+        After a game ends: the automatic state it may have left and the time
+        it added are what the card shows. Off screen, the next bind reads them.
+        """
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card.sync_play_state()
         return True
 
     def refresh_rom_artwork(self, rom, fade=False):

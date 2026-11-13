@@ -83,14 +83,19 @@ class GameSession:
         """
         return self.win.t(message)
 
-    def launch(self, rom):
+    def launch(self, rom, resume=True):
+        """Start ``rom``; ``resume=False`` is "Start fresh" (issue 910).
+
+        With "Resume where I left off" on, a launch picks up the automatic
+        state RetroArch saved on the last exit; "Start fresh" skips it once.
+        """
         # Whatever the user just changed reaches the disk before the game
         # does: a session that ends with the app is the one that would lose
         # the last half second of settings (issue 905).
         self.win.config_manager.flush()
         try:
             success, error_msg = self.win.runtime_manager.launch(
-                rom["path"], rom["console"]
+                rom["path"], rom["console"], resume=resume
             )
         except Exception as exc:
             # A click handler is where an exception goes to die quietly:
@@ -271,6 +276,10 @@ class GameSession:
             rom = result.get("rom") or {}
             rom_name = rom.get("path", "Game").split("/")[-1]
             reason = result.get("failure_reason")
+            if rom.get("path") and not reason:
+                # The session's length goes on the game's play time (issue
+                # 910); a launch that died never ran, so it adds nothing.
+                self.win.play_history.record_play_time(rom["path"], result.get("ran_for"))
             if reason:
                 # It never started. Say so, and say what the log said -- the
                 # exit code alone reads exactly like a clean quit (#226).
@@ -282,6 +291,8 @@ class GameSession:
                 )
                 timeout = 4
             self._toast_now(title, timeout)
+            if rom.get("path"):
+                self.win.on_game_ended(rom)
         return True
 
     def _toast_now(self, title, timeout):

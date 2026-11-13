@@ -1140,6 +1140,16 @@ class ConfigManager:
         self.set_bezel_for_console(console, bezels.CUSTOM)
         return None
 
+    def get_auto_resume(self):
+        """Whether a launch loads the game's automatic save state (issue 910)."""
+        return bool(self.config.get("runtime", {}).get("retroarch", {}).get("auto_resume", False))
+
+    def set_auto_resume(self, enabled):
+        retroarch = self.config.setdefault("runtime", {}).setdefault("retroarch", {})
+        retroarch["auto_resume"] = bool(enabled)
+        self.save_config()
+        return retroarch["auto_resume"]
+
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_log_panel"] = bool(enabled)

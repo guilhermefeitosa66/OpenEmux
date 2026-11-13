@@ -11,6 +11,7 @@ selected.
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.ui.context_menu import SEPARATOR, Submenu
@@ -109,10 +110,15 @@ class _Window:
         self.current_console = kwargs.get("current_console", "SFC")
         self.current_view_mode = kwargs.get("view_mode", "cover")
         self.selected = kwargs.get("selected", [])
+        self.auto_state = kwargs.get("auto_state", False)
         self.calls = []
 
     def t(self, key, **params):
         return key if not params else f"{key}({','.join(sorted(params))})"
+
+    def has_auto_state(self, rom):
+        # Whether Play would resume this game (issue 910): a read, not an action.
+        return self.auto_state
 
     def _target_roms_for(self, rom):
         return list(self.selected) if rom in self.selected and len(self.selected) > 1 else [rom]
@@ -411,6 +417,24 @@ class LoadStateSubmenuTests(unittest.TestCase):
             self.assertIsNotNone(slot3[1])
             slot3[1]()
             self.assertEqual(window.calls, [("launch_rom_at_state", (ROM, 3), {})])
+
+
+class StartFreshTests(unittest.TestCase):
+    """Issue 910: a launch that skips the automatic save state, once."""
+
+    def test_it_is_offered_only_over_an_automatic_state(self):
+        entries = RomContextMenuServices(_Window(view_mode="cover")).build_submenus(ROM)
+        self.assertNotIn("context.start_fresh", [e[0] for e in entries if isinstance(e, tuple)])
+
+    def test_it_sits_right_after_load_state_and_launches_without_the_state(self):
+        window = _Window(view_mode="cover", auto_state=True)
+        window.game = mock.Mock()
+        entries = RomContextMenuServices(window).build_submenus(ROM)
+        self.assertEqual(entries[0].label, "context.load_state")
+        label, callback, icon = entries[1]
+        self.assertEqual((label, icon), ("context.start_fresh", "view-refresh-symbolic"))
+        callback()
+        window.game.launch.assert_called_once_with(ROM, resume=False)
 
 
 class _Card:

@@ -2052,6 +2052,16 @@ class TheSystemPageTests(_PreferencesCase):
         prefs = prefs_module.OpenEmuxPreferences(self.win)
         self.assertTrue(prefs._translucent_bar_row.get_active())
 
+    def test_the_resume_switch_is_stored_and_the_page_re_read(self):
+        # Issue 910: off by default; the resume badges follow the setting, so
+        # the page on screen is re-read when it flips.
+        self.assertFalse(self.prefs._auto_resume_row.get_active())
+        self.prefs._auto_resume_row.set_active(True)
+        self.assertTrue(self.config.get_auto_resume())
+        self.assertTrue(self.called("_reload_current_page"))
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertTrue(prefs._auto_resume_row.get_active())
+
     def test_the_start_fullscreen_switch_is_stored(self):
         # Issue #505: windowed by default, read again at the next launch.
         self.assertFalse(self.prefs._start_fullscreen_row.get_active())

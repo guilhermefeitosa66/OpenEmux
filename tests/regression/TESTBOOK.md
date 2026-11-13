@@ -17065,3 +17065,39 @@ has no Android device, so these are `MANUAL`.
   `tests/test_library_pages.py` (`TheBiosBannerTests`), `tests/test_preferences.py`
   (`test_the_bios_page_can_open_on_a_console`, `test_an_import_re_checks_the_window_warnings`).
 
+### RT-1039 — Recently played: the row, the play time under each card, and resuming from the automatic save state
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with games on two consoles; nothing launched yet (a fresh
+  `~/.openemux/play_history.json`); "Resume where I left off" off (the default).
+- **Steps:**
+  1. Start the app and read the sidebar.
+  2. Launch a game on one console, quit it after two minutes; launch a game on the other console,
+     quit it. Read the sidebar and the window title.
+  3. Open "Recently played" and read the cards; press F5 on the page.
+  4. In Preferences › Video, turn on "Resume where I left off". Launch a game, play a little,
+     quit it. Look at its card; right-click it.
+  5. Pick "Start fresh" on that card; then quit and launch it again with a plain click.
+  6. Delete the only game ever played, and leave the page.
+- **Expected:** 1: no "Recently played" row (issue 910). 2: the row appears right under "All",
+  above "Favorites"; the app opens on that page at the next start; the title reads "Recently
+  played". 3: one group, the last game first, every card captioned with when and for how long
+  ("2 h ago · 1 h 20 min played"; only the time when under a minute was played; a date past a
+  week); F5 only re-reads the page, no rescan. 4: the card shows a small play badge at the
+  bottom-left corner with the tooltip "Play picks up where you left off"; the menu offers "Start
+  fresh" right after "Load state", and the runtime override carries `savestate_auto_save = "true"`
+  and `savestate_auto_load = "true"`. 5: "Start fresh" writes `savestate_auto_load = "false"` for
+  that one launch; the plain launch resumes. With the setting off, no badge and no "Start fresh",
+  whatever is on disk. 6: the row goes with the next navigation away, like Favorites.
+- **Check:** suite files `tests/test_play_history.py` (`ThePlayTimeTests`,
+  `FormattingPlayTimeTests`), `tests/test_library_landing.py` (`TheRecentlyPlayedRowTests`),
+  `tests/test_save_states.py` (`TheAutomaticStateTests`), `tests/test_retroarch_launcher.py`
+  (`test_resume_saves_the_state_on_exit_and_loads_it_on_launch`,
+  `test_start_fresh_still_saves_on_exit_but_does_not_load`),
+  `tests/test_console_sidebar.py` (`TheRecentlyPlayedRowTests`), `tests/test_library_pages.py`
+  (`test_the_recent_page_lists_the_last_game_first_in_one_group`), `tests/test_window.py`
+  (`TheRecentlyPlayedPageTests`), `tests/test_game_session.py`
+  (`test_a_finished_game_adds_its_time_and_tells_the_window`,
+  `test_a_launch_resumes_unless_told_to_start_fresh`), `tests/test_rom_context.py`
+  (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
+  `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).

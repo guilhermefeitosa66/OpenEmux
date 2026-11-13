@@ -46,8 +46,9 @@ class _Runtime:
         self.load_state_calls = 0
         self.relaunched = []
 
-    def launch(self, path, console, state_slot=None):
+    def launch(self, path, console, state_slot=None, resume=True):
         self.launched.append((path, console, state_slot))
+        self.resumed = resume
         return self.launch_result
 
     def is_running(self):
@@ -134,6 +135,14 @@ class LaunchingTests(_SessionCase):
             ),
             self.toasts,
         )
+
+    def test_a_launch_resumes_unless_told_to_start_fresh(self):
+        # Issue 910: "Start fresh" is the one launch that skips the auto state.
+        rom = self.rom()
+        self.session.launch(rom)
+        self.assertTrue(self.runtime.resumed)
+        self.session.launch(rom, resume=False)
+        self.assertFalse(self.runtime.resumed)
 
     def test_a_launch_flushes_a_setting_still_waiting_for_its_write(self):
         # Issue 905: a session that ends with the app would lose the last
@@ -333,6 +342,25 @@ class NoticingTheGameEndedTests(_SessionCase):
             self.said("toast.finished", name="Chrono Trigger.sfc", code=0),
             self.toasts,
         )
+
+    def test_a_finished_game_adds_its_time_and_tells_the_window(self):
+        # Issue 910: the session's length goes on the play time, and the
+        # library re-reads what it shows about the game.
+        rom = self.rom()
+        self.runtime.poll_result = {"rom": rom, "exit_code": 0, "ran_for": 125.0}
+        with mock.patch.object(self.win, "on_game_ended") as ended:
+            self.session.poll()
+        self.assertEqual(self.win.play_history.play_seconds(rom["path"]), 125.0)
+        ended.assert_called_once_with(rom)
+
+    def test_a_game_that_never_started_adds_no_time(self):
+        rom = self.rom()
+        self.runtime.poll_result = {
+            "rom": rom, "exit_code": 1, "failure_reason": "core not found", "ran_for": 0.5
+        }
+        with mock.patch.object(self.win, "on_game_ended"):
+            self.session.poll()
+        self.assertEqual(self.win.play_history.play_seconds(rom["path"]), 0.0)
 
     def test_a_game_that_never_started_says_what_the_log_said(self):
         # Issue #226: the exit code alone reads exactly like a clean quit.

@@ -22,6 +22,7 @@ if HAVE_DISPLAY:
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
         FAVORITES_ID,
+        RECENT_ID,
         collection_scope,
     )
 
@@ -264,6 +265,30 @@ class LoadingAPageTests(WindowCase):
             self.pages.ensure_loaded(FAVORITES_ID)
         load.assert_called_once()
 
+    def test_the_recent_page_is_reached_through_it_too(self):
+        with mock.patch.object(self.pages, "ensure_recent_loaded") as load:
+            self.pages.ensure_loaded(RECENT_ID)
+        load.assert_called_once()
+
+    def test_a_recent_page_that_does_not_exist_loads_nothing(self):
+        self.pages.forget(RECENT_ID)
+        with mock.patch.object(self.pages, "render") as render:
+            self.pages.ensure_recent_loaded()
+        render.assert_not_called()
+
+    def test_the_recent_page_lists_the_last_game_first_in_one_group(self):
+        # Issue 910: one group in play order, however many consoles are in it.
+        first, second = self.rom("SFC", 0), self.rom("FC", 0)
+        self.win.play_history.record_launch(first["path"])
+        self.win.play_history.record_launch(second["path"])
+        self.pages.ensure_recent_loaded()
+        self.assertTrue(self.pages.is_loaded(RECENT_ID))
+        group = self.pages.grid_for(RECENT_ID)
+        self.assertEqual(group.consoles(), [RECENT_ID])
+        self.assertEqual(
+            [entry.rom["path"] for entry in group.entries()], [second["path"], first["path"]]
+        )
+
     def test_a_collection_page_is_reached_by_its_scope(self):
         slug = self.win.collection_manager.create("RPGs")
         with mock.patch.object(self.pages, "ensure_collection_loaded") as load:
@@ -409,6 +434,9 @@ class TheEmptyStatesTests(WindowCase):
     def test_an_empty_favorites_page_says_how_to_star_a_game(self):
         self.assertEqual(self._title_of(FAVORITES_ID), self.said("favorites.empty.title"))
 
+    def test_an_empty_recent_page_says_nothing_was_played(self):
+        self.assertEqual(self._title_of(RECENT_ID), self.said("recent.empty.title"))
+
     def test_an_empty_all_page_says_the_library_is_indexed(self):
         self.assertEqual(self._title_of(ALL_CONSOLES_ID), self.said("console.empty.title"))
 
@@ -429,6 +457,7 @@ class TheGroupHeadingsTests(WindowCase):
         self.assertEqual(self.win.pages._group_title("SFC"), get_system_display_name("SFC"))
 
     def test_a_group_with_no_console_at_all_is_headed_with_a_question_mark(self):
-        from openemux.ui.library_pages import LibraryPages
+        self.assertEqual(self.win.pages._group_title(""), "?")
 
-        self.assertEqual(LibraryPages._group_title(""), "?")
+    def test_the_recent_group_is_headed_after_its_row(self):
+        self.assertEqual(self.win.pages._group_title(RECENT_ID), self.said("sidebar.recent"))

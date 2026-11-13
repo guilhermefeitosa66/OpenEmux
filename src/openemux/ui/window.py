@@ -1,6 +1,8 @@
 import os
 import subprocess
 import logging
+import time
+from datetime import datetime
 from threading import Event, Thread
 from pathlib import Path
 
@@ -30,7 +32,8 @@ from openemux.core.library_view import (
     zoom_step,
 )
 from openemux.core.platform import IS_WINDOWS
-from openemux.core.play_history import PlayHistory
+from openemux.core import save_states
+from openemux.core.play_history import PlayHistory, format_play_time
 from openemux.core import artwork_sources, cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.screenscraper import PROBLEM_QUOTA, PROBLEM_REFUSED, PROBLEM_UNREACHABLE
@@ -85,6 +88,7 @@ from openemux.ui.scopes import (  # noqa: F401
     COLLECTION_ID_PREFIX,
     FAVORITES_ID,
     LIBRARY_EMPTY_ID,
+    RECENT_ID,
     collection_scope,
     collection_slug,
     is_collection_scope,
@@ -256,7 +260,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # by now -- a console with no ROMs any more, a deleted collection, the
         # favorites emptied -- is landing_view()'s problem, and it falls back
         # to Favorites or All by the same rule a rescan uses.
-        self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
+        self.refresh_library(preferred_view=self._startup_view())
         self._start_startup_scan()
         self._warm_core_catalog()
         self._maybe_show_bootstrap_warning()
@@ -1739,6 +1743,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             title = self.t("sidebar.all")
         elif console_id == FAVORITES_ID:
             title = self.t("sidebar.favorites")
+        elif console_id == RECENT_ID:
+            title = self.t("sidebar.recent")
         elif is_collection_scope(console_id):
             title = self.sidebar.label_for(console_id)
         elif console_id:
@@ -2011,6 +2017,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
 
+    def _startup_view(self):
+        """Where the window opens: on the last games played, once there are any.
+
+        "Recently played" is the continue surface (issue 910), so a returning
+        player is in the last game with Right and Enter. With nothing played
+        yet the stored view stands, as issue #383 had it.
+        """
+        if self.play_history.has_history():
+            return RECENT_ID
+        return self.config_manager.session.get_last_view()
+
     def refresh_library(self, preferred_view=None, force=False):
         """Rediscover the library and rebuild whatever the change affects.
 
@@ -2037,6 +2054,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # The pages are still the right pages; their contents may not be.
             self.pages.invalidate_contents()
             self.sidebar.sync_footer()
+            self.sidebar.sync_recent_row()
             self.sidebar.sync_favorites_row()
             target = preferred_view or previous_visible or self.current_console
             if self.pages.has(target):
@@ -2059,6 +2077,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if self.visible_consoles:
             self.pages.add(ALL_CONSOLES_ID, self.t("sidebar.all"))
 
+        # The page exists whether or not its row does, like Favorites: the
+        # row comes with the first launch (issue 910).
+        self.pages.add(RECENT_ID, self.t("sidebar.recent"))
         self.pages.add(FAVORITES_ID, self.t("sidebar.favorites"))
 
         for collection in self.collection_manager.list_collections():
@@ -2106,6 +2127,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             target_view,
             [c["slug"] for c in self.collection_manager.list_collections()],
             has_favorites=self.playlist_manager.has_favorites(),
+            has_recent=self.play_history.has_history(),
         )
         if desired != LIBRARY_EMPTY_ID:
             if not self.sidebar.select(desired):
@@ -2193,6 +2215,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif is_collection_scope(self.current_console):
             self.pages.ensure_collection_loaded(collection_slug(self.current_console))
         else:
@@ -2211,6 +2235,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _sync_favorites_row_idle(self):
         self.sidebar.sync_favorites_row()
+        # The same rule keeps an emptied "Recently played" row until the
+        # user leaves it (issue 910).
+        self.sidebar.sync_recent_row()
         return GLib.SOURCE_REMOVE
 
     def _remember_view_soon(self):
@@ -2550,6 +2577,72 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self.pages.grids():
             grid.refresh_rom_artwork(rom, fade=fade)
 
+    # -- play history and resume (issue 910) --------------------------------
+
+    def play_caption(self, rom):
+        """``"2 h ago · 1 h 20 min played"``: a card's line on the Recently played page.
+
+        ``None`` for a game never launched, so the card falls back to the
+        console's name.
+        """
+        path = rom.get("path")
+        stamp = self.play_history.last_played(path) if path else 0.0
+        if not stamp:
+            return None
+        ago = self._played_ago(stamp)
+        hours, minutes = format_play_time(self.play_history.play_seconds(path))
+        if hours:
+            played = self.t("play.time.hours", hours=hours, minutes=minutes)
+        elif minutes:
+            played = self.t("play.time.minutes", minutes=minutes)
+        else:
+            return ago
+        return self.t("play.caption", ago=ago, played=played)
+
+    def _played_ago(self, stamp, now=None):
+        """How long ago ``stamp`` was, in the coarsest unit that still says something."""
+        elapsed = max(0.0, (now if now is not None else time.time()) - stamp)
+        if elapsed < 60:
+            return self.t("play.ago.now")
+        if elapsed < 3600:
+            return self.t("play.ago.minutes", minutes=int(elapsed // 60))
+        if elapsed < 86400:
+            return self.t("play.ago.hours", hours=int(elapsed // 3600))
+        if elapsed < 7 * 86400:
+            return self.t("play.ago.days", days=int(elapsed // 86400))
+        return datetime.fromtimestamp(stamp).strftime("%d/%m/%Y")
+
+    def has_auto_state(self, rom):
+        """Whether Play would resume ``rom`` from RetroArch's automatic state.
+
+        Only with "Resume where I left off" on: the file may sit there from an
+        earlier session, but with the setting off the launch ignores it, and
+        a badge promising otherwise would lie.
+        """
+        if not self.config_manager.get_auto_resume():
+            return False
+        console = rom.get("console")
+        path = rom.get("path")
+        if not console or not path:
+            return False
+        return save_states.has_auto_state(
+            self.config_manager.get_console_states_dir(console), path
+        )
+
+    def on_game_ended(self, rom):
+        """Bring the library up to date with a game that just ended.
+
+        The play time and the last-played order changed, and so may the
+        automatic state the resume badge reports: the Recently played page
+        is rebuilt when it has been built at all, and the game's card on
+        every other page re-reads its play state.
+        """
+        self.sidebar.sync_recent_row()
+        if self.pages.grid_for(RECENT_ID) is not None or self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
+        for grid in self.pages.grids():
+            grid.refresh_rom_play_state(rom)
+
     def launch_rom_at_state(self, rom, slot):
         """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""
         self.game.launch_at_state(rom, slot)
@@ -2716,6 +2809,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 continue
             self.playlist_manager.forget_rom(rom["console"], rom["path"])
             self.play_history.forget(rom["path"])
+            self.sidebar.sync_recent_row()
             self.config_manager.forget_rom_shader(rom["path"])
             self.config_manager.forget_rom_core(rom["path"])
             self.config_manager.forget_rom_cartridge_color(rom["path"])
@@ -2747,6 +2841,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_all_loaded()
         elif console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif is_collection_scope(console):
             self.pages.ensure_collection_loaded(collection_slug(console))
         else:
@@ -3185,7 +3281,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # Only the scope on screen updates mid-run: targeted card
             # refreshes, never a full grid reload. Everything else waits for
             # the end-of-run reload, which stays as the consistency backstop.
-            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID) or (
+            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID) or (
                 self.current_console == rom["console"]
             ):
                 self.refresh_rom_artwork(rom, fade=True)
@@ -3216,6 +3312,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif self.pages.grid_for(self.current_console) is not None:
             self.pages.ensure_loaded(self.current_console)
         if on_finished:
@@ -3253,6 +3351,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         if selected_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+            return
+        if selected_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
             return
         if selected_console in SYSTEM_IDS:
             self._rescan_single_console(selected_console, show_toast=False)

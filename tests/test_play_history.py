@@ -4,7 +4,7 @@ from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from openemux.core.play_history import PlayHistory
+from openemux.core.play_history import PlayHistory, format_play_time
 
 
 class FakeClock:
@@ -111,6 +111,76 @@ class WhenTheHistoryFileCannotBeUsedTests(unittest.TestCase):
             history = PlayHistory(Path(tmp_dir) / "play_history.json")
             history.repath("/roms/SFC/Never Played.sfc", "/roms/SFC/Renamed.sfc")
             self.assertFalse(history.has_history())
+
+
+class ThePlayTimeTests(unittest.TestCase):
+    """How long a game was played, and which were played last (issue 910)."""
+
+    def _history(self, tmp_dir):
+        return PlayHistory(history_file=Path(tmp_dir) / "play_history.json", clock=FakeClock())
+
+    def test_a_game_never_timed_has_no_play_time(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertEqual(self._history(tmp_dir).play_seconds("/roms/x.sfc"), 0.0)
+
+    def test_sessions_add_up_and_survive_a_restart(self):
+        with TemporaryDirectory() as tmp_dir:
+            history = self._history(tmp_dir)
+            history.record_launch("/roms/x.sfc")
+            self.assertEqual(history.record_play_time("/roms/x.sfc", 90), 90.0)
+            self.assertEqual(history.record_play_time("/roms/x.sfc", 30.5), 120.5)
+            self.assertEqual(self._history(tmp_dir).play_seconds("/roms/x.sfc"), 120.5)
+
+    def test_a_session_that_died_at_once_adds_nothing(self):
+        with TemporaryDirectory() as tmp_dir:
+            history = self._history(tmp_dir)
+            history.record_launch("/roms/x.sfc")
+            self.assertEqual(history.record_play_time("/roms/x.sfc", 0.4), 0.0)
+            self.assertEqual(history.record_play_time("/roms/x.sfc", None), 0.0)
+            self.assertEqual(history.record_play_time("/roms/x.sfc", -5), 0.0)
+            self.assertEqual(self._history(tmp_dir).play_seconds("/roms/x.sfc"), 0.0)
+
+    def test_an_old_history_file_reads_as_never_timed(self):
+        with TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "play_history.json"
+            path.write_text(
+                json.dumps({"/roms/x.sfc": {"last_played": 5.0, "play_count": 1}}),
+                encoding="utf-8",
+            )
+            history = PlayHistory(history_file=path)
+            self.assertEqual(history.play_seconds("/roms/x.sfc"), 0.0)
+            # ...and gets its first session like any other game.
+            self.assertEqual(history.record_play_time("/roms/x.sfc", 60), 60.0)
+
+    def test_the_recent_games_come_last_played_first(self):
+        with TemporaryDirectory() as tmp_dir:
+            history = self._history(tmp_dir)
+            history.record_launch("/roms/a.sfc")
+            history.record_launch("/roms/b.sfc")
+            history.record_launch("/roms/c.sfc")
+            history.record_launch("/roms/a.sfc")
+            self.assertEqual(history.recent(), ["/roms/a.sfc", "/roms/c.sfc", "/roms/b.sfc"])
+            self.assertEqual(history.recent(limit=2), ["/roms/a.sfc", "/roms/c.sfc"])
+
+    def test_a_game_only_timed_but_never_launched_is_not_recent(self):
+        # A play time recorded for a game with no launch stamp (a hand-edited
+        # file) has no place in the order.
+        with TemporaryDirectory() as tmp_dir:
+            history = self._history(tmp_dir)
+            history.record_play_time("/roms/x.sfc", 60)
+            self.assertEqual(history.recent(), [])
+            self.assertTrue(history.has_history())
+
+
+class FormattingPlayTimeTests(unittest.TestCase):
+    def test_hours_and_minutes_are_split_for_the_caller_to_word(self):
+        self.assertEqual(format_play_time(80 * 60), (1, 20))
+        self.assertEqual(format_play_time(12 * 60 + 59), (0, 12))
+
+    def test_under_a_minute_is_nothing_yet(self):
+        self.assertEqual(format_play_time(59), (0, 0))
+        self.assertEqual(format_play_time(None), (0, 0))
+        self.assertEqual(format_play_time(-10), (0, 0))
 
 
 if __name__ == "__main__":

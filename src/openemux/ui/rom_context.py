@@ -113,6 +113,9 @@ class RomContextMenuServices:
         load_state = self._load_state_submenu(rom)
         if load_state is not None:
             entries.append(load_state)
+        start_fresh = self._start_fresh_entry(rom)
+        if start_fresh is not None:
+            entries.append(start_fresh)
         core = self._core_submenu(rom)
         if core is not None:
             entries.append(core)
@@ -305,6 +308,20 @@ class RomContextMenuServices:
                 (label, (lambda r=rom, s=slot: self.win.launch_rom_at_state(r, s)), None)
             )
         return Submenu(t("context.load_state"), entries, "media-floppy-symbolic")
+
+    def _start_fresh_entry(self, rom):
+        """Launch without the automatic state, when there is one to skip (issue 910).
+
+        Play resumes it; this is the one-off way around, so it only shows
+        on a game whose card carries the resume badge.
+        """
+        if not self.win.has_auto_state(rom):
+            return None
+        return (
+            self.win.t("context.start_fresh"),
+            (lambda r=rom: self.win.game.launch(r, resume=False)),
+            "view-refresh-symbolic",
+        )
 
     def _shader_submenu(self, rom):
         console = rom.get("console")

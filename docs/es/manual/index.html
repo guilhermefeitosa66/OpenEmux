@@ -719,6 +719,7 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favoritos</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Jugados recientemente</a></summary></details></li>
         <li><details open><summary><a href="#cores">Núcleos y shaders</a></summary>
             <ul>
               <li><a href="#cores-game">Para un juego</a></li>
@@ -788,6 +789,8 @@
           <p>La barra lateral muestra las páginas de tu biblioteca, de arriba abajo:</p>
           <ul>
             <li><span class="ui">Todos</span>: todos los juegos, agrupados por consola.</li>
+            <li><span class="ui">Jugados recientemente</span>: los últimos juegos que abriste, el más reciente primero. La
+              fila aparece tras el primer juego. Ver <a href="#recent">Jugados recientemente</a>.</li>
             <li><span class="ui">Favoritos</span>: los juegos que marcaste con la estrella. La fila solo aparece cuando hay
               algo marcado. Consulta <a href="#favorites">Favoritos</a>.</li>
             <li>Tus playlists, si creaste alguna. Aquí, <span class="ui">Couch co-op</span>. Consulta
@@ -1240,6 +1243,22 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <p>La página <span class="ui">Favoritos</span> los reúne, agrupados por consola. Su fila aparece en la
             barra lateral en cuanto marcas un juego con la estrella, y OpenEmux se abre en ella cuando no hay otra página a la que
             volver.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Biblioteca</span>
+          <h2>Jugados recientemente</h2>
+          <p>Cada vez que abres un juego queda registrado. Tras el primero, una fila
+            <span class="ui">Jugados recientemente</span> aparece bajo <span class="ui">Todos</span>, y OpenEmux pasa a
+            abrirse en ella: los últimos veinte juegos, el más reciente primero, con cada tarjeta diciendo cuándo
+            jugaste y durante cuánto tiempo.</p>
+          <p>El tiempo cuenta desde que el juego arranca hasta que se cierra y se acumula entre sesiones. Es el mismo
+            reloj que hay detrás del orden <span class="ui">Jugados recientemente</span> de las demás páginas.</p>
+          <p>Para retomar un juego donde lo dejaste, activa <span class="ui">Continuar donde lo dejé</span> en
+            <span class="ui">Ajustes › Vídeo</span>. RetroArch guarda entonces la partida al salir y la carga en el
+            siguiente inicio; una tarjeta con una partida así lleva una pequeña insignia de play en la esquina, y
+            <span class="ui">Empezar de cero</span>, en su menú, omite la partida una vez.</p>
         </section>
 
         <!-- ============================================================ -->

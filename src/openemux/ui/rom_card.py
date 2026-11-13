@@ -184,6 +184,8 @@ class CardContext:
         context_services,
         render_scale=CARTRIDGE_RENDER_SCALE,
         shadow_pad=0,
+        play_caption=None,
+        has_auto_state=None,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -212,6 +214,11 @@ class CardContext:
         # The transparent margin the composite carries for its shadow (issue
         # 903): the picture slot includes it, the cartridge width does not.
         self.shadow_pad = max(0, int(shadow_pad))
+        # ``play_caption(rom)``: the line under the title on the Recently
+        # played page; ``has_auto_state(rom)``: whether the card shows the
+        # resume badge (issue 910). Both optional.
+        self.play_caption = play_caption
+        self.has_auto_state = has_auto_state
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -435,6 +442,19 @@ class RomItem(Gtk.Box):
         if not compact:
             self.cover_overlay.add_overlay(self.menu_button)
 
+        # A game with an automatic save state says Play will pick it up
+        # where it was left (issue 910). Bottom-left, where nothing else sits.
+        self.resume_badge = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+        self.resume_badge.add_css_class("resume-badge")
+        self.resume_badge.set_tooltip_text(self.t("card.resume.tooltip"))
+        self.resume_badge.set_visible(False)
+        self.resume_badge.set_halign(Gtk.Align.START)
+        self.resume_badge.set_valign(Gtk.Align.END)
+        if not compact:
+            self.resume_badge.set_margin_bottom(6)
+            self.resume_badge.set_margin_start(6)
+            self.cover_overlay.add_overlay(self.resume_badge)
+
         # List rows carry the inbox idiom: a checkbox at the start of the row,
         # always visible, reflecting and driving this ROM's selection
         # (issue #78). Clicking it must never launch the game.
@@ -473,7 +493,7 @@ class RomItem(Gtk.Box):
         text_box.append(self.name_label)
 
         self.console_label = None
-        if self.mixed_consoles or compact:
+        if self.mixed_consoles or compact or ctx.play_caption is not None:
             self.console_label = Gtk.Label()
             self.console_label.set_halign(label_align)
             self.console_label.set_xalign(0.0 if compact else 0.5)
@@ -532,8 +552,7 @@ class RomItem(Gtk.Box):
             full_name if self.compact else self._truncate_name(full_name, self._preview_limit)
         )
         self.name_label.set_tooltip_text(full_name)
-        if self.console_label is not None:
-            self.console_label.set_label(get_system_display_name(rom["console"]))
+        self.sync_play_state()
 
         self._sync_favorite_button(self.is_favorite(rom))
         self.artwork_badge.set_visible(entry.has_artwork is False)
@@ -1030,6 +1049,18 @@ class RomItem(Gtk.Box):
         # double-click does not try to start the game twice (issue #236).
         if self.on_launch_callback:
             self.on_launch_callback(rom)
+
+    def sync_play_state(self):
+        """The caption under the title and the resume badge, from the game's history (issue 910)."""
+        rom = self.rom
+        if rom is None:
+            return
+        if self.console_label is not None:
+            caption = self.ctx.play_caption(rom) if self.ctx.play_caption else None
+            self.console_label.set_label(caption or get_system_display_name(rom["console"]))
+        self.resume_badge.set_visible(
+            bool(self.ctx.has_auto_state and self.ctx.has_auto_state(rom))
+        )
 
     def supports_label(self):
         """Whether this ROM's console has a cartridge to put a sticker on.

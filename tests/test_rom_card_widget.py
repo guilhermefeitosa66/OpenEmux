@@ -35,6 +35,8 @@ if HAVE_DISPLAY:
     from openemux.ui import context_menu
     from openemux.ui import rom_card as rom_card_module
     from openemux.ui.rom_card import RomEntry, RomItem, entry_matches, item_for_widget
+    from openemux.ui.scopes import RECENT_ID
+    from openemux.core.systems import get_system_display_name
 
 
 class _CardCase(WindowCase):
@@ -56,6 +58,46 @@ class _CardCase(WindowCase):
         )
         pixbuf.fill(0x00FF00FF)
         return pixbuf
+
+
+@needs_display
+class ThePlayStateTests(_CardCase):
+    """Issue 910: the resume badge and the caption follow the game's history."""
+
+    def test_a_console_page_card_shows_no_badge(self):
+        self.assertFalse(self.card.resume_badge.get_visible())
+        # ...and, not being a mixed page, has no line under the title at all.
+        self.assertIsNone(self.card.console_label)
+
+    def test_the_badge_lights_when_play_would_resume(self):
+        self.card.ctx.has_auto_state = lambda rom: True
+        self.card.sync_play_state()
+        self.assertTrue(self.card.resume_badge.get_visible())
+        self.card.ctx.has_auto_state = lambda rom: False
+        self.card.sync_play_state()
+        self.assertFalse(self.card.resume_badge.get_visible())
+
+    def test_an_unbound_card_has_no_play_state_to_sync(self):
+        self.card.unbind()
+        self.card.sync_play_state()
+        self.assertFalse(self.card.resume_badge.get_visible())
+
+    def test_the_caption_replaces_the_console_name_on_the_recent_page(self):
+        rom = self.entry.rom
+        self.win.play_history.record_launch(rom["path"])
+        self.win.play_history.record_play_time(rom["path"], 600)
+        self.win.sidebar.sync_recent_row()
+        self.win.sidebar.select(RECENT_ID)
+        group = self.win.pages.grid_for(RECENT_ID)
+        grid = group.grids()[0]
+        entry = grid.entries()[0]
+        self.pump_until(lambda: grid.card_for(entry) is not None)
+        card = grid.card_for(entry)
+        self.assertEqual(card.console_label.get_label(), self.win.play_caption(rom))
+        # Off the history, the line falls back to the console's name.
+        self.win.play_history.forget(rom["path"])
+        card.sync_play_state()
+        self.assertEqual(card.console_label.get_label(), get_system_display_name(rom["console"]))
 
 
 @needs_display

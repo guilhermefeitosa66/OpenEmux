@@ -23,6 +23,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk
 
 from openemux.core.library_groups import group_roms_by_console
+from openemux.core.library_view import SORT_RECENTLY_PLAYED
 from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
 from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
@@ -32,6 +33,7 @@ from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.scopes import (
     ALL_CONSOLES_ID,
     FAVORITES_ID,
+    RECENT_ID,
     collection_scope,
     collection_slug,
     is_collection_scope,
@@ -45,9 +47,12 @@ def is_mixed_scope(scope):
     console (issue #384); a console page has one group by definition and is
     left exactly as it was.
     """
-    return scope in (ALL_CONSOLES_ID, FAVORITES_ID) or is_collection_scope(scope)
+    return scope in (ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID) or is_collection_scope(scope)
 
 logger = logging.getLogger(__name__)
+
+#: How many games the "Recently played" page shows (issue 910).
+RECENT_LIMIT = 20
 
 
 def _teardown(grid):
@@ -335,6 +340,9 @@ class LibraryPages:
         if console == FAVORITES_ID:
             self.ensure_favorites_loaded()
             return
+        if console == RECENT_ID:
+            self.ensure_recent_loaded()
+            return
         if is_collection_scope(console):
             self.ensure_collection_loaded(collection_slug(console))
             return
@@ -374,6 +382,15 @@ class LibraryPages:
             self.win.sidebar.sync_favorites_row()
         self.render(FAVORITES_ID, playlists.load_favorites_playlist())
         self.mark_loaded(FAVORITES_ID)
+
+    def ensure_recent_loaded(self):
+        """The last games played, most recent first (issue 910)."""
+        if not self.has(RECENT_ID):
+            return
+        paths = self.win.play_history.recent(RECENT_LIMIT)
+        entries = self.win.playlist_manager.entries_for_paths(paths)
+        self.render(RECENT_ID, entries)
+        self.mark_loaded(RECENT_ID)
 
     def ensure_all_loaded(self, force_rescan=False):
         if not self.has(ALL_CONSOLES_ID):
@@ -421,6 +438,9 @@ class LibraryPages:
         scroll = page.scroll
         # Each page follows its own scope's layout, not the one on screen now.
         display_settings = win.config_manager.get_display_settings(console)
+        if console == RECENT_ID:
+            # The page's whole point is the order: the last game first.
+            display_settings = dict(display_settings, sort_order=SORT_RECENTLY_PLAYED)
         roms = win._sorted_roms(roms, order=display_settings["sort_order"])
         signature = self._signature(roms, display_settings)
         if (
@@ -474,6 +494,7 @@ class LibraryPages:
         on_selection_changed=None,
         band_host_is_self=False,
         dormant=False,
+        play_caption=None,
     ):
         win = self.win
         grid = RomGrid(
@@ -496,6 +517,8 @@ class LibraryPages:
             context_services=win._rom_context_services,
             frame_color_for_rom=win._cartridge_color_for_rom,
             dormant=dormant,
+            play_caption=play_caption,
+            has_auto_state=win.has_auto_state,
         )
         if band_host_is_self:
             grid.band_host = grid
@@ -520,6 +543,11 @@ class LibraryPages:
         win = self.win
         body = GroupedScroll()
         group = GridGroup(on_selection_changed=win._on_selection_changed)
+        if scope == RECENT_ID:
+            # One group, in play order: grouping by console would hide which
+            # game was last (issue 910). The caption under each card says
+            # when and for how long.
+            return self._build_recent(scope, roms, display_settings, body, group)
         for console, group_roms in group_roms_by_console(roms, win.visible_consoles):
             # Asleep until the page lays it out near the viewport (issue
             # 899): a group built awake would realize up to thirty rows of
@@ -538,6 +566,23 @@ class LibraryPages:
         # Every group follows the scope's own layout, so the first one answers
         # for the page: list view pins the master checkbox above the scroller.
         group.compact = bool(group.sections) and group.sections[0].grid.compact
+        return group, body
+
+    def _build_recent(self, scope, roms, display_settings, body, group):
+        win = self.win
+        grid = self._build_grid(
+            scope,
+            roms,
+            display_settings,
+            mixed_consoles=True,
+            on_selection_changed=group.on_child_selection_changed,
+            band_host_is_self=True,
+            play_caption=win.play_caption,
+        )
+        header, set_count = self._group_header(scope, len(roms), grid.compact)
+        body.add_section(header, grid)
+        group.add_section(GridSection(scope, grid, header, set_count=set_count))
+        group.compact = grid.compact
         return group, body
 
     def _group_header(self, console, count, compact):
@@ -588,11 +633,13 @@ class LibraryPages:
         set_count(count)
         return row, set_count
 
-    @staticmethod
-    def _group_title(console):
+    def _group_title(self, console):
         if not console:
             return "?"
-        return f"{console} - {get_system_display_name(console)}"
+        if console == RECENT_ID:
+            return self.win.t("sidebar.recent")
+        # The console's name alone (issue 912); the id is the folder's.
+        return get_system_display_name(console)
 
     def _empty_page_for(self, console):
         t = self.win.t
@@ -601,6 +648,12 @@ class LibraryPages:
                 icon_name="starred-symbolic",
                 title=t("favorites.empty.title"),
                 description=t("favorites.empty.body"),
+            )
+        if console == RECENT_ID:
+            return Adw.StatusPage(
+                icon_name="document-open-recent-symbolic",
+                title=t("recent.empty.title"),
+                description=t("recent.empty.body"),
             )
         if console == ALL_CONSOLES_ID:
             return Adw.StatusPage(

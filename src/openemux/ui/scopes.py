@@ -16,6 +16,10 @@ from inside a method to dodge the cycle. They are their own module now
 ALL_CONSOLES_ID = "__all__"
 #: The "Favorites" view.
 FAVORITES_ID = "__favorites__"
+#: The "Recently played" view: the last games launched, most recent first
+#: (issue 910). Absent until the first launch, like Favorites until the
+#: first star.
+RECENT_ID = "__recent__"
 #: The onboarding page a library with nothing in it lands on (issue #224).
 LIBRARY_EMPTY_ID = "library-empty"
 #: A collection's sidebar/scope id is this prefix plus its slug.
@@ -34,7 +38,7 @@ def collection_scope(slug):
     return f"{COLLECTION_ID_PREFIX}{slug}"
 
 
-def sidebar_row_ids(consoles, collection_slugs=(), has_favorites=False):
+def sidebar_row_ids(consoles, collection_slugs=(), has_favorites=False, has_recent=False):
     """The rows the sidebar shows for this library, in order.
 
     With nothing in the library there are none. Every row here is a view
@@ -60,6 +64,9 @@ def sidebar_row_ids(consoles, collection_slugs=(), has_favorites=False):
         return []
     return [
         ALL_CONSOLES_ID,
+        # "Recently played" first: the shortest path back to the last game
+        # (issue 910). Only once something was launched.
+        *([RECENT_ID] if has_recent else []),
         *([FAVORITES_ID] if has_favorites else []),
         # Collections sit between Favorites and the consoles: user groupings
         # above the hardware, mixing consoles like All does.
@@ -68,18 +75,24 @@ def sidebar_row_ids(consoles, collection_slugs=(), has_favorites=False):
     ]
 
 
-def default_landing_view(has_favorites=False):
+def default_landing_view(has_favorites=False, has_recent=False):
     """Where the library opens when it has no view to go back to.
 
-    Favorites when there is at least one favorite, All otherwise. It used to
-    be Favorites unconditionally, which is a row that may not even be in the
-    sidebar any more (issue #382) -- and All is the more honest destination
-    for a library nobody has told us anything about yet.
+    Recently played when something was played (issue 910): a returning
+    player is in the last game with one press. Favorites when there is at
+    least one favorite, All otherwise. It used to be Favorites
+    unconditionally, which is a row that may not even be in the sidebar any
+    more (issue #382) -- and All is the more honest destination for a
+    library nobody has told us anything about yet.
     """
+    if has_recent:
+        return RECENT_ID
     return FAVORITES_ID if has_favorites else ALL_CONSOLES_ID
 
 
-def landing_view(visible_consoles, target_view, collection_slugs=(), has_favorites=False):
+def landing_view(
+    visible_consoles, target_view, collection_slugs=(), has_favorites=False, has_recent=False
+):
     """Which page a rebuilt library lands on.
 
     With nothing in it, the onboarding page -- that state's whole reason
@@ -97,7 +110,7 @@ def landing_view(visible_consoles, target_view, collection_slugs=(), has_favorit
     """
     if not visible_consoles:
         return LIBRARY_EMPTY_ID
-    fallback = default_landing_view(has_favorites)
+    fallback = default_landing_view(has_favorites, has_recent)
     if is_collection_scope(target_view):
         # Only if it still exists: a collection deleted since is no more a
         # destination than a console that is gone.
@@ -107,6 +120,8 @@ def landing_view(visible_consoles, target_view, collection_slugs=(), has_favorit
     known = set(visible_consoles) | {ALL_CONSOLES_ID}
     if has_favorites:
         known.add(FAVORITES_ID)
+    if has_recent:
+        known.add(RECENT_ID)
     if target_view in known:
         return target_view
     return fallback

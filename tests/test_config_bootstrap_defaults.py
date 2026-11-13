@@ -115,6 +115,23 @@ class ConfigBootstrapDefaultsTests(unittest.TestCase):
             self.assertFalse(reopened.get_ui_settings()["render_cartridge_overlay"])
 
 
+class TheAutoResumeSettingTests(unittest.TestCase):
+    """"Resume where I left off" (issue 910): off until asked for."""
+
+    def test_it_is_off_by_default(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertFalse(manager.get_auto_resume())
+
+    def test_it_survives_a_restart(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            self.assertTrue(ConfigManager(config_file=cfg_path).set_auto_resume(1))
+            self.assertTrue(ConfigManager(config_file=cfg_path).get_auto_resume())
+            ConfigManager(config_file=cfg_path).set_auto_resume(False)
+            self.assertFalse(ConfigManager(config_file=cfg_path).get_auto_resume())
+
+
 class TheDeferredAssetDebtTests(unittest.TestCase):
     """What the first boot leaves for the background (issue #442)."""
 

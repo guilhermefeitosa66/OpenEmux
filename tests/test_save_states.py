@@ -225,5 +225,42 @@ class WhenAStateWillNotBudgeTests(unittest.TestCase):
             self.assertFalse(state.exists())
 
 
+class TheAutomaticStateTests(unittest.TestCase):
+    """The ``.state.auto`` RetroArch writes on exit (issue 910)."""
+
+    def test_a_game_with_an_automatic_state_has_one(self):
+        with TemporaryDirectory() as tmp_dir:
+            console = Path(tmp_dir) / "SFC"
+            console.mkdir()
+            (console / "Chrono Trigger (USA).state.auto").write_bytes(b"state")
+            self.assertTrue(save_states.has_auto_state(console, ROM))
+
+    def test_a_numbered_slot_is_not_the_automatic_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            console = Path(tmp_dir) / "SFC"
+            console.mkdir()
+            (console / "Chrono Trigger (USA).state1").write_bytes(b"state")
+            (console / "Other Game.state.auto").write_bytes(b"state")
+            self.assertFalse(save_states.has_auto_state(console, ROM))
+
+    def test_a_state_sorted_into_a_core_directory_counts(self):
+        with TemporaryDirectory() as tmp_dir:
+            core_dir = Path(tmp_dir) / "SFC" / "Snes9x"
+            core_dir.mkdir(parents=True)
+            (core_dir / "Chrono Trigger (USA).state.auto").write_bytes(b"state")
+            self.assertTrue(save_states.has_auto_state(Path(tmp_dir) / "SFC", ROM))
+
+    def test_a_console_never_played_has_no_directory_and_no_state(self):
+        with TemporaryDirectory() as tmp_dir:
+            self.assertFalse(save_states.has_auto_state(Path(tmp_dir) / "N64", ROM))
+
+    def test_a_directory_that_cannot_be_read_is_no_state_either(self):
+        with TemporaryDirectory() as tmp_dir:
+            console = Path(tmp_dir) / "SFC"
+            console.mkdir()
+            with mock.patch.object(Path, "is_file", side_effect=OSError("gone")):
+                self.assertFalse(save_states.has_auto_state(console, ROM))
+
+
 if __name__ == "__main__":
     unittest.main()
