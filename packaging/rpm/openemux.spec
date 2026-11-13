@@ -186,6 +186,14 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri Nov 13 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.4-1
+- Desktop: a 3000-game library opens in under a second and holds half the memory
+- Desktop: the library opens before any emulator downloads; cores come on a game's first launch
+- Desktop: launch feedback, Recently played with resume, BIOS warnings, incremental search
+- Desktop: a game details dialog, TV mode and accessible names on the cards
+- Android: smaller release APK that starts in about half the time; pause with the controller
+- Android: Continue playing row, sort menu and filter chips, Android TV launcher entry
+
 * Thu Nov 12 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.3-1
 - Android: choose the shape of each on-screen button (circle, pill, rounded square, triangle or the skin's own)
 - Android: rounded triangles and a pressed look on every on-screen button
