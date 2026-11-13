@@ -69,9 +69,10 @@ class TheWindowOpensOnALibraryTests(WindowCase):
 
     def test_the_title_names_the_console_and_counts_its_games(self):
         self.win.sidebar.select("SFC")
+        # The console's name alone, never the folder id (issue 912).
         self.assertEqual(
             self.win.window_title.get_title(),
-            f"SFC — {window_module.get_system_display_name('SFC')}",
+            window_module.get_system_display_name("SFC"),
         )
         self.assertEqual(
             self.win.window_title.get_subtitle(),
@@ -2658,7 +2659,7 @@ class TheConsoleDropdownRowsTests(WindowCase):
     def test_a_console_row_shows_its_icon_and_full_name(self):
         dropdown = self.win._build_console_dropdown(["SFC"])
         row = self._bound_rows(dropdown, ["SFC"])[0]
-        self.assertTrue(self._label_of(row).startswith("SFC - "))
+        self.assertEqual(self._label_of(row), window_module.get_system_display_name("SFC"))
 
     def test_the_all_row_is_labelled_after_the_sidebar_by_default(self):
         dropdown = self.win._build_console_dropdown(["SFC"], include_all=True)

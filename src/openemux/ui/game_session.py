@@ -16,6 +16,8 @@ others are doing.
 
 import logging
 
+from openemux.core.systems import get_system_display_name
+
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -113,7 +115,12 @@ class GameSession:
             self._toast_now(self._error_text(error_msg), 5)
         elif success:
             self._toast_now(
-                self.win.t("toast.running", name=rom["name"], console=rom["console"]), 3
+                self.win.t(
+                    "toast.running",
+                    name=rom["name"],
+                    console=get_system_display_name(rom["console"]),
+                ),
+                3,
             )
             self._announce_launch_notice()
 

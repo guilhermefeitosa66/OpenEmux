@@ -17019,3 +17019,25 @@ has no Android device, so these are `MANUAL`.
   `test_cover_lands_inside_the_label_and_never_outside`), `tests/test_rom_card_widget.py`
   (`TheCartridgeShadowRuleTests`), `tests/test_grid_widget.py`
   (`test_a_cartridge_grid_grows_its_slot_by_the_shadow_margin_and_gives_it_back`).
+
+## Desktop — Console names
+
+### RT-1037 — The sidebar, the group headers, the window title and the launch toast name the console, never its folder id
+- **Area:** Desktop — Console names
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: look at the sidebar, open "All" and read the group headers, select a
+  console and read the window title, launch a game and read the toast; hover a console row;
+  open Preferences → Cores and the import dialog.
+- **Expected:** "Super Nintendo", "Mega Drive", "Nintendo (NES)" and so on, with no "SFC - ",
+  "MD - " or "FC - " in front: the id is the folder's name, not what a player reads, and the
+  prefix doubled the width of the sidebar rows. The id stays where the folder matters: the row's
+  tooltip says "Folder: SFC", the import flow's console choice, the ROM-folder hints and the
+  Preferences pages still name it (issue 912).
+- **Check:** suite files `tests/test_console_sidebar.py`
+  (`test_a_row_is_labelled_by_the_consoles_name_alone`,
+  `test_a_console_row_keeps_the_folder_id_in_its_tooltip`), `tests/test_library_pages.py`
+  (`test_a_group_header_names_the_console`), `tests/test_window.py`
+  (`test_the_title_names_the_console_and_counts_its_games`), `tests/test_game_session.py`
+  (`test_a_launch_records_the_play_and_says_it_is_running`).
+

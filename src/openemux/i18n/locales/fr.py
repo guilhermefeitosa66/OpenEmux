@@ -214,6 +214,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "Manette déconnectée",
     "sidebar.all": "Tous",
     "sidebar.favorites": "Favoris",
+    "sidebar.console.tooltip": 'Dossier : {id}',
     "header.preferences": "Paramètres",
     "header.console_input": "Configurer la manette de cette console",
     "filter.missing_artwork": "Uniquement sans jaquette",

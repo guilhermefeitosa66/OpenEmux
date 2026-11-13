@@ -1742,7 +1742,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         elif is_collection_scope(console_id):
             title = self.sidebar.label_for(console_id)
         elif console_id:
-            title = f"{console_id} — {get_system_display_name(console_id)}"
+            # The name alone (issue 912): the id is the folder, and the
+            # sidebar's tooltip still carries it.
+            title = get_system_display_name(console_id)
         else:
             title = self.t("app.title")
         subtitle = ""
@@ -1814,7 +1816,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # picker can render this entry as "detect automatically".
             label_text = self.t(getattr(_factory, "_all_label_key", None) or "sidebar.all")
         else:
-            label_text = f"{console_id} - {get_system_display_name(console_id)}"
+            label_text = get_system_display_name(console_id)
 
         label = Gtk.Label(label=label_text)
         label.set_halign(Gtk.Align.START)

@@ -216,6 +216,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "Controle desconectado",
     "sidebar.all": "Todos",
     "sidebar.favorites": "Favoritos",
+    "sidebar.console.tooltip": 'Pasta: {id}',
     "header.preferences": "Configurações",
     "header.console_input": "Configurar controle deste console",
     "filter.missing_artwork": "Somente sem capa",

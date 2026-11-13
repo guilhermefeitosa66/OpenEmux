@@ -19,6 +19,7 @@ from tests.gtk_display import HAVE_DISPLAY, needs_display
 from tests.window_harness import WindowCase
 
 if HAVE_DISPLAY:
+    from openemux.core.systems import get_system_display_name
     from openemux.ui import game_session as session_module
     from openemux.ui.game_session import (
         RELAUNCH_MAX_POLLS,
@@ -126,7 +127,11 @@ class LaunchingTests(_SessionCase):
         self.assertEqual(self.runtime.launched[0][:2], (rom["path"], rom["console"]))
         self.assertEqual(self.win.play_history.play_count(rom["path"]), 1)
         self.assertIn(
-            self.said("toast.running", name=rom["name"], console=rom["console"]),
+            self.said(
+                "toast.running",
+                name=rom["name"],
+                console=get_system_display_name(rom["console"]),
+            ),
             self.toasts,
         )
 

@@ -66,8 +66,32 @@ class TheRowsTests(_SidebarCase):
     def test_a_console_that_is_not_there_has_no_row(self):
         self.assertIsNone(self.sidebar.find_row("N64"))
 
-    def test_a_row_is_labelled_by_its_console_id_and_full_name(self):
-        self.assertTrue(self.sidebar.label_for("SFC").startswith("SFC - "))
+    def test_a_row_is_labelled_by_the_consoles_name_alone(self):
+        # Issue 912: "SFC" is the folder, not what a player reads.
+        self.assertEqual(self.sidebar.label_for("SFC"), get_system_display_name("SFC"))
+        self.assertNotIn("SFC", self.sidebar.label_for("SFC"))
+
+    def test_a_row_warns_about_a_missing_bios_and_names_the_files(self):
+        # Issue 911: before the first launch fails.
+        row = self.sidebar.find_row("SFC")
+        self.assertFalse(row.bios_warning.get_visible())
+        self.assertTrue(self.sidebar.set_bios_warning("SFC", ["scph5501.bin"]))
+        self.assertTrue(row.bios_warning.get_visible())
+        self.assertEqual(
+            row.bios_warning.get_tooltip_text(),
+            self.said("sidebar.bios.tooltip", names="scph5501.bin"),
+        )
+        self.assertTrue(self.sidebar.set_bios_warning("SFC", []))
+        self.assertFalse(row.bios_warning.get_visible())
+        self.assertFalse(self.sidebar.set_bios_warning(ALL_CONSOLES_ID, ["x"]))
+        self.assertFalse(self.sidebar.set_bios_warning("N64", ["x"]))
+
+    def test_a_console_row_keeps_the_folder_id_in_its_tooltip(self):
+        row = self.sidebar.find_row("SFC")
+        self.assertEqual(row.get_tooltip_text(), self.said("sidebar.console.tooltip", id="SFC"))
+        self.assertIsNone(self.sidebar.tooltip_for(ALL_CONSOLES_ID))
+        self.assertIsNone(self.sidebar.tooltip_for(FAVORITES_ID))
+        self.assertIsNone(self.sidebar.tooltip_for("col:best"))
 
     def test_the_virtual_views_are_labelled_after_their_own_strings(self):
         self.assertEqual(self.sidebar.label_for(ALL_CONSOLES_ID), self.said("sidebar.all"))

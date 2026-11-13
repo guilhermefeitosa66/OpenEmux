@@ -214,6 +214,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "手柄已断开",
     "sidebar.all": "全部",
     "sidebar.favorites": "收藏",
+    "sidebar.console.tooltip": '文件夹：{id}',
     "header.preferences": "设置",
     "header.console_input": "这台主机的手柄设置",
     "filter.missing_artwork": "仅显示无封面",

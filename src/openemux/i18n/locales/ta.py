@@ -216,6 +216,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "கன்ட்ரோலர் துண்டிக்கப்பட்டது",
     "sidebar.all": "அனைத்தும்",
     "sidebar.favorites": "பிடித்தவை",
+    "sidebar.console.tooltip": 'கோப்புறை: {id}',
     "header.preferences": "அமைப்புகள்",
     "header.console_input": "இந்தக் கன்சோலுக்கான கன்ட்ரோலர் அமைப்புகள்",
     "filter.missing_artwork": "படம் இல்லாதவை மட்டும்",

@@ -18,6 +18,7 @@ from tests.window_harness import WindowCase
 
 if HAVE_DISPLAY:
     from openemux.core.library_view import VIEW_MODE_LIST
+    from openemux.core.systems import get_system_display_name
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
         FAVORITES_ID,
@@ -381,10 +382,8 @@ class TheEmptyStatesTests(WindowCase):
 
 @needs_display
 class TheGroupHeadingsTests(WindowCase):
-    def test_a_group_is_headed_by_its_console_id_and_name(self):
-        from openemux.ui.library_pages import LibraryPages
-
-        self.assertTrue(LibraryPages._group_title("SFC").startswith("SFC - "))
+    def test_a_group_header_names_the_console(self):
+        self.assertEqual(self.win.pages._group_title("SFC"), get_system_display_name("SFC"))
 
     def test_a_group_with_no_console_at_all_is_headed_with_a_question_mark(self):
         from openemux.ui.library_pages import LibraryPages

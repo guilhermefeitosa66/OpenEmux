@@ -214,6 +214,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "コントローラーを切断しました",
     "sidebar.all": "すべて",
     "sidebar.favorites": "お気に入り",
+    "sidebar.console.tooltip": 'フォルダー: {id}',
     "header.preferences": "設定",
     "header.console_input": "このコンソールのコントローラー設定",
     "filter.missing_artwork": "アートワークなしのみ",

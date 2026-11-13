@@ -214,6 +214,7 @@ TRANSLATIONS = {
     "toast.gamepad.disconnected": "Controller getrennt",
     "sidebar.all": "Alle",
     "sidebar.favorites": "Favoriten",
+    "sidebar.console.tooltip": 'Ordner: {id}',
     "header.preferences": "Einstellungen",
     "header.console_input": "Controller-Einstellungen dieser Konsole",
     "filter.missing_artwork": "Nur ohne Cover",

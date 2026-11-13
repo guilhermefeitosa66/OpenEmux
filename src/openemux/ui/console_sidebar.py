@@ -17,7 +17,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GObject, Gtk
+from gi.repository import Pango, Adw, Gdk, Gio, GObject, Gtk
 
 from openemux.core.library_view import VIEW_MODES, normalize_view_mode
 from openemux.core.shaders import normalize_shader_id
@@ -163,7 +163,16 @@ class ConsoleSidebar:
         if is_collection_scope(console_id):
             slug = collection_slug(console_id)
             return self.win.collection_manager.get_name(slug) or slug
-        return f"{console_id} - {get_system_display_name(console_id)}"
+        # The name a player reads, not the folder's (issue 912): "FC",
+        # "SFC", "MD" are the ids the library is laid out by, and they stay
+        # in the row's tooltip and wherever the folder matters.
+        return get_system_display_name(console_id)
+
+    def tooltip_for(self, console_id):
+        """The row's tooltip: the console's folder id, where it went."""
+        if console_id in VIRTUAL_VIEWS or is_collection_scope(console_id):
+            return None
+        return self.win.t("sidebar.console.tooltip", id=console_id)
 
     def rebuild(self, consoles):
         while child := self.list_box.get_first_child():
@@ -218,6 +227,7 @@ class ConsoleSidebar:
         name = Gtk.Label(label=self.label_for(console_id))
         name.set_halign(Gtk.Align.START)
         name.set_hexpand(True)
+        name.set_ellipsize(Pango.EllipsizeMode.END)
         box.append(name)
 
         # All and Favorites are virtual views: no per-console actions apply, so
