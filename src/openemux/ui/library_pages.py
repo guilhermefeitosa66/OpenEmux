@@ -14,6 +14,7 @@ removes rather than fixes (issue #237).
 
 import ctypes
 import logging
+from pathlib import Path
 import sys
 
 import gi
@@ -395,7 +396,15 @@ class LibraryPages:
         # A chunk at a time: resolving checks every file on disk, and a long
         # history only needs as many as it takes to fill the page.
         for start in range(0, len(paths), RECENT_LIMIT):
-            entries.extend(resolve(paths[start : start + RECENT_LIMIT]))
+            chunk = paths[start : start + RECENT_LIMIT]
+            # Resolved in name order; put back in play order before cutting,
+            # or the cut drops by name rather than by age.
+            # Keyed as the entry spells its path, which is normalised.
+            found = {entry["path"]: entry for entry in resolve(chunk)}
+            for path in chunk:
+                entry = found.get(str(Path(str(path).strip())))
+                if entry is not None:
+                    entries.append(entry)
             if len(entries) >= RECENT_LIMIT:
                 break
         entries = entries[:RECENT_LIMIT]

@@ -11,13 +11,20 @@ That is the half where the bug lived.
 """
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 from tests.window_harness import WindowCase
 
 if HAVE_DISPLAY:
-    from openemux.core.library_view import VIEW_MODE_LIST
+    from openemux.core.library_view import (
+        VIEW_MODE_CARTRIDGE,
+        VIEW_MODE_COVER,
+        VIEW_MODE_LIST,
+    )
+    from openemux.ui import grid as grid_module
+    from openemux.ui.card_layout import cartridge_frame_svg
     from openemux.core.systems import get_system_display_name
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
@@ -436,6 +443,125 @@ class LoadingAPageTests(WindowCase):
         ) as scan:
             self.pages.ensure_all_loaded(force_rescan=True)
         self.assertEqual(scan.call_count, len(self.win.visible_consoles))
+
+
+@needs_display
+class TheRecentPageTests(WindowCase):
+    """Issue 942: the 12 latest games, in the library's own view mode."""
+
+    library = {
+        "SFC": [f"Game {index}.sfc" for index in range(6)],
+        "FC": [f"Game {index}.nes" for index in range(5)],
+        "PS": [f"Game {index}.chd" for index in range(3)],
+    }
+
+    def setUp(self):
+        super().setUp()
+        self.pages = self.win.pages
+        ticks = iter(range(1, 1000))
+        self.win.play_history._clock = lambda: float(next(ticks))
+        # Played in this order: SFC first, PS last.
+        self.played = [
+            self.rom(console, index)
+            for console, names in self.library.items()
+            for index in range(len(names))
+        ]
+        for rom in self.played:
+            self.win.play_history.record_launch(rom["path"])
+
+    def listed(self):
+        self.pages.ensure_recent_loaded()
+        return [entry.rom["path"] for entry in self.pages.grid_for(RECENT_ID).entries()]
+
+    def grid(self):
+        self.pages.ensure_recent_loaded()
+        return self.pages.grid_for(RECENT_ID).sections[0].grid
+
+    def test_the_page_holds_the_twelve_latest_newest_first(self):
+        latest = [rom["path"] for rom in reversed(self.played)][:12]
+        self.assertEqual(self.listed(), latest)
+
+    def test_a_game_whose_file_is_gone_does_not_leave_the_page_short(self):
+        gone = self.played[-1]["path"]
+        Path(gone).unlink()
+        listed = self.listed()
+        self.assertEqual(len(listed), 12)
+        self.assertNotIn(gone, listed)
+        self.assertEqual(listed[-1], self.played[1]["path"])
+
+    def test_a_game_already_listed_moves_to_the_front_once(self):
+        again = self.played[5]["path"]
+        self.win.play_history.record_launch(again)
+        listed = self.listed()
+        self.assertEqual(listed[0], again)
+        self.assertEqual(listed.count(again), 1)
+        self.assertEqual(len(listed), 12)
+
+    def test_cartridge_view_draws_each_game_in_its_own_shell(self):
+        if cartridge_frame_svg("SFC") is None or cartridge_frame_svg("FC") is None:
+            self.skipTest("no cartridge art shipped (or no rsvg)")
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        grid = self.grid()
+        self.assertTrue(grid._card_ctx.cartridge)
+        by_console = {rom["console"]: rom for rom in self.played}
+        self.assertEqual(grid._frame_path_for_rom(by_console["FC"]), cartridge_frame_svg("FC"))
+        self.assertEqual(grid._frame_path_for_rom(by_console["SFC"]), cartridge_frame_svg("SFC"))
+
+    def test_a_console_with_no_shell_shows_its_cover_there(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        grid = self.grid()
+        ps = next(rom for rom in self.played if rom["console"] == "PS")
+        with mock.patch.object(grid, "_base_frame_path", "/tmp/tallest.svg"):
+            with mock.patch.object(grid_module, "cartridge_frame_svg", return_value=None):
+                self.assertIsNone(grid._frame_path_for_rom(ps))
+
+    def test_a_shell_colour_is_resolved_once_per_console_and_colour(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        grid = self.grid()
+        fc = next(rom for rom in self.played if rom["console"] == "FC")
+        with mock.patch.object(grid, "_base_frame_path", "/tmp/tallest.svg"), mock.patch.object(
+            grid, "_frame_color_for_rom", return_value="red"
+        ), mock.patch.object(
+            grid_module, "cartridge_frame_svg", side_effect=lambda console, color=None: (
+                f"/tmp/{console}-{color}.svg" if color else f"/tmp/{console}.svg"
+            )
+        ) as resolve:
+            self.assertEqual(grid._frame_path_for_rom(fc), "/tmp/FC-red.svg")
+            self.assertEqual(grid._frame_path_for_rom(fc), "/tmp/FC-red.svg")
+        resolve.assert_called_once_with("FC", "red")
+
+    def test_a_colour_with_no_variant_falls_back_to_the_console_shell(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        grid = self.grid()
+        fc = next(rom for rom in self.played if rom["console"] == "FC")
+        with mock.patch.object(grid, "_base_frame_path", "/tmp/tallest.svg"), mock.patch.object(
+            grid, "_frame_color_for_rom", return_value="red"
+        ), mock.patch.object(
+            grid_module, "cartridge_frame_svg", side_effect=lambda console, color=None: (
+                None if color else f"/tmp/{console}.svg"
+            )
+        ):
+            self.assertEqual(grid._frame_path_for_rom(fc), "/tmp/FC.svg")
+
+    def test_with_no_colour_lookup_the_console_shell_is_used(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        grid = self.grid()
+        fc = next(rom for rom in self.played if rom["console"] == "FC")
+        with mock.patch.object(grid, "_base_frame_path", "/tmp/tallest.svg"), mock.patch.object(
+            grid, "_frame_color_for_rom", None
+        ), mock.patch.object(grid_module, "cartridge_frame_svg", return_value="/tmp/FC.svg"):
+            self.assertEqual(grid._frame_path_for_rom(fc), "/tmp/FC.svg")
+
+    def test_changing_the_view_mode_rebuilds_the_page(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)
+        self.assertFalse(self.grid().compact)
+        self.win.config_manager.set_view_mode(VIEW_MODE_LIST)
+        self.assertTrue(self.grid().compact)
+        self.assertFalse(self.grid()._card_ctx.cartridge)
+
+    def test_cover_view_draws_covers(self):
+        self.win.config_manager.set_view_mode(VIEW_MODE_COVER)
+        self.assertFalse(self.grid()._card_ctx.cartridge)
 
 
 @needs_display
