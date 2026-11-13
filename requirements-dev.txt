@@ -10,7 +10,7 @@ coverage[toml]
 # Correctness-only linter (issue #243). Pinned to a minor line: ruff adds rules
 # between releases, and a rule appearing on its own would fail CI on code
 # nobody touched.
-ruff~=0.17.3
+ruff~=0.17.4
 
 # Image tools under tools/ (export_controller_art.py, phone_shots.py) and their
 # tests. Build-time only: the app never imports it. (It also encoded the site's
