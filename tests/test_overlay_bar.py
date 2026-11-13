@@ -118,7 +118,10 @@ class TranslucentBarTests(unittest.TestCase):
         for name in ("save", "load"):
             self.assertNotIn("<circle", icon[name])
             self.assertIn('stroke-width="1.8"', icon[name])
-        self.assertNotIn('replace("{bg}"', script)
+        # tile_png() no longer fills in a "{bg}" placeholder, so no glyph may
+        # carry one: librsvg would read it as an invalid colour.
+        for name, body in icon.items():
+            self.assertNotIn("{bg}", body, name)
 
     def test_no_strip_is_kept_with_or_without_a_console_shader(self):
         _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, translucent=True)
