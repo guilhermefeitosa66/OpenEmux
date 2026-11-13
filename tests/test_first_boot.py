@@ -305,6 +305,9 @@ class TheDeferredDownloadTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cfg = _FakeConfigManager(tmp_dir)
             cfg.mark_deferred_assets_pending()
+            # "auto" resolves to the platform's driver (gl here, d3d11 on
+            # Windows), and the driver decides which pack comes first.
+            cfg.video_driver = "gl"
             bootstrapper = FirstBootBootstrapper(cfg)
             order = []
             recorder = _RecordingUpdater(bootstrapper.updater)
