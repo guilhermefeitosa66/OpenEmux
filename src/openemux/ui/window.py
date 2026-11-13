@@ -1766,6 +1766,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )),
             ("shortcuts.group.rom", (
                 ("Return", "shortcuts.open_rom"),
+                ("<Alt>Return", "shortcuts.details"),
                 ("Menu", "shortcuts.context_menu"),
                 ("<Ctrl>d", "shortcuts.favorite"),
                 ("F2", "shortcuts.rename"),
@@ -2762,6 +2763,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def launch_rom_at_state(self, rom, slot):
         """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""
         self.game.launch_at_state(rom, slot)
+
+    def open_game_details(self, rom):
+        """The game details dialog (issue 913): from the menu, Alt+Return or the pad's X."""
+        from openemux.ui.game_details import GameDetailsDialog
+
+        GameDetailsDialog(self, rom).present(self)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])

@@ -1129,6 +1129,7 @@ class RomItem(Gtk.Box):
             ("manage-label", self._act_manage_label),
             ("rename", self._act_rename),
             ("delete", self._act_delete),
+            ("details", self._act_details),
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", handler)
@@ -1192,6 +1193,17 @@ class RomItem(Gtk.Box):
         if not self.has_css_class("rom-card-hover"):
             self.menu_button.set_visible(False)
         unparent_when_idle(popover)
+
+    def _act_details(self, _action, _param):
+        self.open_details()
+
+    def open_details(self):
+        """The game details dialog (issue 913), through the window that owns it."""
+        rom = self.rom
+        if rom is None or self.context_services is None:
+            return
+        logger.info("rom context action: details rom=%s", rom.get("name"))
+        self.context_services.win.open_game_details(rom)
 
     def _act_toggle_favorite(self, _action, _param):
         rom = self.rom

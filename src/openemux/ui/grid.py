@@ -929,14 +929,16 @@ class RomGrid(Gtk.GridView):
         is_menu_key = keyval == Gdk.KEY_Menu or (
             keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK
         )
-        launches = keyval in (
-            Gdk.KEY_Return,
-            Gdk.KEY_KP_Enter,
-            Gdk.KEY_ISO_Enter,
-            Gdk.KEY_space,
-            Gdk.KEY_KP_Space,
-        ) and not (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
-        if not (is_menu_key or launches):
+        enter = keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter)
+        # Alt+Return opens the game's details (issue 913).
+        details = enter and bool(state & Gdk.ModifierType.ALT_MASK)
+        launches = (
+            enter or keyval in (Gdk.KEY_space, Gdk.KEY_KP_Space)
+        ) and not (
+            state
+            & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.ALT_MASK)
+        )
+        if not (is_menu_key or launches or details):
             return False
         root = self.get_root()
         card = self.item_for_widget(root.get_focus()) if root else None
@@ -944,6 +946,8 @@ class RomGrid(Gtk.GridView):
             return False
         if is_menu_key:
             card.show_context_menu()
+        elif details:
+            card.open_details()
         else:
             self._launch_rom(card.rom)
         return True

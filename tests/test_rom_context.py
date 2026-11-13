@@ -419,6 +419,18 @@ class LoadStateSubmenuTests(unittest.TestCase):
             self.assertEqual(window.calls, [("launch_rom_at_state", (ROM, 3), {})])
 
 
+class TheDetailsRowTests(unittest.TestCase):
+    """Issue 913: the first row of the menu opens the game details."""
+
+    def test_it_comes_first_when_the_window_is_there(self):
+        entries = card_menu_entries(_Card(services=RomContextMenuServices(_Window())))
+        self.assertEqual(entries[0][:2], ("context.details", "rom.details"))
+
+    def test_without_the_window_there_is_no_dialog_to_open(self):
+        entries = card_menu_entries(_Card())
+        self.assertNotIn("rom.details", [e[1] for e in entries if isinstance(e, tuple)])
+
+
 class StartFreshTests(unittest.TestCase):
     """Issue 910: a launch that skips the automatic save state, once."""
 

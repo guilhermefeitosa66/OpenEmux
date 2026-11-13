@@ -60,6 +60,23 @@ class FindingACardTests(_GridCase):
         self.grid.set_filter(self.entries[0].rom["name"])
         self.assertEqual(self.grid.count(), 1)
 
+    def test_alt_return_opens_the_game_details(self):
+        # Issue 913: Enter plays, Alt+Enter opens the details.
+        card = self.grid.card_for(self.entries[0])
+        if card is None:
+            self.skipTest("no card realized")
+        with mock.patch.object(self.grid, "item_for_widget", return_value=card), mock.patch.object(
+            card, "open_details"
+        ) as details, mock.patch.object(self.grid, "_launch_rom") as launch:
+            handled = self.grid._on_grid_key_pressed(
+                None, Gdk.KEY_Return, 0, Gdk.ModifierType.ALT_MASK
+            )
+            self.assertTrue(handled)
+            details.assert_called_once()
+            launch.assert_not_called()
+            self.grid._on_grid_key_pressed(None, Gdk.KEY_Return, 0, 0)
+            launch.assert_called_once()
+
     def test_a_filter_that_matches_nothing_leaves_the_page_empty(self):
         self.grid.set_filter("nothing matches this")
         self.assertEqual(self.grid.count(), 0)

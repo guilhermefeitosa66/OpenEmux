@@ -123,7 +123,9 @@ def resolve(context, action):
         if action == "back":
             return ("focus-sidebar",)
         if action == "context":
-            return ("context-menu",)
+            # The pad's X opens the game details (issue 913): everything the
+            # popover offers, without the nested submenus a D-pad has to walk.
+            return ("details",)
         if action == "favorite":
             return ("favorite",)
         return ("noop",)
@@ -794,13 +796,14 @@ class NavigationController:
                 ]
             else:
                 hints = [
-                    ("Ⓐ", t("hints.open")),
-                    ("Ⓐ⏳", t("hints.select_enter")),
-                    ("Ⓑ", t("hints.back")),
-                    ("Ⓧ", t("hints.options")),
-                    ("Ⓨ", t("hints.favorite")),
-                    ("L1/R1", t("hints.console_switch")),
-                    ("☰", t("hints.menu")),
+                    (g["confirm"], t("hints.open")),
+                    (g["confirm_hold"], t("hints.select_enter")),
+                    (g["back"], t("hints.back")),
+                    (g["context"], t("hints.details")),
+                    (g["favorite"], t("hints.favorite")),
+                    (g["consoles"], t("hints.console_switch")),
+                    (g["start"], t("hints.search")),
+                    (g["menu"], t("hints.menu")),
                 ]
         else:  # keyboard
             if context in (CTX_DIALOG, CTX_POPOVER):

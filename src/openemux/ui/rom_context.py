@@ -30,13 +30,17 @@ def card_menu_entries(card):
     t = card.t
     rom = card.rom
     is_favorite = card.is_favorite(rom)
-    entries = [
+    entries = []
+    if card.context_services is not None:
+        # Everything below, and the facts, in one dialog (issue 913).
+        entries.append((t("context.details"), "rom.details", "document-properties-symbolic"))
+    entries.append(
         (
             t("context.favorite.remove") if is_favorite else t("context.favorite.add"),
             "rom.toggle-favorite",
             "starred-symbolic" if is_favorite else "non-starred-symbolic",
         ),
-    ]
+    )
 
     # One artwork kind at a time, following what the card is actually
     # showing: the label inside a cartridge, the box art everywhere else

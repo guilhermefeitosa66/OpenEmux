@@ -17202,11 +17202,33 @@ has no Android device, so these are `MANUAL`.
   `test_choosing_the_folder_is_the_suggested_action_and_import_the_second`,
   `test_the_tour_waits_for_the_first_games`).
 
+### RT-1043 — Game details: one dialog for a game's settings, save states, play stats and artwork
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a game with a cover, two cores installed for its console and a save state on
+  slot 3; a gamepad for step 5.
+- **Steps:**
+  1. Right-click the card and pick "Game details…"; close it and press Alt+Return on the focused
+     card.
+  2. Read the hero row and the three settings rows.
+  3. Pick another core in the Core row; read its subtitle; click the reset arrow.
+  4. Click "Load" on the slot 3 row.
+  5. With the gamepad on a card, press Ⓧ; move with the D-pad, Ⓐ on Play, Ⓑ to close.
+- **Expected:** 1: the same dialog both ways (issue 913): cover, title, console, when and for how
   long it was played (or "Never played"), the file, "Play" and the favorite toggle. 2: Core, Shader
   and (where the console has shells) Cartridge color rows show the value in effect; the subtitle
   reads "Console default: X" while the game has no override of its own. 3: the subtitle changes to
   "Set for this game" and a reset arrow appears; the arrow puts the row back on "Console default"
   and clears the override in one step. 4: the game launches into slot 3 and the dialog closes.
+  5: the hint bar reads "Ⓧ Details"; the dialog is walked with the D-pad; Ⓐ on Play launches, Ⓑ
+  closes. The Artwork rows fetch, manage, choose or remove the cover; the Playlists switches add
+  or remove the game; Show in file manager, Rename and Delete sit at the bottom.
+- **Check:** suite files `tests/test_game_details.py`, `tests/test_rom_context.py`
+  (`TheDetailsRowTests`), `tests/test_navigation.py`, `tests/test_navigation_controller.py`
+  (`test_the_details_button_goes_through_the_focused_card`), `tests/test_grid_widget.py`
+  (`test_alt_return_opens_the_game_details`), `tests/test_window.py`
+  (`test_the_game_details_dialog_opens_for_a_game`).
+
   4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
      PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
      card.
