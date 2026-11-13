@@ -1,26 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>OpenEmux moved</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="robots" content="noindex" />
-  <script>
-    // GitHub Pages serves this for any path it does not have. The site moved
-    // from /OpenEmux/ to the root of openemux.libre-apps.org with the same
-    // paths, so drop the prefix and keep the query and the fragment.
-    // The project documents Pages also served stayed in the code repository.
-    (function () {
-      var path = location.pathname.replace(/^\/OpenEmux(?=\/|$)/i, "") || "/";
-      var docs = { "/DEVELOPMENT.md": 1, "/PRODUCT.md": 1, "/share-protocol.md": 1, "/assets/CREDITS.md": 1 };
-      var dest = docs[path]
-        ? "https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/docs" + path
-        : "https://openemux.libre-apps.org" + path;
-      location.replace(dest + location.search + location.hash);
-    })();
-  </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OpenEmux has moved</title>
+<style>:root{color-scheme:light dark}body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:34rem;margin:0 auto;padding:4rem 1.25rem;line-height:1.55}
+h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1.5rem}
+a.btn{display:inline-block;padding:.75rem 1.25rem;border-radius:.6rem;background:#2563eb;color:#fff;text-decoration:none;font-weight:600}
+a.btn:hover{background:#1d4ed8}.url{font-size:.85rem;opacity:.7;word-break:break-all;margin-top:1rem}</style>
 </head>
 <body>
-  <p>OpenEmux moved to <a href="https://openemux.libre-apps.org/">openemux.libre-apps.org</a>.</p>
+<h1>OpenEmux has a new address</h1>
+<p>The OpenEmux website moved to <strong>openemux.libre-apps.org</strong>. This old address is no longer updated. Please update your bookmarks.</p>
+<a class="btn" id="destino" href="https://openemux.libre-apps.org/">Go to openemux.libre-apps.org</a>
+<p class="url" id="url">https://openemux.libre-apps.org/</p>
+<script>
+(function () {
+  var d = (function(){var p=location.pathname.replace(/^\/OpenEmux(?=\/|$)/i,'')||'/';var docs={"/DEVELOPMENT.md":1,"/PRODUCT.md":1,"/share-protocol.md":1,"/assets/CREDITS.md":1};if(docs[p])return "https://github.com/guilhermefeitosa66/OpenEmux/blob/develop/docs"+p+location.search+location.hash;return 'https://openemux.libre-apps.org'+p+location.search+location.hash;})();
+  document.getElementById('destino').href = d;
+  document.getElementById('url').textContent = d;
+})();
+</script>
 </body>
 </html>

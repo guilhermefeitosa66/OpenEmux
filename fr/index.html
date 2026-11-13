@@ -1,17 +1,27 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <title>OpenEmux — Une façon simple de jouer à votre collection rétro</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="canonical" href="https://openemux.libre-apps.org/fr/" />
-  <meta property="og:title" content="OpenEmux — Une façon simple de jouer à votre collection rétro" />
-  <meta property="og:url" content="https://openemux.libre-apps.org/fr/" />
-  <meta property="og:image" content="https://openemux.libre-apps.org/assets/og-opening.png" />
-  <script>location.replace("https://openemux.libre-apps.org/fr/" + location.search + location.hash);</script>
-  <meta http-equiv="refresh" content="0; url=https://openemux.libre-apps.org/fr/" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>OpenEmux has moved</title>
+<link rel="canonical" href="https://openemux.libre-apps.org/fr/">
+<style>:root{color-scheme:light dark}body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:34rem;margin:0 auto;padding:4rem 1.25rem;line-height:1.55}
+h1{font-size:1.5rem;margin:0 0 1rem}p{margin:0 0 1.5rem}
+a.btn{display:inline-block;padding:.75rem 1.25rem;border-radius:.6rem;background:#2563eb;color:#fff;text-decoration:none;font-weight:600}
+a.btn:hover{background:#1d4ed8}.url{font-size:.85rem;opacity:.7;word-break:break-all;margin-top:1rem}</style>
 </head>
 <body>
-  <p>OpenEmux moved to <a href="https://openemux.libre-apps.org/fr/">https://openemux.libre-apps.org/fr/</a>.</p>
+<h1>OpenEmux has a new address</h1>
+<p>The OpenEmux website moved to <strong>openemux.libre-apps.org</strong>. This old address is no longer updated. Please update your bookmarks.</p>
+<a class="btn" id="destino" href="https://openemux.libre-apps.org/fr/">Go to openemux.libre-apps.org</a>
+<p class="url" id="url">https://openemux.libre-apps.org/fr/</p>
+<script>
+(function () {
+  var d = 'https://openemux.libre-apps.org/fr/'+location.search+location.hash;
+  document.getElementById('destino').href = d;
+  document.getElementById('url').textContent = d;
+})();
+</script>
 </body>
 </html>
