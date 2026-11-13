@@ -18,8 +18,9 @@ permissions:
   contents: read
 
 jobs:
-  # Decides whether the pull request or push touches anything but the site.
-  # A change confined to docs/, site/ and Markdown cannot break the app, so the
+  # Decides whether the pull request or push touches anything but Markdown.
+  # A change confined to Markdown files cannot break the app (the website, which
+  # used to count too, moved to its own repository), so the
   # jobs below skip their work for it -- they still run and report success,
   # because they are required checks and a check that never reports leaves the
   # pull request unmergeable. Scheduled and manual runs always do the work.
@@ -34,7 +35,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Anything outside the site?
+      - name: Anything besides Markdown?
         id: diff
         env:
           EVENT: ${{ github.event_name }}
@@ -52,7 +53,7 @@ jobs:
           if [ -n "$range" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             files=$(git diff --name-only "$range")
             printf '%s\n' "$files"
-            outside=$(printf '%s\n' "$files" | grep -vE '^(docs|site)/|\.md$' || true)
+            outside=$(printf '%s\n' "$files" | grep -vE '\.md$' || true)
             if [ -n "$files" ] && [ -z "$outside" ]; then
               code=false
             fi
@@ -88,13 +89,6 @@ jobs:
         # formatting rules -- see [tool.ruff] in pyproject.toml.
         run: ruff check --output-format=github .
 
-      - name: The site is what its source builds
-        # docs/ is generated from site/ by tools/build_site.py, which needs only
-        # the standard library. A hand edit to docs/ that skipped the template
-        # used to reach develop unnoticed (#478); this is the one check a
-        # site-only change still runs.
-        run: python tools/build_site.py --check
-
   unittest:
     name: Unit tests (Python ${{ matrix.python-version }})
     needs: changes
@@ -116,9 +110,9 @@ jobs:
         # 25.04, GNOME runtime 50). The suite takes ~30 s (issue #242).
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
-      - name: Site-only change, nothing to test
+      - name: Markdown-only change, nothing to test
         if: env.CODE != 'true'
-        run: echo "Only docs/, site/ or Markdown changed; the suite is skipped."
+        run: echo "Only Markdown changed; the suite is skipped."
 
       - name: Checkout
         if: env.CODE == 'true'
@@ -222,7 +216,7 @@ jobs:
     needs: [changes, unittest]
     # Push to develop only. A pull request never reaches this job, which is
     # what keeps `contents: write` away from code that came in from outside.
-    # A site-only push ran no suite, so there is no new number to publish.
+    # A Markdown-only push ran no suite, so there is no new number to publish.
     if: |
       github.event_name == 'push' && github.ref == 'refs/heads/develop'
       && needs.changes.outputs.code == 'true'
@@ -256,7 +250,7 @@ jobs:
   windows:
     name: Unit tests (Windows / MSYS2)
     needs: changes
-    # Skipped for a site-only change; a skipped job counts as passing.
+    # Skipped for a Markdown-only change; a skipped job counts as passing.
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     # The suite is `unittest` over `TemporaryDirectory`, so most of it is
@@ -335,7 +329,7 @@ jobs:
   smoke:
     name: Headless start-up
     needs: changes
-    # Skipped for a site-only change; a skipped job counts as passing.
+    # Skipped for a Markdown-only change; a skipped job counts as passing.
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:

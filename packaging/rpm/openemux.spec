@@ -26,7 +26,7 @@ Release:        1%{?dist}
 Summary:        Linux-native emulator frontend for RetroArch
 
 License:        MIT
-URL:            https://github.com/guilhermefeitosa66/OpenEmux
+URL:            https://openemux.libre-apps.org/
 # ExclusiveArch, not BuildArch: the vendored RetroArch is an x86_64 binary, so
 # this package can only be *built* somewhere that produces x86_64 --
 # which is what ExclusiveArch says. BuildArch claims the opposite, that the
@@ -186,6 +186,10 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Fri Nov 13 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.5-1
+- The website moved to openemux.libre-apps.org; the app and the package metadata link it
+- About window: links to the source code and to the Libre Apps foundation
+
 * Fri Nov 13 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.4-1
 - Desktop: a 3000-game library opens in under a second and holds half the memory
 - Desktop: the library opens before any emulator downloads; cores come on a game's first launch

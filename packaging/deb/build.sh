@@ -78,7 +78,7 @@ Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
 Installed-Size: ${INSTALLED_KB}
 Section: games
 Priority: optional
-Homepage: https://github.com/guilhermefeitosa66/OpenEmux
+Homepage: https://openemux.libre-apps.org/
 Depends: ${DEPENDS}
 Recommends: python3-segno
 Description: Linux-native emulator frontend for RetroArch

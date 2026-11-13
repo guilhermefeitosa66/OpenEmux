@@ -64,7 +64,7 @@ packaging/
   windows/  MSYS2 bundle staging, the NSIS installer script, the package lock
   common/   shared by every format: install layout, launcher, desktop entry,
             AppStream metainfo, DEP-5 copyright
-docs/       this guide + the GitHub Pages website (index.html)
+docs/       this guide, PRODUCT.md, the share protocol, README and AppStream images
 ```
 
 See [`CLAUDE.md`](../CLAUDE.md) for a deeper tour of the module responsibilities
@@ -989,65 +989,31 @@ staff, update your `.env`, and cut a new release — no source change needed.
 
 ## The website
 
-The GitHub Pages site is served from `docs/` on `main`, and it speaks the same
-languages as the app (`LANGUAGE_META` in `src/openemux/i18n/__init__.py`).
-English is `docs/index.html`; every other language is `docs/<slug>/index.html`
-(`pt-br`, `es`, `fr`, `de`, `ja`, `zh-cn`, `ta`).
+The website, https://openemux.libre-apps.org, lives in its own repository:
+[`guilhermefeitosa66/site-openemux-libre-apps-org`](https://github.com/guilhermefeitosa66/site-openemux-libre-apps-org)
+(private), checked out at `../site-openemux-libre-apps-org`. It holds the
+source (`site/page.html`, `site/manual.html`, one string table per language),
+the generator (`tools/build_site.py`), the link-preview drawer
+(`tools/site_art.py`), the site's tests and the generated pages with every
+asset they use (`public/`), which Vercel deploys on each push to its `main`.
+Its README and `DEVELOPMENT.md` cover building, the image pipeline and the
+page's animations. It was served by GitHub Pages from `docs/` here, at
+`guilhermefeitosa66.github.io/OpenEmux/`, until 2026-11; those URLs redirect
+to the new domain.
 
-Those pages are **generated** — don't edit them. The source is:
+The site speaks the app's languages (`LANGUAGE_META` in
+`src/openemux/i18n/__init__.py`, copied into its `site/languages.json`), its
+manual quotes the app's own UI strings, and its "What's new" links the release
+notes in `release/`; its tests compare them with an OpenEmux checkout at
+`../OpenEmux`. A new language here means a new language there. Renaming a
+release artifact in `packaging/` means updating the download pattern
+(`data-asset`) in the site too.
 
-- `site/page.html` — the one template, with `{{key}}` placeholders;
-- `site/strings/<locale>.json` — one string table per language, same keys in
-  the same order, each value an HTML fragment.
+What stays here is what runs the app: the tools that take the site's
+captures. Their output is copied into the site repository's
+`public/assets/`, then `make images` there encodes the AVIF/WebP widths.
 
-```bash
-python3 tools/build_site.py          # rewrite docs/ from the source
-python3 tools/build_site.py --check  # exit 1 if docs/ is out of date
-```
-
-Commit the regenerated pages with the source: Pages serves `docs/` as is.
-`tests/test_site.py` fails when they drift apart, when a language lacks a
-string, or when a translation changes the markup rather than the text.
-
-The install section's download buttons find their file by name. Each carries a
-`data-asset` pattern (`^openemux_[0-9.]+_amd64\.deb$` …) that a small script
-matches against the latest release's assets through the GitHub API, once per
-visit; the `href` written in the page (the Releases page, or the APK's
-version-free link) is what a visitor gets when that fails. Renaming an artifact
-in `packaging/` means updating its pattern too: `TheInstallSectionTests` holds
-the patterns against the names of a real release.
-
-A change to the site alone reaches the live page only through `main`. Merge it
-to `develop` as usual, then open a second pull request with just `docs/` to
-`main` — or let it ride with the next release.
-
-### Images
-
-Screenshots on the site are served as AVIF and WebP at several widths, through
-`<picture>` (issue #683). Every PNG matched by `IMAGE_SOURCES` in
-`tools/build_site.py` (today `docs/assets/{desktop,shelf,android,share}/*.png`)
-is the TrueColor master; next to it sit
-`<name>-<width>.avif` and `.webp` at 640 / 1280 / 1920 / 2560 px (only the
-widths below the source's own) plus the full width.
-
-```bash
-.venv/bin/python tools/build_site.py --images   # encode what changed, then rewrite docs/
-```
-
-`--images` needs Pillow 13 (Python 3.11+), a dev-only dependency (`requirements-dev.txt`); the
-published site and the app never use it. It records each source's hash and each
-variant's size and hash in `site/images.json`, and re-encodes only a source
-whose hash changed, so running it again changes nothing. `--check` (what CI
-runs) compares those hashes and needs only the standard library: a PNG edited
-without `--images`, a variant missing or hand-edited, or a generated file no
-source owns fails it.
-
-To use an image in `site/page.html`, add `data-picture` to its `<img>` (and
-`data-sizes` with the CSS width it is shown at; the default is `100vw`). The
-build turns it into a `<picture>` with explicit `width`/`height`,
-`loading="lazy" decoding="async"` and a `data-full` (largest WebP) the lightbox
-opens; `data-picture="eager"` is for an image on the first screen. An opted-in
-image with no widths yet fails the build, naming the file.
+### Desktop captures
 
 The desktop captures are made in the devbox from the fictional demo library,
 at 2× (`GDK_SCALE=2`), by `tools/site_captures.py` run inside the devbox
@@ -1059,47 +1025,47 @@ at 2× (`GDK_SCALE=2`), by `tools/site_captures.py` run inside the devbox
 
 It writes `grid-sfc.png` and `cart-{sfc,fc,gba,n64,md,ps}.png` (2640×1756, window
 content only). Look at each one (no toast, no red Log badge, no "Search
-artwork…" placeholder), copy them to `docs/assets/desktop/` and run
-`--images`. The other captures (AppStream, welcome assistant, manual) follow
-the same demo-library rules; the table below says where each one comes from.
+artwork…" placeholder), copy them to `public/assets/desktop/` of the site
+repository and run `make images` there. The cartridge wall is
+`tools/demo_library.py <roms_dir> --wall ../site-openemux-libre-apps-org/public/assets/carts`.
 
-#### Published images
+### Published images
 
 Every image and video the project publishes, what uses it and what makes it.
 A refresh re-shoots the same set: same files, names, scenes, games, framing,
 pixel sizes and variants. A file that can no longer be produced is listed in
-the pull request, not renamed or dropped. "Widths" are the AVIF/WebP variants
-`--images` writes next to the master (exact sizes in `site/images.json`).
+the pull request, not renamed or dropped. Paths starting with `public/` are in
+the site repository, whose `site/images.json` lists the AVIF/WebP widths of
+each capture.
 
-| Files | Used in | Made by | Size | Widths |
-| --- | --- | --- | --- | --- |
-| `docs/assets/desktop/grid-sfc.png` | opening (desktop), OG image | `tools/site_captures.py` (devbox, 2×) | 2640×1756 | 640, 1280, 1920, 2640 |
-| `docs/assets/desktop/cart-{sfc,fc,gba,n64,md,ps}.png` | screenshot gallery | `tools/site_captures.py` | 2640×1756 | 640, 1280, 1920, 2640 |
-| `docs/assets/android/library-snes.png` | opening (phone), OG image | emulator capture (below) | 1440×3120 | 640, 1280, 1440 |
-| `docs/assets/android/game-{snes,gba,n64,megadrive,ps,nds}-portrait.png` | Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 1080×2238 | 640, 1080 |
-| `docs/assets/android/game-{gba,nds}-landscape.png` | Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 2238×1080 | 640, 1280, 1920, 2238 |
-| `docs/assets/share/phone-{1-pick,2-code,3-progress,4-sent}.png` | Share nearby | emulator capture (below) | 1440×3120 | 640, 1280, 1440 |
-| `docs/assets/share/desktop-{1-ready,2-offer,3-progress,4-received,4-library}.png` | Share nearby | devbox capture (below) | 2236×1516 | 640, 1280, 1920, 2236 |
-| `docs/assets/carts/<console>-<slug>.webp` (84) | cartridge wall (`CONSOLES` in `site/page.html`) | `tools/demo_library.py --wall` | 400 px wide | — |
-| `docs/assets/og-opening.png` | `og:image` | `tools/site_art.py` | 1200×630 | — |
-| `docs/assets/logo-128.png` | header, favicon | `tools/site_art.py` | 128×128 | — |
-| `docs/assets/logo.png` | README, manual, promo video (the app ships its own copy, `src/openemux/ui/assets/images/logo.png`) | original art, not re-made | 735×776 | — |
-| `docs/assets/openemux-promo.mp4`, `openemux-promo-poster.jpg` | the opening's video | `openemux-video` (Remotion; its README) | 1920×1080, 30 fps, 44 s (the 66 s render sped up 1.5x with ffmpeg); poster = frame 495 of the render | — |
-| `docs/manual/img/*.webp` (64) | the manual (`site/manual.html`); `overview.webp` is also its `og:image` | devbox crops of a 1880×1280 window, lossless WebP (issue 524) | as in `site/manual.html` | — |
-| `docs/assets/openemux-{roms-nes,roms-snes,settings}.png` | AppStream `<screenshots>` (pinned to a commit) | devbox, 1320×878 window | 1320×878 | — |
-| `docs/assets/openemux-gameplay-gba.png` | AppStream `<screenshots>` (pinned) | devbox: a `demo_gameplay.py` frame in RetroArch over the library | 1300×860 | — |
-| `docs/assets/openemux-{all,library-snes}.png` | no page: inputs of the promo video | devbox, 1320×878 window | 1320×878 | — |
-| `src/openemux/ui/assets/images/welcome/*.png` (10, `SLIDES` in `welcome.py`) | welcome assistant | devbox 1320×878 captures resized | 1200×800 | — |
+| Files | Used in | Made by | Size |
+| --- | --- | --- | --- |
+| `public/assets/desktop/grid-sfc.png` | site: opening (desktop), OG image | `tools/site_captures.py` (devbox, 2×) | 2640×1756 |
+| `public/assets/desktop/cart-{sfc,fc,gba,n64,md,ps}.png` | site: screenshot gallery | `tools/site_captures.py` | 2640×1756 |
+| `public/assets/android/library-snes.png` | site: opening (phone), OG image | emulator capture (below) | 1440×3120 |
+| `public/assets/android/game-{snes,gba,n64,megadrive,ps,nds}-portrait.png` | site: Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 1080×2238 |
+| `public/assets/android/game-{gba,nds}-landscape.png` | site: Android gallery | `tools/phone_shots.py` + `tools/demo_gameplay.py` | 2238×1080 |
+| `public/assets/share/phone-{1-pick,2-code,3-progress,4-sent}.png` | site: Share nearby | emulator capture (below) | 1440×3120 |
+| `public/assets/share/desktop-{1-ready,2-offer,3-progress,4-received,4-library}.png` | site: Share nearby | devbox capture (below) | 2236×1516 |
+| `public/assets/carts/<console>-<slug>.webp` (84) | site: cartridge wall | `tools/demo_library.py --wall` | 400 px wide |
+| `public/assets/og-opening.png`, `logo-128.png` | site: `og:image`, header and favicon | the site's `tools/site_art.py` | 1200×630, 128×128 |
+| `openemux-promo.mp4`, `openemux-promo-poster.jpg` (no longer published: the site dropped the video on 2026-11-13) | nowhere | `openemux-video` (Remotion; its README) | 1920×1080, 30 fps, 44 s (the 66 s render sped up 1.5x with ffmpeg); poster = frame 495 of the render |
+| `public/manual/img/*.webp` (64) | site: the manual; `overview.webp` is also its `og:image` | devbox crops of a 1880×1280 window, lossless WebP (issue 524) | as in the site's `site/manual.html` |
+| `docs/assets/logo.png` | README, promo video (the app ships its own copy, `src/openemux/ui/assets/images/logo.png`; the site has one in `public/assets/`) | original art, not re-made | 735×776 |
+| `docs/assets/openemux-{roms-nes,roms-snes,settings}.png` | AppStream `<screenshots>` (pinned to a commit) | devbox, 1320×878 window | 1320×878 |
+| `docs/assets/openemux-gameplay-gba.png` | AppStream `<screenshots>` (pinned) | devbox: a `demo_gameplay.py` frame in RetroArch over the library | 1300×860 |
+| `docs/assets/openemux-{all,library-snes}.png` | no page: inputs of the promo video | devbox, 1320×878 window | 1320×878 |
+| `src/openemux/ui/assets/images/welcome/*.png` (10, `SLIDES` in `welcome.py`) | welcome assistant | devbox 1320×878 captures resized | 1200×800 |
 
 The README shows only `logo.png`. Nothing references these any more (kept,
 not re-shot): `docs/assets/openemux-gameplay-nes.png`,
-`openemux-roms-{gba,n64}.png`, `openemux-settings-{bios,input}.png`, the six
-`openemux-mobile-*.png`, `docs/assets/shelf/` (the carousel left the site) and
-`share/phone-1-what.png`.
+`openemux-roms-{gba,n64}.png`, `openemux-settings-{bios,input}.png` and the six
+`openemux-mobile-*.png`. `docs/assets/CREDITS.md` says where the games shown
+come from (the site carries a copy).
 
-#### Android and Share nearby captures
+### Android and Share nearby captures
 
-`docs/assets/android/` and `docs/assets/share/` (issue #684) come from the
+`public/assets/android/` and `public/assets/share/` of the site (issue #684) come from the
 Android app and from both apps talking to each other. Nothing in them is real
 game art: the same demo library, the same fictional gameplay.
 
@@ -1112,7 +1078,7 @@ bundled skin, with the skin art on top, exactly as the app layers them.
 .venv/bin/python tools/demo_gameplay.py /tmp/frames \
     --console SFC --console GBA --console N64 --console MD --console PS --console NDS
 .venv/bin/python tools/phone_shots.py \
-    ../openemux-android/pkg/android/openemux/src/main/assets/skins /tmp/frames docs/assets/android
+    ../openemux-android/pkg/android/openemux/src/main/assets/skins /tmp/frames ../site-openemux-libre-apps-org/public/assets/android
 ```
 
 The default set is every console portrait plus GBA and NDS landscape;
@@ -1173,39 +1139,8 @@ display `:77`.
    scrolling to the game, `desktop-4-library.png`.
 
 Convert the phone PNGs to RGB (the screencap is RGBA), copy everything into
-place, run `--images`, and take the emulator down (`adb emu kill` happens when
+place in the site repository, run `make images` there, and take the emulator down (`adb emu kill` happens when
 `emulator-lock.sh`'s command ends; `avdmanager delete avd -n <name>`).
-
-### Scroll stages
-
-A moment that plays as the visitor scrolls (the opening, issue 686) is a
-*scroll stage*: a tall `<section data-stage>` (its length in `--stage-len`)
-whose `.stage-sticky` box holds still while the section scrolls past. Its
-`data-stage-layer` elements carry an `animation-name`, and their `@keyframes`
-span the whole stage (0 % to 100 % is the progress through it), so each
-layer's timing lives in the keyframe stops. Two drivers play the same
-keyframes: CSS scroll-driven animations (`view-timeline`, range `contain`)
-where the browser has them, and otherwise the small script at the end of
-`site/page.html`, which writes the progress into `--p` and seeks paused
-animations with `animation-delay`. The CSS with no driver is the final
-composition: that is what reduced motion, no JavaScript and old browsers
-get. Animate only `transform` and `opacity`, and never touch the scroll
-itself (no snap, no wheel or touch handlers); `tests/test_site.py` holds both.
-
-A stage whose final composition is not its last frame (Share nearby, issue
-687) keeps its staged layout under the motion query, written once per driver
-(`#share[data-stage]` under `@supports`, `#share.stage-js` for the script);
-outside it the same markup is the static version (there, four cards). Give
-each animated element a single class that names its keyframes, so one rule
-with an id can switch them all off where the stage does not fit.
-
-### Composed images
-
-`tools/site_art.py` (Pillow) draws `docs/assets/og-opening.png`, the
-1200×630 link preview, from the opening's two captures
-(`desktop/grid-sfc.png`, `android/library-snes.png`), and
-`docs/assets/logo-128.png`, the header and favicon logo. Run it again after
-retaking those captures or changing `logo.png`.
 
 ## Cutting a release
 
