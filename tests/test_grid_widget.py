@@ -631,6 +631,19 @@ class SleepingAndWakingTests(_GridCase):
         self.assertIsNone(self.grid._restore_source)
         self.assertIsNone(self.grid._probe)
 
+    def test_the_cards_render_their_composites_at_the_display_scale(self):
+        # Issue 902: 2x on every monitor, four times the pixels of a 1x card.
+        self.assertEqual(self.grid._card_ctx.render_scale, grid_module.cartridge_render_scale(self.grid))
+        self.assertEqual(grid_module.cartridge_render_scale(self.grid), max(1, self.grid.get_scale_factor()))
+
+    def test_a_widget_that_cannot_say_its_scale_renders_at_the_fallback(self):
+        widget = mock.Mock()
+        widget.get_scale_factor.side_effect = RuntimeError("no display")
+        self.assertEqual(grid_module.cartridge_render_scale(widget), grid_module.CARTRIDGE_RENDER_SCALE)
+        widget.get_scale_factor.side_effect = None
+        widget.get_scale_factor.return_value = 0
+        self.assertEqual(grid_module.cartridge_render_scale(widget), 1)
+
     def test_every_card_built_is_counted(self):
         before = grid_module.cards_built()
         self.grid._on_factory_setup(None, mock.Mock())

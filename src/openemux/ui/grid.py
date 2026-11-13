@@ -33,6 +33,7 @@ from openemux.core.library_view import (
 from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     ACTIVATION_DEBOUNCE_US,
     CARTRIDGE_RENDER_SCALE,
+    cartridge_render_scale,
     CONSOLE_COVER_ASPECTS,
     DEFAULT_COVER_ASPECT,
     DEFAULT_ITEM_SIZE,
@@ -243,6 +244,9 @@ class RomGrid(Gtk.GridView):
             compact=self.compact,
             zoom=self.zoom,
             cartridge=bool(cartridge_frame_path),
+            # 1x on a 1x display: the composite used to be 2x everywhere,
+            # four times the pixels the card draws (issue 902).
+            render_scale=cartridge_render_scale(self),
             frame_for_rom=self._frame_path_for_rom,
             context_services=context_services,
             on_launch=self._launch_rom,

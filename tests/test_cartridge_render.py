@@ -159,8 +159,38 @@ class CartridgeCacheTests(unittest.TestCase):
             _write_cover(cover, size=(32, 32), color=(0, 0, 255))
             second = render_cartridge(str(cover), FRAME, "GB", "Game", 100, cache_dir=base / "cache")
             self.assertNotEqual(first, second)
-            self.assertFalse(first.exists())  # stale composite is dropped
             self.assertTrue(second.exists())
+
+    def test_a_zoom_round_trip_renders_nothing_twice(self):
+        # Issue 902: the composite of the previous width used to be deleted
+        # after every write, so stepping the zoom back re-rendered the shelf.
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            cover = _write_cover(base / "c.png")
+            cache = base / "cache"
+            small = render_cartridge(str(cover), FRAME, "GB", "Game", 100, cache_dir=cache)
+            large = render_cartridge(str(cover), FRAME, "GB", "Game", 150, cache_dir=cache)
+            self.assertNotEqual(small, large)
+            self.assertTrue(small.exists())
+            self.assertTrue(large.exists())
+            stamp = small.stat().st_mtime_ns
+            self.assertEqual(
+                render_cartridge(str(cover), FRAME, "GB", "Game", 100, cache_dir=cache), small
+            )
+            self.assertEqual(small.stat().st_mtime_ns, stamp)
+
+    def test_the_display_scale_sets_the_pixel_size_and_its_own_file(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            frame = load_frame(FRAME)
+            at_1x = frame.render(None, width=100, scale=1)
+            at_2x = frame.render(None, width=100, scale=2)
+            self.assertEqual(at_1x.get_width(), 100)
+            self.assertEqual(at_2x.get_width(), 200)
+            one = render_cartridge(None, FRAME, "GB", "Game", 100, scale=1, cache_dir=base)
+            two = render_cartridge(None, FRAME, "GB", "Game", 100, scale=2, cache_dir=base)
+            self.assertNotEqual(one, two)
+            self.assertTrue(one.exists() and two.exists())
 
     def test_blank_cartridge_without_cover(self):
         with TemporaryDirectory() as tmp:
@@ -360,32 +390,127 @@ class ACoverThatCannotBeScaledTests(unittest.TestCase):
                 )
 
     def test_an_image_with_no_pixels_is_not_drawn(self):
-        pixbuf = unittest.mock.Mock()
-        pixbuf.get_width.return_value = 0
-        pixbuf.get_height.return_value = 0
         with unittest.mock.patch.object(
-            cartridge_render.GdkPixbuf.Pixbuf, "new_from_file", return_value=pixbuf
+            cartridge_render, "_image_size", return_value=(0, 0)
         ):
             self.assertIsNone(CartridgeFrame._scaled_cover(Path("cover.png"), 100, 100))
 
+    def test_an_image_whose_header_reads_but_whose_pixels_do_not_is_not_drawn(self):
+        with TemporaryDirectory() as tmp_dir:
+            cover = _write_cover(Path(tmp_dir) / "c.png")
+            with unittest.mock.patch.object(
+                cartridge_render.GdkPixbuf.Pixbuf,
+                "new_from_file_at_scale",
+                side_effect=cartridge_render.GLib.Error("truncated"),
+            ):
+                with self.assertLogs("openemux.core.cartridge_render", level="WARNING"):
+                    self.assertIsNone(CartridgeFrame._scaled_cover(cover, 100, 100))
 
-class TheBytesReaderTests(unittest.TestCase):
-    """cairo's PNG loader wants a file object; this is the whole of one."""
 
-    def test_a_read_with_no_size_returns_the_rest(self):
-        reader = cartridge_render._BytesReader(b"abcdef")
-        self.assertEqual(reader.read(2), b"ab")
-        self.assertEqual(reader.read(-1), b"cdef")
-        self.assertEqual(reader.read(None), b"")
+class PixbufToSurfaceTests(unittest.TestCase):
+    """The label reaches cairo straight from its pixels, with no PNG in between (issue 902)."""
+
+    def _pixbuf(self, width, height, alpha=False, fill=0xFF000000):
+        import gi
+
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
+
+        pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, alpha, 8, width, height)
+        pixbuf.fill(fill)
+        return pixbuf
+
+    def _pixel(self, surface, x=0, y=0):
+        data = surface.get_data()
+        offset = y * surface.get_stride() + x * 4
+        return bytes(data[offset:offset + 4])
+
+    def test_an_rgb_pixbuf_becomes_a_native_rgb24_surface(self):
+        surface = cartridge_render._pixbuf_to_surface(self._pixbuf(3, 2, fill=0x1122_33FF))
+        self.assertEqual((surface.get_width(), surface.get_height()), (3, 2))
+        self.assertEqual(surface.get_format(), cartridge_render.cairo.FORMAT_RGB24)
+        # Little-endian memory order is B, G, R, x.
+        self.assertEqual(self._pixel(surface, 2, 1)[:3], bytes([0x33, 0x22, 0x11]))
+
+    def test_a_pixbuf_with_alpha_is_flattened_onto_the_blank_sticker_tone(self):
+        clear = self._pixbuf(2, 2, alpha=True, fill=0xFF000000)  # red, fully transparent
+        surface = cartridge_render._pixbuf_to_surface(clear)
+        expected = cartridge_render._rgb_pixel(cartridge_render.BLANK_LABEL_RGB)
+        blue, green, red = expected >> 8 & 0xFF, expected >> 16 & 0xFF, expected >> 24 & 0xFF
+        self.assertEqual(self._pixel(surface)[:3], bytes([blue, green, red]))
+
+    def test_a_padded_rowstride_is_packed_row_by_row(self):
+        import gi
+
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf, GLib
+
+        # Three bytes of pixel per row plus one byte of padding.
+        rows = bytes([10, 20, 30, 0, 40, 50, 60, 0])
+        padded = GdkPixbuf.Pixbuf.new_from_bytes(
+            GLib.Bytes.new(rows), GdkPixbuf.Colorspace.RGB, False, 8, 1, 2, 4
+        )
+        surface = cartridge_render._pixbuf_to_surface(padded)
+        self.assertEqual(self._pixel(surface, 0, 0)[:3], bytes([30, 20, 10]))
+        self.assertEqual(self._pixel(surface, 0, 1)[:3], bytes([60, 50, 40]))
+
+    def test_a_big_endian_host_packs_the_other_way_round(self):
+        surface = cartridge_render._pixbuf_to_surface(
+            self._pixbuf(1, 1, fill=0x1122_33FF), byteorder="big"
+        )
+        self.assertEqual(self._pixel(surface)[1:], bytes([0x11, 0x22, 0x33]))
+
+    def test_the_fill_value_is_the_pixbuf_layout(self):
+        self.assertEqual(cartridge_render._rgb_pixel((1.0, 0.0, 0.5)), 0xFF0080FF)
 
 
 @unittest.skipUnless(rsvg_available(), "librsvg typelib (gir1.2-rsvg-2.0) not installed")
-class ACoverThatWillNotConvertTests(unittest.TestCase):
-    def test_a_pixbuf_that_cannot_be_encoded_is_reported(self):
-        pixbuf = unittest.mock.Mock()
-        pixbuf.save_to_bufferv.return_value = (False, None)
-        with self.assertRaises(CartridgeFrameError):
-            cartridge_render._pixbuf_to_surface(pixbuf)
+class TheFrameIsRasterizedOnceTests(unittest.TestCase):
+    """librsvg draws the frame and the stencil once per size; the rest is cairo (issue 902)."""
+
+    def test_a_second_cartridge_of_the_same_size_calls_librsvg_no_more(self):
+        frame = load_frame(FRAME)
+        frame._label_cache = {}
+        with TemporaryDirectory() as tmp:
+            cover = _write_cover(Path(tmp) / "c.png")
+            frame.render(str(cover), width=100)
+            with unittest.mock.patch.object(
+                frame._frame, "render_document", side_effect=AssertionError("rasterized again")
+            ), unittest.mock.patch.object(
+                frame._full, "render_layer", side_effect=AssertionError("rasterized again")
+            ):
+                surface = frame.render(str(cover), width=100)
+        self.assertEqual(surface.get_width(), 100)
+
+    def test_a_new_size_replaces_the_cached_one(self):
+        frame = load_frame(FRAME)
+        frame.render(None, width=100)
+        frame.render(None, width=150)
+        self.assertEqual(list(frame._label_cache), [frame.size_for_width(150)])
+
+    def test_two_threads_asking_at_once_rasterize_once(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        frame = load_frame(FRAME)
+        frame._label_cache = {}
+        calls = []
+        real = frame._frame.render_document
+
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+
+        with unittest.mock.patch.object(frame._frame, "render_document", counted):
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(lambda _i: frame.render(None, width=120), range(8)))
+        self.assertEqual(len(calls), 1)
+
+    def test_the_cover_is_decoded_at_the_sticker_size_not_in_full(self):
+        with TemporaryDirectory() as tmp:
+            cover = _write_cover(Path(tmp) / "c.png", size=(400, 400))
+            surface, dx, dy = CartridgeFrame._scaled_cover(cover, 50, 20)
+            self.assertEqual((surface.get_width(), surface.get_height()), (50, 50))
+            self.assertEqual((dx, dy), (0, -15))
 
 
 class WithoutLibrsvgTests(unittest.TestCase):
@@ -613,81 +738,7 @@ class FrameAssetLookupTests(unittest.TestCase):
             self.assertIsNone(cartridge_render.cartridge_frame("SFC"))
 
 
-class DropStaleTests(unittest.TestCase):
-    """``_drop_stale`` must never delete the composite it was told to keep.
-
-    It did, on Windows, for every render: ``keep`` is built by joining with
-    "/" while ``iterdir()`` appends with the OS separator, so the two spell the
-    same file differently ("MD/a.png" vs "MD\a.png") and ``Path.__eq__`` --
-    which compares the normalised *string* -- answered False. Every cartridge
-    was written and then immediately deleted, so the grid received a path to a
-    file that no longer existed and silently fell back to the bare cover art.
-
-    The lesson generalises: ``Path.__eq__`` is not a same-file test on Windows.
-    """
-
-    # A composite is named "<rom name>.<12-hex key>.png" -- _cache_key() returns
-    # the first 12 characters of a sha1. The fixtures spell real keys because
-    # _is_composite_of() checks that shape (issue #234): a made-up suffix is
-    # simply not recognised as a composite, and the test would pass while
-    # exercising nothing.
-    NEW_KEY = "0123456789ab"
-    OLD_KEY = "ba9876543210"
-
-    def _populate(self, directory):
-        keep = directory / f"_blank.{self.NEW_KEY}.png"
-        stale = directory / f"_blank.{self.OLD_KEY}.png"
-        unrelated = directory / f"Zelda.{self.NEW_KEY}.png"
-        other_suffix = directory / f"_blank.{self.NEW_KEY}.png.1234.tmp"
-        for path in (keep, stale, unrelated, other_suffix):
-            path.write_bytes(b"png")
-        return keep, stale, unrelated, other_suffix
-
-    def test_keeps_the_target_and_drops_only_its_own_stale_siblings(self):
-        with TemporaryDirectory() as tmp_dir:
-            directory = Path(tmp_dir)
-            keep, stale, unrelated, other_suffix = self._populate(directory)
-
-            cartridge_render._drop_stale(directory, "_blank", keep)
-
-            self.assertTrue(keep.exists(), "the composite just rendered was deleted")
-            self.assertFalse(stale.exists(), "an outdated composite was left behind")
-            # A different ROM's composite shares the directory, not the stem.
-            self.assertTrue(unrelated.exists())
-            # In-flight temporaries from parallel renders are not .png.
-            self.assertTrue(other_suffix.exists())
-
-    def test_a_stale_composite_that_will_not_delete_is_left_behind(self):
-        # Sweeping the cache is housekeeping; a file that will not go must not
-        # take the render that just succeeded down with it.
-        with TemporaryDirectory() as tmp_dir:
-            directory = Path(tmp_dir)
-            keep, stale, _, _ = self._populate(directory)
-
-            with unittest.mock.patch.object(
-                Path, "unlink", side_effect=OSError("read-only")
-            ):
-                cartridge_render._drop_stale(directory, "_blank", keep)
-
-            self.assertTrue(stale.exists())
-            self.assertTrue(keep.exists())
-
-    def test_keeps_the_target_when_it_is_spelled_with_a_different_separator(self):
-        # The exact Windows shape of the bug, reproduced explicitly so it is
-        # covered even where "/" and os.sep happen to be the same character.
-        with TemporaryDirectory() as tmp_dir:
-            directory = Path(tmp_dir)
-            keep, stale, _, _ = self._populate(directory)
-
-            # Same file, spelled the way render_cartridge builds it.
-            respelled = Path(f"{directory.as_posix()}/{keep.name}")
-            self.assertTrue(respelled.samefile(keep))
-
-            cartridge_render._drop_stale(directory, "_blank", respelled)
-
-            self.assertTrue(keep.exists())
-            self.assertFalse(stale.exists())
-
+class WhatRenderReturnsTests(unittest.TestCase):
     def test_a_rendered_cartridge_still_exists_when_the_call_returns(self):
         # The user-visible invariant: a returned path that is not on disk shows
         # up as a missing cartridge, not as an error.

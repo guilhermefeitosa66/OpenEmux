@@ -41,6 +41,15 @@ RUNTIME_KEEP_LAUNCHES = 20
 #: case that leaked (the window's close handler is what removes it).
 ARTWORK_TEMP_MAX_AGE_HOURS = 24
 
+#: The cartridge composites (issue 902). Every zoom level and display scale a
+#: shelf was shown at keeps its own files, so a zoom round-trip re-renders
+#: nothing; what bounds the cache is this sweep. A composite goes when it has
+#: not been read in this long -- ``relatime`` bumps the access time of a file
+#: read daily about once a day, which is enough -- or when the cache is over
+#: budget, oldest first.
+CARTRIDGE_CACHE_MAX_AGE_DAYS = 60
+CARTRIDGE_CACHE_MAX_BYTES = 512 * 1024 * 1024
+
 #: The per-launch files, keyed by the timestamp they share. Written by
 #: ``RetroArchLauncher``: ``runtime_<console>_<ts>.cfg``,
 #: ``coreopts_<console>_<ts>.cfg``, ``retroarch_<console>_<ts>.log`` and
@@ -207,9 +216,72 @@ def sweep_artwork_temp_dirs(
     return removed
 
 
+def prune_cartridge_cache(
+    cache_dir,
+    max_age_days=CARTRIDGE_CACHE_MAX_AGE_DAYS,
+    max_bytes=CARTRIDGE_CACHE_MAX_BYTES,
+    now=None,
+):
+    """Drop cartridge composites nobody has looked at, and the oldest past the budget.
+
+    One directory per console under ``cache_dir``; the files are the
+    ``<rom>.<key>.png`` composites ``cartridge_render`` writes, re-rendered
+    on demand when missing. "Looked at" is the later of the access and the
+    modification time, so a mount with ``noatime`` still ages a composite by
+    its render date rather than never. Returns the number of files removed.
+    """
+    cache_dir = Path(cache_dir)
+    try:
+        consoles = [entry for entry in cache_dir.iterdir() if entry.is_dir()]
+    except OSError:
+        return 0
+
+    files = []
+    for console_dir in consoles:
+        try:
+            entries = list(console_dir.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.suffix != ".png":
+                continue
+            try:
+                info = entry.stat()
+            except OSError:
+                continue
+            files.append((max(info.st_atime, info.st_mtime), info.st_size, entry))
+
+    cutoff = (now if now is not None else time.time()) - max_age_days * 86400
+    removed = 0
+    kept_bytes = 0
+    # Oldest first: the ones past the age go whatever the budget says, and
+    # then the budget is filled newest first.
+    files.sort(reverse=True)
+    for seen, size, path in files:
+        if seen >= cutoff and kept_bytes + size <= max_bytes:
+            kept_bytes += size
+            continue
+        if _unlink(path):
+            removed += 1
+
+    if removed:
+        logger.info(
+            "housekeeping pruned cartridge composites: removed=%d kept_bytes=%d dir=%s",
+            removed,
+            kept_bytes,
+            cache_dir,
+        )
+    return removed
+
+
 def run_startup_housekeeping(config_manager, artwork_temp_root=None):
     """Run every sweep, and never let one of them stop the app from starting."""
-    summary = {"runtime_files": 0, "buildbot_cache": 0, "artwork_temp_dirs": 0}
+    summary = {
+        "runtime_files": 0,
+        "buildbot_cache": 0,
+        "artwork_temp_dirs": 0,
+        "cartridge_composites": 0,
+    }
     try:
         runtime_dir = Path(config_manager.get_runtime_dir())
         summary["runtime_files"] = prune_runtime_files(runtime_dir)
@@ -218,6 +290,9 @@ def run_startup_housekeeping(config_manager, artwork_temp_root=None):
             artwork_temp_root
             if artwork_temp_root is not None
             else default_artwork_temp_root()
+        )
+        summary["cartridge_composites"] = prune_cartridge_cache(
+            config_manager.store_path("cartridge_cache")
         )
     except Exception:  # noqa: BLE001 - startup must survive anything here
         logger.exception("housekeeping failed")

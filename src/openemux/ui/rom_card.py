@@ -34,6 +34,25 @@ from openemux.ui.card_layout import (
     FixedSizePicture,
     cartridge_frame_svg,
 )
+
+#: Gdk.Texture objects are immutable and GTK keeps their upload, so one is
+#: made per decoded pixbuf and kept on it: a recycled card scrolling back to
+#: a cached cover re-attaches the same texture instead of uploading it again
+#: (issue 902). The attribute lives as long as the cover cache holds the
+#: pixbuf, and goes with it.
+_TEXTURE_ATTR = "_openemux_texture"
+
+
+def texture_for(pixbuf):
+    """The one Gdk.Texture for ``pixbuf``, made on the first ask."""
+    texture = getattr(pixbuf, _TEXTURE_ATTR, None)
+    if texture is None:
+        texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+        try:
+            setattr(pixbuf, _TEXTURE_ATTR, texture)
+        except AttributeError:  # pragma: no cover - a pixbuf stand-in with slots
+            pass
+    return texture
 from openemux.ui.context_menu import (
     build_context_popover,
     present_context_popover,
@@ -163,6 +182,7 @@ class CardContext:
         cartridge,
         frame_for_rom,
         context_services,
+        render_scale=CARTRIDGE_RENDER_SCALE,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -185,6 +205,9 @@ class CardContext:
         # Whether this page draws cards as cartridges at all. The shell of an
         # individual ROM (its color variant) comes from frame_for_rom.
         self.cartridge = cartridge
+        # The composite's pixel scale: the display's, so a 1x monitor holds
+        # 1x composites (issue 902).
+        self.render_scale = max(1, int(render_scale))
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -703,7 +726,8 @@ class RomItem(Gtk.Box):
         once before the card gives up on the cartridge.
         """
         label_path = cover_path if is_label_art(cover_path) else None
-        wanted = (str(self.cartridge_frame_path), self.cover_width, CARTRIDGE_RENDER_SCALE)
+        scale = self.ctx.render_scale
+        wanted = (str(self.cartridge_frame_path), self.cover_width, scale)
         for attempt in (0, 1):
             if entry.composite_key != wanted:
                 composite = cartridge_render.render_cartridge(
@@ -712,7 +736,7 @@ class RomItem(Gtk.Box):
                     rom["console"],
                     rom["name"],
                     width=self.cover_width,
-                    scale=CARTRIDGE_RENDER_SCALE,
+                    scale=scale,
                 )
                 entry.composite_key = wanted
                 entry.composite_path = str(composite) if composite else None
@@ -774,12 +798,12 @@ class RomItem(Gtk.Box):
         if self._is_stale(token) or self._is_abandoned():
             return False
         try:
-            if full_resolution:
-                self.cover_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-            else:
-                if self._backdrop is not None:
-                    self._fit_cover_to(pixbuf)
-                self.cover_image.set_pixbuf(pixbuf)
+            if not full_resolution and self._backdrop is not None:
+                self._fit_cover_to(pixbuf)
+            # One texture per cached pixbuf, cover or composite: a rebind to
+            # art the cache still holds re-attaches it rather than uploading
+            # it again (issue 902).
+            self.cover_image.set_paintable(texture_for(pixbuf))
             # Set on every apply, either way: the grid recycles cards, and one
             # that last showed a cartridge must not hand its look to a cover.
             # Only once the art is attached, so a failed attach leaves the

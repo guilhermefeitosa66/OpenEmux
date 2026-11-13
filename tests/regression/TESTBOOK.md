@@ -16850,9 +16850,12 @@ has no Android device, so these are `MANUAL`.
   Before issue 899, opening "All" built 1843 cards for a viewport showing nine, blocked the
   main loop for two seconds and added 140 MB; a zoom step rebuilt every group.
 - **Check:** `./devbox/devbox.sh exec env DEVBOX_REPO=$PWD tools/perf/library_bench.sh all`
-  prints `all_main_settle_s` below `0.3`, `zoom_in_main_settle_s` below `0.5`, and a
-  `cards_built` for the whole session (start, "All", search, zoom in, zoom out, a scroll, ten
-  consoles, "All" again) below `1500` — about three screens per page shown. Unit-level:
+  prints `all_main_cpu_s` below `0.3` and `zoom_in_main_cpu_s` below `0.5` (the main thread's
+  own CPU time for the switch and for the zoom: what the window is blocked for; the
+  `*_main_settle_s` beside them also count the trickle of covers landing on the main loop
+  afterwards), and a `cards_built` for the whole session (start, "All", search, zoom in, zoom
+  out, a scroll, ten consoles, "All" again) below `1500` — about three screens per page shown.
+  Unit-level:
   `tests/test_grouped_scroll.py` (`test_only_the_groups_near_the_viewport_hold_cards`,
   `test_the_page_builds_a_few_screens_of_cards_not_the_library`,
   `WhoIsNearTheViewportTests`), `tests/test_grid_widget.py` (`SleepingAndWakingTests`),
@@ -16879,3 +16882,28 @@ has no Android device, so these are `MANUAL`.
   `test_waking_puts_the_page_back_where_it_was`, `test_tearing_down_lets_go_of_the_entries_and_the_cards`),
   `tests/test_library_pages.py` (`test_a_rebuilt_page_tears_the_previous_grid_down`,
   `test_forgetting_and_resetting_tear_the_grids_down`).
+
+### RT-1031 — A cartridge is rendered once per size at the display's scale, and never uploaded twice
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console in the cartridge shelf on a 1x monitor and on a 2x one,
+  step the zoom in and back out, and scroll the shelf up and down.
+- **Expected:** On a 1x monitor the composites on disk (`~/.openemux/cache/cartridges/<console>/`)
+  are the size of the card, on a 2x monitor twice that: the scale follows the display instead of
+  being 2x everywhere, so a 1x card holds a quarter of the pixels it used to. The first render of
+  a cartridge writes one PNG, the one in the disk cache: the label reaches cairo straight from its
+  pixels, decoded at the sticker's size rather than in full and rescaled, and the frame and the
+  label stencil are rasterized through librsvg once per size and reused, so the decode pool
+  composes several cartridges at once instead of one at a time. Stepping the zoom in and back out
+  renders nothing twice: every size keeps its own composite, and the start-up housekeeping prunes
+  the cache by age (60 days unread) and size (512 MB) instead of the render deleting the other
+  sizes. A card scrolling back to a cartridge the cover cache still holds re-attaches the same
+  `Gdk.Texture` rather than uploading the pixels again (issue 902).
+- **Check:** suite files `tests/test_cartridge_render.py` (`PixbufToSurfaceTests`,
+  `TheFrameIsRasterizedOnceTests`, `test_a_zoom_round_trip_renders_nothing_twice`,
+  `test_the_display_scale_sets_the_pixel_size_and_its_own_file`), `tests/test_housekeeping.py`
+  (`PruneCartridgeCacheTests`), `tests/test_rom_card_widget.py`
+  (`test_the_same_pixbuf_is_attached_as_the_same_texture_every_time`,
+  `test_the_composite_is_rendered_at_the_cards_display_scale`), `tests/test_grid_widget.py`
+  (`test_the_cards_render_their_composites_at_the_display_scale`).

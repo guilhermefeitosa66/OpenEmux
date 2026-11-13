@@ -138,6 +138,36 @@ class TheCoverArrivingTests(_CardCase):
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(), True)
         self.assertIsNotNone(self.card.cover_image.get_paintable())
 
+    def test_the_same_pixbuf_is_attached_as_the_same_texture_every_time(self):
+        # Issue 902: a recycled card re-uploaded the cached cartridge on
+        # every bind.
+        pixbuf = self.pixbuf()
+        self.card._apply_cover_pixbuf(self.card._generation, pixbuf, True)
+        first = self.card.cover_image.get_paintable()
+        self.card._apply_cover_pixbuf(self.card._generation, pixbuf, True)
+        self.assertIs(self.card.cover_image.get_paintable(), first)
+        self.assertIs(rom_card_module.texture_for(pixbuf), first)
+
+    def test_a_plain_cover_gets_its_texture_the_same_way(self):
+        self.card.cartridge_frame_path = None
+        pixbuf = self.pixbuf()
+        with mock.patch.object(Gdk.Texture, "new_for_pixbuf", wraps=Gdk.Texture.new_for_pixbuf) as make:
+            self.card._apply_cover_pixbuf(self.card._generation, pixbuf, False)
+            self.card._apply_cover_pixbuf(self.card._generation, pixbuf, False)
+        self.assertEqual(make.call_count, 1)
+        self.assertIsNotNone(self.card.cover_image.get_paintable())
+
+    def test_the_composite_is_rendered_at_the_cards_display_scale(self):
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        self.entry.forget_artwork()
+        with mock.patch.object(self.card.ctx, "render_scale", 2), mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        self.assertEqual(render.call_args[1]["scale"], 2)
+
     def test_a_cartridge_composite_casts_its_shadow_from_its_outline(self):
         # issue 725: `.rom-cover` is a box shadow plus rounded corners, which
         # drew a rectangle around every cartridge.
@@ -179,7 +209,7 @@ class TheCoverArrivingTests(_CardCase):
 
     def test_art_that_will_not_attach_is_logged_rather_than_raised(self):
         with mock.patch.object(
-            self.card.cover_image, "set_pixbuf", side_effect=RuntimeError("bad")
+            self.card.cover_image, "set_paintable", side_effect=RuntimeError("bad")
         ):
             self.assertFalse(
                 self.card._apply_cover_pixbuf(
