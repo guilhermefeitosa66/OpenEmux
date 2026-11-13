@@ -75,6 +75,16 @@ class TranslucentBarTests(unittest.TestCase):
         value = re.search(r"^TRANSLUCENT_OPACITY = ([0-9.]+)$", script, re.M).group(1)
         self.assertEqual(float(value), overlay_bar.TRANSLUCENT_OPACITY)
 
+    def test_the_hide_and_show_buttons_draw_the_android_eye(self):
+        # Issue 938: a down chevron read as "more" or "minimize". The eye-slash
+        # hides the bar and the plain eye shows it, as in the Android app.
+        script = (Path(__file__).resolve().parent.parent / "scripts" / "build_overlay.py").read_text()
+        eye = "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6"
+        hide = re.search(r'^    "hide": \'<path d="([^"]+)"', script, re.M).group(1)
+        show = re.search(r'^    "show": \'<path d="([^"]+)"', script, re.M).group(1)
+        self.assertEqual(hide, eye + "M4 4l16 16")
+        self.assertEqual(show, eye)
+
     def test_no_strip_is_kept_with_or_without_a_console_shader(self):
         _, shader_dir = overlay_bar.prepare_shaders(None, "gl", self.runtime, translucent=True)
         folder = Path(shader_dir)

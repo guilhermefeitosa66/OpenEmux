@@ -2399,13 +2399,15 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Mode:** MANUAL
 - **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. Pause the game and mute it, then click the bar's down-chevron.
-  2. Click the faded up-chevron that appears in the bottom-right corner.
+  1. Pause the game and mute it, then click the bar's rightmost button, an eye with a slash.
+  2. Click the faded eye that appears in the bottom-right corner.
 - **Expected:** Hidden, the bar is gone, the game grows to the full height of the window, and only
-  a small faded button remains in the bottom-right corner (RetroArch says `Shader: "Controls
-  hidden.glslp"`). Shown again, the bar returns with its state intact — still paused (blue play),
-  still muted (red) — and the game shrinks back above it.
-- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`).
+  a small faded button with a plain eye remains in the bottom-right corner (RetroArch says
+  `Shader: "Controls hidden.glslp"`). Neither button is a chevron any more: the eye-slash hides,
+  the eye shows, as in the Android app (issue #938). Shown again, the bar returns with its state
+  intact — still paused (blue play), still muted (red) — and the game shrinks back above it.
+- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`)
+  and its `test_the_hide_and_show_buttons_draw_the_android_eye` for the two glyphs.
 
 ### RT-330 — A console's shader keeps its quality with the bar
 - **Area:** Launch
@@ -2496,7 +2498,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   repo) with RetroArch from Flathub (`org.libretro.RetroArch`); a game of any console.
 - **Steps:**
   1. Launch the game from the Flatpak OpenEmux.
-  2. Hide the bar with its down-chevron, then show it again.
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye.
 - **Expected:** The game opens with OpenEmux's bar on the bottom edge and the game above it, as
   in RT-327; hiding and showing behave as in RT-329. `~/.openemux/runtime/overlay/` holds
   `openemux-bar.cfg`, its PNGs and the margin shaders, and that is where the launch points
@@ -2512,7 +2514,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   on; a console with no shader and one with a shader (e.g. `dot` on GBA).
 - **Steps:**
   1. Launch a game on each console.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Turn the switch off again and launch one of the games.
 - **Expected:** With the switch on, the game fills the whole height of the window and the bar is
@@ -2535,7 +2537,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Open "Settings" → "Video": the "Game Window" group sits above "In-Game Bar". Launch a game, then
      quit it.
   2. Turn "Start games in fullscreen" on, close "Settings" and launch a game.
-  3. In that game, hide the bar with its down-chevron and show it again with the faded button; press
+  3. In that game, hide the bar with its eye-slash button and show it again with the faded eye; press
      the fullscreen hotkey (`F` by default) twice.
   4. Turn the switch off while the game is still running, quit the game and launch it again.
 - **Expected:** With the switch off the game opens in a decorated window. With it on, the game window
@@ -2572,7 +2574,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   "Simple"; the game window 16:9 (its default shape).
 - **Steps:**
   1. Launch the MD game.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Click every button on the bar: pause, reset, slow motion, fast-forward, turbo, save, load,
      mute, volume, fullscreen, menu, close.
