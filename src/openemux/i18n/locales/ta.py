@@ -158,6 +158,8 @@ TRANSLATIONS = {
     "about.ack.inspired_by": "ஈர்ப்பு",
     "about.ack.emulation": "எமுலேஷன்",
     "about.legal.console_icons": "கன்சோல் ஐகான்கள்",
+    "about.link.source": "மூலக் குறியீடு",
+    "about.link.foundation": "Libre Apps அறக்கட்டளை",
     "shortcuts.group.general": "பொது",
     "shortcuts.search": "நூலகத்தில் தேடு",
     "shortcuts.preferences": "அமைப்புகளைத் திற",

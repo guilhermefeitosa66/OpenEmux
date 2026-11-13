@@ -26,7 +26,7 @@ Release:        1%{?dist}
 Summary:        Linux-native emulator frontend for RetroArch
 
 License:        MIT
-URL:            https://github.com/guilhermefeitosa66/OpenEmux
+URL:            https://openemux.libre-apps.org/
 # ExclusiveArch, not BuildArch: the vendored RetroArch is an x86_64 binary, so
 # this package can only be *built* somewhere that produces x86_64 --
 # which is what ExclusiveArch says. BuildArch claims the opposite, that the

@@ -20,7 +20,7 @@ OpenEmux spans several repositories, all checked out next to this one (under `~/
 | `guilhermefeitosa66/openemux-builds` | `../openemux-builds` | `main` | Android beta APKs, one pre-release per finished `repo-mobile` issue (`beta-<version>`), linked from the issue. Signed with the release key, patch number only bumped. Published by the pipeline after QA merges. |
 | `guilhermefeitosa66/openemux-evidence` | `../openemux-evidence` | `main` | Images embedded in issue comments: `qa/issue-<N>/<run>/` (QA screenshots) and `design/issue-<N>/` (design specs). Nothing is built or shipped from it. |
 | `guilhermefeitosa66/openemux-ops` (private) | `../openemux-ops` | `main` | Maintainer notes; `pipeline/PIPELINE.md` documents the autonomous issue pipeline. |
-| `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video in the site's hero (`public/assets/openemux-promo.mp4` and its poster, in the site repository). |
+| `guilhermefeitosa66/openemux-video` (private) | `../openemux-video` | `main` | Remotion source of the promo video. Since 2026-11-13 the site no longer shows it (it ended on the old github.io address); a new render would have to be published elsewhere. |
 
 Satellite repositories are named `openemux-<name>`; only this one keeps `OpenEmux`. Pipeline worktrees go in `../OpenEmux-wt/`, `../openemux-android-wt/` and `../openemux-video-wt/`, never inside a checkout. Every one of these repositories uses the personal git identity and key (`~/.ssh/id_ed25519` with `IdentitiesOnly=yes`).
 

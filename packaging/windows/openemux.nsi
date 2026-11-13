@@ -145,7 +145,7 @@ Section "OpenEmux" SecMain
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\OpenEmux.exe"
   WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "Guilherme Feitoza"
-  WriteRegStr HKCU "${UNINST_KEY}" "URLInfoAbout" "https://github.com/guilhermefeitosa66/OpenEmux"
+  WriteRegStr HKCU "${UNINST_KEY}" "URLInfoAbout" "https://openemux.libre-apps.org/"
   WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\Uninstall.exe"'
   WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1

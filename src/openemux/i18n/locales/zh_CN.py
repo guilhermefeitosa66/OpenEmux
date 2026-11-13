@@ -157,6 +157,8 @@ TRANSLATIONS = {
     "about.ack.inspired_by": "灵感来源",
     "about.ack.emulation": "模拟引擎",
     "about.legal.console_icons": "主机图标",
+    "about.link.source": "源代码",
+    "about.link.foundation": "Libre Apps 基金会",
     "shortcuts.group.general": "常规",
     "shortcuts.search": "搜索游戏库",
     "shortcuts.preferences": "打开设置",

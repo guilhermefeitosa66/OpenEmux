@@ -18,7 +18,7 @@ pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu"
 # RetroArch, and on ARM there is none to vendor -- libretro publishes no ARM
 # build -- so the package depends on the distribution's instead (see below).
 arch=('x86_64' 'aarch64')
-url="https://github.com/guilhermefeitosa66/OpenEmux"
+url="https://openemux.libre-apps.org/"
 license=('MIT')
 
 depends=(

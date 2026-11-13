@@ -1049,7 +1049,7 @@ each capture.
 | `public/assets/share/desktop-{1-ready,2-offer,3-progress,4-received,4-library}.png` | site: Share nearby | devbox capture (below) | 2236×1516 |
 | `public/assets/carts/<console>-<slug>.webp` (84) | site: cartridge wall | `tools/demo_library.py --wall` | 400 px wide |
 | `public/assets/og-opening.png`, `logo-128.png` | site: `og:image`, header and favicon | the site's `tools/site_art.py` | 1200×630, 128×128 |
-| `public/assets/openemux-promo.mp4`, `openemux-promo-poster.jpg` | site: the opening's video | `openemux-video` (Remotion; its README) | 1920×1080, 30 fps, 44 s (the 66 s render sped up 1.5x with ffmpeg); poster = frame 495 of the render |
+| `openemux-promo.mp4`, `openemux-promo-poster.jpg` (no longer published: the site dropped the video on 2026-11-13) | nowhere | `openemux-video` (Remotion; its README) | 1920×1080, 30 fps, 44 s (the 66 s render sped up 1.5x with ffmpeg); poster = frame 495 of the render |
 | `public/manual/img/*.webp` (64) | site: the manual; `overview.webp` is also its `og:image` | devbox crops of a 1880×1280 window, lossless WebP (issue 524) | as in the site's `site/manual.html` |
 | `docs/assets/logo.png` | README, promo video (the app ships its own copy, `src/openemux/ui/assets/images/logo.png`; the site has one in `public/assets/`) | original art, not re-made | 735×776 |
 | `docs/assets/openemux-{roms-nes,roms-snes,settings}.png` | AppStream `<screenshots>` (pinned to a commit) | devbox, 1320×878 window | 1320×878 |
