@@ -24,6 +24,7 @@ from gi.repository import Adw, GLib, Gtk
 
 from openemux.core.library_groups import group_roms_by_console
 from openemux.core.library_view import SORT_RECENTLY_PLAYED
+from openemux.core.play_history import RECENT_LIMIT
 from openemux.core.systems import get_system_display_name
 from openemux.ui.console_icons import console_icon
 from openemux.ui.grid import GRID_MARGIN, LIST_MARGIN, RomGrid
@@ -50,9 +51,6 @@ def is_mixed_scope(scope):
     return scope in (ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID) or is_collection_scope(scope)
 
 logger = logging.getLogger(__name__)
-
-#: How many games the "Recently played" page shows (issue 910).
-RECENT_LIMIT = 20
 
 
 def _teardown(grid):
@@ -384,11 +382,23 @@ class LibraryPages:
         self.mark_loaded(FAVORITES_ID)
 
     def ensure_recent_loaded(self):
-        """The last games played, most recent first (issue 910)."""
+        """The last games played, most recent first (issue 910).
+
+        At most ``RECENT_LIMIT`` of them, counted among the games that still
+        resolve to a library entry (issue 942).
+        """
         if not self.has(RECENT_ID):
             return
-        paths = self.win.play_history.recent(RECENT_LIMIT)
-        entries = self.win.playlist_manager.entries_for_paths(paths)
+        paths = self.win.play_history.recent()
+        resolve = self.win.playlist_manager.entries_for_paths
+        entries = []
+        # A chunk at a time: resolving checks every file on disk, and a long
+        # history only needs as many as it takes to fill the page.
+        for start in range(0, len(paths), RECENT_LIMIT):
+            entries.extend(resolve(paths[start : start + RECENT_LIMIT]))
+            if len(entries) >= RECENT_LIMIT:
+                break
+        entries = entries[:RECENT_LIMIT]
         self.render(RECENT_ID, entries)
         self.mark_loaded(RECENT_ID)
 
@@ -495,6 +505,7 @@ class LibraryPages:
         band_host_is_self=False,
         dormant=False,
         play_caption=None,
+        mixed_cartridges=False,
     ):
         win = self.win
         grid = RomGrid(
@@ -519,6 +530,7 @@ class LibraryPages:
             dormant=dormant,
             play_caption=play_caption,
             has_auto_state=win.has_auto_state,
+            mixed_cartridges=mixed_cartridges,
         )
         # An incremental filter settles over frames; the title's count and
         # the empty state follow it (issue 906).
@@ -581,6 +593,9 @@ class LibraryPages:
             on_selection_changed=group.on_child_selection_changed,
             band_host_is_self=True,
             play_caption=win.play_caption,
+            # One grid in play order still draws cartridges, each in its own
+            # console's shell (issue 942).
+            mixed_cartridges=True,
         )
         header, set_count = self._group_header(scope, len(roms), grid.compact)
         body.add_section(header, grid)

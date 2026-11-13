@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 #: directory keeps its history there (issue #239).
 DEFAULT_HISTORY_FILE = store_path("play_history")
 
+#: How many games the "Recently played" page shows: a short "pick up where
+#: you left off" list, not the whole history (issue 942). Only the page is
+#: capped -- every game's play count and play time stay recorded.
+RECENT_LIMIT = 12
+
 
 class PlayHistory:
     """Last-played timestamps and play counts, persisted as JSON."""
@@ -87,15 +92,22 @@ class PlayHistory:
     def has_history(self):
         return bool(self._entries)
 
-    def recent(self, limit=20):
-        """The last ``limit`` ROM paths played, most recent first."""
+    def recent(self, limit=None):
+        """The ROM paths played, most recent first; the last ``limit`` if given.
+
+        The page caps *after* resolving the paths to library entries, so a
+        game whose file is gone does not leave it one short (issue 942); it
+        asks for the whole order and keeps the first ``RECENT_LIMIT``.
+        """
         played = [
             (entry["last_played"], path)
             for path, entry in self._entries.items()
             if entry["last_played"] > 0
         ]
         played.sort(reverse=True)
-        return [path for _stamp, path in played[:limit]]
+        if limit is not None:
+            played = played[:limit]
+        return [path for _stamp, path in played]
 
     # -- updates -----------------------------------------------------------
     def record_launch(self, rom_path):
