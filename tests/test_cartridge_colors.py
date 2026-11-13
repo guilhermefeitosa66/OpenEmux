@@ -3,6 +3,7 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from openemux.core import cartridge_colors
 from openemux.core.cartridge_colors import (
@@ -128,6 +129,44 @@ class ColorStoreCachingTests(unittest.TestCase):
             self.assertEqual(store.get_console_color("SFC"), "red")
             store.set_console_color("SFC", "blue")
             self.assertEqual(store.get_console_color("SFC"), "blue")
+
+    def test_a_page_of_lookups_stats_the_file_once_not_per_card(self):
+        # Issue 907: every card bind stat-ed the file twice and deep-copied
+        # the mapping twice. Readers now share the parse, and the stamp is
+        # compared at most every STAMP_TTL_S.
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            store.get_effective_color("/roms/SFC/Game.sfc", "SFC")
+            with mock.patch.object(store, "_stamp", wraps=store._stamp) as stamp, mock.patch.object(
+                cartridge_colors.copy, "deepcopy", side_effect=AssertionError("copied")
+            ):
+                for _ in range(200):
+                    self.assertEqual(
+                        store.get_effective_color("/roms/SFC/Game.sfc", "SFC"), "red"
+                    )
+            self.assertEqual(stamp.call_count, 0)
+
+    def test_an_edit_made_outside_the_app_is_seen_after_the_grace_period(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            self.assertEqual(store.get_console_color("SFC"), "red")
+            other = CartridgeColorStore(store.config_file)
+            other.set_console_color("SFC", "blue")
+            # Inside the grace period the parse is trusted.
+            self.assertEqual(store.get_console_color("SFC"), "red")
+            store._checked_at -= cartridge_colors.STAMP_TTL_S
+            self.assertEqual(store.get_console_color("SFC"), "blue")
+
+    def test_after_the_grace_period_an_unchanged_file_is_not_parsed_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            store = self._store(tmp_dir)
+            store.set_console_color("SFC", "red")
+            self.assertEqual(store.get_console_color("SFC"), "red")
+            store._checked_at -= cartridge_colors.STAMP_TTL_S
+            with mock.patch.object(store, "_load_uncached", side_effect=AssertionError("parsed")):
+                self.assertEqual(store.get_console_color("SFC"), "red")
 
     def test_a_caller_cannot_edit_the_cache(self):
         with TemporaryDirectory() as tmp_dir:

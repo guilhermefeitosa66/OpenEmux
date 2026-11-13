@@ -402,6 +402,50 @@ class FavoriteLookupTests(unittest.TestCase):
                 builtins.open = real_open
             self.assertEqual(len(reads), 1, reads)
 
+    def test_a_page_of_cards_stats_the_file_once_not_per_card(self):
+        # Issue 907: the stamp is compared at most every FAVORITES_STAMP_TTL_S,
+        # so a page of stars costs no syscall per card.
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base, favorites=[rom])
+            self.assertTrue(manager.is_favorite(rom))
+            with unittest.mock.patch.object(Path, "stat", side_effect=AssertionError("stat")):
+                for _ in range(200):
+                    self.assertTrue(manager.is_favorite(rom))
+
+    def test_an_edit_made_outside_the_app_is_seen_after_the_grace_period(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base)
+            self.assertFalse(manager.is_favorite(rom))
+            other = self._manager(base)
+            other.toggle_favorite({"path": str(rom)})
+            self.assertFalse(manager.is_favorite(rom))
+            from openemux.core.playlist_manager import FAVORITES_STAMP_TTL_S
+
+            manager._favorites_checked_at -= FAVORITES_STAMP_TTL_S
+            self.assertTrue(manager.is_favorite(rom))
+
+    def test_after_the_grace_period_an_unchanged_file_is_not_parsed_again(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            rom = base / "roms" / "FC" / "Mario.nes"
+            rom.parent.mkdir(parents=True, exist_ok=True)
+            manager = self._manager(base, favorites=[rom])
+            self.assertTrue(manager.is_favorite(rom))
+            from openemux.core.playlist_manager import FAVORITES_STAMP_TTL_S
+
+            manager._favorites_checked_at -= FAVORITES_STAMP_TTL_S
+            with unittest.mock.patch(
+                "openemux.core.playlist_manager.read_path_lines",
+                side_effect=AssertionError("parsed"),
+            ):
+                self.assertTrue(manager.is_favorite(rom))
+
     def test_a_write_invalidates_the_parse(self):
         with TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)

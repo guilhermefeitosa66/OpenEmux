@@ -53,6 +53,7 @@ from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
 from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
+    ART_UNRESOLVED,
     CardContext,
     RomEntry,
     RomItem,
@@ -201,6 +202,11 @@ class RomGrid(Gtk.GridView):
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
         # The console's authored shell; per-ROM colors swap in a variant of it.
         self._base_frame_path = cartridge_frame_path
+        # Shell colour -> frame path. The frames are shipped assets that do
+        # not change while the app runs, so resolving each colour once per
+        # grid spares every bind the two file probes and the frame stat
+        # (issue 907).
+        self._frame_by_color = {}
 
         self._card_ctx = CardContext(
             t=t,
@@ -460,7 +466,12 @@ class RomGrid(Gtk.GridView):
         if self._frame_color_for_rom is None:
             return self._base_frame_path
         color = self._frame_color_for_rom(rom)
-        return cartridge_frame_svg(rom["console"], color) or self._base_frame_path
+        try:
+            return self._frame_by_color[color]
+        except KeyError:
+            path = cartridge_frame_svg(rom["console"], color) or self._base_frame_path
+            self._frame_by_color[color] = path
+            return path
 
     def refresh_rom_frame(self, rom):
         """Re-resolve one card's shell after its cartridge color changed.
@@ -485,10 +496,9 @@ class RomGrid(Gtk.GridView):
         if card is not None:
             card._refresh_cover_after_change(fade=fade)
         else:
-            # Off screen: the state is stale until something shows it again,
-            # and the cover cache is keyed by mtime, so the next bind re-reads
-            # the new file by itself.
-            entry.has_artwork = None
+            # Off screen: forget what was resolved, so the next bind looks
+            # the art up again rather than trusting the remembered path.
+            entry.forget_artwork()
         return True
 
     # -- layout ------------------------------------------------------------

@@ -27,7 +27,7 @@ from openemux.core.library_view import (
     scale_length,
 )
 from openemux.core.paths import display_text
-from openemux.core.scraper import COVER_ART, LABEL_ART, fetch_cover, is_label_art
+from openemux.core.scraper import COVER_ART, LABEL_ART, is_label_art, resolve_local_art
 from openemux.core.systems import get_system_display_name
 from openemux.ui.card_layout import (
     CARTRIDGE_RENDER_SCALE,
@@ -43,6 +43,10 @@ from openemux.ui.rom_context import card_menu_entries
 
 logger = logging.getLogger(__name__)
 
+#: The artwork of an entry nobody has looked for yet. Distinct from None,
+#: which is the resolved answer "this game has no artwork".
+ART_UNRESOLVED = object()
+
 
 class RomEntry(GObject.Object):
     """One library row, as the grid's model sees it.
@@ -55,6 +59,12 @@ class RomEntry(GObject.Object):
 
     The lowercased name is precomputed because it is what the search filter
     compares against, once per keystroke per ROM.
+
+    The resolved artwork is remembered here too (issue 907): the path the
+    lookup found, the cache key its decode was filed under, and the cartridge
+    composite rendered for it. A card scrolling back to this game is then a
+    few dictionary lookups, where it used to repeat the directory probes, the
+    cache stat and the composite's own stat on every bind.
     """
 
     __gtype_name__ = "OpenEmuxRomEntry"
@@ -71,6 +81,25 @@ class RomEntry(GObject.Object):
         # None until the cover fetch resolves; the "without artwork" filter
         # and the badge only act on False (issue #127).
         self.has_artwork = None
+        self.forget_artwork()
+
+    def forget_artwork(self):
+        """Drop what was remembered about the artwork, so the next bind looks again.
+
+        Every path that changes a game's art through the app ends here: the
+        picker, the manager, a sync, a shell colour change.
+        """
+        self.has_artwork = None
+        #: ART_UNRESOLVED, None (no art) or the path of the first kind found.
+        self.art_path = ART_UNRESOLVED
+        #: The cover cache key of the cover decoded at the card's size.
+        self.cover_key = None
+        #: ``(frame_path, width, scale)`` the composite below was rendered for.
+        self.composite_key = None
+        #: The composite's path (None when the render failed), and the cover
+        #: cache key its decode was filed under.
+        self.composite_path = None
+        self.composite_pixbuf_key = None
 
 
 def entry_matches(entry, query="", only_missing_artwork=False):
@@ -443,6 +472,9 @@ class RomItem(Gtk.Box):
         self._context_popover = None
         self._action_group = None
         self._fade_next_apply = False
+        # The pool job fetching this card's art, while one is pending: the
+        # grid promotes it when the card is on screen (issue 899).
+        self._fetch_job = None
 
     # -- binding -----------------------------------------------------------
 
@@ -515,12 +547,36 @@ class RomItem(Gtk.Box):
         if entry is None:
             return
         token = self._generation
-        fetch_cover(
-            entry.rom,
-            self.roms_dir,
-            lambda rom, cover_path: self._on_cover_fetched(entry, token, rom, cover_path),
-            kinds=self._art_kinds,
-        )
+        rom = entry.rom
+        roms_dir = self.roms_dir
+        kinds = self._art_kinds
+
+        def _worker():
+            # First thing, before any disk work: a job queued for a card that
+            # has since moved on (a zoom replaces every card on the page)
+            # costs a token compare and nothing else (issue 899).
+            if self._is_stale(token):
+                return
+            path = entry.art_path
+            if path is ART_UNRESOLVED:
+                path = resolve_local_art(rom, roms_dir, kinds)
+                entry.art_path = path
+            self._on_cover_fetched(entry, token, rom, path)
+
+        self._fetch_job = cover_cache.submit(_worker)
+
+    def promote_pending_fetch(self):
+        """Move this card's fetch, if still queued, to the front of the pool.
+
+        Called by the grid for the cards that are actually on screen after a
+        layout pass, so they get their art before the rows GTK keeps around
+        them (issue 899). Returns whether a job was promoted.
+        """
+        job = self._fetch_job
+        if job is None or job.done():
+            self._fetch_job = None
+            return False
+        return job.promote()
 
     def _is_stale(self, token):
         return token != self._generation
@@ -613,38 +669,70 @@ class RomItem(Gtk.Box):
             # be thrown away, so it is not started at all.
             return
         if self.cartridge_frame_path:
-            # Compose the label into the cartridge (cached on disk, so this
-            # only costs anything the first time). A ROM with no label renders
-            # as a blank cartridge instead of the generic icon, keeping the
-            # shelf consistent -- and that includes a ROM that has box art:
-            # cropped into the sticker, a box cover is not a label, it is a
-            # broken-looking cartridge (issue #457).
-            label_path = cover_path if is_label_art(cover_path) else None
-            composite = cartridge_render.render_cartridge(
-                label_path,
-                self.cartridge_frame_path,
-                rom["console"],
-                rom["name"],
-                width=self.cover_width,
-                scale=CARTRIDGE_RENDER_SCALE,
-            )
-            if composite:
-                # Full resolution: the composite is already the card's shape,
-                # and the full-size art is what keeps it sharp on HiDPI.
-                pixbuf = cover_cache.load_cover(str(composite))
-                if pixbuf is not None:
-                    GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, True)
-                    return
+            pixbuf = self._cartridge_pixbuf(entry, rom, cover_path)
+            if pixbuf is not None:
+                GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, True)
+                return
         if cover_path:
             width, height = self._cover_target_size()
-            pixbuf = cover_cache.load_cover(cover_path, width, height)
+            key = entry.cover_key or cover_cache.cache_key(cover_path, width, height)
+            pixbuf = cover_cache.load_cover(cover_path, width, height, key=key)
             if pixbuf is not None:
+                entry.cover_key = key
                 GLib.idle_add(self._apply_cover_pixbuf, token, pixbuf, False)
                 return
         # No cover, or one that would not decode -- cover_cache logs the
         # latter, so a corrupt file is no longer indistinguishable from a
         # missing one.
         GLib.idle_add(self._restore_placeholder, token)
+
+    def _cartridge_pixbuf(self, entry, rom, cover_path):
+        """The decoded cartridge composite for this game, or None.
+
+        Compose the label into the cartridge (cached on disk, so this only
+        costs anything the first time). A ROM with no label renders as a
+        blank cartridge instead of the generic icon, keeping the shelf
+        consistent -- and that includes a ROM that has box art: cropped into
+        the sticker, a box cover is not a label, it is a broken-looking
+        cartridge (issue #457).
+
+        The composite's path and its decode key are kept on the entry, so a
+        rebind of the same game neither re-checks the disk cache nor stats
+        the composite (issue 907). A remembered composite that will not
+        decode any more -- pruned from the disk cache -- is rendered again
+        once before the card gives up on the cartridge.
+        """
+        label_path = cover_path if is_label_art(cover_path) else None
+        wanted = (str(self.cartridge_frame_path), self.cover_width, CARTRIDGE_RENDER_SCALE)
+        for attempt in (0, 1):
+            if entry.composite_key != wanted:
+                composite = cartridge_render.render_cartridge(
+                    label_path,
+                    self.cartridge_frame_path,
+                    rom["console"],
+                    rom["name"],
+                    width=self.cover_width,
+                    scale=CARTRIDGE_RENDER_SCALE,
+                )
+                entry.composite_key = wanted
+                entry.composite_path = str(composite) if composite else None
+                entry.composite_pixbuf_key = None
+            composite = entry.composite_path
+            if not composite:
+                return None
+            # Full resolution: the composite is already the card's shape, and
+            # the full-size art is what keeps it sharp on HiDPI.
+            key = entry.composite_pixbuf_key or cover_cache.cache_key(composite)
+            pixbuf = cover_cache.load_cover(composite, key=key)
+            if pixbuf is not None:
+                entry.composite_pixbuf_key = key
+                return pixbuf
+            if attempt == 0 and entry.composite_pixbuf_key is not None:
+                # Remembered from before and gone from the disk since.
+                entry.composite_key = None
+                continue
+            return None
+        return None  # pragma: no cover - the loop returns on both attempts
 
     def _restore_placeholder(self, token):
         if self._is_stale(token) or self._is_abandoned():
@@ -1099,6 +1187,8 @@ class RomItem(Gtk.Box):
         # popping. Off for every other refresh path.
         if self.entry is None:
             return
+        # Whatever was remembered about the art is what just changed.
+        self.entry.forget_artwork()
         self._fade_next_apply = bool(fade)
         self._generation += 1
         self._start_cover_fetch()

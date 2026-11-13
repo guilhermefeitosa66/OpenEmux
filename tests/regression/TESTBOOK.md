@@ -16805,3 +16805,27 @@ has no Android device, so these are `MANUAL`.
   text of the section, the steps and the dates are in that language. The release skill rewrites
   the section for every release.
 - **Check:** human only. Unit-level: `tests/test_site.py` (`TheNewsTests`).
+
+## Desktop — Library performance
+
+### RT-1028 — A card bound to a game it already resolved touches no file
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: open a console with a few hundred games, scroll to the bottom and
+  back to the top, and watch for stutter on a slow disk (an HDD, an SD card or a network home).
+- **Expected:** The second pass is smooth: scrolling back over a card the grid already showed
+  re-binds it from what the entry remembers — the artwork path, the cover's cache key and the
+  cartridge composite — with no directory probe, no stat of the cover and no stat of the
+  composite, on either thread (issue 907). The first pass finds each console's art through one
+  directory listing per art kind rather than eight `exists()` probes per card. The favourite star
+  and the shell colour read a parse that is stat-ed at most twice a second, and nothing in the
+  bind path deep-copies the colour mapping any more. Choosing, removing or syncing a game's art
+  still refreshes its card: every one of those paths forgets what the entry remembered.
+- **Check:** suite files `tests/test_scraper.py` (`TheArtworkIndexTests`),
+  `tests/test_cover_cache.py` (`RememberedKeysTests`), `tests/test_cartridge_colors.py`
+  (`test_a_page_of_lookups_stats_the_file_once_not_per_card`), `tests/test_playlist_manager.py`
+  (`test_a_page_of_cards_stats_the_file_once_not_per_card`), `tests/test_rom_card_widget.py`
+  (`test_the_fetch_resolves_the_art_once_and_remembers_it_on_the_entry`,
+  `RememberingTheCompositeTests`), `tests/test_grid_widget.py`
+  (`test_a_shell_colour_is_resolved_once_per_grid`).

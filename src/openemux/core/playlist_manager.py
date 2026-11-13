@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 import threading
+import time
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
 from openemux.core.dir_walk import relative_to_base
@@ -8,6 +9,12 @@ from openemux.core.paths import read_path_lines, write_path_lines
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+#: How long the favorites parse is trusted before the file is stat-ed again
+#: for a change made outside the app. The manager's own writes drop the
+#: parse at once; this only spaces out the stat that catches everything
+#: else, so a page of cards binds without one syscall per star (issue 907).
+FAVORITES_STAMP_TTL_S = 0.5
 
 
 class PlaylistManager:
@@ -19,6 +26,8 @@ class PlaylistManager:
         # card rendered, so the parse has to happen once per page, not once
         # per card (issue #217).
         self._favorites_cache = (None, frozenset())
+        # When the favorites stamp was last compared; see FAVORITES_STAMP_TTL_S.
+        self._favorites_checked_at = None
         # toggle_favorite is a read-modify-write of one file; two of them at
         # once (a click while a rescan repaths) would lose one edit (#208).
         self._write_lock = threading.RLock()
@@ -109,14 +118,22 @@ class PlaylistManager:
         is still a favorite: it is only missing, and only remove_missing_
         favorites is allowed to decide it is gone.
         """
+        now = time.monotonic()
+        cached_stamp, cached = self._favorites_cache
+        if (
+            self._favorites_checked_at is not None
+            and now - self._favorites_checked_at < FAVORITES_STAMP_TTL_S
+        ):
+            return cached
         playlist_path = self.get_favorites_playlist_path()
         try:
             stat = playlist_path.stat()
         except OSError:
             self._favorites_cache = (None, frozenset())
+            self._favorites_checked_at = now
             return self._favorites_cache[1]
         stamp = (stat.st_mtime_ns, stat.st_size)
-        cached_stamp, cached = self._favorites_cache
+        self._favorites_checked_at = now
         if cached_stamp == stamp:
             return cached
         paths = frozenset(str(Path(line)) for line in read_path_lines(playlist_path))
@@ -131,6 +148,7 @@ class PlaylistManager:
         one tick, and our own writes are the one case we can be exact about.
         """
         self._favorites_cache = (None, frozenset())
+        self._favorites_checked_at = None
 
     def list_favorite_paths(self):
         """A mutable copy of the favorite paths."""

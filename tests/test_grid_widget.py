@@ -353,6 +353,25 @@ class RefreshingOneCardTests(_GridCase):
         with mock.patch.object(self.grid, "_base_frame_path", None):
             self.assertIsNone(self.grid._frame_path_for_rom(self.entries[0].rom))
 
+    def test_a_game_off_screen_forgets_its_remembered_art_too(self):
+        entry = self.entries[0]
+        entry.art_path = "/roms/SFC/covers/Game.png"
+        with mock.patch.object(self.grid, "_bound", {}):
+            self.grid.refresh_rom_artwork(entry.rom)
+        self.assertIs(entry.art_path, grid_module.ART_UNRESOLVED)
+
+    def test_a_shell_colour_is_resolved_once_per_grid(self):
+        # Issue 907: two file probes and a frame stat per bind, for a frame
+        # that never changes while the app runs.
+        with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"), mock.patch.object(
+            self.grid, "_frame_color_for_rom", return_value="red"
+        ), mock.patch.object(
+            grid_module, "cartridge_frame_svg", return_value="/tmp/base-red.svg"
+        ) as resolve:
+            for entry in self.entries:
+                self.assertEqual(self.grid._frame_path_for_rom(entry.rom), "/tmp/base-red.svg")
+        resolve.assert_called_once()
+
     def test_a_page_with_no_colour_lookup_uses_the_console_shell(self):
         with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"):
             with mock.patch.object(self.grid, "_frame_color_for_rom", None):

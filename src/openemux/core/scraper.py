@@ -8,6 +8,8 @@ Two kinds of artwork are supported per ROM:
 Remote download is handled by openemux.core.cover_sync.
 """
 
+import os
+import threading
 from pathlib import Path
 import shutil
 
@@ -84,13 +86,80 @@ def get_art_path_candidates(
     return [Path(roms_dir) / console / kind / f"{rom_name}.{ext}" for ext in SUPPORTED_COVER_EXTS]
 
 
+#: One listing per artwork directory, keyed by ``(roms_dir, console, kind)``
+#: and stamped with the directory's mtime: ``{stem: path}`` (issue 907).
+_ART_INDEX = {}
+_ART_INDEX_LOCK = threading.Lock()
+_EXT_RANK = {ext: rank for rank, ext in enumerate(SUPPORTED_COVER_EXTS)}
+
+
+def local_art_index(roms_dir: Path, console: str, kind: str = COVER_ART) -> dict:
+    """Every image in a console's ``kind`` directory, as ``{stem: path}``.
+
+    Built with one ``scandir`` and kept until the directory's mtime moves --
+    adding, removing or renaming a file moves it, and the writers in this
+    module drop the listing themselves for the case where the change lands
+    inside one filesystem clock tick. Before this, every card bind probed up
+    to eight candidate names with ``exists()`` on the decode pool: a 3000-game
+    library was 24,000 syscalls per page build, each one a round trip on a
+    network home (issue 907).
+
+    When several extensions exist for one stem, the first in
+    :data:`SUPPORTED_COVER_EXTS` wins, as the candidate order always did.
+    """
+    directory = Path(roms_dir) / console / kind
+    key = (str(roms_dir), console, kind)
+    try:
+        stamp = directory.stat().st_mtime_ns
+    except OSError:
+        with _ART_INDEX_LOCK:
+            _ART_INDEX.pop(key, None)
+        return {}
+    with _ART_INDEX_LOCK:
+        cached = _ART_INDEX.get(key)
+        if cached is not None and cached[0] == stamp:
+            return cached[1]
+    index = {}
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                stem, dot, ext = entry.name.rpartition(".")
+                rank = _EXT_RANK.get(ext) if dot else None
+                if rank is None or not stem:
+                    continue
+                try:
+                    if not entry.is_file():
+                        continue
+                except OSError:  # pragma: no cover - a vanished entry mid-listing
+                    continue
+                previous = index.get(stem)
+                if previous is None or rank < _EXT_RANK[previous.suffix[1:]]:
+                    index[stem] = Path(entry.path)
+    except OSError:
+        return {}
+    with _ART_INDEX_LOCK:
+        _ART_INDEX[key] = (stamp, index)
+    return index
+
+
+def forget_art_index(roms_dir: Path = None, console: str = None, kind: str = None):
+    """Drop the cached listings, all of them or one directory's.
+
+    For the writers that change a directory and look it up again right away:
+    two writes inside one clock tick leave the directory's mtime where it
+    was, so the stamp alone would keep serving the old listing.
+    """
+    with _ART_INDEX_LOCK:
+        if roms_dir is None:
+            _ART_INDEX.clear()
+            return
+        _ART_INDEX.pop((str(roms_dir), console, kind), None)
+
+
 def find_local_art(
     roms_dir: Path, console: str, rom_name: str, kind: str = COVER_ART
 ) -> Path | None:
-    for candidate in get_art_path_candidates(roms_dir, console, rom_name, kind):
-        if candidate.exists():
-            return candidate
-    return None
+    return local_art_index(roms_dir, console, kind).get(rom_name)
 
 
 def is_label_art(path) -> bool:
@@ -122,6 +191,7 @@ def remove_local_art(
             removed += 1
         except Exception:
             continue
+    forget_art_index(roms_dir, console, kind)
     return removed
 
 
@@ -141,6 +211,7 @@ def save_local_art(
     # good cover a moment earlier (issue #234).
     shutil.copy2(source, target)
     remove_local_art(roms_dir, console, rom_name, kind, keep=target)
+    forget_art_index(roms_dir, console, kind)
     return target
 
 
@@ -161,6 +232,7 @@ def rename_local_art(roms_dir: Path, console: str, old_name: str, new_name: str)
                 renamed += 1
             except OSError:
                 continue
+        forget_art_index(roms_dir, console, kind)
     return renamed
 
 
@@ -180,12 +252,22 @@ def save_local_cover(roms_dir: Path, console: str, rom_name: str, source_path: s
     return save_local_art(roms_dir, console, rom_name, source_path, COVER_ART)
 
 
+def resolve_local_art(rom: dict, roms_dir: str | Path, kinds=(COVER_ART,)) -> str | None:
+    """The first artwork of ``kinds`` this ROM has on disk, or None.
+
+    ``kinds`` is tried in order, so a card can prefer the cartridge label and
+    fall back to the box art when no label was configured.
+    """
+    for kind in kinds:
+        found = find_local_art(Path(roms_dir), rom["console"], rom["name"], kind)
+        if found:
+            return str(found)
+    return None
+
+
 def fetch_cover(rom: dict, roms_dir: str | Path, on_done_callback=None, kinds=(COVER_ART,)) -> None:
     """
     Resolve local artwork off the main thread to avoid UI blocking.
-
-    `kinds` is tried in order, so a card can prefer the cartridge label and fall
-    back to the box art when no label was configured.
 
     Runs on the shared, bounded decode pool rather than a thread of its own:
     a 500-ROM console used to spawn 500 OS threads here (issue #128). The
@@ -194,12 +276,8 @@ def fetch_cover(rom: dict, roms_dir: str | Path, on_done_callback=None, kinds=(C
     """
 
     def _worker():
-        found = None
-        for kind in kinds:
-            found = find_local_art(Path(roms_dir), rom["console"], rom["name"], kind)
-            if found:
-                break
+        found = resolve_local_art(rom, roms_dir, kinds)
         if on_done_callback:
-            on_done_callback(rom, str(found) if found else None)
+            on_done_callback(rom, found)
 
     cover_cache.submit(_worker)

@@ -260,9 +260,81 @@ class TheCoverArrivingTests(_CardCase):
 
     def test_an_unbound_card_starts_no_fetch(self):
         self.card.entry = None
-        with mock.patch.object(rom_card_module, "fetch_cover") as fetch:
+        with mock.patch.object(rom_card_module.cover_cache, "submit") as submit:
             self.card._start_cover_fetch()
-        fetch.assert_not_called()
+        submit.assert_not_called()
+
+    def _run_fetch_now(self):
+        """Run the fetch the card would queue, on this thread."""
+        with mock.patch.object(
+            rom_card_module.cover_cache, "submit", side_effect=lambda fn: fn() or mock.Mock()
+        ):
+            self.card._start_cover_fetch()
+
+    def test_the_fetch_resolves_the_art_once_and_remembers_it_on_the_entry(self):
+        # Issue 907: the directory probes used to run on every bind.
+        self.entry.forget_artwork()  # the real fetch may have answered already
+        with mock.patch.object(
+            rom_card_module, "resolve_local_art", return_value="/roms/SFC/covers/Game.png"
+        ) as resolve, mock.patch.object(self.card, "_on_cover_fetched") as fetched:
+            self._run_fetch_now()
+            self._run_fetch_now()
+        resolve.assert_called_once()
+        self.assertEqual(self.entry.art_path, "/roms/SFC/covers/Game.png")
+        self.assertEqual(fetched.call_count, 2)
+        self.assertEqual(fetched.call_args[0][3], "/roms/SFC/covers/Game.png")
+
+    def test_a_fetch_queued_for_a_game_the_card_has_left_does_no_disk_work(self):
+        self.entry.forget_artwork()
+        with mock.patch.object(rom_card_module.cover_cache, "submit") as submit:
+            self.card._start_cover_fetch()
+        worker = submit.call_args[0][0]
+        self.card._generation += 1
+        with mock.patch.object(rom_card_module, "resolve_local_art") as resolve:
+            worker()
+        resolve.assert_not_called()
+        self.assertIs(self.entry.art_path, rom_card_module.ART_UNRESOLVED)
+
+    def test_a_refresh_forgets_what_was_remembered(self):
+        self.entry.art_path = "/roms/SFC/covers/Game.png"
+        self.entry.cover_key = ("key",)
+        with mock.patch.object(self.card, "_start_cover_fetch"):
+            self.card._refresh_cover_after_change()
+        self.assertIs(self.entry.art_path, rom_card_module.ART_UNRESOLVED)
+        self.assertIsNone(self.entry.cover_key)
+
+    def test_a_decoded_cover_remembers_its_cache_key(self):
+        self.card.cartridge_frame_path = None
+        pixbuf = self.pixbuf()
+        with mock.patch.object(
+            rom_card_module.cover_cache, "cache_key", return_value=("the", "key")
+        ), mock.patch.object(
+            rom_card_module.cover_cache, "load_cover", return_value=pixbuf
+        ) as load, mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/tmp/a.png"
+            )
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/tmp/a.png"
+            )
+        self.assertEqual(self.entry.cover_key, ("the", "key"))
+        self.assertEqual(load.call_args[1]["key"], ("the", "key"))
+
+    def test_a_pending_fetch_can_be_promoted_to_the_front_of_the_pool(self):
+        job = mock.Mock()
+        job.done.return_value = False
+        job.promote.return_value = True
+        self.card._fetch_job = job
+        self.assertTrue(self.card.promote_pending_fetch())
+        job.promote.assert_called_once()
+
+    def test_a_finished_fetch_is_not_promoted_and_is_let_go(self):
+        job = mock.Mock()
+        job.done.return_value = True
+        self.card._fetch_job = job
+        self.assertFalse(self.card.promote_pending_fetch())
+        self.assertIsNone(self.card._fetch_job)
+        self.assertFalse(self.card.promote_pending_fetch())
 
     def test_the_cross_fade_runs_when_the_new_art_lands(self):
         # Issue #187: what separates covers filling in during a sync from
@@ -301,6 +373,58 @@ class WhatACartridgeLabelShowsTests(_CardCase):
         # every game whose only art is its box.
         self._composite_with("/roms/SFC/covers/Game.png")
         self.assertTrue(self.entry.has_artwork)
+
+
+@needs_display
+class RememberingTheCompositeTests(_CardCase):
+    """A rebind of the same game neither re-renders nor re-stats (issue 907)."""
+
+    def _fetch(self, render, load, cache_key=("composite", "key")):
+        self.card.cartridge_frame_path = "/tmp/frame.svg"
+        with mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", side_effect=render
+        ) as rendered, mock.patch.object(
+            rom_card_module.cover_cache, "load_cover", side_effect=load
+        ) as loaded, mock.patch.object(
+            rom_card_module.cover_cache, "cache_key", return_value=cache_key
+        ), mock.patch.object(rom_card_module.GLib, "idle_add"):
+            self.card._on_cover_fetched(
+                self.entry, self.card._generation, self.entry.rom, "/roms/SFC/labels/Game.png"
+            )
+        return rendered, loaded
+
+    def test_the_second_bind_reuses_the_composite_and_its_key(self):
+        pixbuf = self.pixbuf()
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: pixbuf)
+        self.assertEqual(rendered.call_count, 1)
+        self.assertEqual(self.entry.composite_path, "/cache/SFC/Game.abc.png")
+        self.assertEqual(self.entry.composite_pixbuf_key, ("composite", "key"))
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/other.png"), lambda *a, **k: pixbuf)
+        rendered.assert_not_called()
+        self.assertEqual(loaded.call_args[1]["key"], ("composite", "key"))
+
+    def test_a_remembered_composite_that_is_gone_is_rendered_once_more(self):
+        pixbuf = self.pixbuf()
+        self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: pixbuf)
+        answers = iter([None, pixbuf])
+        rendered, loaded = self._fetch(
+            lambda *a, **k: Path("/cache/SFC/Game.def.png"), lambda *a, **k: next(answers)
+        )
+        self.assertEqual(rendered.call_count, 1)
+        self.assertEqual(self.entry.composite_path, "/cache/SFC/Game.def.png")
+        self.assertEqual(loaded.call_count, 2)
+
+    def test_a_composite_that_will_not_decode_falls_back_to_the_cover(self):
+        rendered, loaded = self._fetch(lambda *a, **k: Path("/cache/SFC/Game.abc.png"), lambda *a, **k: None)
+        self.assertEqual(rendered.call_count, 1)
+        self.assertIsNone(self.entry.composite_pixbuf_key)
+
+    def test_a_render_that_fails_is_remembered_as_no_cartridge(self):
+        rendered, loaded = self._fetch(lambda *a, **k: None, lambda *a, **k: None)
+        self.assertIsNone(self.entry.composite_path)
+        self.assertIsNotNone(self.entry.composite_key)
+        rendered, loaded = self._fetch(lambda *a, **k: None, lambda *a, **k: None)
+        rendered.assert_not_called()
 
 
 @needs_display
