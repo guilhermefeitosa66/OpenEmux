@@ -14,8 +14,6 @@
   "hero.lede": "<p class=\"lede\">உங்களிடம் உள்ள விளையாட்டுகளைச் சேர்க்கவும். Linux, Windows, Android ஆகியவற்றில் OpenEmux அவற்றை அட்டைப் படங்களுடன் கன்சோல் வாரியாக அடுக்குகிறது.</p>",
   "hero.install_link": "நிறுவுவது எப்படி ↓",
   "hero.watch": "▶ காணொளியைப் பார்க்க (44 வி)",
-  "hero.shot_desktop": "கணினியில் OpenEmux, அட்டைப் படங்களுடன் Super Nintendo நூலகம்",
-  "hero.shot_phone": "Android இல் OpenEmux, Super Nintendo நூலகம்",
   "hero.note": "<p class=\"cta-note\">இலவசம், திறந்த மூலம் · MIT உரிமம் · Linux-இல் AppImage, .deb, .rpm &amp; Flatpak ·\n        Windows-இல் installer &amp; portable ZIP · Android-க்கு APK (GPLv3)</p>",
   "hero.relation": "<p class=\"cta-note\">macOS-க்கான <a href=\"https://openemu.org/\">OpenEmu</a>-வால் ஈர்க்கப்பட்டது, ஆனால் இது ஒரு fork அல்ல: எமுலேஷனுக்கு RetroArch-ஐப் பயன்படுத்தும் தனிக் குறியீடு. <a href=\"#thanks\">இதைப் பற்றி மேலும்</a>.</p>",
   "hero.video_label": "44 விநாடிகளில் OpenEmux: கணினியில் நூலகம், கார்ட்ரிட்ஜ் காட்சி, இயங்கும் விளையாட்டு, பிறகு Android செயலியின் அலமாரி, திரைக் கட்டுப்பாடுகள், நெடுக்கு மற்றும் கிடைமட்டம், Nintendo DS",
