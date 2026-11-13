@@ -721,6 +721,7 @@
         <li><details open><summary><a href="#favorites">收藏</a></summary></details></li>
         <li><details open><summary><a href="#recent">最近玩过</a></summary></details></li>
         <li><details open><summary><a href="#details">游戏详情</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">电视模式</a></summary></details></li>
         <li><details open><summary><a href="#cores">内核和着色器</a></summary>
             <ul>
               <li><a href="#cores-game">针对单个游戏</a></li>
@@ -1159,9 +1160,25 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </section>
 
         <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">游戏库</span>
+          <h2>电视模式</h2>
+          <p>按 <kbd>F11</kbd> 或手柄上的 Guide 键，游戏库会进入适合沙发的全屏模式：侧边栏消失，游戏架变大，标题和提示变大，
+            聚焦的卡片获得更粗的边框。再按同一个键，或按 <kbd>Esc</kbd>，即可回到桌面布局。你的缩放设置不会被改动。</p>
+          <p>手持手柄时，底部的提示会使用该手柄的字母（Xbox 为 A B X Y，任天堂为 B A Y X，PlayStation 为四个图形）；设置 › 系统中的
+            <span class="ui">手柄按键标签</span>可强制某一系列，<span class="ui">交换确认和取消</span>可把确认放到右侧键。以 Xbox
+            字母为例的按键表：</p>
+          <ul>
+            <li><strong>A</strong> 开始聚焦的游戏；长按进入选择。</li>
             <li><strong>B</strong> 返回主机列表；<strong>X</strong> 打开游戏详情；<strong>Y</strong> 切换收藏。</li>
             <li><strong>LB/RB</strong> 切换主机，在<span class="ui">全部</span>页面中则在主机分组之间跳转。</li>
             <li><strong>Menu</strong>（Start）打开屏幕键盘：方向键在字母网格中移动，边输入边筛选游戏库；完成后落在第一个匹配项上。</li>
+            <li><strong>View</strong>（Select）打开主菜单；<strong>Guide</strong> 键开关电视模式。</li>
+            <li>按住 <strong>LT/RT</strong> 并用方向键可扩展选择。</li>
+          </ul>
+          <p>减少动画和大字体在这里和其他地方一样遵循你的 GNOME 设置。</p>
+        </section>
+
         <!-- ============================================================ -->
         <section class="chapter" id="cores">
           <span class="eyebrow">模拟</span>

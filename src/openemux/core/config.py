@@ -1160,6 +1160,25 @@ class ConfigManager:
         ui["gamepad_navigation"] = bool(enabled)
         self.save_config()
 
+    # ----- the controller's button labels (issue 914) ----------------------
+    def get_controller_glyph_family(self):
+        """``"auto"`` or a family name: which pad's letters the hint bar draws."""
+        value = str(self.config.get("ui", {}).get("controller_glyphs", "auto") or "auto")
+        return value if value in ("auto", "xbox", "playstation", "nintendo", "generic") else "auto"
+
+    def set_controller_glyph_family(self, family):
+        ui = self.config.setdefault("ui", {})
+        ui["controller_glyphs"] = str(family or "auto")
+        self.save_config()
+
+    def get_swap_confirm_cancel(self):
+        return bool(self.config.get("ui", {}).get("swap_confirm_cancel", False))
+
+    def set_swap_confirm_cancel(self, enabled):
+        ui = self.config.setdefault("ui", {})
+        ui["swap_confirm_cancel"] = bool(enabled)
+        self.save_config()
+
     def get_console_order(self):
         """The user's console order, cleaned (issue #386).
 

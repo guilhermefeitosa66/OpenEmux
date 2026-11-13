@@ -2476,6 +2476,71 @@ class TheGameAndInputHandoffTests(WindowCase):
             self.win.on_launch_game(rom)
         launch.assert_called_once_with(rom)
 
+    def test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up(self):
+        # Issue 914: F11 or the pad's Guide button.
+        self.assertFalse(self.win.tv_mode)
+        self.config.set_zoom(1.0)
+        with mock.patch.object(self.win, "fullscreen") as full, mock.patch.object(
+            self.win, "unfullscreen"
+        ) as unfull:
+            self.assertTrue(self.win.toggle_tv_mode())
+            self.assertTrue(self.win.has_css_class("tv-mode"))
+            self.assertTrue(self.win.split_view.get_collapsed())
+            self.assertEqual(self.win._zoom, window_module.TV_MODE_MIN_ZOOM)
+            full.assert_called_once()
+            self.assertIn(self.said("toast.tv_mode.on"), self.toasts)
+            self.assertFalse(self.win.toggle_tv_mode())
+            unfull.assert_called_once()
+        self.assertFalse(self.win.has_css_class("tv-mode"))
+        self.assertEqual(self.win._zoom, 1.0)
+
+    def test_escape_leaves_tv_mode_when_nothing_else_wants_it(self):
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(self.win, "unfullscreen"):
+            self.win.toggle_tv_mode()
+            with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
+                self.assertTrue(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.assertFalse(self.win.tv_mode)
+            self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+
+    def test_the_on_screen_keyboard_opens_over_a_searchable_page(self):
+        from openemux.ui.onscreen_keyboard import OnScreenKeyboard
+
+        self.win.sidebar.select("SFC")
+        with mock.patch.object(OnScreenKeyboard, "present") as present:
+            dialog = self.win.open_onscreen_keyboard()
+        self.assertIsNotNone(dialog)
+        present.assert_called_once_with(self.win)
+        dialog.force_close()
+        self.win._set_search_enabled(False)
+        self.assertIsNone(self.win.open_onscreen_keyboard())
+
+    def test_the_controller_preferences_reach_the_reader_and_the_hints(self):
+        self.config.set_swap_confirm_cancel(True)
+        with mock.patch.object(self.win.navigation, "refresh_hints") as refresh:
+            self.win.apply_controller_preferences()
+        self.assertTrue(self.win.gamepad_navigator.swap_confirm_cancel)
+        refresh.assert_called_once_with(force=True)
+
+    def test_the_card_transitions_follow_the_desktops_animation_setting(self):
+        # Issue 915: the CSS keys the lift on .animated, which follows
+        # gtk-enable-animations like the Adwaita widgets do.
+        settings = self.win._gtk_settings
+        self.assertIsNotNone(settings)
+        settings.set_property("gtk-enable-animations", True)
+        self.assertTrue(self.win.has_css_class("animated"))
+        settings.set_property("gtk-enable-animations", False)
+        self.assertFalse(self.win.has_css_class("animated"))
+        settings.set_property("gtk-enable-animations", True)
+        self.assertTrue(self.win._sync_animations_class())
+
+    def test_the_game_details_dialog_opens_for_a_game(self):
+        # Issue 913: from the menu, Alt+Return or the pad's X.
+        from openemux.ui.game_details import GameDetailsDialog
+
+        with mock.patch.object(GameDetailsDialog, "present") as present:
+            self.win.open_game_details(self.rom())
+        present.assert_called_once_with(self.win)
+
     def test_launching_at_a_state_slot_goes_through_the_session(self):
         rom = self.rom()
         with mock.patch.object(self.win.game, "launch_at_state") as launch:

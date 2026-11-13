@@ -17245,8 +17245,33 @@ has no Android device, so these are `MANUAL`.
 - **Check:** suite files `tests/test_rom_card_widget.py` (`WhatAScreenReaderHearsTests`),
   `tests/test_window.py` (`test_the_card_transitions_follow_the_desktops_animation_setting`).
 
+### RT-1045 — TV mode: fullscreen couch layout, the pad's own letters in the hints, an on-screen keyboard and shoulder jumps
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
+  pipeline's virtual pad), a library with several consoles.
+- **Steps:**
+  1. Press F11 (or the pad's Guide button); take a screenshot and scale it to 25%.
+  2. Press Start on the pad; type "mar" on the on-screen keyboard; press Done.
+  3. On "All", press RB/R1 twice, then LB/L1.
   4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
      PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
      card.
+  5. Press Escape; press F11 again.
+- **Expected:** 1: the window goes fullscreen with the sidebar hidden; the shelf is drawn at least at
+  150% zoom, titles and hints are larger (26 px or more at 1080p) and the focused card has a
+  4 px ring and a slight scale, still distinguishable at 25% (issue 914). The user's zoom setting
+  is untouched. 2: a letter grid the D-pad walks; each press filters the library at once; Done
+  closes it and the focus lands on the first match. 3: the focus jumps to the first card of the next
+  console group, then back. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family), never Ⓐ-style
+  glyphs; with the swap on, the east button confirms and the labels follow. 5: Escape leaves TV mode
   (sidebar back, zoom back); F11 toggles it again. Reduced motion follows RT-1044's class; GNOME's
   large text scales the labels as everywhere else.
+- **Check:** suite files `tests/test_controller_glyphs.py`, `tests/test_onscreen_keyboard.py`,
+  `tests/test_ui_gamepad.py` (`TheConfirmCancelSwapTests`), `tests/test_navigation.py`,
+  `tests/test_navigation_controller.py` (`test_the_hints_use_the_connected_pads_letters`,
+  `test_the_shoulders_walk_the_groups_of_a_grouped_page`), `tests/test_window.py`
+  (`test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up`,
+  `test_escape_leaves_tv_mode_when_nothing_else_wants_it`,
+  `test_the_on_screen_keyboard_opens_over_a_searchable_page`), `tests/test_preferences.py`
+  (`test_the_controller_label_family_and_the_swap_are_stored`).

@@ -64,7 +64,8 @@ NAV_TOKEN_ACTIONS = {
     "5": "next_console",  # R1
     "6": "menu",      # Select/Back/View: the primary menu, so Preferences,
                       # Shortcuts and About are reachable without a mouse
-    "7": "confirm",   # Start
+    "7": "search",    # Start: the on-screen keyboard (issue 914)
+    "8": "tv_mode",   # Guide/Home/PS: TV mode on and off (issue 914)
     # The analog triggers, pressed direction only: the pad's Shift for range
     # selection (issue #78). The resting direction ("-2"/"-5") stays unmapped
     # so an idle trigger cannot read as held.
@@ -293,6 +294,19 @@ class NavigatorCore:
         self._should_suspend = should_suspend or (lambda: False)
         self._cancel = threading.Event()
         self._thread = None
+        #: Nintendo-style confirm on the east button (issue 914): the window
+        #: sets it from the preference, and the hint bar swaps its labels too.
+        self.swap_confirm_cancel = False
+
+    def action_for(self, token):
+        """The UI action a token stands for, with the confirm/cancel swap applied."""
+        action = action_for_token(token)
+        if self.swap_confirm_cancel:
+            if action == "confirm":
+                return "back"
+            if action == "back":
+                return "confirm"
+        return action
 
     # -- lifecycle
     def start(self):
@@ -335,7 +349,7 @@ class NavigatorCore:
 
     def _dispatch(self, token, pressed, repeat, hold, suspended):
         """Turn one ``(token, pressed)`` transition into UI actions."""
-        action = action_for_token(token)
+        action = self.action_for(token)
         if action is None:
             return
         if action in STATEFUL_ACTIONS:

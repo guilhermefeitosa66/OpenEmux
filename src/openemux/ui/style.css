@@ -500,3 +500,38 @@ button.controller-target.current.lit {
     background-color: alpha(@warning_bg_color, 0.18);
     border-bottom: 1px solid alpha(@warning_bg_color, 0.4);
 }
+
+/* ===== TV mode (issue 914) ===== */
+/* Fullscreen, the sidebar hidden, everything sized for three metres: bigger
+   titles and hints, a thicker focus ring that also scales the card, and a
+   title-safe inset so nothing sits on the screen's edge. */
+.tv-mode .rom-title {
+    font-size: 1.45em;
+}
+
+.tv-mode .rom-console,
+.tv-mode .tip-bar label,
+.tv-mode .hint-key {
+    font-size: 1.35em;
+}
+
+.tv-mode .hint-key {
+    padding: 2px 10px;
+}
+
+.tv-mode .tip-bar {
+    min-height: 48px;
+    padding: 8px 48px;
+}
+
+/* About 5% of a 1080p screen on the sides and 2.5% above: the title-safe
+   inset, in the fixed lengths GTK's CSS takes. */
+.tv-mode gridview {
+    padding: 27px 96px;
+}
+
+.tv-mode.keynav-active gridview > child:focus-within .rom-card {
+    outline-width: 4px;
+    outline-offset: -4px;
+    transform: scale(1.04);
+}

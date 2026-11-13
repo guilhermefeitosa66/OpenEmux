@@ -721,6 +721,7 @@
         <li><details open><summary><a href="#favorites">お気に入り</a></summary></details></li>
         <li><details open><summary><a href="#recent">最近プレイ</a></summary></details></li>
         <li><details open><summary><a href="#details">ゲームの詳細</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">TV モード</a></summary></details></li>
         <li><details open><summary><a href="#cores">コアとシェーダー</a></summary>
             <ul>
               <li><a href="#cores-game">1つのゲームに対して</a></li>
@@ -1164,10 +1165,27 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </section>
 
         <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">ライブラリ</span>
+          <h2>TV モード</h2>
+          <p><kbd>F11</kbd>、またはゲームパッドのガイドボタンを押すと、ライブラリはソファ向けの全画面になります。サイドバーが消え、
+            棚は大きく描かれ、タイトルとヒントが大きくなり、フォーカスされたカードには太い枠が付きます。同じキーかボタン、
+            または <kbd>Esc</kbd> でデスクトップのレイアウトに戻ります。ズーム設定はそのままです。</p>
+          <p>パッドを手にしていると、下部のヒントはそのパッドの文字（Xbox なら A B X Y、Nintendo なら B A Y X、PlayStation なら
+            四つの記号）を使います。設定 › システムの<span class="ui">コントローラーのボタン表記</span>でファミリーを固定でき、
+            <span class="ui">決定とキャンセルを入れ替える</span>で決定を右のボタンにできます。Xbox の文字での対応表:</p>
+          <ul>
+            <li><strong>A</strong> はフォーカス中のゲームをプレイ。長押しで選択を開始。</li>
             <li><strong>B</strong> はコンソール一覧へ戻る。<strong>X</strong> はゲームの詳細を開く。<strong>Y</strong> はお気に入りを切り替え。</li>
             <li><strong>LB/RB</strong> はコンソールを切り替え、<span class="ui">すべて</span>ではコンソールのグループ間を移動。</li>
             <li><strong>Menu</strong>（Start）はオンスクリーンキーボードを開く。十字キーで文字グリッドを移動し、入力に合わせてライブラリを
               絞り込む。完了で最初の一致に移動。</li>
+            <li><strong>View</strong>（Select）はメインメニューを開く。<strong>ガイド</strong>ボタンは TV モードを切り替え。</li>
+            <li><strong>LT/RT</strong> を押しながら十字キーで選択範囲を広げる。</li>
+          </ul>
+          <p>視覚効果を減らす設定と大きな文字は、ここでも他と同じく GNOME の設定に従います。</p>
+        </section>
+
         <!-- ============================================================ -->
         <section class="chapter" id="cores">
           <span class="eyebrow">エミュレーション</span>

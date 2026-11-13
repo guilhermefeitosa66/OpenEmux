@@ -18,6 +18,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gtk, Adw, Gdk, GLib
 
+from openemux.core import controller_glyphs
+
 logger = logging.getLogger(__name__)
 
 # Focus contexts, from the innermost scope out.
@@ -65,6 +67,9 @@ def resolve(context, action):
       ("focus-sidebar",)         move focus to the console list
       ("focus-grid",)            move focus into the game grid
       ("context-menu",)          open the focused card's context menu
+      ("details",)               open the focused card's game details dialog
+      ("tv-mode",)               toggle TV mode (fullscreen couch layout)
+      ("osk",)                   open the on-screen keyboard over the search box
       ("open-menu",)             open the window's primary (hamburger) menu
       ("favorite",)              toggle favourite on the focused card
       ("console-delta", n)       select previous/next console (wraps)
@@ -102,6 +107,11 @@ def resolve(context, action):
     # makes Preferences, Shortcuts and About available without a mouse.
     if action == "menu":
         return ("open-menu",)
+    # The Guide button and Start, from anywhere in the main window (issue 914).
+    if action == "tv_mode":
+        return ("tv-mode",)
+    if action == "search":
+        return ("osk",)
 
     # Main window: console switching works from anywhere.
     if action == "prev_console":
@@ -406,9 +416,19 @@ class NavigationController:
 
     def on_gamepad_connected(self, name):
         self.gamepad_connected = True
+        # Which family's letters the hint bar draws (issue 914).
+        self.gamepad_name = name
         self.window._toast(self.window.t("toast.gamepad.connected", name=name))
-        self.refresh_hints()
+        self.refresh_hints(force=True)
         return False
+
+    def glyphs(self):
+        """The hint bar's gamepad labels, for the pad in hand or the preference."""
+        config = getattr(self.window, "config_manager", None)
+        preference = config.get_controller_glyph_family() if config is not None else controller_glyphs.AUTO
+        swap = bool(config.get_swap_confirm_cancel()) if config is not None else False
+        family = controller_glyphs.resolve_family(preference, getattr(self, "gamepad_name", ""))
+        return controller_glyphs.glyphs(family, swap_confirm_cancel=swap)
 
     def on_gamepad_disconnected(self):
         self.gamepad_connected = False
@@ -688,6 +708,17 @@ class NavigationController:
         if item is not None:
             item.toggle_favorite()
 
+    def _cmd_details(self):
+        item = self.window._focused_rom_item()
+        if item is not None:
+            item.open_details()
+
+    def _cmd_tv_mode(self):
+        self.window.toggle_tv_mode()
+
+    def _cmd_osk(self):
+        self.window.open_onscreen_keyboard()
+
     def _cmd_close_search(self):
         window = self.window
         if window.search_bar.get_search_mode():
@@ -695,6 +726,10 @@ class NavigationController:
 
     def _cmd_console_delta(self, delta):
         window = self.window
+        if self.current_context() == CTX_GRID and self._jump_group(delta):
+            # On a grouped page ("All") the shoulders walk the groups rather
+            # than leave the page (issue 914).
+            return
         rows = []
         row = window.console_list.get_first_child()
         while row is not None:
@@ -710,6 +745,20 @@ class NavigationController:
         if was_in_grid:
             # The page was just (re)rendered; focus its grid on the next tick.
             GLib.idle_add(self._cmd_focus_grid)
+
+    def _jump_group(self, delta):
+        """Focus the first card of the next (or previous) group of a grouped page."""
+        group = self._current_grid()
+        if group is None or not getattr(group, "is_group", False):
+            return False
+        grids = group.visible_grids()
+        if len(grids) < 2:
+            return False
+        item = group.item_for_widget(self._focus_widget())
+        owner = group.grid_for_item(item) if item is not None else None
+        index = grids.index(owner) if owner in grids else -1
+        target = grids[(index + delta) % len(grids)]
+        return bool(target.focus_first_card())
 
     def _cmd_move_console(self, delta):
         """Ctrl+Up / Ctrl+Down: move the focused console row (issue #386).
@@ -749,10 +798,14 @@ class NavigationController:
         self.refresh_hints()
         return True
 
-    def refresh_hints(self):
+    def refresh_hints(self, force=False):
         window = self.window
         if not hasattr(window, "set_hints"):
             return
+        if force:
+            # The labels changed under the same state (another pad, a
+            # preference): redraw whatever the last state was.
+            self._hint_state = None
         source = self._source
         if source == SOURCE_GAMEPAD and not self.gamepad_connected:
             source = SOURCE_MOUSE
@@ -777,22 +830,26 @@ class NavigationController:
             return
 
         if source == SOURCE_GAMEPAD:
+            # The letters of the pad in hand, never Ⓐ-style glyphs a font may
+            # lack (issue 914).
+            g = self.glyphs()
             if context == CTX_GRID_SELECTION:
                 hints = [
-                    ("Ⓐ", t("hints.select_toggle")),
-                    ("L2/R2+✚", t("hints.select_range")),
-                    ("Ⓨ", t("hints.select_all")),
-                    ("Ⓧ", t("hints.select_actions")),
-                    ("Ⓑ", t("hints.select_exit")),
+                    (g["confirm"], t("hints.select_toggle")),
+                    (g["range"], t("hints.select_range")),
+                    (g["favorite"], t("hints.select_all")),
+                    (g["context"], t("hints.select_actions")),
+                    (g["back"], t("hints.select_exit")),
                 ]
             elif context in (CTX_DIALOG, CTX_POPOVER):
-                hints = [("Ⓐ", t("hints.confirm")), ("Ⓑ", t("hints.close"))]
+                hints = [(g["confirm"], t("hints.confirm")), (g["back"], t("hints.close"))]
             elif context == CTX_SIDEBAR:
                 hints = [
-                    ("Ⓐ", t("hints.enter_pane")),
+                    (g["confirm"], t("hints.enter_pane")),
                     ("↕", t("hints.navigate")),
-                    ("L1/R1", t("hints.console_switch")),
-                    ("☰", t("hints.menu")),
+                    (g["consoles"], t("hints.console_switch")),
+                    (g["start"], t("hints.search")),
+                    (g["menu"], t("hints.menu")),
                 ]
             else:
                 hints = [

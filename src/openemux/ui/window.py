@@ -105,7 +105,11 @@ from openemux.ui.welcome import WelcomeAssistant
 logger = logging.getLogger(__name__)
 
 #: Slots reserved in the bottom bar for input hints (see set_hints).
-MAX_INPUT_HINTS = 6
+MAX_INPUT_HINTS = 8
+
+#: TV mode (issue 914) never shows the cards smaller than this zoom: three
+#: metres away, the shelf a desktop reads at 100% is unreadable.
+TV_MODE_MIN_ZOOM = 1.5
 
 
 
@@ -261,6 +265,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 or self.runtime_manager.is_running()
             ),
         )
+        self.gamepad_navigator.swap_confirm_cancel = self.config_manager.get_swap_confirm_cancel()
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
@@ -1054,6 +1059,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     @property
     def _zoom(self):
+        if getattr(self, "_tv_mode", False):
+            return max(self._display_settings["zoom"], TV_MODE_MIN_ZOOM)
         return self._display_settings["zoom"]
 
     @property
@@ -1553,6 +1560,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
+            # TV mode (issue 914): fullscreen, the sidebar away, bigger
+            # everything. The pad's Guide button toggles it too.
+            ("tv-mode", lambda *_: self.toggle_tv_mode(), ["F11"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1637,7 +1647,58 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if self._selected_roms:
             self._clear_selection()
             return True
-        return self.navigation.escape_to_sidebar()
+        if self.navigation.escape_to_sidebar():
+            return True
+        if self.tv_mode:
+            # Nothing else wanted the Escape: it leaves TV mode (issue 914).
+            self.toggle_tv_mode()
+            return True
+        return False
+
+    # ----- TV mode (issue 914) ---------------------------------------------
+    @property
+    def tv_mode(self):
+        return self._tv_mode
+
+    def toggle_tv_mode(self):
+        """Fullscreen with the sidebar hidden and everything sized for a couch.
+
+        The zoom floor, the bigger titles and hints and the thicker focus ring
+        come from the ``tv-mode`` class and ``TV_MODE_MIN_ZOOM``; the user's
+        own zoom setting is left alone, so leaving the mode restores the
+        desktop look exactly.
+        """
+        self._tv_mode = not self._tv_mode
+        if self._tv_mode:
+            self.add_css_class("tv-mode")
+            self.split_view.set_collapsed(True)
+            self.split_view.set_show_content(True)
+            self.fullscreen()
+        else:
+            self.remove_css_class("tv-mode")
+            self.unfullscreen()
+            self.split_view.set_collapsed(False)
+        self._reload_current_page()
+        self._toast(self.t("toast.tv_mode.on" if self._tv_mode else "toast.tv_mode.off"), timeout=2)
+        return self._tv_mode
+
+    def open_onscreen_keyboard(self):
+        """The pad's way into the search box (issue 914)."""
+        if not self.search_entry.get_sensitive():
+            return None
+        from openemux.ui.onscreen_keyboard import OnScreenKeyboard
+
+        dialog = OnScreenKeyboard(self)
+        dialog.present(self)
+        return dialog
+
+    def apply_controller_preferences(self):
+        """Hand the button-label family and the confirm/cancel swap to the readers."""
+        swap = self.config_manager.get_swap_confirm_cancel()
+        navigator = getattr(self, "gamepad_navigator", None)
+        if navigator is not None:
+            navigator.swap_confirm_cancel = swap
+        self.navigation.refresh_hints(force=True)
 
         self.connect("close-request", self._on_close_stop_game)
     def _on_close_flush_config(self, *_args):
@@ -1763,6 +1824,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         groups = (
             ("shortcuts.group.general", (
                 ("<Ctrl>f", "shortcuts.search"),
+                ("F11", "shortcuts.tv_mode"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),

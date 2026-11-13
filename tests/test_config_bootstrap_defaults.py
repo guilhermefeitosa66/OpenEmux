@@ -132,6 +132,28 @@ class TheAutoResumeSettingTests(unittest.TestCase):
             self.assertFalse(ConfigManager(config_file=cfg_path).get_auto_resume())
 
 
+class TheControllerLabelSettingsTests(unittest.TestCase):
+    """Issue 914: which pad's letters the hints draw, and the confirm/cancel swap."""
+
+    def test_defaults_follow_the_pad_and_keep_the_buttons_as_they_are(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = ConfigManager(config_file=Path(tmp_dir) / "config.yaml")
+            self.assertEqual(manager.get_controller_glyph_family(), "auto")
+            self.assertFalse(manager.get_swap_confirm_cancel())
+
+    def test_they_survive_a_restart_and_junk_reads_as_auto(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+            manager.set_controller_glyph_family("nintendo")
+            manager.set_swap_confirm_cancel(True)
+            reopened = ConfigManager(config_file=cfg_path)
+            self.assertEqual(reopened.get_controller_glyph_family(), "nintendo")
+            self.assertTrue(reopened.get_swap_confirm_cancel())
+            reopened.set_controller_glyph_family("sega")
+            self.assertEqual(ConfigManager(config_file=cfg_path).get_controller_glyph_family(), "auto")
+
+
 class TheDeferredAssetDebtTests(unittest.TestCase):
     """What the first boot leaves for the background (issue #442)."""
 

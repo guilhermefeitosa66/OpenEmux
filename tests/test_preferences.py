@@ -2052,6 +2052,18 @@ class TheSystemPageTests(_PreferencesCase):
         prefs = prefs_module.OpenEmuxPreferences(self.win)
         self.assertTrue(prefs._translucent_bar_row.get_active())
 
+    def test_the_controller_label_family_and_the_swap_are_stored(self):
+        # Issue 914: the hint bar's letters and a Nintendo-style confirm.
+        self.assertEqual(self.prefs._glyph_family_row.get_selected(), 0)
+        self.prefs._glyph_family_row.set_selected(2)
+        self.assertEqual(self.config.get_controller_glyph_family(), "playstation")
+        self.prefs._swap_confirm_row.set_active(True)
+        self.assertTrue(self.config.get_swap_confirm_cancel())
+        self.assertEqual(len(self.called("apply_controller_preferences")), 2)
+        prefs = prefs_module.OpenEmuxPreferences(self.win)
+        self.assertEqual(prefs._glyph_family_row.get_selected(), 2)
+        self.assertTrue(prefs._swap_confirm_row.get_active())
+
     def test_the_resume_switch_is_stored_and_the_page_re_read(self):
         # Issue 910: off by default; the resume badges follow the setting, so
         # the page on screen is re-read when it flips.

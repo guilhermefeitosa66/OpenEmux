@@ -2372,6 +2372,34 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._gamepad_nav_row.set_active(self.config.get_ui_settings()["gamepad_navigation"])
         self._gamepad_nav_row.connect("notify::active", self._on_gamepad_nav_changed)
         interface_group.add(self._gamepad_nav_row)
+
+        # Which pad's letters the hint bar draws, and a Nintendo-style
+        # confirm on the east button (issue 914).
+        self._glyph_families = ["auto", "xbox", "playstation", "nintendo", "generic"]
+        family_labels = [
+            self.t("controller.family.auto"),
+            self.t("controller.family.xbox"),
+            self.t("controller.family.playstation"),
+            self.t("controller.family.nintendo"),
+            self.t("controller.family.generic"),
+        ]
+        self._glyph_family_row = Adw.ComboRow(
+            title=self.t("settings.system.glyphs.title"),
+            subtitle=self.t("settings.system.glyphs.subtitle"),
+        )
+        self._glyph_family_row.set_model(Gtk.StringList.new(family_labels))
+        self._glyph_family_row.set_selected(
+            self._glyph_families.index(self.config.get_controller_glyph_family())
+        )
+        self._glyph_family_row.connect("notify::selected", self._on_glyph_family_changed)
+        interface_group.add(self._glyph_family_row)
+        self._swap_confirm_row = Adw.SwitchRow(
+            title=self.t("settings.system.swap.title"),
+            subtitle=self.t("settings.system.swap.subtitle"),
+        )
+        self._swap_confirm_row.set_active(self.config.get_swap_confirm_cancel())
+        self._swap_confirm_row.connect("notify::active", self._on_swap_confirm_changed)
+        interface_group.add(self._swap_confirm_row)
         page.add(interface_group)
 
         welcome_group = Adw.PreferencesGroup(title=self.t("prefs.group.welcome"))
@@ -2745,6 +2773,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())
+
+    def _on_glyph_family_changed(self, row, *_a):
+        self.config.set_controller_glyph_family(self._glyph_families[row.get_selected()])
+        self.win.apply_controller_preferences()
+
+    def _on_swap_confirm_changed(self, row, *_a):
+        self.config.set_swap_confirm_cancel(row.get_active())
+        self.win.apply_controller_preferences()
 
     def _on_welcome_startup_changed(self, row, *_a):
         self.config.set_show_welcome_on_startup(row.get_active())

@@ -547,6 +547,51 @@ class ActivatingAndMenusTests(_NavigationCase):
         with mock.patch.object(self.win, "_focused_rom_item", return_value=item):
             self.nav._cmd_context_menu()
 
+    def test_tv_mode_and_the_keyboard_go_through_the_window(self):
+        # Issue 914: the Guide button and Start.
+        with mock.patch.object(self.win, "toggle_tv_mode") as toggle, mock.patch.object(
+            self.win, "open_onscreen_keyboard"
+        ) as osk:
+            self.nav._cmd_tv_mode()
+            self.nav._cmd_osk()
+        toggle.assert_called_once()
+        osk.assert_called_once()
+
+    def test_the_hints_use_the_connected_pads_letters(self):
+        # Issue 914: no Ⓐ-style glyphs; the family read off the pad's name,
+        # or the preference, and the swap follows.
+        self.nav.on_gamepad_connected("Nintendo Switch Pro Controller")
+        glyphs = self.nav.glyphs()
+        self.assertEqual((glyphs["confirm"], glyphs["back"]), ("B", "A"))
+        self.config.set_controller_glyph_family("playstation")
+        self.assertEqual(self.nav.glyphs()["confirm"], "✕")
+        self.config.set_swap_confirm_cancel(True)
+        self.assertEqual(self.nav.glyphs()["confirm"], "○")
+
+    def test_the_shoulders_walk_the_groups_of_a_grouped_page(self):
+        first, second = mock.Mock(), mock.Mock()
+        group = mock.Mock(is_group=True)
+        group.visible_grids.return_value = [first, second]
+        group.item_for_widget.return_value = object()
+        group.grid_for_item.return_value = first
+        with mock.patch.object(self.nav, "_current_grid", return_value=group):
+            self.assertTrue(self.nav._jump_group(1))
+        second.focus_first_card.assert_called_once()
+        group.visible_grids.return_value = [first]
+        with mock.patch.object(self.nav, "_current_grid", return_value=group):
+            self.assertFalse(self.nav._jump_group(1))
+        with mock.patch.object(self.nav, "_current_grid", return_value=None):
+            self.assertFalse(self.nav._jump_group(1))
+
+    def test_the_details_button_goes_through_the_focused_card(self):
+        # Issue 913: X opens the game details dialog of the focused card.
+        item = mock.Mock()
+        with mock.patch.object(self.win, "_focused_rom_item", return_value=item):
+            self.nav._cmd_details()
+        item.open_details.assert_called_once()
+        with mock.patch.object(self.win, "_focused_rom_item", return_value=None):
+            self.nav._cmd_details()
+
     def test_the_favorite_button_goes_through_the_focused_card(self):
         item = mock.Mock()
         with mock.patch.object(self.win, "_focused_rom_item", return_value=item):
@@ -708,14 +753,26 @@ class SwitchingConsolesWithTheShouldersTests(_NavigationCase):
 
     def test_switching_from_the_grid_puts_focus_back_in_the_new_grid(self):
         # The page is (re)rendered by the selection, so the grid can only be
-        # focused on the next tick.
+        # focused on the next tick. On a page that is not grouped (issue 914
+        # walks the groups of "All" instead), which _jump_group says here.
         with mock.patch.object(
             self.nav, "current_context", return_value=CTX_GRID
-        ), mock.patch.object(navigation_module.GLib, "idle_add") as idle_add:
+        ), mock.patch.object(self.nav, "_jump_group", return_value=False), mock.patch.object(
+            navigation_module.GLib, "idle_add"
+        ) as idle_add:
             self.nav._cmd_console_delta(1)
         self.assertIn(
             mock.call(self.nav._cmd_focus_grid), idle_add.call_args_list
         )
+
+    def test_on_a_grouped_page_the_shoulders_stay_on_the_page(self):
+        # Issue 914: "All" has groups to walk, so the console row is left alone.
+        selected = self.win.console_list.get_selected_row()
+        with mock.patch.object(
+            self.nav, "current_context", return_value=CTX_GRID
+        ), mock.patch.object(self.nav, "_jump_group", return_value=True):
+            self.nav._cmd_console_delta(1)
+        self.assertIs(self.win.console_list.get_selected_row(), selected)
 
 
 @needs_display
@@ -830,7 +887,8 @@ class TheHintBarTests(_NavigationCase):
         self.assertIn("L1/R1", glyphs)
 
     def test_the_pad_gets_the_full_set_on_the_grid(self):
-        self.assertEqual(len(self._hints_for(SOURCE_GAMEPAD, CTX_GRID)), 7)
+        # Issue 914 added Start (the on-screen keyboard) to the seven.
+        self.assertEqual(len(self._hints_for(SOURCE_GAMEPAD, CTX_GRID)), 8)
 
     def test_the_keyboard_gets_enter_and_escape_in_a_popover(self):
         glyphs = [glyph for glyph, _label in self._hints_for(

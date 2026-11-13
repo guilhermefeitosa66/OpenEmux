@@ -721,6 +721,7 @@
         <li><details open><summary><a href="#favorites">Favorites</a></summary></details></li>
         <li><details open><summary><a href="#recent">Recently played</a></summary></details></li>
         <li><details open><summary><a href="#details">Game details</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">TV mode</a></summary></details></li>
         <li><details open><summary><a href="#cores">Cores and shaders</a></summary>
             <ul>
               <li><a href="#cores-game">For one game</a></li>
@@ -1277,11 +1278,29 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </section>
 
         <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">Library</span>
+          <h2>TV mode</h2>
+          <p>Press <kbd>F11</kbd>, or the Guide button on a gamepad, and the library goes fullscreen for a couch: the sidebar
+            goes away, the shelf is drawn larger, titles and hints grow and the focused card gets a thicker ring. The
+            same key or button, or <kbd>Esc</kbd>, brings the desktop layout back. Your zoom setting is left alone.</p>
+          <p>With a pad in hand, the hints at the bottom use that pad’s own letters (A B X Y on an Xbox pad, B A Y X on a
+            Nintendo one, the four shapes on a PlayStation pad); <span class="ui">Controller button labels</span>
+            in Settings › System forces a family, and <span class="ui">Swap confirm and cancel</span> puts confirm on the
+            right-hand button. The map, with the Xbox letters:</p>
+          <ul>
+            <li><strong>A</strong> plays the focused game; hold it to start a selection.</li>
             <li><strong>B</strong> goes back to the console list; <strong>X</strong> opens the game’s details; <strong>Y</strong>
               toggles the favorite.</li>
             <li><strong>LB/RB</strong> switch console, and on <span class="ui">All</span> jump between the console groups.</li>
             <li><strong>Menu</strong> (Start) opens the on-screen keyboard: a letter grid the D-pad walks, filtering the library
               as you type; Done lands on the first match.</li>
+            <li><strong>View</strong> (Select) opens the main menu; the <strong>Guide</strong> button toggles TV mode.</li>
+            <li><strong>LT/RT</strong> held with the D-pad extend a selection.</li>
+          </ul>
+          <p>Reduced motion and large text follow your GNOME settings here as everywhere else.</p>
+        </section>
+
         <!-- ============================================================ -->
         <section class="chapter" id="cores">
           <span class="eyebrow">Emulation</span>
