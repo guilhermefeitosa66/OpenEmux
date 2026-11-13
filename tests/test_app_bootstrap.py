@@ -172,6 +172,21 @@ class PresentingTheMainWindowTests(_ApplicationCase):
             self.app._present_main_window()
         build.assert_not_called()
         window.present.assert_called_once()
+
+    def test_the_first_window_settles_the_renderer_probe_a_moment_later(self):
+        # Issue 903: the AppImage tries the GPU renderer behind a marker
+        # file; a window alive a second after presenting is the proof it works.
+        window = mock.Mock()
+        with mock.patch.object(app_module, "OpenEmuxWindow", return_value=window), mock.patch.object(
+            app_module.GLib, "timeout_add"
+        ) as timeout_add, mock.patch.object(app_module, "clear_renderer_probe") as clear:
+            self.app._present_main_window()
+            delay, callback = timeout_add.call_args[0]
+            self.assertEqual(delay, OpenEmuxApplication.RENDERER_PROBE_GRACE_MS)
+            self.assertFalse(callback())
+        clear.assert_called_once_with(window)
+
+
 @needs_display
 class TheBootstrapFlowTests(_ApplicationCase):
     def setUp(self):
@@ -197,6 +212,13 @@ class TheBootstrapFlowTests(_ApplicationCase):
         self.assertTrue(self.app._bootstrap_running)
         self.windows[0].present.assert_called_once()
         self.thread.assert_called_once()
+
+    def test_the_first_boot_window_settles_the_renderer_probe_too(self):
+        # On a fresh install it is the first window drawn, so it is the one
+        # that proves the renderer works (issue 903).
+        with mock.patch.object(app_module.GLib, "timeout_add") as timeout_add:
+            self.app._start_bootstrap_flow(initial_boot=True)
+        self.assertEqual(timeout_add.call_args[0][0], OpenEmuxApplication.RENDERER_PROBE_GRACE_MS)
 
     def test_the_worker_runs_the_bootstrap_and_reports_back_on_the_main_loop(self):
         with mock.patch.object(

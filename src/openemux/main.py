@@ -8,6 +8,7 @@ import shutil
 
 from openemux.core.paths import (
     bytecode_cache_dir,
+    default_config_dir,
     get_project_root,
     is_running_in_appimage,
     is_running_in_flatpak,
@@ -65,21 +66,100 @@ def _ensure_gtk_typelibs():
         )
 
 
-def _configure_gtk_renderer():
-    """Pick a crash-safe GSK renderer default for fragile graphics stacks.
+#: Written under the config directory before GTK comes up in the AppImage and
+#: removed once the first frame has been drawn; see _configure_gtk_renderer.
+RENDERER_PROBE_NAME = "renderer-probe"
 
-    GTK4's default GL/Vulkan (ngl) renderer can hard-crash (SIGSEGV, no Python
-    traceback) at window realization when the AppImage's bundled GTK stack runs
-    against the host's own GL/Vulkan drivers -- a common failure on fresh
-    Debian/Mesa combos. The Cairo software renderer sidesteps every GPU-driver
-    mismatch and is more than adequate for OpenEmux's 2D cover-grid UI.
+#: The probe file this process wrote, or None when it wrote none.
+_renderer_probe = None
 
-    Only applied inside the AppImage and only when the user has not already
-    chosen a renderer, so a working setup can still opt back in with, e.g.,
-    GSK_RENDERER=ngl (or gl / vulkan).
+
+def renderer_probe_path(config_dir=None):
+    return Path(config_dir if config_dir is not None else default_config_dir()) / "runtime" / RENDERER_PROBE_NAME
+
+
+def _configure_gtk_renderer(config_dir=None):
+    """Try GTK's own renderer in the AppImage, and fall back after a crash.
+
+    GTK4's GPU renderer can hard-crash (SIGSEGV, no Python traceback) at
+    window realization when the AppImage's bundled GTK stack runs against the
+    host's own GL/Vulkan drivers -- a common failure on fresh Debian/Mesa
+    combos -- which is why the AppImage used to force the Cairo software
+    renderer unconditionally. That made every AppImage user pay for a
+    software blur per cartridge on every scroll frame (issue 903), on
+    machines where the GPU renderer would have worked.
+
+    So the AppImage now *tries* GTK's default: a marker is written before
+    GTK initialises and removed after the first frame has been drawn
+    (:func:`clear_renderer_probe`). A marker still there at the next start
+    means the last attempt never drew a frame -- the renderer crashed the
+    process -- and this machine gets Cairo from then on. Removing the marker
+    file is how to try the GPU again after a driver update.
+
+    ``GSK_RENDERER`` set by the user wins over all of this, on the AppImage
+    and elsewhere; outside the AppImage GTK picks for itself as before.
     """
-    if is_running_in_appimage() and not os.environ.get("GSK_RENDERER"):
+    global _renderer_probe
+    _renderer_probe = None
+    log = logging.getLogger(__name__)
+    if not is_running_in_appimage():
+        return
+    if os.environ.get("GSK_RENDERER"):
+        log.info("gsk renderer: %s (GSK_RENDERER set by the user)", os.environ["GSK_RENDERER"])
+        return
+    probe = renderer_probe_path(config_dir)
+    if probe.exists():
         os.environ["GSK_RENDERER"] = "cairo"
+        log.warning(
+            "gsk renderer: cairo -- the last attempt at the GPU renderer did not "
+            "reach its first frame (remove %s to try it again)",
+            probe,
+        )
+        return
+    try:
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text(f"pid={os.getpid()}\n", encoding="utf-8")
+    except OSError as exc:
+        # Nowhere to leave a note for the next start: the safe choice is
+        # the one that cannot crash.
+        os.environ["GSK_RENDERER"] = "cairo"
+        log.warning("gsk renderer: cairo -- could not write the probe %s: %s", probe, exc)
+        return
+    _renderer_probe = probe
+    log.info("gsk renderer: trying GTK's default; probe at %s", probe)
+
+
+def clear_renderer_probe(window=None):
+    """The first frame was drawn: the GPU renderer works here. Drop the marker.
+
+    Called by the application a moment after the main window is presented.
+    ``window`` is only asked which renderer GTK actually picked, for the log.
+    """
+    global _renderer_probe
+    log = logging.getLogger(__name__)
+    name = _renderer_name(window)
+    if name:
+        log.info("gsk renderer in use: %s", name)
+    probe, _renderer_probe = _renderer_probe, None
+    if probe is None:
+        return False
+    try:
+        probe.unlink()
+    except OSError as exc:
+        log.warning("gsk renderer: could not remove the probe %s: %s", probe, exc)
+        return False
+    return True
+
+
+def _renderer_name(window):
+    """The GSK renderer class drawing ``window``, or None when it cannot say."""
+    if window is None:
+        return None
+    try:
+        renderer = window.get_renderer()
+    except Exception:  # noqa: BLE001 - a window stand-in, or one not realized
+        return None
+    return type(renderer).__name__ if renderer is not None else None
 
 
 def _ensure_pixbuf_loaders():
@@ -193,11 +273,13 @@ def prepare_process():
     # no file in the folder is open (issue #768). The bytecode cache is under
     # data/cache, outside the folders the swap renames.
     import_result = _apply_pending_portable_import()
-    _configure_gtk_renderer()
     # Before logging: the start-up log lives in the config dir, which a legacy
     # one may still be on its way to.
     migrate_legacy_config_dir()
     configure_startup_logging()
+    # After the migration, since the renderer probe lives in the config dir,
+    # and after the log is open, so the pick is on record (issue 903).
+    _configure_gtk_renderer()
     if import_result is not None:
         logging.info("portable import at start-up: %s", import_result)
     _declare_windows_app_id()

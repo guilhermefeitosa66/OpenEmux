@@ -16908,6 +16908,26 @@ has no Android device, so these are `MANUAL`.
   `test_the_composite_is_rendered_at_the_cards_display_scale`), `tests/test_grid_widget.py`
   (`test_the_cards_render_their_composites_at_the_display_scale`).
 
+### RT-1032 — The AppImage tries the GPU renderer and falls back to software only after a crash
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start the AppImage on a machine whose GPU driver works, read the
+  start-up log; then start it on one where GTK's GPU renderer crashes at the first window, and
+  start it a second time.
+- **Expected:** The AppImage no longer forces `GSK_RENDERER=cairo`. It writes a probe file
+  (`~/.openemux/runtime/renderer-probe`) before GTK comes up and removes it one second after the
+  first window (the library or the first-boot screen) is presented; the log says
+  `gsk renderer: trying GTK's default` and then `gsk renderer in use: <the GSK renderer class>`.
+  When the renderer crashes the process before that second, the probe stays, and the next start
+  logs `gsk renderer: cairo -- the last attempt at the GPU renderer did not reach its first
+  frame` and runs on the software renderer from then on; deleting the probe file is how to try
+  the GPU again after a driver update. `GSK_RENDERER` set by the user is honoured as it was, and
+  a probe that cannot be written picks cairo rather than guessing (issue 903).
+- **Check:** suite files `tests/test_startup_preparation.py` (`TheRendererPickTests`),
+  `tests/test_app_bootstrap.py` (`test_the_first_window_settles_the_renderer_probe_a_moment_later`,
+  `test_the_first_boot_window_settles_the_renderer_probe_too`).
+
 ### RT-1033 — Settings changed with a gesture reach the disk once the gesture stops, and survive a close
 - **Area:** Desktop — Library performance
 - **Mode:** AUTO-SUITE
