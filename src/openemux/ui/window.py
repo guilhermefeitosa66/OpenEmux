@@ -1046,9 +1046,30 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return sort_roms(
             roms,
             order,
-            file_stat=self._rom_file_stat if needs_stat else None,
+            file_stat=self._file_stat_from_index(roms) if needs_stat else None,
             last_played=self.play_history.last_played if needs_history else None,
         )
+
+    @classmethod
+    def _file_stat_from_index(cls, roms):
+        """A ``(size, added)`` lookup that reads the index before the disk.
+
+        The scan writes each ROM's size and arrival time beside the list
+        (issue 901), so "recently added" and "file size" on "All" are a
+        dictionary lookup per game rather than a stat of the whole library
+        on every render. A game the index does not know is stat-ed as before.
+        """
+        known = {
+            rom.get("path", ""): (rom["size"], rom["added"])
+            for rom in roms
+            if "size" in rom and "added" in rom
+        }
+
+        def lookup(path):
+            found = known.get(path)
+            return found if found is not None else cls._rom_file_stat(path)
+
+        return lookup
 
     @staticmethod
     def _rom_file_stat(path):
@@ -2707,7 +2728,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Thread(target=_worker, daemon=True).start()
         return {"started": True}
 
-    def _rescan_all_consoles(self, show_toast=False):
+    def _rescan_all_consoles(self, show_toast=False, only_changed=False):
         if self._scan_running:
             self._queue_rescan(console=None, show_toast=show_toast)
             if show_toast:
@@ -2731,7 +2752,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         def _worker():
             try:
                 summary = self.playlist_manager.scan_and_rebuild_all_playlists(
-                    on_progress=_on_progress
+                    on_progress=_on_progress, only_changed=only_changed
                 )
             except Exception as exc:
                 logger.exception("rescan crashed")
@@ -2835,7 +2856,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return False
 
     def _start_startup_scan(self):
-        self._rescan_all_consoles(show_toast=False)
+        """Pick up what changed on the disk since the last run.
+
+        Only the consoles whose folders moved are walked (issue 901): the
+        rest answer from their index, so a second launch of an unchanged
+        library writes no playlist and performs no fsync. Refresh, and the
+        scan dialog, still walk everything.
+        """
+        self._rescan_all_consoles(show_toast=False, only_changed=True)
 
     def _show_sync_covers_dialog(self):
         if not self.visible_consoles:

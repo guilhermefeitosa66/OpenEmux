@@ -1243,6 +1243,17 @@ class TheRomsFolderPickerTests(WindowCase):
         dialog.select_folder_finish.return_value = selected
         return dialog
 
+    def test_the_incremental_flag_reaches_the_playlist_rebuild(self):
+        with mock.patch.object(
+            self.win.playlist_manager, "scan_and_rebuild_all_playlists",
+            return_value={"consoles": {}, "total_consoles": 0, "total_roms": 0, "failed": {}, "skipped": []},
+        ) as rebuild, mock.patch.object(
+            window_module, "Thread", side_effect=lambda target, daemon: mock.Mock(start=target)
+        ), mock.patch.object(window_module.GLib, "idle_add"):
+            self.win._rescan_all_consoles(show_toast=False, only_changed=True)
+        self.assertTrue(rebuild.call_args.kwargs["only_changed"])
+        self.win._scan_running = False
+
     def test_choosing_a_folder_repoints_the_library_at_it(self):
         new_root = self.tmp / "elsewhere"
         new_root.mkdir()
@@ -1499,12 +1510,13 @@ class TheRescanPlumbingTests(WindowCase):
             self.win._rescan_single_console(ALL_CONSOLES_ID)
         rescan.assert_called_once()
 
-    def test_the_startup_scan_is_a_silent_whole_library_rescan(self):
+    def test_the_startup_scan_is_a_silent_incremental_rescan(self):
         # The method itself is held back during construction (it is a thread),
-        # so it is called here against the real implementation.
+        # so it is called here against the real implementation. Only the
+        # consoles whose folders moved are walked (issue 901).
         with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
             REAL_STARTUP_SCAN(self.win)
-        rescan.assert_called_once_with(show_toast=False)
+        rescan.assert_called_once_with(show_toast=False, only_changed=True)
 
     def test_the_refresh_button_rescans_the_console_it_is_on(self):
         self.win.sidebar.select("SFC")
@@ -2213,6 +2225,26 @@ class SortingTests(WindowCase):
         self.assertGreater(size, 0)
         self.assertGreater(added, 0)
 
+    def test_the_date_and_size_orders_read_the_index_not_the_disk(self):
+        # Issue 901: "Recently added" on "All" was a stat of the whole
+        # library per render.
+        roms = [
+            {"name": "A", "path": "/nowhere/a.sfc", "console": "SFC", "size": 5, "added": 10.0},
+            {"name": "B", "path": "/nowhere/b.sfc", "console": "SFC", "size": 9, "added": 20.0},
+        ]
+        from openemux.core.library_view import SORT_FILE_SIZE, SORT_RECENTLY_ADDED
+
+        with mock.patch.object(window_module.os, "stat", side_effect=AssertionError("stat")):
+            by_size = self.win._sorted_roms(roms, order=SORT_FILE_SIZE)
+            by_date = self.win._sorted_roms(roms, order=SORT_RECENTLY_ADDED)
+        self.assertEqual([rom["name"] for rom in by_size], ["B", "A"])
+        self.assertEqual([rom["name"] for rom in by_date], ["B", "A"])
+
+    def test_a_game_the_index_does_not_know_is_still_stat_ed(self):
+        rom = self.rom()
+        lookup = OpenEmuxWindow._file_stat_from_index([{"path": rom["path"]}])
+        self.assertEqual(lookup(rom["path"]), OpenEmuxWindow._rom_file_stat(rom["path"]))
+
     def test_a_rom_that_is_gone_sorts_as_unknown(self):
         self.assertEqual(
             OpenEmuxWindow._rom_file_stat(str(self.tmp / "gone.sfc")), (0, 0.0)
@@ -2370,7 +2402,7 @@ class TheRescanWorkersTests(WindowCase):
         with mock.patch.object(
             self.win.playlist_manager,
             "scan_and_rebuild_all_playlists",
-            lambda on_progress=None: progress.append(
+            lambda on_progress=None, only_changed=False: progress.append(
                 on_progress({"current": 1, "total": 2})
             )
             or {"consoles": {}, "total_consoles": 0, "total_roms": 0, "failed": {}},

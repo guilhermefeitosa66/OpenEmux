@@ -16950,3 +16950,28 @@ has no Android device, so these are `MANUAL`.
   (`test_closing_flushes_a_setting_still_waiting_for_its_write`), `tests/test_game_session.py`
   (`test_a_launch_flushes_a_setting_still_waiting_for_its_write`), `tests/test_app_bootstrap.py`
   (`test_quitting_flushes_a_setting_still_waiting_for_its_write`).
+
+### RT-1034 — A second launch of an unchanged library writes no playlist and walks no folder
+- **Area:** Desktop — Library performance
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: start the app twice on the same library and watch the "Scanning
+  ROMs" banner and the disk light; then add a ROM to one console's folder with the app closed and
+  start it again; sort "All" by "Recently added" and by "File size".
+- **Expected:** The first start scans each console in one walk, with one stat per file (no second
+  pass for the cue sheets, no `is_file()` on top of what the directory entry already said), and
+  writes beside each `<CONSOLE>.list` a `<CONSOLE>.meta.json` holding the display name (an
+  archive's inner title), the size, the arrival time of every game and the fingerprint of the
+  console's folders (their mtimes). The second start compares each console's fingerprint with the
+  stored one and walks nothing: no playlist is rewritten, no fsync runs, and the banner finishes
+  at once. The console that received a ROM has a folder whose mtime moved, so it alone is walked
+  and rewritten; the others still answer from their index. Loading a page is a parse of the two
+  files: no `exists()` per game and no archive opened for its name, on the main thread or
+  anywhere (a game deleted outside the app stays listed until the next start's scan drops it).
+  Sorting by date added or file size reads the sizes and dates from the index instead of stat-ing
+  the library on every render (issue 901). "Refresh" and the scan dialog still walk everything.
+- **Check:** suite files `tests/test_playlist_manager.py` (`TheMetaIndexTests`,
+  `test_a_game_that_left_the_disk_stays_listed_until_the_next_scan`), `tests/test_scanner.py`
+  (`OneWalkOneStatTests`), `tests/test_dir_walk.py` (`WalkEntriesTests`, `DirectoryStampsTests`),
+  `tests/test_window.py` (`test_the_startup_scan_is_a_silent_incremental_rescan`,
+  `test_the_date_and_size_orders_read_the_index_not_the_disk`).
