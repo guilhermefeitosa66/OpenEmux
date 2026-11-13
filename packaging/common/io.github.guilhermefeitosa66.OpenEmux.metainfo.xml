@@ -88,6 +88,15 @@
   </keywords>
 
   <releases>
+    <release version="1.23.5" date="2026-11-13">
+      <description>
+        <p>The website moved to its own address, part of the Libre Apps foundation.</p>
+        <ul>
+          <li>The About window links the new website</li>
+          <li>It also links the source code and the Libre Apps foundation</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.23.4" date="2026-11-13">
       <description>
         <p>A release about speed and about the moments where the app used to leave you guessing.</p>
