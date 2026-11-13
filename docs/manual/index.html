@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favorites</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Recently played</a></summary></details></li>
+        <li><details open><summary><a href="#details">Game details</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">TV mode</a></summary></details></li>
         <li><details open><summary><a href="#cores">Cores and shaders</a></summary>
             <ul>
               <li><a href="#cores-game">For one game</a></li>
@@ -788,6 +791,8 @@
           <p>The sidebar lists the pages of your library, top to bottom:</p>
           <ul>
             <li><span class="ui">All</span>: every game, grouped by console.</li>
+            <li><span class="ui">Recently played</span>: the last games you launched, the latest first. The row
+              appears after the first launch. See <a href="#recent">Recently played</a>.</li>
             <li><span class="ui">Favorites</span>: the games you starred. The row only appears once something is
               starred. See <a href="#favorites">Favorites</a>.</li>
             <li>Your playlists, if you made any. Here, <span class="ui">Couch co-op</span>. See
@@ -945,11 +950,12 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">The first launch</h3>
-          <p>The first time it runs, OpenEmux shows a <span class="ui">Preparing first-time setup</span> window while
-            it creates its configuration, makes the ROMs, BIOS and covers folders, prepares input profiles and
-            playlists, and downloads the libretro cores your consoles need. That usually takes about ten seconds; the
-            rest of the cores keep downloading in the background while you use the app, and a banner under the header
-            shows their progress.</p>
+          <p>The first time it runs, OpenEmux shows a <span class="ui">Preparing first-time setup</span> window for a
+            moment while it creates its configuration, makes the ROMs, BIOS and covers folders and prepares input
+            profiles and playlists. The library opens right after: the libretro cores and the shader packs download in
+            the background, with their progress in a banner under the header, the cores your consoles use first. A
+            game you launch before its core has arrived fetches that core on the spot. Offline, the app opens all the
+            same and the banner says what will be fetched at the next start.</p>
           <p>Your settings live in <code>~/.openemux/</code>, and your games in <code>~/games/roms/</code>, one folder
             per console.</p>
 
@@ -1240,6 +1246,59 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <p>The <span class="ui">Favorites</span> page gathers them, grouped by console. Its row shows up in the
             sidebar once you have starred a game, and OpenEmux opens on it when there is nothing else to come back
             to.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Library</span>
+          <h2>Recently played</h2>
+          <p>Every launch is remembered. Once you have played something, a <span class="ui">Recently played</span>
+            row appears under <span class="ui">All</span>, and OpenEmux opens on it: the last twenty games, the
+            latest first, each card saying when you played it and for how long.</p>
+          <p>The time counts from when the game starts to when it closes, and adds up across sessions. It is the
+            same clock behind the <span class="ui">Recently played</span> sort order on every other page.</p>
+          <p>To pick a game up where you left it, turn on <span class="ui">Resume where I left off</span> under
+            <span class="ui">Settings › Video</span>. RetroArch then saves the game when you quit and loads that save
+            on the next launch; a card with such a save carries a small play badge in its corner, and
+            <span class="ui">Start fresh</span> in its menu skips the save once.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">Library</span>
+          <h2>Game details</h2>
+          <p>Every game has a details page: pick <span class="ui">Game details…</span> in its menu, press <kbd>Alt</kbd>+<kbd>Enter</kbd>
+            on the card, or Ⓧ on a gamepad. It shows the cover, when and for how long you played, the file, and
+            <span class="ui">Play</span>.</p>
+          <p>Below sit the <span class="ui">Core</span>, <span class="ui">Shader</span> and <span class="ui">Cartridge color</span> rows
+            with the value in effect and where it comes from (the console default, or this game); a small arrow puts a
+            row back on the console default. Then the save states with <span class="ui">Load</span>, the artwork actions,
+            the playlists the game belongs to, and <span class="ui">Show in file manager</span>, <span class="ui">Rename…</span>
+            and <span class="ui">Delete ROM…</span>.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">Library</span>
+          <h2>TV mode</h2>
+          <p>Press <kbd>F11</kbd>, or the Guide button on a gamepad, and the library goes fullscreen for a couch: the sidebar
+            goes away, the shelf is drawn larger, titles and hints grow and the focused card gets a thicker ring. The
+            same key or button, or <kbd>Esc</kbd>, brings the desktop layout back. Your zoom setting is left alone.</p>
+          <p>With a pad in hand, the hints at the bottom use that pad’s own letters (A B X Y on an Xbox pad, B A Y X on a
+            Nintendo one, the four shapes on a PlayStation pad); <span class="ui">Controller button labels</span>
+            in Settings › System forces a family, and <span class="ui">Swap confirm and cancel</span> puts confirm on the
+            right-hand button. The map, with the Xbox letters:</p>
+          <ul>
+            <li><strong>A</strong> plays the focused game; hold it to start a selection.</li>
+            <li><strong>B</strong> goes back to the console list; <strong>X</strong> opens the game’s details; <strong>Y</strong>
+              toggles the favorite.</li>
+            <li><strong>LB/RB</strong> switch console, and on <span class="ui">All</span> jump between the console groups.</li>
+            <li><strong>Menu</strong> (Start) opens the on-screen keyboard: a letter grid the D-pad walks, filtering the library
+              as you type; Done lands on the first match.</li>
+            <li><strong>View</strong> (Select) opens the main menu; the <strong>Guide</strong> button toggles TV mode.</li>
+            <li><strong>LT/RT</strong> held with the D-pad extend a selection.</li>
+          </ul>
+          <p>Reduced motion and large text follow your GNOME settings here as everywhere else.</p>
         </section>
 
         <!-- ============================================================ -->

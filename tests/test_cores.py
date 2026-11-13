@@ -1,3 +1,4 @@
+import os
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -97,6 +98,128 @@ class CoreCatalogTests(unittest.TestCase):
             catalog = CoreCatalog(core_dirs=[info_dir, so_dir])
             self.assertEqual(catalog.display_name_for(_core_name("snes9x")), "Snes9x")
             self.assertTrue(catalog.is_installed(_core_name("snes9x")))
+
+
+class PickableCoresTests(unittest.TestCase):
+    """What the deferred sweep fetches: the cores a picker would list (issue 908)."""
+
+    def test_curated_cores_are_always_wanted(self):
+        with TemporaryDirectory() as tmp:
+            wanted = cores_module.pickable_core_filenames([Path(tmp)])
+        for name in cores_module.curated_core_filenames():
+            self.assertIn(name, wanted)
+
+    def test_a_core_whose_info_names_a_supported_system_is_wanted(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "bsnes_hd_beta_libretro.info").write_text(
+                'database = "Nintendo - Super Nintendo Entertainment System"\n', encoding="utf-8"
+            )
+            (base / "mame2003_libretro.info").write_text(
+                'database = "MAME 2003"\n', encoding="utf-8"
+            )
+            (base / "notes.txt").write_text("x", encoding="utf-8")
+            wanted = cores_module.pickable_core_filenames([base, base / "missing"])
+        self.assertIn("bsnes_hd_beta_libretro" + CORE_SUFFIX, wanted)
+        self.assertNotIn("mame2003_libretro" + CORE_SUFFIX, wanted)
+
+    def test_the_first_directory_with_an_info_file_answers_for_it(self):
+        with TemporaryDirectory() as tmp:
+            first, second = Path(tmp) / "a", Path(tmp) / "b"
+            first.mkdir()
+            second.mkdir()
+            (first / "x_libretro.info").write_text('database = "MAME"\n', encoding="utf-8")
+            (second / "x_libretro.info").write_text(
+                'database = "Nintendo - Game Boy"\n', encoding="utf-8"
+            )
+            wanted = cores_module.pickable_core_filenames([first, second])
+        self.assertNotIn("x_libretro" + CORE_SUFFIX, wanted)
+
+
+class TheCatalogCacheTests(unittest.TestCase):
+    """The scan is kept beside the config and reloaded while the directories stand still."""
+
+    def _catalog(self, base):
+        cores_dir = base / "cores"
+        cores_dir.mkdir(exist_ok=True)
+        _write_core(cores_dir, _core_name("snes9x"), {"corename": "Snes9x", "database": "Nintendo - SNES", "display_version": "1.62"})
+        return CoreCatalog(core_dirs=[cores_dir], cache_file=base / "cores_catalog.json")
+
+    def test_the_scan_is_written_once_and_read_back_without_parsing(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            first = self._catalog(base)
+            self.assertEqual(first.display_name_for(_core_name("snes9x")), "Snes9x")
+            self.assertTrue((base / "cores_catalog.json").exists())
+            second = CoreCatalog(core_dirs=first.core_dirs, cache_file=base / "cores_catalog.json")
+            with mock.patch.object(cores_module, "parse_core_info", side_effect=AssertionError("parsed")):
+                core = second.installed()[_core_name("snes9x")]
+        self.assertEqual((core.display_name, core.database, core.version), ("Snes9x", "Nintendo - SNES", "1.62"))
+        self.assertTrue(core.path.endswith(_core_name("snes9x")))
+
+    def test_a_directory_that_moved_invalidates_the_cache(self):
+        import os, time
+
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            first = self._catalog(base)
+            first.installed()
+            old = time.time() - 100
+            os.utime(base / "cores", (old, old))
+            second = CoreCatalog(core_dirs=first.core_dirs, cache_file=base / "cores_catalog.json")
+            with mock.patch.object(cores_module, "parse_core_info", wraps=cores_module.parse_core_info) as parse:
+                second.installed()
+            self.assertEqual(parse.call_count, 1)
+
+    def test_a_broken_cache_is_set_aside_and_the_scan_runs(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            catalog = self._catalog(base)
+            (base / "cores_catalog.json").write_text("{broken", encoding="utf-8")
+            self.assertIn(_core_name("snes9x"), catalog.installed())
+            self.assertTrue((base / "cores_catalog.json").exists())  # rewritten
+            catalog.refresh()
+            (base / "cores_catalog.json").write_text('{"version": 0, "stamps": {}, "cores": {}}', encoding="utf-8")
+            self.assertIn(_core_name("snes9x"), catalog.installed())
+
+    def test_a_directory_that_is_not_there_has_no_stamp(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            catalog = self._catalog(base)
+            catalog.core_dirs.append(base / "nowhere")
+            self.assertEqual(list(catalog._stamps()), [str(base / "cores")])
+
+    def test_without_a_cache_file_the_catalog_scans_as_before(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "cores").mkdir()
+            _write_core(base / "cores", _core_name("snes9x"), {"corename": "Snes9x"})
+            catalog = CoreCatalog(core_dirs=[base / "cores"])
+            self.assertFalse(catalog.is_ready())
+            catalog.warm_up()
+            self.assertTrue(catalog.is_ready())
+            self.assertEqual(os.listdir(tmp), ["cores"])
+
+    def test_a_cache_that_cannot_be_written_is_not_an_error(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "cores").mkdir()
+            _write_core(base / "cores", _core_name("snes9x"), {"corename": "Snes9x"})
+            blocked = base / "blocked"
+            blocked.write_text("x", encoding="utf-8")
+            catalog = CoreCatalog(core_dirs=[base / "cores"], cache_file=blocked / "cores_catalog.json")
+            self.assertIn(_core_name("snes9x"), catalog.installed())
+
+    def test_two_threads_asking_at_once_scan_once(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            catalog = self._catalog(base)
+            with mock.patch.object(catalog, "_scan", wraps=catalog._scan) as scan:
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    list(pool.map(lambda _i: catalog.installed(), range(8)))
+            self.assertEqual(scan.call_count, 1)
 
 
 class CoreConfigStoreTests(unittest.TestCase):

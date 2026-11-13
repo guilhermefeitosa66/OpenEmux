@@ -579,6 +579,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
                 title=f"{console_id} — {status['display_name']}",
                 subtitle=f"{present}/{total}",
             )
+            expander._bios_console = console_id
             # The row names a console, so show its icon like everywhere else.
             expander.add_prefix(console_icon(console_id))
             # One Import per console: the file is checked against this
@@ -624,6 +625,14 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         if show_toast:
             self._toast(self.t("bios.reloaded"))
 
+    def show_bios_console(self, console_id):
+        """Open ``console_id``'s row on the BIOS page, for the page banner."""
+        for row in getattr(self, "_bios_rows", []):
+            if getattr(row, "_bios_console", None) == console_id:
+                row.set_expanded(True)
+                return True
+        return False
+
     def _open_bios_import_picker(self, console_id):
         dialog = Gtk.FileDialog()
         dialog.set_title(
@@ -663,6 +672,9 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # The rows read the disk again, so the imported files show as present
         # now; the pre-launch check reads the disk on every launch already.
         self._reload_bios(show_toast=False)
+        # The sidebar icon and the console page's banner clear without a
+        # restart (issue 911).
+        self.win.sync_bios_warnings([summary["console"]])
         # Settings may have been closed while the files were copying; an
         # Adw.Dialog presented on an unrooted widget never shows, so fall back
         # to the main window.
@@ -1953,6 +1965,15 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         self._start_fullscreen_row.connect("notify::active", self._on_start_fullscreen_changed)
         launch_mode.add(self._start_fullscreen_row)
+        # RetroArch's automatic save state, on exit and on the next launch
+        # (issue 910). Off by default: it changes what Play does.
+        self._auto_resume_row = Adw.SwitchRow(
+            title=self.t("settings.launch_mode.resume.title"),
+            subtitle=self.t("settings.launch_mode.resume.subtitle"),
+        )
+        self._auto_resume_row.set_active(self.config.get_auto_resume())
+        self._auto_resume_row.connect("notify::active", self._on_auto_resume_changed)
+        launch_mode.add(self._auto_resume_row)
         page.add(launch_mode)
 
         # The in-game bar RetroArch draws (issue #469). Read at each launch, so
@@ -2186,6 +2207,25 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             row.connect("notify::selected", self._on_core_changed, console_id)
             group.add(row)
 
+        # The deferred sweep after the first boot fetches only the cores some
+        # picker above would list; the ~200 others the buildbot builds are an
+        # opt-in (issue 908). Turning it on owes the sweep again, and the
+        # window starts it right away.
+        download_group = Adw.PreferencesGroup(title=self.t("prefs.group.core_downloads"))
+        self._download_all_cores_row = Adw.SwitchRow(
+            title=self.t("settings.cores.download_all.title"),
+            subtitle=self.t("settings.cores.download_all.subtitle"),
+        )
+        self._download_all_cores_row.add_prefix(
+            Gtk.Image.new_from_icon_name("folder-download-symbolic")
+        )
+        self._download_all_cores_row.set_active(
+            self.config.get_retroarch_updater_settings()["download_all_cores"]
+        )
+        self._download_all_cores_row.connect("notify::active", self._on_download_all_cores_changed)
+        download_group.add(self._download_all_cores_row)
+        page.add(download_group)
+
         # Settings the core itself understands, which do not travel in the
         # config file the launch appends (issue #296). Only for the cores that
         # have any, so this group is empty on most libraries.
@@ -2332,6 +2372,34 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._gamepad_nav_row.set_active(self.config.get_ui_settings()["gamepad_navigation"])
         self._gamepad_nav_row.connect("notify::active", self._on_gamepad_nav_changed)
         interface_group.add(self._gamepad_nav_row)
+
+        # Which pad's letters the hint bar draws, and a Nintendo-style
+        # confirm on the east button (issue 914).
+        self._glyph_families = ["auto", "xbox", "playstation", "nintendo", "generic"]
+        family_labels = [
+            self.t("controller.family.auto"),
+            self.t("controller.family.xbox"),
+            self.t("controller.family.playstation"),
+            self.t("controller.family.nintendo"),
+            self.t("controller.family.generic"),
+        ]
+        self._glyph_family_row = Adw.ComboRow(
+            title=self.t("settings.system.glyphs.title"),
+            subtitle=self.t("settings.system.glyphs.subtitle"),
+        )
+        self._glyph_family_row.set_model(Gtk.StringList.new(family_labels))
+        self._glyph_family_row.set_selected(
+            self._glyph_families.index(self.config.get_controller_glyph_family())
+        )
+        self._glyph_family_row.connect("notify::selected", self._on_glyph_family_changed)
+        interface_group.add(self._glyph_family_row)
+        self._swap_confirm_row = Adw.SwitchRow(
+            title=self.t("settings.system.swap.title"),
+            subtitle=self.t("settings.system.swap.subtitle"),
+        )
+        self._swap_confirm_row.set_active(self.config.get_swap_confirm_cancel())
+        self._swap_confirm_row.connect("notify::active", self._on_swap_confirm_changed)
+        interface_group.add(self._swap_confirm_row)
         page.add(interface_group)
 
         welcome_group = Adw.PreferencesGroup(title=self.t("prefs.group.welcome"))
@@ -2680,6 +2748,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         # so the header icon is refreshed here rather than left to that.
         self.win._sync_theme_button()
 
+    def _on_download_all_cores_changed(self, row, *_a):
+        enabled = row.get_active()
+        self.config.set_download_all_cores(enabled)
+        if enabled:
+            self.win._start_deferred_asset_download()
+
     def _on_show_tips_changed(self, row, *_a):
         enabled = row.get_active()
         self.config.set_show_tips(enabled)
@@ -2691,8 +2765,22 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
     def _on_start_fullscreen_changed(self, row, *_a):
         self.config.set_start_games_fullscreen(row.get_active())
 
+    def _on_auto_resume_changed(self, row, *_a):
+        self.config.set_auto_resume(row.get_active())
+        # The resume badges follow the setting, so the page on screen
+        # re-reads its cards (issue 910).
+        self.win._reload_current_page()
+
     def _on_gamepad_nav_changed(self, row, *_a):
         self.win._apply_gamepad_navigation(row.get_active())
+
+    def _on_glyph_family_changed(self, row, *_a):
+        self.config.set_controller_glyph_family(self._glyph_families[row.get_selected()])
+        self.win.apply_controller_preferences()
+
+    def _on_swap_confirm_changed(self, row, *_a):
+        self.config.set_swap_confirm_cancel(row.get_active())
+        self.win.apply_controller_preferences()
 
     def _on_welcome_startup_changed(self, row, *_a):
         self.config.set_show_welcome_on_startup(row.get_active())

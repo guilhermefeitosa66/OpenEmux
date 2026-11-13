@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favoris</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Joués récemment</a></summary></details></li>
+        <li><details open><summary><a href="#details">Détails du jeu</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">Mode TV</a></summary></details></li>
         <li><details open><summary><a href="#cores">Cœurs et shaders</a></summary>
             <ul>
               <li><a href="#cores-game">Pour un seul jeu</a></li>
@@ -783,6 +786,8 @@
           <p>La barre latérale liste les pages de votre bibliothèque, de haut en bas :</p>
           <ul>
             <li><span class="ui">Tous</span> : tous les jeux, groupés par console.</li>
+            <li><span class="ui">Joués récemment</span> : les derniers jeux lancés, le plus récent en premier. La ligne
+              apparaît après le premier lancement. Voir <a href="#recent">Joués récemment</a>.</li>
             <li><span class="ui">Favoris</span> : les jeux que vous avez marqués d’une étoile. La ligne n’apparaît qu’une fois un jeu marqué. Voir <a href="#favorites">Favoris</a>.</li>
             <li>Vos playlists, si vous en avez créé. Ici, <span class="ui">Couch co-op</span>. Voir <a href="#playlists">Playlists</a>.</li>
             <li>Une ligne par console qui a des jeux, écrite avec son identifiant court et son nom, comme <span class="ui">SFC - Super Nintendo</span>.</li>
@@ -917,7 +922,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">Le premier lancement</h3>
-          <p>Au premier lancement, OpenEmux affiche une fenêtre <span class="ui">Préparation de la configuration initiale</span> pendant qu’il crée sa configuration, crée les dossiers des ROMs, des BIOS et des jaquettes, prépare les profils d’entrée et les playlists, et télécharge les cœurs libretro dont vos consoles ont besoin. Cela prend en général une dizaine de secondes ; le reste des cœurs continue de se télécharger en arrière-plan pendant que vous utilisez l’application, et un bandeau sous l’en-tête montre leur progression.</p>
+          <p>Au premier démarrage, OpenEmux affiche un instant la fenêtre <span class="ui">Préparation de la configuration initiale</span> pendant qu’il crée sa configuration, les dossiers ROM, BIOS et jaquettes, et
+            prépare les profils de manette et les listes. La bibliothèque s’ouvre aussitôt après : les cœurs libretro et
+            les paquets de shaders se téléchargent en arrière-plan, leur progression dans une bannière sous l’en-tête,
+            les cœurs de vos consoles d’abord. Un jeu lancé avant l’arrivée de son cœur le télécharge sur-le-champ.
+            Hors ligne, l’application s’ouvre quand même et la bannière dit ce qui sera récupéré au prochain démarrage.</p>
           <p>Vos paramètres se trouvent dans <code>~/.openemux/</code>, et vos jeux dans <code>~/games/roms/</code>, un dossier par console.</p>
 
           <h3 id="install-source">Compiler depuis les sources</h3>
@@ -1125,6 +1134,61 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </div>
           <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="La page Favoris groupée par console, avec sa ligne encadrée" /></figure>
           <p>La page <span class="ui">Favoris</span> les rassemble, groupés par console. Sa ligne apparaît dans la barre latérale dès que vous avez mis un jeu en favori, et OpenEmux s’ouvre dessus quand il n’y a rien d’autre à retrouver.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Bibliothèque</span>
+          <h2>Joués récemment</h2>
+          <p>Chaque lancement est retenu. Dès que vous avez joué à quelque chose, une ligne
+            <span class="ui">Joués récemment</span> apparaît sous <span class="ui">Tous</span>, et OpenEmux s’ouvre
+            dessus : les vingt derniers jeux, le plus récent en premier, chaque carte indiquant quand vous y avez joué
+            et combien de temps.</p>
+          <p>Le temps compte du lancement du jeu à sa fermeture et s’additionne d’une session à l’autre. C’est la même
+            horloge qui sert à l’ordre <span class="ui">Joués récemment</span> des autres pages.</p>
+          <p>Pour reprendre un jeu où vous l’aviez laissé, activez <span class="ui">Reprendre où j’en étais</span> dans
+            <span class="ui">Paramètres › Vidéo</span>. RetroArch sauvegarde alors la partie à la sortie et la recharge
+            au lancement suivant ; une carte avec une telle sauvegarde porte un petit badge de lecture dans son coin,
+            et <span class="ui">Repartir de zéro</span>, dans son menu, l’ignore une fois.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">Bibliothèque</span>
+          <h2>Détails du jeu</h2>
+          <p>Chaque jeu a une page de détails : choisissez <span class="ui">Détails du jeu…</span> dans son menu, appuyez sur
+            <kbd>Alt</kbd>+<kbd>Entrée</kbd> sur la carte ou sur Ⓧ à la manette. Elle montre la jaquette, quand et combien de
+            temps vous avez joué, le fichier et <span class="ui">Jouer</span>.</p>
+          <p>En dessous, les lignes <span class="ui">Cœur</span>, <span class="ui">Shader</span> et <span class="ui">Couleur de la cartouche</span>
+            donnent la valeur en vigueur et son origine (le défaut de la console, ou ce jeu) ; une petite flèche ramène la
+            ligne au défaut de la console. Puis les sauvegardes d’état avec <span class="ui">Charger</span>, les actions sur
+            la jaquette, les listes où figure le jeu, et <span class="ui">Afficher dans le gestionnaire de fichiers</span>,
+            <span class="ui">Renommer…</span> et <span class="ui">Supprimer la ROM…</span>.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">Bibliothèque</span>
+          <h2>Mode TV</h2>
+          <p>Appuyez sur <kbd>F11</kbd>, ou sur le bouton Guide d’une manette, et la bibliothèque passe en plein écran pour le
+            canapé : la barre latérale disparaît, l’étagère est dessinée plus grande, titres et indications grossissent et la
+            carte active reçoit un contour plus épais. La même touche ou le même bouton, ou <kbd>Échap</kbd>, ramène la
+            disposition de bureau. Votre zoom n’est pas touché.</p>
+          <p>Manette en main, les indications du bas utilisent les lettres de cette manette (A B X Y sur une Xbox, B A Y X sur une
+            Nintendo, les quatre formes sur une PlayStation) ; <span class="ui">Étiquettes des boutons de la manette</span>
+            dans Paramètres › Système force une famille, et <span class="ui">Inverser confirmer et annuler</span> met confirmer
+            sur le bouton de droite. La carte, avec les lettres Xbox :</p>
+          <ul>
+            <li><strong>A</strong> lance le jeu actif ; maintenez-le pour commencer une sélection.</li>
+            <li><strong>B</strong> revient à la liste des consoles ; <strong>X</strong> ouvre les détails du jeu ; <strong>Y</strong>
+              bascule le favori.</li>
+            <li><strong>LB/RB</strong> changent de console et, sur <span class="ui">Tous</span>, sautent entre les groupes de consoles.</li>
+            <li><strong>Menu</strong> (Start) ouvre le clavier à l’écran : une grille de lettres parcourue à la croix, qui filtre la
+              bibliothèque au fil de la saisie ; Terminé se pose sur le premier résultat.</li>
+            <li><strong>View</strong> (Select) ouvre le menu principal ; le bouton <strong>Guide</strong> active et désactive le mode TV.</li>
+            <li><strong>LT/RT</strong> maintenus avec la croix étendent une sélection.</li>
+          </ul>
+          <p>Le mouvement réduit et le grand texte suivent vos réglages GNOME ici comme partout.</p>
         </section>
 
         <!-- ============================================================ -->

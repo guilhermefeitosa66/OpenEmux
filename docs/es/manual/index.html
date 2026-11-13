@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">Favoritos</a></summary></details></li>
+        <li><details open><summary><a href="#recent">Jugados recientemente</a></summary></details></li>
+        <li><details open><summary><a href="#details">Detalles del juego</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">Modo TV</a></summary></details></li>
         <li><details open><summary><a href="#cores">Núcleos y shaders</a></summary>
             <ul>
               <li><a href="#cores-game">Para un juego</a></li>
@@ -788,6 +791,8 @@
           <p>La barra lateral muestra las páginas de tu biblioteca, de arriba abajo:</p>
           <ul>
             <li><span class="ui">Todos</span>: todos los juegos, agrupados por consola.</li>
+            <li><span class="ui">Jugados recientemente</span>: los últimos juegos que abriste, el más reciente primero. La
+              fila aparece tras el primer juego. Ver <a href="#recent">Jugados recientemente</a>.</li>
             <li><span class="ui">Favoritos</span>: los juegos que marcaste con la estrella. La fila solo aparece cuando hay
               algo marcado. Consulta <a href="#favorites">Favoritos</a>.</li>
             <li>Tus playlists, si creaste alguna. Aquí, <span class="ui">Couch co-op</span>. Consulta
@@ -945,11 +950,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">El primer inicio</h3>
-          <p>La primera vez que se ejecuta, OpenEmux muestra una ventana <span class="ui">Preparando la configuración inicial</span> mientras
-            crea su configuración, prepara las carpetas de ROMs, BIOS y carátulas, prepara los perfiles de entrada y las
-            playlists, y descarga los núcleos de libretro que necesitan tus consolas. Eso suele tardar unos diez segundos; el
-            resto de los núcleos se sigue descargando en segundo plano mientras usas la aplicación, y un aviso bajo la cabecera
-            muestra el progreso.</p>
+          <p>La primera vez, OpenEmux muestra un momento la ventana <span class="ui">Preparando la configuración inicial</span> mientras crea su configuración, las carpetas de ROMs, BIOS y carátulas y prepara perfiles de
+            mando y listas. La biblioteca se abre justo después: los núcleos libretro y los paquetes de shaders se
+            descargan en segundo plano, con su progreso en un banner bajo la cabecera, primero los núcleos que usan tus
+            consolas. Un juego que inicies antes de que llegue su núcleo lo descarga en el momento. Sin conexión, la
+            aplicación se abre igual y el banner dice qué se descargará en el próximo inicio.</p>
           <p>Tu configuración se guarda en <code>~/.openemux/</code>, y tus juegos en <code>~/games/roms/</code>, una carpeta
             por consola.</p>
 
@@ -1240,6 +1245,60 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <p>La página <span class="ui">Favoritos</span> los reúne, agrupados por consola. Su fila aparece en la
             barra lateral en cuanto marcas un juego con la estrella, y OpenEmux se abre en ella cuando no hay otra página a la que
             volver.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">Biblioteca</span>
+          <h2>Jugados recientemente</h2>
+          <p>Cada vez que abres un juego queda registrado. Tras el primero, una fila
+            <span class="ui">Jugados recientemente</span> aparece bajo <span class="ui">Todos</span>, y OpenEmux pasa a
+            abrirse en ella: los últimos veinte juegos, el más reciente primero, con cada tarjeta diciendo cuándo
+            jugaste y durante cuánto tiempo.</p>
+          <p>El tiempo cuenta desde que el juego arranca hasta que se cierra y se acumula entre sesiones. Es el mismo
+            reloj que hay detrás del orden <span class="ui">Jugados recientemente</span> de las demás páginas.</p>
+          <p>Para retomar un juego donde lo dejaste, activa <span class="ui">Continuar donde lo dejé</span> en
+            <span class="ui">Ajustes › Vídeo</span>. RetroArch guarda entonces la partida al salir y la carga en el
+            siguiente inicio; una tarjeta con una partida así lleva una pequeña insignia de play en la esquina, y
+            <span class="ui">Empezar de cero</span>, en su menú, omite la partida una vez.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">Biblioteca</span>
+          <h2>Detalles del juego</h2>
+          <p>Cada juego tiene una página de detalles: elige <span class="ui">Detalles del juego…</span> en su menú, pulsa
+            <kbd>Alt</kbd>+<kbd>Intro</kbd> en la tarjeta o Ⓧ en el mando. Muestra la carátula, cuándo y durante cuánto
+            tiempo jugaste, el archivo y <span class="ui">Jugar</span>.</p>
+          <p>Debajo están las filas <span class="ui">Núcleo</span>, <span class="ui">Shader</span> y <span class="ui">Color del cartucho</span>
+            con el valor en vigor y de dónde viene (el predeterminado de la consola o este juego); una flechita devuelve la
+            fila al predeterminado de la consola. Después, las partidas guardadas con <span class="ui">Cargar</span>, las
+            acciones de carátula, las listas a las que pertenece el juego y <span class="ui">Mostrar en el gestor de archivos</span>, <span class="ui">Renombrar…</span> y <span class="ui">Eliminar ROM…</span>.</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">Biblioteca</span>
+          <h2>Modo TV</h2>
+          <p>Pulsa <kbd>F11</kbd>, o el botón Guía del mando, y la biblioteca pasa a pantalla completa pensada para el sofá: la
+            barra lateral desaparece, la estantería se dibuja más grande, títulos y pistas crecen y la tarjeta enfocada
+            recibe un borde más grueso. La misma tecla o botón, o <kbd>Esc</kbd>, devuelve la disposición de escritorio.
+            Tu zoom no se toca.</p>
+          <p>Con un mando en la mano, las pistas de abajo usan las letras de ese mando (A B X Y en un Xbox, B A Y X en un Nintendo,
+            las cuatro formas en un PlayStation); <span class="ui">Etiquetas de los botones del mando</span> en Ajustes › Sistema
+            fuerza una familia, y <span class="ui">Intercambiar confirmar y cancelar</span> pone confirmar en el botón derecho.
+            El mapa, con las letras de Xbox:</p>
+          <ul>
+            <li><strong>A</strong> juega el juego enfocado; mantenlo para empezar una selección.</li>
+            <li><strong>B</strong> vuelve a la lista de consolas; <strong>X</strong> abre los detalles del juego; <strong>Y</strong>
+              alterna el favorito.</li>
+            <li><strong>LB/RB</strong> cambian de consola y, en <span class="ui">Todos</span>, saltan entre los grupos de consola.</li>
+            <li><strong>Menu</strong> (Start) abre el teclado en pantalla: una rejilla de letras que la cruceta recorre, filtrando la
+              biblioteca mientras escribes; Listo cae en el primer resultado.</li>
+            <li><strong>View</strong> (Select) abre el menú principal; el botón <strong>Guía</strong> activa y desactiva el modo TV.</li>
+            <li><strong>LT/RT</strong> mantenidos con la cruceta extienden una selección.</li>
+          </ul>
+          <p>El movimiento reducido y el texto grande siguen tus ajustes de GNOME aquí como en todas partes.</p>
         </section>
 
         <!-- ============================================================ -->

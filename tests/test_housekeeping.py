@@ -9,6 +9,7 @@ from openemux.core.artwork_search import artwork_temp_root
 from openemux.core.housekeeping import (
     RUNTIME_KEEP_LAUNCHES,
     prune_buildbot_cache,
+    prune_cartridge_cache,
     prune_runtime_files,
     run_startup_housekeeping,
     sweep_artwork_temp_dirs,
@@ -178,6 +179,98 @@ class ArtworkTempRootTests(unittest.TestCase):
                 os.environ["XDG_CACHE_HOME"] = previous
 
 
+class PruneCartridgeCacheTests(unittest.TestCase):
+    """The composites keep every size they were rendered at (issue 902); this bounds them."""
+
+    def _composite(self, cache, console, name, age_days=0, size=1, now=None):
+        path = cache / console / f"{name}.0123456789ab.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"x" * size)
+        stamp = (now if now is not None else time.time()) - age_days * DAY
+        os.utime(path, (stamp, stamp))
+        return path
+
+    def test_a_composite_nobody_looked_at_for_two_months_goes(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            old = self._composite(cache, "SFC", "Old", age_days=90)
+            fresh = self._composite(cache, "SFC", "Fresh", age_days=1)
+            self.assertEqual(prune_cartridge_cache(cache), 1)
+            self.assertFalse(old.exists())
+            self.assertTrue(fresh.exists())
+
+    def test_a_composite_read_recently_stays_however_old_its_render_is(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            path = self._composite(cache, "SFC", "Game", age_days=90)
+            # Rendered long ago, opened yesterday: relatime moved the atime.
+            os.utime(path, (time.time() - DAY, time.time() - 90 * DAY))
+            self.assertEqual(prune_cartridge_cache(cache), 0)
+            self.assertTrue(path.exists())
+
+    def test_past_the_budget_the_oldest_go_first(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            now = time.time()
+            newest = self._composite(cache, "SFC", "A", age_days=1, size=10, now=now)
+            middle = self._composite(cache, "FC", "B", age_days=2, size=10, now=now)
+            oldest = self._composite(cache, "MD", "C", age_days=3, size=10, now=now)
+            self.assertEqual(prune_cartridge_cache(cache, max_bytes=25, now=now), 1)
+            self.assertTrue(newest.exists())
+            self.assertTrue(middle.exists())
+            self.assertFalse(oldest.exists())
+
+    def test_files_that_are_not_composites_are_left_alone(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            temp = cache / "SFC" / "Game.0123456789ab.png.1234.tmp"
+            temp.parent.mkdir(parents=True)
+            temp.write_bytes(b"x")
+            os.utime(temp, (time.time() - 90 * DAY,) * 2)
+            self.assertEqual(prune_cartridge_cache(cache), 0)
+            self.assertTrue(temp.exists())
+
+    def test_a_missing_cache_is_not_an_error(self):
+        with TemporaryDirectory() as tmp:
+            self.assertEqual(prune_cartridge_cache(Path(tmp) / "nope"), 0)
+
+    def test_a_console_directory_that_cannot_be_listed_is_skipped(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            self._composite(cache, "SFC", "Old", age_days=90)
+            real_iterdir = Path.iterdir
+
+            def failing(self):
+                if self.name == "SFC":
+                    raise PermissionError("no")
+                return real_iterdir(self)
+
+            with mock.patch.object(Path, "iterdir", failing):
+                self.assertEqual(prune_cartridge_cache(cache), 0)
+
+    def test_a_composite_that_vanishes_mid_sweep_is_skipped(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            self._composite(cache, "SFC", "Old", age_days=90)
+            real_stat = Path.stat
+
+            def vanished(self, *args, **kwargs):
+                if self.suffix == ".png":
+                    raise FileNotFoundError("gone")
+                return real_stat(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "stat", vanished):
+                self.assertEqual(prune_cartridge_cache(cache), 0)
+
+    def test_a_composite_that_will_not_delete_is_not_counted(self):
+        with TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            old = self._composite(cache, "SFC", "Old", age_days=90)
+            with mock.patch.object(Path, "unlink", side_effect=OSError("read-only")):
+                self.assertEqual(prune_cartridge_cache(cache), 0)
+            self.assertTrue(old.exists())
+
+
 class RunStartupHousekeepingTests(unittest.TestCase):
     class _Config:
         def __init__(self, runtime_dir):
@@ -186,10 +279,16 @@ class RunStartupHousekeepingTests(unittest.TestCase):
         def get_runtime_dir(self):
             return self._runtime_dir
 
+        def store_path(self, name):
+            assert name == "cartridge_cache"
+            return self._runtime_dir.parent / "cache" / "cartridges"
+
     def test_sweeps_all_three_places(self):
         with TemporaryDirectory() as tmp:
             runtime = Path(tmp) / "runtime"
             artwork = Path(tmp) / "artwork-manager"
+            stale_composite = Path(tmp) / "cache" / "cartridges" / "SFC" / "Old.0123456789ab.png"
+            _touch(stale_composite, age_days=90)
             # One past the default keep-the-last-N floor, so exactly the
             # oldest launch's four files are the ones eligible to go.
             for index in range(RUNTIME_KEEP_LAUNCHES + 1):
@@ -208,6 +307,8 @@ class RunStartupHousekeepingTests(unittest.TestCase):
             self.assertEqual(summary["runtime_files"], 4)
             self.assertEqual(summary["buildbot_cache"], 1)
             self.assertEqual(summary["artwork_temp_dirs"], 1)
+            self.assertEqual(summary["cartridge_composites"], 1)
+            self.assertFalse(stale_composite.exists())
 
     def test_a_broken_config_manager_does_not_raise(self):
         class Broken:

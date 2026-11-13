@@ -17,6 +17,9 @@ A core is matched to a console two ways, unioned:
 """
 
 import copy
+import json
+import logging
+import threading
 from pathlib import Path
 
 import yaml
@@ -32,9 +35,16 @@ from openemux.core.platform import (
     user_retroarch_dirs,
 )
 from openemux.core.systems import (
+    SYSTEM_IDS,
+    curated_core_filenames,
     get_runtime_core_candidates,
     get_thumbnail_system,
 )
+
+logger = logging.getLogger(__name__)
+
+#: Bump when what the catalog cache stores changes shape.
+CATALOG_CACHE_VERSION = 1
 
 # A RetroArch installed as a Flatpak keeps its cores under its own app dir.
 RETROARCH_FLATPAK_ID = "org.libretro.RetroArch"
@@ -120,10 +130,62 @@ class CoreInfo:
         return system_name in [db.strip() for db in self.database.split("|")]
 
 
+def pickable_core_filenames(info_dirs):
+    """Every core some picker would list, from the ``.info`` files on disk.
+
+    The curated candidates of every console, plus each core whose ``.info``
+    ``database`` names a supported system -- the same rule
+    :meth:`CoreCatalog.cores_for_console` applies. The deferred sweep after
+    the first boot used to fetch all ~240 cores the buildbot builds; the
+    ~200 no picker ever shows are left out unless the user opts in (issue
+    908). Spelled with this platform's extension, like the catalogs.
+    """
+    systems = {name for name in (get_thumbnail_system(system) for system in SYSTEM_IDS) if name}
+    wanted = set(curated_core_filenames())
+    seen = set()
+    for base in info_dirs:
+        base = Path(base)
+        if not base.is_dir():
+            continue
+        for info_path in sorted(base.glob("*.info")):
+            if info_path.stem in seen:
+                continue
+            seen.add(info_path.stem)
+            fields = parse_core_info(info_path)
+            databases = {db.strip() for db in fields.get("database", "").split("|") if db.strip()}
+            if databases & systems:
+                wanted.add(info_path.stem + CORE_SUFFIX)
+    return sorted(wanted)
+
+
 class CoreCatalog:
-    def __init__(self, project_root=None, core_dirs=None):
+    """What is installed, scanned once and kept on disk between runs.
+
+    The scan parses one ``.info`` per core; after the deferred sweep that
+    is a couple of hundred files, and it used to run on the main thread at
+    the first right-click on a card (issue 908). The result is cached as
+    JSON beside the config, keyed by the mtimes of the core directories, so
+    a start whose directories did not move loads it with one read; and the
+    window warms the catalog on a worker after the first frame, so the
+    first menu finds it ready. One instance serves the window and the
+    launcher.
+    """
+
+    def __init__(self, project_root=None, core_dirs=None, cache_file=None):
         self.core_dirs = [Path(d) for d in (core_dirs or core_search_dirs(project_root))]
+        self.cache_file = Path(cache_file) if cache_file is not None else None
         self._cores = None
+        self._lock = threading.RLock()
+
+    def _stamps(self):
+        """``{directory: mtime_ns}`` of the directories that exist."""
+        stamps = {}
+        for base in self.core_dirs:
+            try:
+                stamps[str(base)] = base.stat().st_mtime_ns
+            except OSError:
+                continue
+        return stamps
 
     def _scan(self):
         # ``.info`` files are keyed by the core's stem; a core may have its .so
@@ -154,10 +216,75 @@ class CoreCatalog:
             )
         return cores
 
+    # -- the on-disk cache ---------------------------------------------------
+    def _load_cache(self, stamps):
+        if self.cache_file is None:
+            return None
+        try:
+            raw = json.loads(self.cache_file.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            quarantine_state_file(self.cache_file, exc)
+            return None
+        if (
+            not isinstance(raw, dict)
+            or raw.get("version") != CATALOG_CACHE_VERSION
+            or raw.get("stamps") != stamps
+            or not isinstance(raw.get("cores"), dict)
+        ):
+            return None
+        cores = {}
+        for filename, entry in raw["cores"].items():
+            cores[filename] = CoreInfo(
+                filename=filename,
+                path=entry.get("path", ""),
+                display_name=entry.get("display_name") or humanize_core_filename(filename),
+                database=entry.get("database", ""),
+                core_name=entry.get("core_name", ""),
+                version=entry.get("version", ""),
+            )
+        return cores
+
+    def _store_cache(self, stamps, cores):
+        if self.cache_file is None:
+            return
+        payload = {
+            "version": CATALOG_CACHE_VERSION,
+            "stamps": stamps,
+            "cores": {
+                filename: {
+                    "path": core.path,
+                    "display_name": core.display_name,
+                    "database": core.database,
+                    "core_name": core.core_name,
+                    "version": core.version,
+                }
+                for filename, core in cores.items()
+            },
+        }
+        try:
+            atomic_write_text(self.cache_file, json.dumps(payload, sort_keys=True), durable=False)
+        except OSError as exc:
+            logger.debug("core catalog cache not written: %s", exc)
+
     def installed(self):
-        if self._cores is None:
-            self._cores = self._scan()
-        return self._cores
+        with self._lock:
+            if self._cores is None:
+                stamps = self._stamps()
+                cores = self._load_cache(stamps)
+                if cores is None:
+                    cores = self._scan()
+                    self._store_cache(stamps, cores)
+                self._cores = cores
+            return self._cores
+
+    def warm_up(self):
+        """Have the scan done, for a worker thread after the first frame."""
+        self.installed()
+
+    def is_ready(self):
+        return self._cores is not None
 
     def refresh(self):
         """Forget the last scan, so the next question rescans the directories.
@@ -166,7 +293,8 @@ class CoreCatalog:
         because every core arrived before the window opened. Since issue #442
         most of them arrive afterwards, in the background.
         """
-        self._cores = None
+        with self._lock:
+            self._cores = None
 
     def is_installed(self, core_filename):
         return bool(core_filename) and core_filename in self.installed()

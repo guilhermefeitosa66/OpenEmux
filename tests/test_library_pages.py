@@ -18,9 +18,11 @@ from tests.window_harness import WindowCase
 
 if HAVE_DISPLAY:
     from openemux.core.library_view import VIEW_MODE_LIST
+    from openemux.core.systems import get_system_display_name
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
         FAVORITES_ID,
+        RECENT_ID,
         collection_scope,
     )
 
@@ -122,6 +124,19 @@ class TheRegistryMovesAsOneTests(unittest.TestCase):
 
 
 @needs_display
+class ReturningTheFreedHeapTests(unittest.TestCase):
+    def test_off_linux_the_heap_is_left_alone(self):
+        from gi.repository import GLib
+
+        from openemux.ui import library_pages
+
+        with mock.patch.object(library_pages.sys, "platform", "win32"), mock.patch.object(
+            library_pages.ctypes, "CDLL", side_effect=AssertionError("no libc off Linux")
+        ):
+            self.assertEqual(library_pages._return_freed_heap(), GLib.SOURCE_REMOVE)
+
+
+@needs_display
 class CollectionPagesTests(unittest.TestCase):
     def setUp(self):
         self.pages, self.win = _pages()
@@ -200,6 +215,49 @@ class TheMasterCheckboxTests(WindowCase):
 
 
 @needs_display
+class TheBiosBannerTests(WindowCase):
+    """The console page says what system file it lacks (issue 911)."""
+
+    def setUp(self):
+        super().setUp()
+        self.pages = self.win.pages
+        self.page = self.pages.page_for("SFC")
+
+    def test_the_banner_names_the_console_and_the_files_and_opens_the_bios_page(self):
+        self.assertTrue(self.pages.set_bios_banner("SFC", ["scph5501.bin", "scph5502.bin"]))
+        banner = self.page.bios_banner
+        self.assertTrue(banner.get_visible())
+        self.assertEqual(
+            banner.label.get_label(),
+            self.said(
+                "bios.banner.title",
+                console=self.win.sidebar.label_for("SFC"),
+                names="scph5501.bin, scph5502.bin",
+            ),
+        )
+        with mock.patch.object(self.win, "open_bios_settings") as opened:
+            banner.import_button.emit("clicked")
+        opened.assert_called_once_with("SFC")
+
+    def test_the_banner_goes_when_the_files_arrive(self):
+        self.pages.set_bios_banner("SFC", ["scph5501.bin"])
+        self.assertFalse(self.pages.set_bios_banner("SFC", []))
+        self.assertFalse(self.page.bios_banner.get_visible())
+
+    def test_a_dismissed_banner_stays_down_for_the_session(self):
+        self.pages.set_bios_banner("SFC", ["scph5501.bin"])
+        self.page.bios_banner.dismiss_button.emit("clicked")
+        self.assertFalse(self.page.bios_banner.get_visible())
+        self.assertFalse(self.pages.set_bios_banner("SFC", ["scph5501.bin"]))
+        self.assertFalse(self.page.bios_banner.get_visible())
+
+    def test_a_page_that_never_needed_a_banner_has_none(self):
+        self.assertFalse(self.pages.set_bios_banner("SFC", []))
+        self.assertIsNone(self.page.bios_banner)
+        self.assertFalse(self.pages.set_bios_banner("N64", ["x"]))
+
+
+@needs_display
 class LoadingAPageTests(WindowCase):
     def setUp(self):
         super().setUp()
@@ -219,6 +277,30 @@ class LoadingAPageTests(WindowCase):
         with mock.patch.object(self.pages, "ensure_favorites_loaded") as load:
             self.pages.ensure_loaded(FAVORITES_ID)
         load.assert_called_once()
+
+    def test_the_recent_page_is_reached_through_it_too(self):
+        with mock.patch.object(self.pages, "ensure_recent_loaded") as load:
+            self.pages.ensure_loaded(RECENT_ID)
+        load.assert_called_once()
+
+    def test_a_recent_page_that_does_not_exist_loads_nothing(self):
+        self.pages.forget(RECENT_ID)
+        with mock.patch.object(self.pages, "render") as render:
+            self.pages.ensure_recent_loaded()
+        render.assert_not_called()
+
+    def test_the_recent_page_lists_the_last_game_first_in_one_group(self):
+        # Issue 910: one group in play order, however many consoles are in it.
+        first, second = self.rom("SFC", 0), self.rom("FC", 0)
+        self.win.play_history.record_launch(first["path"])
+        self.win.play_history.record_launch(second["path"])
+        self.pages.ensure_recent_loaded()
+        self.assertTrue(self.pages.is_loaded(RECENT_ID))
+        group = self.pages.grid_for(RECENT_ID)
+        self.assertEqual(group.consoles(), [RECENT_ID])
+        self.assertEqual(
+            [entry.rom["path"] for entry in group.entries()], [second["path"], first["path"]]
+        )
 
     def test_a_collection_page_is_reached_by_its_scope(self):
         slug = self.win.collection_manager.create("RPGs")
@@ -241,6 +323,43 @@ class LoadingAPageTests(WindowCase):
         page = self.pages.page_for(collection_scope(slug))
         self.pages.ensure_collection_page(slug)
         self.assertIs(self.pages.page_for(collection_scope(slug)), page)
+
+    def test_a_rebuilt_page_tears_the_previous_grid_down(self):
+        # Issue 900: the old grid, its cards and their textures were left for
+        # the garbage collector to find the cycle.
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.win._apply_view_mode(VIEW_MODE_LIST)
+        self.assertIsNot(self.pages.grid_for("SFC"), grid)
+        self.assertTrue(grid.is_dormant())
+        self.assertEqual(grid.entries(), [])
+
+    def test_a_page_that_empties_tears_its_grid_down_too(self):
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.render("SFC", [])
+        self.assertIsNone(self.pages.grid_for("SFC"))
+        self.assertTrue(grid.is_dormant())
+
+    def test_forgetting_and_resetting_tear_the_grids_down(self):
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.forget("SFC")
+        self.assertTrue(grid.is_dormant())
+        self.win.refresh_library(force=True)
+        self.win.sidebar.select("SFC")
+        grid = self.pages.grid_for("SFC")
+        self.pages.reset()
+        self.assertTrue(grid.is_dormant())
+
+    def test_the_groups_of_a_mixed_page_start_asleep(self):
+        # Issue 899: a group built awake realizes up to thirty rows of cards
+        # in its first allocation, on screen or not.
+        self.pages._signatures.clear()  # the landing page is already built
+        with mock.patch.object(self.win.pages, "_build_grid", wraps=self.win.pages._build_grid) as build:
+            self.pages.ensure_all_loaded()
+        self.assertTrue(build.call_args_list)
+        self.assertTrue(all(call.kwargs.get("dormant") for call in build.call_args_list))
 
     def test_a_forced_rescan_rebuilds_the_playlist_and_fetches_the_artwork(self):
         # A playlist built for the first time is exactly when the library has
@@ -328,6 +447,9 @@ class TheEmptyStatesTests(WindowCase):
     def test_an_empty_favorites_page_says_how_to_star_a_game(self):
         self.assertEqual(self._title_of(FAVORITES_ID), self.said("favorites.empty.title"))
 
+    def test_an_empty_recent_page_says_nothing_was_played(self):
+        self.assertEqual(self._title_of(RECENT_ID), self.said("recent.empty.title"))
+
     def test_an_empty_all_page_says_the_library_is_indexed(self):
         self.assertEqual(self._title_of(ALL_CONSOLES_ID), self.said("console.empty.title"))
 
@@ -344,12 +466,11 @@ class TheEmptyStatesTests(WindowCase):
 
 @needs_display
 class TheGroupHeadingsTests(WindowCase):
-    def test_a_group_is_headed_by_its_console_id_and_name(self):
-        from openemux.ui.library_pages import LibraryPages
-
-        self.assertTrue(LibraryPages._group_title("SFC").startswith("SFC - "))
+    def test_a_group_header_names_the_console(self):
+        self.assertEqual(self.win.pages._group_title("SFC"), get_system_display_name("SFC"))
 
     def test_a_group_with_no_console_at_all_is_headed_with_a_question_mark(self):
-        from openemux.ui.library_pages import LibraryPages
+        self.assertEqual(self.win.pages._group_title(""), "?")
 
-        self.assertEqual(LibraryPages._group_title(""), "?")
+    def test_the_recent_group_is_headed_after_its_row(self):
+        self.assertEqual(self.win.pages._group_title(RECENT_ID), self.said("sidebar.recent"))

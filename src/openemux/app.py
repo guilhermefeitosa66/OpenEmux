@@ -16,7 +16,7 @@ import traceback
 from threading import Thread
 
 from openemux.core.startup_logging import append_startup_error
-from openemux.main import APP_ID
+from openemux.main import APP_ID, clear_renderer_probe
 
 try:
     import gi
@@ -42,6 +42,7 @@ from gi.repository import Gtk  # noqa: F401
 from gi.repository import Adw, GLib
 from openemux.ui.window import OpenEmuxWindow
 from openemux.ui.first_boot_window import FirstBootWindow
+from openemux.ui.grid import cards_built as grid_cards_built
 from openemux.core.config import ConfigManager
 from openemux.core.first_boot import FirstBootBootstrapper
 from openemux.core.housekeeping import run_startup_housekeeping
@@ -121,6 +122,7 @@ class OpenEmuxApplication(Adw.Application):
         self._bootstrap_running = True
         self._bootstrap_window = window
         window.present()
+        self._settle_renderer_probe(window)
         run_first_start_offer(
             window,
             self.config_manager.get_locale(),
@@ -176,6 +178,16 @@ class OpenEmuxApplication(Adw.Application):
         share = getattr(self.main_window, "_share_coordinator", None)
         if share is not None:
             share.shutdown()
+        # A debounced setting save still waiting (issue 905).
+        self.config_manager.flush()
+        # One line for the performance checks: a grouped page on a big
+        # library used to build a card per game of every console within
+        # thirty rows of its anchor (issue 899). Here rather than on the
+        # window's close-request, which Ctrl+Q never emits; the bench in
+        # tools/perf reads it from the log.
+        logging.getLogger(__name__).info(
+            "library grid: cards built this session=%d", grid_cards_built()
+        )
         Adw.Application.do_shutdown(self)
 
     def _on_window_added(self, _application, window):
@@ -216,8 +228,26 @@ class OpenEmuxApplication(Adw.Application):
         self.config_manager.ensure_rom_directories()
         self.main_window = OpenEmuxWindow(application=self)
         self.main_window.present()
+        self._settle_renderer_probe(self.main_window)
         self.main_window.maybe_show_welcome()
         self.main_window.maybe_report_recovered_state()
+
+    #: How long after a window is presented the renderer counts as working.
+    #: A renderer that crashes does so at realization or on the first frame,
+    #: well inside this.
+    RENDERER_PROBE_GRACE_MS = 1000
+
+    def _settle_renderer_probe(self, window):
+        """Drop the AppImage's renderer probe once ``window`` has been drawing.
+
+        The marker main.py wrote before GTK came up (issue 903) is what tells
+        the next start whether the GPU renderer crashed this one; a window
+        alive a second after being presented is the proof that it did not.
+        """
+        GLib.timeout_add(
+            self.RENDERER_PROBE_GRACE_MS,
+            lambda: clear_renderer_probe(window) and False,
+        )
 
     def request_bootstrap_retry_from_ui(self, parent_window):
         if self._bootstrap_running:
@@ -235,6 +265,7 @@ class OpenEmuxApplication(Adw.Application):
             parent=parent,
         )
         self._bootstrap_window.present()
+        self._settle_renderer_probe(self._bootstrap_window)
         bootstrapper = FirstBootBootstrapper(self.config_manager)
         window = self._bootstrap_window
 

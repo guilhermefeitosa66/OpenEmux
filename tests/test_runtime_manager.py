@@ -162,9 +162,12 @@ class CommandDispatchTests(unittest.TestCase):
         launched = {}
 
         def _fake_launch(rom_path, console, state_slot=None, network_cmd_port=None,
-                         force_extract=False):
+                         force_extract=False, resume=True,
+                         check_bios=True):
             launched["args"] = (rom_path, console)
             launched["port"] = network_cmd_port
+            launched["resume"] = resume
+            launched["check_bios"] = check_bios
             return _FakeProcess(), None
 
         manager.retroarch_launcher.launch_process = _fake_launch
@@ -172,6 +175,26 @@ class CommandDispatchTests(unittest.TestCase):
         self.assertTrue(success, error)
         self.assertEqual(launched["args"], ("/roms/x.sfc", "SFC"))
         return manager, launched
+
+    def test_launch_anyway_skips_the_bios_check_at_the_launcher(self):
+        # Issue 904: the window already named the missing files; the user
+        # chose to let RetroArch try.
+        with TemporaryDirectory() as tmp_dir:
+            manager, launched = self._relaunch_recording_the_port(tmp_dir)
+            self.assertTrue(launched["check_bios"])
+            manager._clear_active()
+            manager.launch("/roms/x.sfc", "SFC", check_bios=False)
+            self.assertFalse(launched["check_bios"])
+
+    def test_start_fresh_reaches_the_launcher(self):
+        # "Start fresh" (issue 910) is a launch that skips the automatic
+        # state once; a plain launch resumes it.
+        with TemporaryDirectory() as tmp_dir:
+            manager, launched = self._relaunch_recording_the_port(tmp_dir)
+            self.assertTrue(launched["resume"])
+            manager._clear_active()
+            manager.launch("/roms/x.sfc", "SFC", resume=False)
+            self.assertFalse(launched["resume"])
 
     def test_relaunch_rom_launches_the_same_rom_again(self):
         with TemporaryDirectory() as tmp_dir, mock.patch.object(
@@ -624,13 +647,15 @@ class UnpackedRetryTests(unittest.TestCase):
         calls = []
 
         def _launch(rom_path, console, state_slot=None, network_cmd_port=None,
-                    force_extract=False):
+                    force_extract=False, resume=True,
+                    check_bios=True):
             calls.append(
                 {
                     "rom": rom_path,
                     "console": console,
                     "state_slot": state_slot,
                     "force_extract": force_extract,
+                    "check_bios": check_bios,
                 }
             )
             proc = _FakeProcess()
@@ -951,3 +976,21 @@ class WhatTheHotApplySnapshotAnswersTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ASharedCoreCatalogTests(unittest.TestCase):
+    """The window's catalog is the launcher's (issue 908)."""
+
+    def test_the_catalog_handed_in_is_the_launchers(self):
+        from openemux.core.cores import CoreCatalog
+
+        with TemporaryDirectory() as tmp_dir:
+            catalog = CoreCatalog(core_dirs=[Path(tmp_dir)])
+            config = _DummyConfig(tmp_dir)
+            manager = RuntimeManager(tmp_dir, config, sleep=_RecordingSleep(), core_catalog=catalog)
+        self.assertIs(manager.retroarch_launcher.core_catalog, catalog)
+
+    def test_without_one_the_launcher_makes_its_own(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager, _config = _manager(tmp_dir)
+        self.assertIsNotNone(manager.retroarch_launcher.core_catalog)

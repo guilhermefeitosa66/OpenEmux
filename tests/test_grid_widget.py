@@ -22,8 +22,10 @@ if HAVE_DISPLAY:
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gdk, Gtk
 
+    from openemux.core.library_view import VIEW_MODE_LIST
     from openemux.ui import grid as grid_module
-    from openemux.ui.grid import ACTIVATION_DEBOUNCE_US, RomGrid
+    from openemux.ui.grid import ACTIVATION_DEBOUNCE_US, RomGrid, RomItem
+    from openemux.ui.scopes import ALL_CONSOLES_ID
 
 
 class _GridCase(WindowCase):
@@ -58,9 +60,79 @@ class FindingACardTests(_GridCase):
         self.grid.set_filter(self.entries[0].rom["name"])
         self.assertEqual(self.grid.count(), 1)
 
+    def test_alt_return_opens_the_game_details(self):
+        # Issue 913: Enter plays, Alt+Enter opens the details.
+        card = self.grid.card_for(self.entries[0])
+        if card is None:
+            self.skipTest("no card realized")
+        with mock.patch.object(self.grid, "item_for_widget", return_value=card), mock.patch.object(
+            card, "open_details"
+        ) as details, mock.patch.object(self.grid, "_launch_rom") as launch:
+            handled = self.grid._on_grid_key_pressed(
+                None, Gdk.KEY_Return, 0, Gdk.ModifierType.ALT_MASK
+            )
+            self.assertTrue(handled)
+            details.assert_called_once()
+            launch.assert_not_called()
+            self.grid._on_grid_key_pressed(None, Gdk.KEY_Return, 0, 0)
+            launch.assert_called_once()
+
     def test_a_filter_that_matches_nothing_leaves_the_page_empty(self):
         self.grid.set_filter("nothing matches this")
         self.assertEqual(self.grid.count(), 0)
+
+    def test_words_match_in_any_order_whatever_the_accents(self):
+        # Issue 906: "zelda link" finds "The Legend of Zelda - A Link to the Past".
+        name = self.entries[0].rom["name"]
+        words = name.split()
+        self.grid.set_filter(" ".join(reversed(words)).upper())
+        self.assertIn(self.entries[0], self.grid.visible_entries())
+
+    def test_typing_on_only_re_checks_what_still_shows(self):
+        # Issue 906: a query that grew is MORE_STRICT, one that shrank is
+        # LESS_STRICT; GTK re-runs the predicate on every entry only for a
+        # different query.
+        changes = []
+        with mock.patch.object(self.grid._filter, "changed", changes.append):
+            self.grid.set_filter("me")
+            self.grid.set_filter("met")
+            self.grid.set_filter("me")
+            self.grid.set_filter("mario")
+            self.grid.set_filter("mario", only_missing_artwork=True)
+            self.grid.set_filter("mario")
+        self.assertEqual(
+            changes,
+            [
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.LESS_STRICT,
+                Gtk.FilterChange.DIFFERENT,
+                Gtk.FilterChange.MORE_STRICT,
+                Gtk.FilterChange.DIFFERENT,
+            ],
+        )
+
+    def test_a_small_page_filters_in_one_go_and_a_big_one_in_slices(self):
+        self.assertFalse(self.grid._filtered.get_incremental())
+        roms = [{"name": f"Game {i}", "path": f"/roms/{i}.sfc", "console": "SFC"} for i in range(400)]
+        big = self.win.pages._build_grid("SFC", roms, self.config.get_display_settings("SFC"))
+        self.assertTrue(big._filtered.get_incremental())
+        big.set_filter("game 39")
+        self.assertGreaterEqual(big.filter_pending(), 0)
+        self.pump_until(lambda: big.filter_pending() == 0)
+        # "39" is a substring: Game 39, 139, 239, 339 and 390 … 399.
+        self.assertEqual(big.count(), 14)
+        big.teardown()
+
+    def test_the_count_is_asked_of_the_model_not_a_list(self):
+        self.assertEqual(self.grid.count(), self.grid._filtered.get_n_items())
+        self.assertEqual(self.grid.filter_pending(), 0)
+
+    def test_whoever_listens_hears_the_count_move(self):
+        heard = []
+        self.grid.connect_count_changed(heard.append)
+        self.grid.set_filter("nothing matches this")
+        self.assertEqual(heard, [self.grid])
 
     def test_an_entry_that_is_not_on_this_page_has_no_position(self):
         self.assertIsNone(self.grid._position_of(None))
@@ -88,6 +160,10 @@ class TheFactoryCallbacksTests(_GridCase):
 
         def get_item(self):
             return self._item
+
+        def get_position(self):
+            # The screen reader's "item n of m" (issue 915) reads the position.
+            return 0
 
         def set_child(self, child):
             self._child = child
@@ -267,6 +343,17 @@ class LaunchingFromTheGridTests(_GridCase):
             self.grid._launch_rom(None)
         launch.assert_not_called()
 
+    def test_the_key_controller_runs_before_the_cells_own_bindings(self):
+        # The cell wrapping a card is a GtkListItemWidget, whose binding takes
+        # Enter and Space on the way up and drops them (the cell is not
+        # activatable); only a capture-phase controller sees them (issue 914).
+        phases = [
+            controller.get_propagation_phase()
+            for controller in self.grid.observe_controllers()
+            if isinstance(controller, Gtk.EventControllerKey)
+        ]
+        self.assertIn(Gtk.PropagationPhase.CAPTURE, phases)
+
 
 @needs_display
 class TheGridKeysTests(_GridCase):
@@ -352,6 +439,25 @@ class RefreshingOneCardTests(_GridCase):
     def test_a_page_with_no_shell_resolves_no_frame(self):
         with mock.patch.object(self.grid, "_base_frame_path", None):
             self.assertIsNone(self.grid._frame_path_for_rom(self.entries[0].rom))
+
+    def test_a_game_off_screen_forgets_its_remembered_art_too(self):
+        entry = self.entries[0]
+        entry.art_path = "/roms/SFC/covers/Game.png"
+        with mock.patch.object(self.grid, "_bound", {}):
+            self.grid.refresh_rom_artwork(entry.rom)
+        self.assertIs(entry.art_path, grid_module.ART_UNRESOLVED)
+
+    def test_a_shell_colour_is_resolved_once_per_grid(self):
+        # Issue 907: two file probes and a frame stat per bind, for a frame
+        # that never changes while the app runs.
+        with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"), mock.patch.object(
+            self.grid, "_frame_color_for_rom", return_value="red"
+        ), mock.patch.object(
+            grid_module, "cartridge_frame_svg", return_value="/tmp/base-red.svg"
+        ) as resolve:
+            for entry in self.entries:
+                self.assertEqual(self.grid._frame_path_for_rom(entry.rom), "/tmp/base-red.svg")
+        resolve.assert_called_once()
 
     def test_a_page_with_no_colour_lookup_uses_the_console_shell(self):
         with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"):
@@ -444,12 +550,223 @@ class TheColumnLatticeTests(_GridCase):
         width = self.grid._card_allocation_width()
         self.assertEqual(self.grid._card_allocation_width(), width)
 
-    def test_before_any_card_exists_the_nominal_width_is_used(self):
+    def test_before_any_card_exists_a_probe_card_is_measured_instead(self):
+        # Issue 899: the nominal width packed the columns a padding too
+        # tight, and a sleeping grid's height follows the column count, so
+        # the count has to be right before the first card exists.
         self.grid._measured_card_width = None
         with mock.patch.object(self.grid, "_bound", {}):
-            self.assertEqual(
-                self.grid._card_allocation_width(), self.grid._card_size[0]
-            )
+            probed = self.grid._card_allocation_width()
+        self.grid._measured_card_width = None
+        self.assertEqual(probed, self.grid._card_allocation_width())
+        self.assertGreaterEqual(probed, self.grid._card_size[0])
+
+
+@needs_display
+class SleepingAndWakingTests(_GridCase):
+    """A grid that let go of its model (issues 899 and 900)."""
+
+    def test_a_sleeping_grid_has_no_cards_and_no_model_on_the_view(self):
+        self.grid.set_dormant(True)
+        self.pump()
+        self.assertTrue(self.grid.is_dormant())
+        self.assertIsNone(self.grid.get_model())
+        self.assertEqual(self.grid.bound_cards(), [])
+
+    def test_asleep_it_still_measures_as_tall_as_its_rows(self):
+        width = self.grid.get_width()
+        awake = self.grid.measure(Gtk.Orientation.VERTICAL, width)[1]
+        self.grid.set_dormant(True)
+        asleep = self.grid.measure(Gtk.Orientation.VERTICAL, width)[1]
+        self.assertEqual(asleep, awake)
+
+    def _margins(self, grid=None):
+        grid = grid or self.grid
+        return grid.get_margin_top() + grid.get_margin_bottom()
+
+    def test_asleep_with_an_unknown_width_it_keeps_the_last_column_count(self):
+        self.grid.set_dormant(True)
+        columns = self.grid._column_state[0]
+        rows = -(-len(self.entries) // columns)
+        self.assertEqual(
+            self.grid.measure(Gtk.Orientation.VERTICAL, -1)[1],
+            rows * self.grid._row_height() + self._margins(),
+        )
+
+    def test_asleep_before_any_layout_it_counts_one_column(self):
+        self.grid.set_dormant(True)
+        self.grid._column_state = None
+        self.assertEqual(self.grid._columns_for(-1), 1)
+        self.assertEqual(self.grid._columns_for(0), 1)
+
+    def test_asleep_a_width_counts_the_columns_it_would_hold(self):
+        from openemux.ui.grid import columns_and_slack
+
+        self.grid.set_dormant(True)
+        width = 4000
+        expected, _ = columns_and_slack(
+            self.grid._available_width(width),
+            self.grid._card_allocation_width(),
+            len(self.grid._entries),
+            spacing=self.grid._spacing,
+        )
+        columns = self.grid._columns_for(width)
+        self.assertEqual(columns, max(1, min(expected, len(self.grid._entries))))
+        self.assertGreater(columns, 1)
+
+    def test_a_sleeping_grid_with_nothing_to_show_is_flat(self):
+        self.grid.set_dormant(True)
+        self.grid.set_filter("nothing matches this")
+        self.assertEqual(
+            self.grid.measure(Gtk.Orientation.VERTICAL, -1)[1], self._margins()
+        )
+
+    def test_a_list_asleep_is_one_row_per_game(self):
+        self.win._apply_view_mode(VIEW_MODE_LIST)
+        grid = self.show_with_cards("SFC")
+        grid.set_dormant(True)
+        self.assertEqual(
+            grid.measure(Gtk.Orientation.VERTICAL, -1)[1],
+            len(grid.entries()) * grid._row_height() + self._margins(grid),
+        )
+
+    def test_waking_builds_the_cards_again(self):
+        self.grid.set_dormant(True)
+        self.pump()
+        self.grid.set_dormant(False)
+        self.assertTrue(
+            self.pump_until(lambda: self.grid.card_for(self.entries[0]) is not None)
+        )
+
+    def test_sleeping_twice_and_waking_twice_are_no_ops(self):
+        self.grid.set_dormant(False)
+        self.grid.set_dormant(True)
+        with mock.patch.object(self.grid, "set_model") as set_model:
+            self.grid.set_dormant(True)
+        set_model.assert_not_called()
+
+    def test_waking_puts_the_page_back_where_it_was(self):
+        vadj = self.grid.get_vadjustment()
+        self.grid.set_dormant(True)
+        self.grid._sleep_scroll = 50.0
+        with mock.patch.object(vadj, "get_upper", return_value=1000.0), mock.patch.object(
+            vadj, "get_page_size", return_value=100.0
+        ), mock.patch.object(vadj, "set_value") as set_value:
+            self.grid.set_dormant(False)
+            self.pump()
+        set_value.assert_called_with(50.0)
+        self.assertIsNone(self.grid._restore_source)
+
+    def test_a_restore_with_nowhere_to_scroll_is_left_alone(self):
+        self.grid._sleep_scroll = None
+        self.grid._restore_sleep_scroll()
+        self.grid._sleep_scroll = 50.0
+        self.grid._awake = False
+        with mock.patch.object(self.grid.get_vadjustment(), "set_value") as set_value:
+            self.grid._restore_sleep_scroll()
+        set_value.assert_not_called()
+        self.grid._awake = True
+        with mock.patch.object(self.grid, "get_vadjustment", return_value=None):
+            self.grid._restore_sleep_scroll()
+
+    def test_leaving_the_page_puts_the_grid_to_sleep_and_coming_back_wakes_it(self):
+        # Issue 900: ten console visits used to add about 9 MB each.
+        self.win.sidebar.select(ALL_CONSOLES_ID)
+        self.assertTrue(self.pump_until(self.grid.is_dormant))
+        self.win.sidebar.select("SFC")
+        self.assertTrue(self.pump_until(lambda: not self.grid.is_dormant()))
+
+    def test_focusing_a_card_of_a_sleeping_grid_wakes_it(self):
+        self.grid.set_dormant(True)
+        self.pump()
+        self.assertTrue(self.grid.focus_first_card())
+        self.assertFalse(self.grid.is_dormant())
+
+    def test_the_cards_on_screen_are_the_ones_overlapping_the_allocation(self):
+        visible = self.grid.visible_cards()
+        self.assertIn(self.card(), visible)
+        with mock.patch.object(self.grid, "get_height", return_value=0):
+            self.assertEqual(self.grid.visible_cards(), [])
+
+    def test_a_card_whose_wrapper_is_gone_is_not_on_screen(self):
+        loose = RomItem(self.grid._card_ctx)
+        with mock.patch.object(self.grid, "_bound", {self.entries[0]: loose}):
+            self.assertEqual(self.grid.visible_cards(), [])
+
+    def test_a_card_whose_bounds_cannot_be_computed_is_not_on_screen(self):
+        card = self.card()
+        with mock.patch.object(
+            Gtk.Widget, "compute_bounds", return_value=(False, None)
+        ):
+            self.assertNotIn(card, self.grid.visible_cards())
+
+    def test_a_layout_promotes_the_fetches_of_the_cards_on_screen_once(self):
+        # Issue 899: the visible cards used to wait behind the rows GTK keeps
+        # around them.
+        card = self.card()
+        self.grid._promotion_pending = False
+        with mock.patch.object(card, "promote_pending_fetch") as promote, mock.patch.object(
+            grid_module.GLib, "idle_add", side_effect=lambda fn: fn()
+        ) as idle_add:
+            self.grid._queue_fetch_promotion()
+            self.grid._promotion_pending = True
+            self.grid._queue_fetch_promotion()
+        self.assertEqual(idle_add.call_count, 1)
+        promote.assert_called_once()
+
+    def test_a_grid_with_no_cards_queues_no_promotion(self):
+        with mock.patch.object(self.grid, "_bound", {}), mock.patch.object(
+            grid_module.GLib, "idle_add"
+        ) as idle_add:
+            self.grid._queue_fetch_promotion()
+        idle_add.assert_not_called()
+
+    def test_tearing_down_lets_go_of_the_entries_and_the_cards(self):
+        self.grid._restore_source = grid_module.GLib.idle_add(lambda: False)
+        self.grid.teardown()
+        self.assertTrue(self.grid.is_dormant())
+        self.assertEqual(self.grid.entries(), [])
+        self.assertEqual(self.grid.count(), 0)
+        self.assertEqual(self.grid.bound_cards(), [])
+        self.assertIsNone(self.grid._restore_source)
+        self.assertIsNone(self.grid._probe)
+
+    def test_a_cartridge_grid_grows_its_slot_by_the_shadow_margin_and_gives_it_back(self):
+        # Issue 903: the composite carries its shadow in a transparent
+        # margin; the lattice must not move for it.
+        from openemux.core import cartridge_render
+        from openemux.core.library_view import scale_length
+        from openemux.ui.card_layout import FIXED_ITEM_WIDTH, GRID_MARGIN, GRID_SPACING
+
+        grid = self.grid
+        if not grid._base_frame_path:
+            self.skipTest("this page draws covers, not cartridges")
+        pad = grid_module.CARTRIDGE_SHADOW_PAD
+        self.assertEqual(grid._shadow_pad, pad)
+        frame = cartridge_render.load_frame(grid._base_frame_path)
+        width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, grid.zoom))
+        self.assertEqual(grid._card_ctx.cover_size, (width + 2 * pad, height + 2 * pad))
+        self.assertEqual(grid._card_ctx.shadow_pad, pad)
+        self.assertEqual(grid._spacing, max(0, GRID_SPACING - 2 * pad))
+        self.assertEqual(grid._margin, max(0, GRID_MARGIN - grid._card_margin - pad))
+
+    def test_the_cards_render_their_composites_at_the_display_scale(self):
+        # Issue 902: 2x on every monitor, four times the pixels of a 1x card.
+        self.assertEqual(self.grid._card_ctx.render_scale, grid_module.cartridge_render_scale(self.grid))
+        self.assertEqual(grid_module.cartridge_render_scale(self.grid), max(1, self.grid.get_scale_factor()))
+
+    def test_a_widget_that_cannot_say_its_scale_renders_at_the_fallback(self):
+        widget = mock.Mock()
+        widget.get_scale_factor.side_effect = RuntimeError("no display")
+        self.assertEqual(grid_module.cartridge_render_scale(widget), grid_module.CARTRIDGE_RENDER_SCALE)
+        widget.get_scale_factor.side_effect = None
+        widget.get_scale_factor.return_value = 0
+        self.assertEqual(grid_module.cartridge_render_scale(widget), 1)
+
+    def test_every_card_built_is_counted(self):
+        before = grid_module.cards_built()
+        self.grid._on_factory_setup(None, mock.Mock())
+        self.assertEqual(grid_module.cards_built(), before + 1)
 
 
 @needs_display

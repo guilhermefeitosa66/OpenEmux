@@ -1,13 +1,30 @@
 from pathlib import Path
+import json
 import logging
 import threading
+import time
 
 from openemux.core.archives import archive_rom_name, is_archive, loads_archives_natively
+from openemux.core.atomic_write import atomic_write_text
 from openemux.core.dir_walk import relative_to_base
 from openemux.core.paths import read_path_lines, write_path_lines
+from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.systems import SYSTEM_IDS, get_supported_extensions, resolve_system_id
 
 logger = logging.getLogger(__name__)
+
+#: The index beside each console's ``.list`` (issue 901): what the scan
+#: derived from the disk -- the display name (an archive's inner title, read
+#: by opening the zip), the size and the time the file appeared -- plus the
+#: directory fingerprint the scan saw, so a load is a parse and a start-up
+#: rescan can tell an unchanged console from a changed one without walking it.
+META_VERSION = 1
+
+#: How long the favorites parse is trusted before the file is stat-ed again
+#: for a change made outside the app. The manager's own writes drop the
+#: parse at once; this only spaces out the stat that catches everything
+#: else, so a page of cards binds without one syscall per star (issue 907).
+FAVORITES_STAMP_TTL_S = 0.5
 
 
 class PlaylistManager:
@@ -19,6 +36,8 @@ class PlaylistManager:
         # card rendered, so the parse has to happen once per page, not once
         # per card (issue #217).
         self._favorites_cache = (None, frozenset())
+        # When the favorites stamp was last compared; see FAVORITES_STAMP_TTL_S.
+        self._favorites_checked_at = None
         # toggle_favorite is a read-modify-write of one file; two of them at
         # once (a click while a rescan repaths) would lose one edit (#208).
         self._write_lock = threading.RLock()
@@ -30,6 +49,10 @@ class PlaylistManager:
     def get_favorites_playlist_path(self):
         return self.config_manager.get_playlists_dir() / "FAVORITES.list"
 
+    def get_meta_path(self, console):
+        system_id = resolve_system_id(console)
+        return self.config_manager.get_playlists_dir() / f"{system_id}.meta.json"
+
     def playlist_exists(self, console):
         return self.get_playlist_path(console).exists()
 
@@ -40,27 +63,99 @@ class PlaylistManager:
         return True
 
     def load_playlist(self, console):
+        """The console's games, from the index alone.
+
+        A parse and nothing else (issue 901): no ``exists()`` per ROM and no
+        archive opened for its inner name. The scan is what decides what is
+        on the disk -- a game deleted outside the app is dropped by the next
+        start's rescan, which sees the folder's mtime move -- and the names,
+        sizes and dates come from the meta index written beside the list. A
+        line the index does not know (a list written by an older version, a
+        portable install moved to another machine) is derived from the file
+        as before, once, until the next scan writes it down.
+        """
         system_id = resolve_system_id(console)
         playlist_path = self.get_playlist_path(console)
-        if not playlist_path.exists():
+        try:
+            lines = read_path_lines(playlist_path)
+        except OSError:
             logger.info("playlist load skipped: console=%s path=%s reason=missing_file", system_id, playlist_path)
             return []
 
         entries = []
         logger.info("playlist load started: console=%s path=%s", system_id, playlist_path)
         extensions = get_supported_extensions(system_id)
-        for path_str in read_path_lines(playlist_path):
-            path = Path(path_str)
-            if not path.exists():
+        known = self._read_meta(system_id).get("roms", {})
+        for path_str in lines:
+            meta = known.get(path_str)
+            if meta is None:
+                path = Path(path_str)
+                display_name = self._playlist_entry_name(path, system_id, extensions)
+                if display_name is None:
+                    continue
+                entries.append(self._rom_entry(path, system_id, name=display_name))
                 continue
-            display_name = self._playlist_entry_name(path, system_id, extensions)
-            if display_name is None:
-                continue
-            entries.append(self._rom_entry(path, system_id, name=display_name))
+            entries.append(
+                {
+                    "name": meta.get("name") or Path(path_str).stem,
+                    "path": path_str,
+                    "console": system_id,
+                    "size": meta.get("size", 0),
+                    "added": meta.get("added", 0.0),
+                }
+            )
 
         sorted_entries = sorted(entries, key=lambda x: x["name"])
         logger.info("playlist load finished: console=%s total=%d", system_id, len(sorted_entries))
         return sorted_entries
+
+    # -- the meta index ----------------------------------------------------
+    def _read_meta(self, console):
+        meta_path = self.get_meta_path(console)
+        try:
+            raw = json.loads(meta_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict) or not isinstance(raw.get("roms"), dict):
+                raise ValueError("not a meta index")
+        except FileNotFoundError:
+            return {}
+        except (OSError, ValueError) as exc:
+            quarantine_state_file(meta_path, exc)
+            return {}
+        return raw
+
+    def _write_meta(self, console, roms, fingerprint):
+        payload = {
+            "version": META_VERSION,
+            "dirs": fingerprint,
+            "roms": {
+                rom["path"]: {
+                    "name": rom["name"],
+                    "size": rom.get("size", 0),
+                    "added": rom.get("added", 0.0),
+                }
+                for rom in roms
+            },
+        }
+        atomic_write_text(
+            self.get_meta_path(console), json.dumps(payload, sort_keys=True), durable=False
+        )
+
+    def name_for_path(self, console, path):
+        """The index's display name for a ROM, or None when it has none."""
+        return self._read_meta(console).get("roms", {}).get(str(path), {}).get("name")
+
+    def playlist_is_current(self, console):
+        """Whether the console's folders are as the last scan left them.
+
+        The fingerprint is the directory mtimes under the console (a file
+        added, removed or renamed moves the one holding it); it is compared
+        with the one the scan wrote beside the list. A console with no index
+        yet, or whose folder is gone, is not current.
+        """
+        meta = self._read_meta(console)
+        if not meta or "dirs" not in meta:
+            return False
+        return meta["dirs"] == self.scanner.fingerprint(console)
 
     def entries_for_paths(self, paths):
         """Resolve a flat list of ROM paths into mixed-console rom entries.
@@ -83,13 +178,28 @@ class PlaylistManager:
             console = self._console_from_rom_path(path)
             if not console:
                 continue
-            display_name = self._playlist_entry_name(
-                path, console, get_supported_extensions(console)
-            )
+            # From the index when it knows the game, so a favorite in an
+            # archive is not re-opened on every visit (issue 901).
+            display_name = self._known_names(console).get(path_str)
+            if display_name is None:
+                display_name = self._playlist_entry_name(
+                    path, console, get_supported_extensions(console)
+                )
             if display_name is None:
                 continue
             entries.append(self._rom_entry(path, console, name=display_name))
         return sorted(entries, key=lambda x: x["name"].lower())
+
+    def _known_names(self, console):
+        """``{path: name}`` from the console's index, read once per call chain."""
+        cache = getattr(self, "_names_cache", None)
+        if cache is None or cache[0] != console:
+            names = {
+                path: meta.get("name")
+                for path, meta in self._read_meta(console).get("roms", {}).items()
+            }
+            self._names_cache = cache = (console, names)
+        return cache[1]
 
     def load_favorites_playlist(self):
         playlist_path = self.get_favorites_playlist_path()
@@ -109,14 +219,22 @@ class PlaylistManager:
         is still a favorite: it is only missing, and only remove_missing_
         favorites is allowed to decide it is gone.
         """
+        now = time.monotonic()
+        cached_stamp, cached = self._favorites_cache
+        if (
+            self._favorites_checked_at is not None
+            and now - self._favorites_checked_at < FAVORITES_STAMP_TTL_S
+        ):
+            return cached
         playlist_path = self.get_favorites_playlist_path()
         try:
             stat = playlist_path.stat()
         except OSError:
             self._favorites_cache = (None, frozenset())
+            self._favorites_checked_at = now
             return self._favorites_cache[1]
         stamp = (stat.st_mtime_ns, stat.st_size)
-        cached_stamp, cached = self._favorites_cache
+        self._favorites_checked_at = now
         if cached_stamp == stamp:
             return cached
         paths = frozenset(str(Path(line)) for line in read_path_lines(playlist_path))
@@ -131,6 +249,7 @@ class PlaylistManager:
         one tick, and our own writes are the one case we can be exact about.
         """
         self._favorites_cache = (None, frozenset())
+        self._favorites_checked_at = None
 
     def list_favorite_paths(self):
         """A mutable copy of the favorite paths."""
@@ -254,6 +373,7 @@ class PlaylistManager:
                 write_path_lines(playlist_path, updated)
                 self._drop_favorites_cache()
                 changed += 1
+            self._repath_meta(console, old_line, new_line)
         logger.info(
             "playlist reindex: console=%s old=%s new=%s files=%d",
             console,
@@ -266,6 +386,10 @@ class PlaylistManager:
     def scan_and_rebuild_playlist(self, console):
         system_id = resolve_system_id(console)
         logger.info("playlist rebuild started: console=%s", system_id)
+        # The fingerprint before the walk: a file landing during the scan
+        # moves a directory the fingerprint already recorded as older, so
+        # the next start rescans rather than trusting a list that missed it.
+        fingerprint = self.scanner.fingerprint(system_id)
         roms = self.scanner.scan_console(system_id)
         playlist_path = self.get_playlist_path(system_id)
 
@@ -280,15 +404,28 @@ class PlaylistManager:
                 rom["path"],
                 playlist_path,
             )
+        lines = [rom["path"] for rom in roms]
         # Written whole, so the main thread reading this playlist while the
         # rescan worker rebuilds it sees the old list or the new one -- never
-        # the half a truncate-and-append left exposed (issue #208).
-        write_path_lines(playlist_path, [rom["path"] for rom in roms])
+        # the half a truncate-and-append left exposed (issue #208). And only
+        # when it changed (issue 901): the start-up scan of an unchanged
+        # library used to rewrite 31 lists with 62 fsyncs for nothing.
+        if self._playlist_lines(playlist_path) != lines:
+            write_path_lines(playlist_path, lines)
+        self._write_meta(system_id, roms, fingerprint)
+        self._names_cache = None
 
         logger.info("playlist rebuild finished: console=%s total=%d path=%s", system_id, len(roms), playlist_path)
         return roms
 
-    def scan_and_rebuild_all_playlists(self, consoles=None, on_progress=None):
+    @staticmethod
+    def _playlist_lines(playlist_path):
+        try:
+            return read_path_lines(playlist_path)
+        except OSError:
+            return None
+
+    def scan_and_rebuild_all_playlists(self, consoles=None, on_progress=None, only_changed=False):
         """Rebuild every console's playlist, one bad console at a time.
 
         A console that cannot be scanned is recorded and skipped rather than
@@ -296,6 +433,10 @@ class PlaylistManager:
         surrogate-safe encoding above, a single ROM with a non-UTF-8 name --
         used to abort the whole rescan and leave the rest of the library
         un-scanned (issue #214).
+
+        ``only_changed`` is the start-up scan (issue 901): a console whose
+        folders carry the fingerprint the last scan wrote is reported from
+        its index and not walked. Refresh asks for everything.
         """
         selected_consoles = list(consoles or SYSTEM_IDS)
         summary = {
@@ -303,11 +444,16 @@ class PlaylistManager:
             "total_consoles": len(selected_consoles),
             "total_roms": 0,
             "failed": {},
+            "skipped": [],
         }
         for index, console in enumerate(selected_consoles, start=1):
             system_id = resolve_system_id(console)
             try:
-                roms = self.scan_and_rebuild_playlist(console)
+                if only_changed and self.playlist_is_current(system_id):
+                    roms = self.load_playlist(system_id)
+                    summary["skipped"].append(system_id)
+                else:
+                    roms = self.scan_and_rebuild_playlist(console)
             except Exception as exc:
                 logger.exception("playlist rebuild failed: console=%s", system_id)
                 summary["failed"][system_id] = str(exc)
@@ -325,7 +471,28 @@ class PlaylistManager:
                         "total_roms": summary["total_roms"],
                     }
                 )
+        if summary["skipped"]:
+            logger.info(
+                "playlist rebuild skipped unchanged consoles: %d of %d",
+                len(summary["skipped"]),
+                len(selected_consoles),
+            )
         return summary
+
+    def _repath_meta(self, console, old_line, new_line):
+        """Follow a rename, or a removal, in the console's index."""
+        meta = self._read_meta(console)
+        roms = meta.get("roms", {})
+        entry = roms.pop(old_line, None)
+        if entry is None:
+            return
+        if new_line:
+            entry["name"] = Path(new_line).stem if not is_archive(new_line) else entry.get("name")
+            roms[new_line] = entry
+        self._names_cache = None
+        atomic_write_text(
+            self.get_meta_path(console), json.dumps(meta, sort_keys=True), durable=False
+        )
 
     def _playlist_entry_name(self, path, console, extensions):
         """Display name for a playlist line, or None when it is not a ROM.

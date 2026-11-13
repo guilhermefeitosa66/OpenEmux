@@ -5,6 +5,12 @@
 .rom-card {
     border-radius: 10px;
     padding: 8px;
+}
+
+/* The lift and the tint animate only while the desktop wants animations:
+   the window carries .animated when gtk-enable-animations is on (issue 915),
+   as the Adwaita widgets already honour that setting. */
+.animated .rom-card {
     transition: background-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -108,10 +114,12 @@ flowboxchild:focus-visible {
 /* A cartridge is not a box: its silhouette is the frame's alpha (the N64's
    rounded top, the FC's notched corners, the Game Boy's cut corner). A
    box-shadow and a radius follow the widget's rectangle, and drew one around
-   every cartridge; a drop-shadow filter blurs the rendered alpha instead, so
-   the shadow follows the outline (issue 725). */
+   every cartridge (issue 725). The shadow that follows the outline is baked
+   into the composite itself (issue 903): a drop-shadow filter here was a
+   software blur of every card on every scroll frame under the cairo
+   renderer. No shadow, no radius, no filter on this node. */
 .rom-cartridge {
-    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+    box-shadow: none;
 }
 
 /* Fills the leftover area around a cover kept at its own proportions inside
@@ -429,6 +437,17 @@ button.controller-target.current.lit {
     background-color: alpha(black, 0.75);
 }
 
+/* A game with an automatic save state: Play resumes it (issue 910). Bottom
+   left of the cover, the one corner nothing else uses. */
+.resume-badge {
+    color: white;
+    background-color: alpha(@accent_bg_color, 0.9);
+    border-radius: 999px;
+    padding: 4px;
+    min-width: 16px;
+    min-height: 16px;
+}
+
 .sidebar-menu-button {
     padding: 2px;
     min-width: 24px;
@@ -472,4 +491,47 @@ button.controller-target.current.lit {
   background-color: #ffffff;
   padding: 8px;
   border-radius: 6px;
+}
+
+/* The "needs system files" banner over a console page (issue 911): the
+   warning colours of the theme, a row the grid sits under. */
+.bios-banner {
+    padding: 8px 14px;
+    background-color: alpha(@warning_bg_color, 0.18);
+    border-bottom: 1px solid alpha(@warning_bg_color, 0.4);
+}
+
+/* ===== TV mode (issue 914) ===== */
+/* Fullscreen, the sidebar hidden, everything sized for three metres: bigger
+   titles and hints, a thicker focus ring that also scales the card, and a
+   title-safe inset so nothing sits on the screen's edge. */
+.tv-mode .rom-title {
+    font-size: 1.45em;
+}
+
+.tv-mode .rom-console,
+.tv-mode .tip-bar label,
+.tv-mode .hint-key {
+    font-size: 1.35em;
+}
+
+.tv-mode .hint-key {
+    padding: 2px 10px;
+}
+
+.tv-mode .tip-bar {
+    min-height: 48px;
+    padding: 8px 48px;
+}
+
+/* About 5% of a 1080p screen on the sides and 2.5% above: the title-safe
+   inset, in the fixed lengths GTK's CSS takes. */
+.tv-mode gridview {
+    padding: 27px 96px;
+}
+
+.tv-mode.keynav-active gridview > child:focus-within .rom-card {
+    outline-width: 4px;
+    outline-offset: -4px;
+    transform: scale(1.04);
 }

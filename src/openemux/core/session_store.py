@@ -68,8 +68,10 @@ class SessionStore:
     def save(self):
         data = self.load()
         try:
+            # Atomic but not fsynced: written on every sidebar click, rebuilt
+            # by the next one, and worth no disk stall (issue 905).
             atomic_write_text(
-                self.session_file, json.dumps(data, indent=2, sort_keys=True)
+                self.session_file, json.dumps(data, indent=2, sort_keys=True), durable=False
             )
         except OSError as exc:
             # Not worth a dialog: the app opens on the default next time.

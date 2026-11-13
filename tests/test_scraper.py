@@ -4,11 +4,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from openemux.core import cover_cache
+from openemux.core import scraper
 from openemux.core.scraper import (
     COVER_ART,
     get_art_path_candidates,
     fetch_cover,
+    forget_art_index,
     get_cover_path_candidates,
+    local_art_index,
     rename_local_art,
     LABEL_ART,
     find_local_art,
@@ -18,6 +21,7 @@ from openemux.core.scraper import (
     is_image,
     remove_local_art,
     remove_local_covers,
+    resolve_local_art,
     save_local_art,
     save_local_cover,
 )
@@ -201,6 +205,109 @@ class TheBackgroundCoverLookupTests(unittest.TestCase):
             cover_cache._pool = None
 
         self.assertEqual(told, [str(label)])
+
+
+class TheArtworkIndexTests(unittest.TestCase):
+    """One directory listing per console and kind, not eight probes per card (issue 907)."""
+
+    def setUp(self):
+        forget_art_index()
+        self.addCleanup(forget_art_index)
+
+    def _covers(self, base):
+        covers = base / "roms" / "SFC" / "covers"
+        covers.mkdir(parents=True, exist_ok=True)
+        return covers
+
+    def test_the_listing_maps_each_stem_to_its_file(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = self._covers(Path(tmp_dir))
+            (covers / "Chrono Trigger.png").write_bytes(b"x")
+            (covers / "Super Metroid.jpg").write_bytes(b"x")
+            (covers / "notes.txt").write_bytes(b"x")
+            (covers / "no-extension").write_bytes(b"x")
+            index = local_art_index(Path(tmp_dir) / "roms", "SFC", COVER_ART)
+        self.assertEqual(
+            {stem: path.name for stem, path in index.items()},
+            {"Chrono Trigger": "Chrono Trigger.png", "Super Metroid": "Super Metroid.jpg"},
+        )
+
+    def test_a_stem_with_several_extensions_keeps_the_candidate_order(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = self._covers(Path(tmp_dir))
+            (covers / "Game.webp").write_bytes(b"x")
+            (covers / "Game.jpg").write_bytes(b"x")
+            (covers / "Game.png").write_bytes(b"x")
+            found = find_local_art(Path(tmp_dir) / "roms", "SFC", "Game")
+        self.assertEqual(found.name, "Game.png")
+
+    def test_a_directory_that_does_not_exist_is_an_empty_listing(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir) / "roms"
+            self.assertEqual(local_art_index(roms, "SFC", COVER_ART), {})
+            self.assertIsNone(find_local_art(roms, "SFC", "Game"))
+
+    def test_the_listing_is_read_once_until_the_directory_changes(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir) / "roms"
+            covers = self._covers(Path(tmp_dir))
+            (covers / "Game.png").write_bytes(b"x")
+            with mock.patch.object(scraper.os, "scandir", wraps=scraper.os.scandir) as scan:
+                for _ in range(50):  # a page of cards
+                    find_local_art(roms, "SFC", "Game")
+            self.assertEqual(scan.call_count, 1)
+
+    def test_a_file_added_later_is_found_once_the_directory_moved(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir) / "roms"
+            covers = self._covers(Path(tmp_dir))
+            self.assertIsNone(find_local_art(roms, "SFC", "Game"))
+            (covers / "Game.png").write_bytes(b"x")
+            # The directory's mtime moved -- or, inside one clock tick, the
+            # writers drop the listing themselves.
+            forget_art_index(roms, "SFC", COVER_ART)
+            self.assertEqual(find_local_art(roms, "SFC", "Game").name, "Game.png")
+
+    def test_a_subdirectory_named_like_a_cover_is_not_a_cover(self):
+        with TemporaryDirectory() as tmp_dir:
+            covers = self._covers(Path(tmp_dir))
+            (covers / "Folder.png").mkdir()
+            self.assertIsNone(find_local_art(Path(tmp_dir) / "roms", "SFC", "Folder"))
+
+    def test_a_directory_that_cannot_be_listed_is_empty(self):
+        with TemporaryDirectory() as tmp_dir:
+            roms = Path(tmp_dir) / "roms"
+            self._covers(Path(tmp_dir))
+            with mock.patch.object(scraper.os, "scandir", side_effect=PermissionError("no")):
+                self.assertEqual(local_art_index(roms, "SFC", COVER_ART), {})
+
+    def test_saving_removing_and_renaming_refresh_the_listing(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms = base / "roms"
+            source = base / "a.png"
+            source.write_bytes(b"x")
+            self.assertIsNone(find_local_art(roms, "SFC", "Game"))
+            save_local_art(roms, "SFC", "Game", source)
+            self.assertIsNotNone(find_local_art(roms, "SFC", "Game"))
+            rename_local_art(roms, "SFC", "Game", "Renamed")
+            self.assertIsNone(find_local_art(roms, "SFC", "Game"))
+            self.assertIsNotNone(find_local_art(roms, "SFC", "Renamed"))
+            remove_local_art(roms, "SFC", "Renamed")
+            self.assertIsNone(find_local_art(roms, "SFC", "Renamed"))
+
+    def test_resolving_tries_the_kinds_in_order(self):
+        with TemporaryDirectory() as tmp_dir:
+            base = Path(tmp_dir)
+            roms = base / "roms"
+            source = base / "a.png"
+            source.write_bytes(b"x")
+            rom = {"console": "SFC", "name": "Game"}
+            self.assertIsNone(resolve_local_art(rom, roms, kinds=(LABEL_ART, COVER_ART)))
+            cover = save_local_art(roms, "SFC", "Game", source, COVER_ART)
+            self.assertEqual(resolve_local_art(rom, roms, kinds=(LABEL_ART, COVER_ART)), str(cover))
+            label = save_local_art(roms, "SFC", "Game", source, LABEL_ART)
+            self.assertEqual(resolve_local_art(rom, roms, kinds=(LABEL_ART, COVER_ART)), str(label))
 
 
 if __name__ == "__main__":

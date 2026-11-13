@@ -1,6 +1,8 @@
 import os
 import subprocess
 import logging
+import time
+from datetime import datetime
 from threading import Event, Thread
 from pathlib import Path
 
@@ -30,7 +32,8 @@ from openemux.core.library_view import (
     zoom_step,
 )
 from openemux.core.platform import IS_WINDOWS
-from openemux.core.play_history import PlayHistory
+from openemux.core import save_states
+from openemux.core.play_history import PlayHistory, format_play_time
 from openemux.core import artwork_sources, cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.screenscraper import PROBLEM_QUOTA, PROBLEM_REFUSED, PROBLEM_UNREACHABLE
@@ -85,6 +88,7 @@ from openemux.ui.scopes import (  # noqa: F401
     COLLECTION_ID_PREFIX,
     FAVORITES_ID,
     LIBRARY_EMPTY_ID,
+    RECENT_ID,
     collection_scope,
     collection_slug,
     is_collection_scope,
@@ -101,7 +105,11 @@ from openemux.ui.welcome import WelcomeAssistant
 logger = logging.getLogger(__name__)
 
 #: Slots reserved in the bottom bar for input hints (see set_hints).
-MAX_INPUT_HINTS = 6
+MAX_INPUT_HINTS = 8
+
+#: TV mode (issue 914) never shows the cards smaller than this zoom: three
+#: metres away, the shelf a desktop reads at 100% is unreadable.
+TV_MODE_MIN_ZOOM = 1.5
 
 
 
@@ -159,7 +167,28 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks = TaskBanner(self.t)
 
         project_root = str(get_project_root())
-        self.runtime_manager = RuntimeManager(project_root, self.config_manager)
+        self.project_root = Path(project_root)
+        # One catalog for the window and the launcher, cached on disk beside
+        # the config and warmed on a worker once the window is up (issue
+        # 908): the first right-click on a card no longer parses the info
+        # directory on the main thread.
+        self.core_catalog = CoreCatalog(
+            project_root=self.project_root,
+            cache_file=self.config_manager.config_dir / "cores_catalog.json",
+        )
+        # One preset index per process, cached beside the config (issue
+        # 904): the launcher used to build its own by walking the shader
+        # packs on the first launch.
+        self.shader_catalog = ShaderCatalog(
+            runtime_dir=self.config_manager.get_runtime_dir(),
+            cache_file=self.config_manager.config_dir / "shaders_index.json",
+        )
+        self.runtime_manager = RuntimeManager(
+            project_root,
+            self.config_manager,
+            core_catalog=self.core_catalog,
+            shader_catalog=self.shader_catalog,
+        )
         # Launch, the relaunch dance and the runtime poll: one collaborator,
         # because they only make sense together (issue #237).
         self.game = GameSession(self)
@@ -168,9 +197,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # to another console.
         self._reveal_pending = []
         self._reveal_timer = None
-        self.project_root = Path(project_root)
-        self.shader_catalog = ShaderCatalog(runtime_dir=self.config_manager.get_runtime_dir())
-        self.core_catalog = CoreCatalog(project_root=self.project_root)
+        #: True while "Search everywhere" moves to the All page, so the
+        #: selection handler keeps the query instead of clearing it (issue 906).
+        self._carrying_search_query = False
+        #: Fullscreen couch layout (issue 914), off until F11 or the Guide button.
+        self._tv_mode = False
+        # The card transitions follow the desktop's animation setting (issue
+        # 915): a class on the window the CSS keys off.
+        self._gtk_settings = Gtk.Settings.get_default()
+        if self._gtk_settings is not None:
+            self._gtk_settings.connect("notify::gtk-enable-animations", self._sync_animations_class)
+        self._sync_animations_class()
+        #: The tour waits for the first games (issue 909); the folder picker
+        #: asks for covers once the scan it started has counted them.
+        self._welcome_pending = False
+        self._offer_covers_after_scan = False
         self._rom_context_services = RomContextMenuServices(self)
 
         self.toast_overlay = Adw.ToastOverlay()
@@ -224,9 +265,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 or self.runtime_manager.is_running()
             ),
         )
+        self.gamepad_navigator.swap_confirm_cancel = self.config_manager.get_swap_confirm_cancel()
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
+        # A setting changed in the last half second is still waiting for its
+        # debounced write (issue 905).
+        self.connect("close-request", self._on_close_flush_config)
         # The last word on where the library was left (issue #383). The
         # per-navigation write is what survives a crash or a session logout;
         # this one catches a view changed by something other than the sidebar.
@@ -244,14 +289,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # by now -- a console with no ROMs any more, a deleted collection, the
         # favorites emptied -- is landing_view()'s problem, and it falls back
         # to Favorites or All by the same rule a rescan uses.
-        self.refresh_library(preferred_view=self.config_manager.session.get_last_view())
+        self.refresh_library(preferred_view=self._startup_view())
         self._start_startup_scan()
+        self._warm_core_catalog()
         self._maybe_show_bootstrap_warning()
         # A repair that starts chains the deferred sweep from its done handler.
         if not self._start_core_repair():
             self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
+
+    def _warm_core_catalog(self):
+        """Scan the core directories on a worker, so the first menu finds them scanned."""
+        Thread(target=self.core_catalog.warm_up, daemon=True, name="openemux-core-catalog").start()
+
+    def _on_assets_banner_clicked(self, _banner):
+        self.assets_banner.set_revealed(False)
+        self._start_deferred_asset_download()
+
+    def _on_covers_banner_clicked(self, _banner):
+        self.covers_banner.set_revealed(False)
+        self._start_cover_sync(scope="all", selected_console=None)
+
+    def prepare_console_core(self, console, on_progress=None, cancel_event=None):
+        """Have a core for ``console`` before a launch, fetching it when none is there.
+
+        ``"ready"`` when the launcher resolves one (or just downloaded one),
+        ``"cancelled"`` or ``"failed"`` otherwise (issue 909). Called from
+        the session's launch worker, never on the main thread.
+        """
+        launcher = self.runtime_manager.retroarch_launcher
+        if launcher.resolve_core_path(console):
+            return "ready"
+        state = FirstBootBootstrapper(self.config_manager).download_console_core(
+            console, on_progress=on_progress, cancel_event=cancel_event
+        )
+        if state == "ready":
+            # The catalog cached what was on disk; the launcher resolves
+            # through it (issue 908).
+            self.core_catalog.refresh()
+        return state
 
     def _start_deferred_asset_download(self):
         """Fetch the cores and shaders the first boot left for later.
@@ -295,13 +372,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_deferred_assets_done_ui(self, task_id, summary):
         self._core_job_running = False
         self.tasks.finish(task_id)
+        # Owed still, and not by the user's choice: say so where it stays
+        # readable, with a way to try again now (issue 909).
+        failed = bool(summary.get("failed")) or bool(summary.get("error"))
+        self.assets_banner.set_revealed(failed and not summary.get("cancelled"))
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
+        # Each catalog is one object for the window and the launcher (issues
+        # 908 and 904).
         self.core_catalog.refresh()
         self.shader_catalog.refresh()
-        launcher = self.runtime_manager.retroarch_launcher
-        launcher.core_catalog.refresh()
-        launcher.shader_catalog.refresh()
+        self._warm_core_catalog()
         logger.info(
             "deferred asset download finished: failed=%s cancelled=%s error=%s",
             summary.get("failed"),
@@ -389,8 +470,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.tasks.finish(self._core_repair_task)
             self._core_repair_task = None
         if summary.get("downloaded"):
+            # One catalog for the window and the launcher (issue 908).
             self.core_catalog.refresh()
-            self.runtime_manager.retroarch_launcher.core_catalog.refresh()
+            self._warm_core_catalog()
         message = self._core_repair_message(manual, summary)
         if message:
             self._core_toast(*message)
@@ -667,12 +749,28 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Search revealed on demand (HIG: search is a mode, not a permanent field).
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_hexpand(True)
-        self._translatable(lambda: self.search_entry.set_placeholder_text(self.t("header.search")))
         self.search_entry.connect("search-changed", self._on_search_changed)
+        # Enter launches the one match or lands on the first (issue 906).
+        self.search_entry.connect("activate", self._on_search_activate)
+        # The scope is said in the placeholder; a console page offers the
+        # whole library one click away, with the query kept (issue 906).
+        self.search_everywhere_button = Gtk.Button()
+        self.search_everywhere_button.add_css_class("flat")
+        self.search_everywhere_button.set_visible(False)
+        self.search_everywhere_button.connect("clicked", self._on_search_everywhere)
+        self._translatable(
+            lambda: self.search_everywhere_button.set_label(self.t("search.everywhere"))
+        )
+        search_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        search_row.append(self.search_entry)
+        search_row.append(self.search_everywhere_button)
         self.search_bar = Gtk.SearchBar()
         self.search_bar.set_key_capture_widget(self)
         self.search_bar.connect_entry(self.search_entry)
-        self.search_bar.set_child(self.search_entry)
+        self.search_bar.set_child(search_row)
+        # Escape closes the bar: the query goes with it and the focus comes
+        # back to the games (issue 906).
+        self.search_bar.connect("notify::search-mode-enabled", self._on_search_mode_changed)
         self.search_button.bind_property(
             "active", self.search_bar, "search-mode-enabled",
             GObject.BindingFlags.BIDIRECTIONAL,
@@ -694,7 +792,50 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.update_banner.connect("button-clicked", self._on_update_banner_clicked)
         toolbar.add_top_bar(self.update_banner)
 
-        toolbar.set_content(self.content_stack)
+        # After the first scan: the covers are one click away (issue 909).
+        self.covers_banner = Adw.Banner()
+        self.covers_banner.set_revealed(False)
+        self._translatable(lambda: self.covers_banner.set_button_label(self.t("banner.covers.action")))
+        self.covers_banner.connect("button-clicked", self._on_covers_banner_clicked)
+        toolbar.add_top_bar(self.covers_banner)
+
+        # The background download could not finish (offline, most likely):
+        # say what will be fetched later, and offer to try now (issue 909).
+        self.assets_banner = Adw.Banner()
+        self.assets_banner.set_revealed(False)
+        self._translatable(lambda: self.assets_banner.set_title(self.t("banner.assets.failed")))
+        self._translatable(lambda: self.assets_banner.set_button_label(self.t("banner.assets.retry")))
+        self.assets_banner.connect("button-clicked", self._on_assets_banner_clicked)
+        toolbar.add_top_bar(self.assets_banner)
+
+        # A search that matches nothing says so, over whichever page is
+        # showing, with a way out (issue 906).
+        self.search_empty = Adw.StatusPage(icon_name="system-search-symbolic")
+        self.search_empty.set_visible(False)
+        empty_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        empty_actions.set_halign(Gtk.Align.CENTER)
+        self.search_empty_clear = Gtk.Button()
+        self.search_empty_clear.add_css_class("pill")
+        self.search_empty_clear.connect("clicked", lambda _b: self.search_entry.set_text(""))
+        self._translatable(lambda: self.search_empty_clear.set_label(self.t("search.empty.clear")))
+        empty_actions.append(self.search_empty_clear)
+        self.search_empty_everywhere = Gtk.Button()
+        self.search_empty_everywhere.add_css_class("pill")
+        self.search_empty_everywhere.add_css_class("suggested-action")
+        self.search_empty_everywhere.set_visible(False)
+        self.search_empty_everywhere.connect("clicked", self._on_search_everywhere)
+        self._translatable(
+            lambda: self.search_empty_everywhere.set_label(self.t("search.everywhere"))
+        )
+        empty_actions.append(self.search_empty_everywhere)
+        self.search_empty.set_child(empty_actions)
+        # Registered once both buttons exist: the placeholder and the offer
+        # are re-said on a language change too.
+        self._translatable(lambda: self._sync_search_scope(self.current_console))
+        content_overlay = Gtk.Overlay()
+        content_overlay.set_child(self.content_stack)
+        content_overlay.add_overlay(self.search_empty)
+        toolbar.set_content(content_overlay)
         # Installed on the stack rather than on each grid so that every page —
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
         self.imports.install_drop_target(self.content_stack)
@@ -918,6 +1059,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     @property
     def _zoom(self):
+        if getattr(self, "_tv_mode", False):
+            return max(self._display_settings["zoom"], TV_MODE_MIN_ZOOM)
         return self._display_settings["zoom"]
 
     @property
@@ -1043,9 +1186,30 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return sort_roms(
             roms,
             order,
-            file_stat=self._rom_file_stat if needs_stat else None,
+            file_stat=self._file_stat_from_index(roms) if needs_stat else None,
             last_played=self.play_history.last_played if needs_history else None,
         )
+
+    @classmethod
+    def _file_stat_from_index(cls, roms):
+        """A ``(size, added)`` lookup that reads the index before the disk.
+
+        The scan writes each ROM's size and arrival time beside the list
+        (issue 901), so "recently added" and "file size" on "All" are a
+        dictionary lookup per game rather than a stat of the whole library
+        on every render. A game the index does not know is stat-ed as before.
+        """
+        known = {
+            rom.get("path", ""): (rom["size"], rom["added"])
+            for rom in roms
+            if "size" in rom and "added" in rom
+        }
+
+        def lookup(path):
+            found = known.get(path)
+            return found if found is not None else cls._rom_file_stat(path)
+
+        return lookup
 
     @staticmethod
     def _rom_file_stat(path):
@@ -1396,6 +1560,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
+            # TV mode (issue 914): fullscreen, the sidebar away, bigger
+            # everything. The pad's Guide button toggles it too.
+            ("tv-mode", lambda *_: self.toggle_tv_mode(), ["F11"]),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1473,6 +1640,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         controller = Gtk.EventControllerKey()
         controller.connect("key-pressed", self._on_window_escape)
         self.add_controller(controller)
+        # TV mode (issue 914) collapses the split view, and the navigation
+        # view inside it pops the content page on Escape before that bubble
+        # handler runs: the sidebar came back as a full-screen page with the
+        # mode still on. Leaving the mode is decided in the capture phase
+        # instead, with anything that owns its Escape still left alone.
+        first = Gtk.EventControllerKey()
+        first.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        first.connect("key-pressed", self._on_tv_mode_escape)
+        self.add_controller(first)
+
+    def _on_tv_mode_escape(self, _controller, keyval, _keycode, _state):
+        if keyval != Gdk.KEY_Escape or not self._tv_mode:
+            return False
+        if (
+            self.get_visible_dialog() is not None
+            or self.navigation._active_popover() is not None
+            or self.search_bar.get_search_mode()
+        ):
+            return False
+        return self._on_window_escape(None, keyval, 0, 0)
 
     def _on_window_escape(self, _controller, keyval, _keycode, _state):
         if keyval != Gdk.KEY_Escape:
@@ -1480,7 +1667,63 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if self._selected_roms:
             self._clear_selection()
             return True
+        if self.tv_mode:
+            # The sidebar is away in TV mode, so stepping back to it would only
+            # swap the page for a full-screen console list: Escape leaves the
+            # mode instead (issue 914).
+            self.toggle_tv_mode()
+            return True
         return self.navigation.escape_to_sidebar()
+
+    # ----- TV mode (issue 914) ---------------------------------------------
+    @property
+    def tv_mode(self):
+        return self._tv_mode
+
+    def toggle_tv_mode(self):
+        """Fullscreen with the sidebar hidden and everything sized for a couch.
+
+        The zoom floor, the bigger titles and hints and the thicker focus ring
+        come from the ``tv-mode`` class and ``TV_MODE_MIN_ZOOM``; the user's
+        own zoom setting is left alone, so leaving the mode restores the
+        desktop look exactly.
+        """
+        self._tv_mode = not self._tv_mode
+        if self._tv_mode:
+            self.add_css_class("tv-mode")
+            self.split_view.set_collapsed(True)
+            self.split_view.set_show_content(True)
+            self.fullscreen()
+        else:
+            self.remove_css_class("tv-mode")
+            self.unfullscreen()
+            self.split_view.set_collapsed(False)
+        self._reload_current_page()
+        self._toast(self.t("toast.tv_mode.on" if self._tv_mode else "toast.tv_mode.off"), timeout=2)
+        return self._tv_mode
+
+    def open_onscreen_keyboard(self):
+        """The pad's way into the search box (issue 914)."""
+        if not self.search_entry.get_sensitive():
+            return None
+        from openemux.ui.onscreen_keyboard import OnScreenKeyboard
+
+        dialog = OnScreenKeyboard(self)
+        dialog.present(self)
+        return dialog
+
+    def apply_controller_preferences(self):
+        """Hand the button-label family and the confirm/cancel swap to the readers."""
+        swap = self.config_manager.get_swap_confirm_cancel()
+        navigator = getattr(self, "gamepad_navigator", None)
+        if navigator is not None:
+            navigator.swap_confirm_cancel = swap
+        self.navigation.refresh_hints(force=True)
+
+        self.connect("close-request", self._on_close_stop_game)
+    def _on_close_flush_config(self, *_args):
+        self.config_manager.flush()
+        return False
 
     def _on_close_stop_gamepad(self, *_args):
         self.gamepad_navigator.stop()
@@ -1543,8 +1786,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Deferred to the idle loop so the main window paints first and the
         assistant lands on top of a ready-to-use library.
         """
-        if self.config_manager.get_show_welcome_on_startup():
-            GLib.idle_add(self._open_welcome)
+        if not self.config_manager.get_show_welcome_on_startup():
+            return
+        if not self.visible_consoles:
+            # A tour before there is anything to tour is forgotten (issue
+            # 909): it opens once the first scan has found games.
+            self._welcome_pending = True
+            return
+        GLib.idle_add(self._open_welcome)
 
     def maybe_report_recovered_state(self):
         """Tell the user when a state file was set aside on the way in.
@@ -1595,6 +1844,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         groups = (
             ("shortcuts.group.general", (
                 ("<Ctrl>f", "shortcuts.search"),
+                ("F11", "shortcuts.tv_mode"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),
@@ -1612,6 +1862,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )),
             ("shortcuts.group.rom", (
                 ("Return", "shortcuts.open_rom"),
+                ("<Alt>Return", "shortcuts.details"),
                 ("Menu", "shortcuts.context_menu"),
                 ("<Ctrl>d", "shortcuts.favorite"),
                 ("F2", "shortcuts.rename"),
@@ -1695,10 +1946,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             title = self.t("sidebar.all")
         elif console_id == FAVORITES_ID:
             title = self.t("sidebar.favorites")
+        elif console_id == RECENT_ID:
+            title = self.t("sidebar.recent")
         elif is_collection_scope(console_id):
             title = self.sidebar.label_for(console_id)
         elif console_id:
-            title = f"{console_id} — {get_system_display_name(console_id)}"
+            # The name alone (issue 912): the id is the folder, and the
+            # sidebar's tooltip still carries it.
+            title = get_system_display_name(console_id)
         else:
             title = self.t("app.title")
         subtitle = ""
@@ -1719,6 +1974,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.window_title.set_subtitle(subtitle)
         if hasattr(self, "content_page"):
             self.content_page.set_title(title)
+        self._sync_search_empty_state()
 
     def _build_console_dropdown(self, console_ids, default_id=None, include_all=False, all_label_key=None):
         ids = []
@@ -1770,7 +2026,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # picker can render this entry as "detect automatically".
             label_text = self.t(getattr(_factory, "_all_label_key", None) or "sidebar.all")
         else:
-            label_text = f"{console_id} - {get_system_display_name(console_id)}"
+            label_text = get_system_display_name(console_id)
 
         label = Gtk.Label(label=label_text)
         label.set_halign(Gtk.Align.START)
@@ -1965,6 +2221,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         toast.set_timeout(6)
         self.toast_overlay.add_toast(toast)
 
+    def _startup_view(self):
+        """Where the window opens: on the last games played, once there are any.
+
+        "Recently played" is the continue surface (issue 910), so a returning
+        player is in the last game with Right and Enter. With nothing played
+        yet the stored view stands, as issue #383 had it.
+        """
+        if self.play_history.has_history():
+            return RECENT_ID
+        return self.config_manager.session.get_last_view()
+
     def refresh_library(self, preferred_view=None, force=False):
         """Rediscover the library and rebuild whatever the change affects.
 
@@ -1991,6 +2258,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # The pages are still the right pages; their contents may not be.
             self.pages.invalidate_contents()
             self.sidebar.sync_footer()
+            self.sidebar.sync_recent_row()
             self.sidebar.sync_favorites_row()
             target = preferred_view or previous_visible or self.current_console
             if self.pages.has(target):
@@ -1998,6 +2266,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.pages.ensure_loaded(target)
                 self.content_stack.set_visible_child_name(target)
                 self._update_window_title(target)
+            self.sync_bios_warnings()
             return
 
         while child := self.content_stack.get_first_child():
@@ -2008,10 +2277,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = discovered
         self.sidebar.sync_footer()
         self.sidebar.rebuild(self.visible_consoles)
+        if self.visible_consoles and self._welcome_pending:
+            self._welcome_pending = False
+            GLib.idle_add(self._open_welcome)
 
         if self.visible_consoles:
             self.pages.add(ALL_CONSOLES_ID, self.t("sidebar.all"))
 
+        # The page exists whether or not its row does, like Favorites: the
+        # row comes with the first launch (issue 910).
+        self.pages.add(RECENT_ID, self.t("sidebar.recent"))
         self.pages.add(FAVORITES_ID, self.t("sidebar.favorites"))
 
         for collection in self.collection_manager.list_collections():
@@ -2029,6 +2304,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # Drag-and-drop is the fastest way in and used to go unmentioned
             # here: the page only offered "choose a folder", so the one thing
             # someone with a folder of ROMs open would try was undocumented.
+            # Most people installing a frontend already keep a folder of
+            # games: pointing at it is the common case and the suggested
+            # action; importing files one by one comes second (issue 909).
             empty = Adw.StatusPage(
                 icon_name="folder-download-symbolic",
                 title=self.t("library.empty.title"),
@@ -2036,15 +2314,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )
             actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             actions.set_halign(Gtk.Align.CENTER)
-            import_btn = Gtk.Button(label=self.t("library.empty.action"))
-            import_btn.add_css_class("suggested-action")
-            import_btn.add_css_class("pill")
-            import_btn.connect("clicked", lambda _b: self.imports.open_picker())
-            actions.append(import_btn)
             choose = Gtk.Button(label=self.t("library.empty.choose"))
+            choose.add_css_class("suggested-action")
             choose.add_css_class("pill")
             choose.connect("clicked", lambda _b: self._choose_roms_path())
             actions.append(choose)
+            import_btn = Gtk.Button(label=self.t("library.empty.action"))
+            import_btn.add_css_class("pill")
+            import_btn.connect("clicked", lambda _b: self.imports.open_picker())
+            actions.append(import_btn)
             empty.set_child(actions)
             self.content_stack.add_titled(empty, LIBRARY_EMPTY_ID, "Library")
 
@@ -2052,11 +2330,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if target_view is None:
             target_view = previous_visible or self.current_console
 
+        self.sync_bios_warnings()
+
         desired = landing_view(
             self.visible_consoles,
             target_view,
             [c["slug"] for c in self.collection_manager.list_collections()],
             has_favorites=self.playlist_manager.has_favorites(),
+            has_recent=self.play_history.has_history(),
         )
         if desired != LIBRARY_EMPTY_ID:
             if not self.sidebar.select(desired):
@@ -2140,16 +2421,20 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # this scope before its page is (re)rendered.
         self._refresh_scope_settings()
         self._set_search_enabled(True)
+        self._sync_search_scope(self.current_console)
         if self.current_console == ALL_CONSOLES_ID:
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif is_collection_scope(self.current_console):
             self.pages.ensure_collection_loaded(collection_slug(self.current_console))
         else:
             self.pages.ensure_loaded(self.current_console)
         self.content_stack.set_visible_child_name(self.current_console)
-        self.search_entry.set_text("")
+        if not self._carrying_search_query:
+            self.search_entry.set_text("")
         self._update_window_title(self.current_console)
         # Navigating away is when a "Favorites" row kept alive only to show
         # its empty state is dropped (issue #382). On idle: the list is
@@ -2162,6 +2447,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _sync_favorites_row_idle(self):
         self.sidebar.sync_favorites_row()
+        # The same rule keeps an emptied "Recently played" row until the
+        # user leaves it (issue 910).
+        self.sidebar.sync_recent_row()
         return GLib.SOURCE_REMOVE
 
     def _remember_view_soon(self):
@@ -2249,6 +2537,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.config_manager.get_playlists_dir() / "collections",
             entries_loader=self.playlist_manager.entries_for_paths,
         )
+        self._offer_covers_after_scan = True
         self._rescan_all_consoles(show_toast=False)
 
         if unwritable:
@@ -2386,6 +2675,46 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 self.t("toast.core.bios_warning", core=core_filename, bios=", ".join(missing)),
                 timeout=6,
             )
+        self.sync_bios_warnings([console])
+
+    # ----- missing BIOS, before the first launch fails (issue 911) ---------
+    def missing_bios_for_console(self, console):
+        """The system files the console's core needs and the BIOS folder lacks.
+
+        The core is the one a launch would run -- the console's override or
+        the first curated candidate installed -- so the answer is the same
+        the launcher gives, only before anyone clicks Play.
+        """
+        if console not in SYSTEM_IDS:
+            return []
+        core_path = self.runtime_manager.retroarch_launcher.resolve_core_path(console)
+        if not core_path:
+            return []
+        # A look, not a launch: no BIOS folder is created for it.
+        return find_missing_required_for_core(
+            self.config_manager, console, Path(core_path).name, ensure_dir=False
+        )
+
+    def sync_bios_warnings(self, consoles=None):
+        """Re-check the consoles' BIOS and show or clear the warnings.
+
+        The sidebar row gets its icon, the console's page its banner. Called
+        after the library is rebuilt, after a BIOS import, after a core
+        change and after a Share nearby transfer, which is every way the
+        answer can move while the window is open.
+        """
+        targets = [c for c in (consoles or self.visible_consoles) if c in SYSTEM_IDS]
+        for console in targets:
+            missing = self.missing_bios_for_console(console)
+            self.sidebar.set_bios_warning(console, missing)
+            self.pages.set_bios_banner(console, missing)
+
+    def open_bios_settings(self, console):
+        """Preferences, on the BIOS page, with ``console``'s row open."""
+        self._open_preferences(page="bios")
+        dialog = self._open_preferences_dialog()
+        if dialog is not None:
+            dialog.show_bios_console(console)
 
     def set_rom_shader(self, rom, shader_id):
         """Persist a per-ROM shader override (``shader_id=None`` clears it)."""
@@ -2461,9 +2790,97 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         for grid in self.pages.grids():
             grid.refresh_rom_artwork(rom, fade=fade)
 
+    # -- play history and resume (issue 910) --------------------------------
+
+    def play_caption(self, rom):
+        """``"2 h ago · 1 h 20 min played"``: a card's line on the Recently played page.
+
+        ``None`` for a game never launched, so the card falls back to the
+        console's name.
+        """
+        path = rom.get("path")
+        stamp = self.play_history.last_played(path) if path else 0.0
+        if not stamp:
+            return None
+        ago = self._played_ago(stamp)
+        hours, minutes = format_play_time(self.play_history.play_seconds(path))
+        if hours:
+            played = self.t("play.time.hours", hours=hours, minutes=minutes)
+        elif minutes:
+            played = self.t("play.time.minutes", minutes=minutes)
+        else:
+            return ago
+        return self.t("play.caption", ago=ago, played=played)
+
+    def _played_ago(self, stamp, now=None):
+        """How long ago ``stamp`` was, in the coarsest unit that still says something."""
+        elapsed = max(0.0, (now if now is not None else time.time()) - stamp)
+        if elapsed < 60:
+            return self.t("play.ago.now")
+        if elapsed < 3600:
+            return self.t("play.ago.minutes", minutes=int(elapsed // 60))
+        if elapsed < 86400:
+            return self.t("play.ago.hours", hours=int(elapsed // 3600))
+        if elapsed < 7 * 86400:
+            return self.t("play.ago.days", days=int(elapsed // 86400))
+        return datetime.fromtimestamp(stamp).strftime("%d/%m/%Y")
+
+    def has_auto_state(self, rom):
+        """Whether Play would resume ``rom`` from RetroArch's automatic state.
+
+        Only with "Resume where I left off" on: the file may sit there from an
+        earlier session, but with the setting off the launch ignores it, and
+        a badge promising otherwise would lie.
+        """
+        if not self.config_manager.get_auto_resume():
+            return False
+        console = rom.get("console")
+        path = rom.get("path")
+        if not console or not path:
+            return False
+        return save_states.has_auto_state(
+            self.config_manager.get_console_states_dir(console), path
+        )
+
+    def _sync_animations_class(self, *_args):
+        """``.animated`` on the window while GNOME wants animations (issue 915)."""
+        enabled = True
+        if self._gtk_settings is not None:
+            enabled = bool(self._gtk_settings.get_property("gtk-enable-animations"))
+        if enabled:
+            self.add_css_class("animated")
+        else:
+            self.remove_css_class("animated")
+        return enabled
+
+    def set_rom_launching(self, rom, launching):
+        """The game's card shows "Starting…" on every page it is on (issue 904)."""
+        for grid in self.pages.grids():
+            grid.set_rom_launching(rom, launching)
+
+    def on_game_ended(self, rom):
+        """Bring the library up to date with a game that just ended.
+
+        The play time and the last-played order changed, and so may the
+        automatic state the resume badge reports: the Recently played page
+        is rebuilt when it has been built at all, and the game's card on
+        every other page re-reads its play state.
+        """
+        self.sidebar.sync_recent_row()
+        if self.pages.grid_for(RECENT_ID) is not None or self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
+        for grid in self.pages.grids():
+            grid.refresh_rom_play_state(rom)
+
     def launch_rom_at_state(self, rom, slot):
         """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""
         self.game.launch_at_state(rom, slot)
+
+    def open_game_details(self, rom):
+        """The game details dialog (issue 913): from the menu, Alt+Return or the pad's X."""
+        from openemux.ui.game_details import GameDetailsDialog
+
+        GameDetailsDialog(self, rom).present(self)
 
     def _is_favorite_rom(self, rom):
         return self.playlist_manager.is_favorite(rom["path"])
@@ -2627,6 +3044,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 continue
             self.playlist_manager.forget_rom(rom["console"], rom["path"])
             self.play_history.forget(rom["path"])
+            self.sidebar.sync_recent_row()
             self.config_manager.forget_rom_shader(rom["path"])
             self.config_manager.forget_rom_core(rom["path"])
             self.config_manager.forget_rom_cartridge_color(rom["path"])
@@ -2658,6 +3076,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_all_loaded()
         elif console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif is_collection_scope(console):
             self.pages.ensure_collection_loaded(collection_slug(console))
         else:
@@ -2699,7 +3119,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Thread(target=_worker, daemon=True).start()
         return {"started": True}
 
-    def _rescan_all_consoles(self, show_toast=False):
+    def _rescan_all_consoles(self, show_toast=False, only_changed=False):
         if self._scan_running:
             self._queue_rescan(console=None, show_toast=show_toast)
             if show_toast:
@@ -2723,7 +3143,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         def _worker():
             try:
                 summary = self.playlist_manager.scan_and_rebuild_all_playlists(
-                    on_progress=_on_progress
+                    on_progress=_on_progress, only_changed=only_changed
                 )
             except Exception as exc:
                 logger.exception("rescan crashed")
@@ -2802,6 +3222,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks.finish(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
+        if self._offer_covers_after_scan:
+            # The folder was just chosen: the covers are the next thing a new
+            # library wants, and nothing used to suggest them (issue 909).
+            self._offer_covers_after_scan = False
+            total = int(summary.get("total_roms") or 0)
+            if total > 0 and not self._cover_sync_running:
+                self.covers_banner.set_title(self.t("banner.covers.offer", count=total))
+                self.covers_banner.set_revealed(True)
         if summary.get("error"):
             self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
             return False
@@ -2827,7 +3255,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         return False
 
     def _start_startup_scan(self):
-        self._rescan_all_consoles(show_toast=False)
+        """Pick up what changed on the disk since the last run.
+
+        Only the consoles whose folders moved are walked (issue 901): the
+        rest answer from their index, so a second launch of an unchanged
+        library writes no playlist and performs no fsync. Refresh, and the
+        scan dialog, still walk everything.
+        """
+        self._rescan_all_consoles(show_toast=False, only_changed=True)
 
     def _show_sync_covers_dialog(self):
         if not self.visible_consoles:
@@ -2934,6 +3369,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             return
+        # However the sync was started, the offer is answered.
+        self.covers_banner.set_revealed(False)
 
         # A caller can hand in the exact ROMs to cover (a selection); otherwise
         # the scope decides how much of the library is read.
@@ -3089,7 +3526,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # Only the scope on screen updates mid-run: targeted card
             # refreshes, never a full grid reload. Everything else waits for
             # the end-of-run reload, which stays as the consistency backstop.
-            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID) or (
+            if self.current_console in (ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID) or (
                 self.current_console == rom["console"]
             ):
                 self.refresh_rom_artwork(rom, fade=True)
@@ -3120,6 +3557,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_all_loaded()
         elif self.current_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
+        elif self.current_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
         elif self.pages.grid_for(self.current_console) is not None:
             self.pages.ensure_loaded(self.current_console)
         if on_finished:
@@ -3158,6 +3597,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if selected_console == FAVORITES_ID:
             self.pages.ensure_favorites_loaded()
             return
+        if selected_console == RECENT_ID:
+            self.pages.ensure_recent_loaded()
+            return
         if selected_console in SYSTEM_IDS:
             self._rescan_single_console(selected_console, show_toast=False)
 
@@ -3174,6 +3616,84 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def _on_search_changed(self, _entry):
         self.apply_library_filters()
+
+    def _visible_grid(self):
+        visible = self.content_stack.get_visible_child_name()
+        return self.pages.grid_for(visible) if visible else None
+
+    def _on_search_activate(self, _entry):
+        """Enter in the search box: launch the one match, or land on the first (issue 906)."""
+        grid = self._visible_grid()
+        if grid is None:
+            return
+        count = grid.count()
+        if count == 1:
+            self.on_launch_game(grid.visible_entries()[0].rom)
+        elif count > 1:
+            grid.focus_first_card()
+
+    def _on_search_mode_changed(self, bar, _pspec):
+        if bar.get_search_mode():
+            return
+        # Closing the bar (Escape, the button) clears the query so the page
+        # is whole again, and puts the focus back on the games.
+        self.search_entry.set_text("")
+        grid = self._visible_grid()
+        if grid is not None and self.get_mapped():
+            grid.focus_first_card()
+
+    def _sync_search_scope(self, scope):
+        """Say in the placeholder what the box searches, and offer the whole library."""
+        if scope in SYSTEM_IDS:
+            placeholder = self.t("search.placeholder.console", console=get_system_display_name(scope))
+        elif scope in (FAVORITES_ID, RECENT_ID) or is_collection_scope(scope):
+            placeholder = self.t("search.placeholder.scope", scope=self.sidebar.label_for(scope))
+        else:
+            placeholder = self.t("search.placeholder.library")
+        self.search_entry.set_placeholder_text(placeholder)
+        offer = bool(scope) and scope != ALL_CONSOLES_ID and self.pages.has(ALL_CONSOLES_ID)
+        self.search_everywhere_button.set_visible(offer)
+        self.search_empty_everywhere.set_visible(offer)
+
+    def _on_search_everywhere(self, *_args):
+        """Carry the query over to the "All" page (issue 906)."""
+        query = self.search_entry.get_text()
+        self._carrying_search_query = True
+        try:
+            if not self.sidebar.select(ALL_CONSOLES_ID):
+                return
+        finally:
+            self._carrying_search_query = False
+        self.search_entry.set_text(query)
+        self.search_button.set_active(True)
+        self.search_entry.grab_focus()
+        self.apply_library_filters()
+
+    def _on_grid_count_changed(self, grid):
+        """A grid's filter let a different number through (incremental, issue 906)."""
+        visible = self._visible_grid()
+        if visible is None:
+            return
+        if visible is not grid and not (
+            getattr(visible, "is_group", False) and grid in visible.grids()
+        ):
+            return
+        self._update_window_title(self.current_console)
+
+    def _sync_search_empty_state(self):
+        """The "No games match" page shows when a query leaves nothing, once the filter is done."""
+        query = self.search_entry.get_text().strip()
+        grid = self._visible_grid()
+        show = bool(query) and grid is not None and grid.count() == 0 and grid.filter_pending() == 0
+        if show:
+            self.search_empty.set_title(self.t("search.empty.title", query=query))
+            body_key = (
+                "search.empty.body.scope"
+                if self.search_everywhere_button.get_visible()
+                else "search.empty.body.library"
+            )
+            self.search_empty.set_description(self.t(body_key))
+        self.search_empty.set_visible(show)
 
     def apply_library_filters(self):
         """Decide card visibility from the search query and the artwork filter.
@@ -3207,6 +3727,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.search_entry.get_text(),
             only_missing_artwork=self._filter_missing_artwork,
         )
+        self._sync_search_empty_state()
 
     def _on_missing_artwork_action(self, action, _param):
         enabled = not action.get_state().get_boolean()

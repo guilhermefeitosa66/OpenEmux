@@ -21,6 +21,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Gdk, GLib, Gio, Gtk
 
 from openemux.core import cartridge_render
+from openemux.core.library_search import parse_query, refinement
 from openemux.core.library_view import (
     DEFAULT_ZOOM,
     is_grid_view,
@@ -33,6 +34,8 @@ from openemux.core.library_view import (
 from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     ACTIVATION_DEBOUNCE_US,
     CARTRIDGE_RENDER_SCALE,
+    CARTRIDGE_SHADOW_PAD,
+    cartridge_render_scale,
     CONSOLE_COVER_ASPECTS,
     DEFAULT_COVER_ASPECT,
     DEFAULT_ITEM_SIZE,
@@ -53,6 +56,7 @@ from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
 from openemux.ui.grouped_scroll import GroupedScroll
 from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
+    ART_UNRESOLVED,
     CardContext,
     RomEntry,
     RomItem,
@@ -61,6 +65,28 @@ from openemux.ui.rom_card import (  # noqa: F401  (re-exported)
 )
 
 logger = logging.getLogger(__name__)
+
+#: Pages with more games than this filter incrementally (issue 906): the
+#: predicate is Python, and 3000 of them in one keystroke is a visible stall.
+INCREMENTAL_FILTER_THRESHOLD = 300
+
+#: How a parsed query's change maps to what GTK has to re-check.
+FILTER_CHANGES = {
+    "same": Gtk.FilterChange.DIFFERENT,
+    "stricter": Gtk.FilterChange.MORE_STRICT,
+    "looser": Gtk.FilterChange.LESS_STRICT,
+    "different": Gtk.FilterChange.DIFFERENT,
+}
+
+#: How many cards every grid in this process has built, for the probes and
+#: the test book: a grouped page on a big library used to build one card per
+#: ROM of every console within thirty rows of each group's anchor (issue 899).
+_cards_built = 0
+
+
+def cards_built():
+    """The running count of cards built since the process started."""
+    return _cards_built
 
 
 class RomGrid(Gtk.GridView):
@@ -115,6 +141,9 @@ class RomGrid(Gtk.GridView):
         context_services=None,
         frame_color_for_rom=None,
         band_host=None,
+        dormant=False,
+        play_caption=None,
+        has_auto_state=None,
     ):
         # Before anything else: the GObject has to exist before this widget
         # can be configured. The model and the factory are attached at the
@@ -136,6 +165,21 @@ class RomGrid(Gtk.GridView):
         self.roms_dir = roms_dir
         self.ui_settings = ui_settings or {}
         self.on_selection_changed = on_selection_changed
+        # Whether the view holds its model. A dormant grid has let go of it,
+        # so GTK keeps no card for it; it still measures as tall as its rows,
+        # so the page around it keeps its height (issue 899). Set by
+        # set_dormant; grouped pages start their grids asleep and wake the
+        # ones that come near the viewport.
+        self._awake = True
+        # An unparented card measured for the row height and the card width
+        # before any real card exists -- CSS applies to it as to the rest.
+        self._probe = None
+        self._measured_row_height = None
+        # Where the page was scrolled to when the grid went to sleep.
+        self._sleep_scroll = None
+        self._restore_source = None
+        # Coalesces the per-allocation promotion of the visible cards' fetches.
+        self._promotion_pending = False
         # Focus memory: coming back from the sidebar restores this game. The
         # entry, not the widget -- the widget may be showing another game by
         # then (issue #219).
@@ -166,12 +210,23 @@ class RomGrid(Gtk.GridView):
         self._spacing = scale_spacing(
             LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
         )
+        # A cartridge composite carries its shadow in a transparent margin
+        # (issue 903): the card grows by it on every side, and the gaps and
+        # the edges give the same back, so the cartridges keep their place.
+        cartridge_frame_path = cartridge_frame_for(
+            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
+        )
+        self._shadow_pad = CARTRIDGE_SHADOW_PAD if cartridge_frame_path else 0
+        self._spacing = max(0, self._spacing - 2 * self._shadow_pad)
         # GtkGridView has no row/column spacing of its own: the horizontal gap
         # comes from a cell being one gap wider than the card centred in it,
         # and the vertical gap from half of it on each card. The grid's own
         # margin gives back the half-gap that leaves at the four edges.
         self._card_margin = self._spacing // 2
-        self._margin = max(0, (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin)
+        self._margin = max(
+            0,
+            (LIST_MARGIN if self.compact else GRID_MARGIN) - self._card_margin - self._shadow_pad,
+        )
 
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. Per console it follows that console's box-art
@@ -183,15 +238,14 @@ class RomGrid(Gtk.GridView):
             else cover_size_for_console(console, self.zoom)
         )
         # The card shape comes from the frame art itself: fixed width, and the
-        # height that keeps the cartridge's own proportions. Since issue #384 a
-        # mixed page is one grid per console, so this reaches "All", "Favorites"
-        # and the collections too (issue #385).
-        cartridge_frame_path = cartridge_frame_for(
-            console, self.view_mode, mixed_consoles=mixed_consoles, compact=self.compact
-        )
+        # height that keeps the cartridge's own proportions, plus the shadow
+        # margin on every side. Since issue #384 a mixed page is one grid per
+        # console, so this reaches "All", "Favorites" and the collections too
+        # (issue #385).
         if cartridge_frame_path:
             frame = cartridge_render.load_frame(cartridge_frame_path)
-            cover_size = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+            width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
+            cover_size = (width + 2 * self._shadow_pad, height + 2 * self._shadow_pad)
 
         if self.compact:
             # Rows show the box art itself, never a cartridge: a frame drawn at
@@ -201,6 +255,11 @@ class RomGrid(Gtk.GridView):
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
         # The console's authored shell; per-ROM colors swap in a variant of it.
         self._base_frame_path = cartridge_frame_path
+        # Shell colour -> frame path. The frames are shipped assets that do
+        # not change while the app runs, so resolving each colour once per
+        # grid spares every bind the two file probes and the frame stat
+        # (issue 907).
+        self._frame_by_color = {}
 
         self._card_ctx = CardContext(
             t=t,
@@ -211,6 +270,15 @@ class RomGrid(Gtk.GridView):
             compact=self.compact,
             zoom=self.zoom,
             cartridge=bool(cartridge_frame_path),
+            # 1x on a 1x display: the composite used to be 2x everywhere,
+            # four times the pixels the card draws (issue 902).
+            render_scale=cartridge_render_scale(self),
+            shadow_pad=self._shadow_pad,
+            # "2 h ago, 1 h 20 min played" under the title on the Recently
+            # played page, and the resume badge on a game with an automatic
+            # state (issue 910).
+            play_caption=play_caption,
+            has_auto_state=has_auto_state,
             frame_for_rom=self._frame_path_for_rom,
             context_services=context_services,
             on_launch=self._launch_rom,
@@ -231,11 +299,16 @@ class RomGrid(Gtk.GridView):
         self._by_path = {entry.path: entry for entry in self._entries}
         self._store = Gio.ListStore.new(RomEntry)
         self._store.splice(0, 0, self._entries)
-        self._query = ""
+        self._query = ()
         self._only_missing_artwork = False
         self._filter = Gtk.CustomFilter.new(self._match_entry)
         self._filtered = Gtk.FilterListModel(model=self._store, filter=self._filter)
+        # Above a few hundred games the filter runs in slices on the idle
+        # loop rather than in one go per keystroke (issue 906); the count
+        # and the headers follow it through ``items-changed``.
+        self._filtered.set_incremental(len(self._entries) > INCREMENTAL_FILTER_THRESHOLD)
         self._visible_cache = None
+        self._count_listeners = []
         self._filtered.connect("items-changed", self._on_filtered_changed)
 
         factory = Gtk.SignalListItemFactory()
@@ -245,7 +318,9 @@ class RomGrid(Gtk.GridView):
         factory.connect("teardown", self._on_factory_teardown)
 
         self.set_factory(factory)
-        self.set_model(Gtk.NoSelection(model=self._filtered))
+        self._awake = not dormant
+        if self._awake:
+            self.set_model(Gtk.NoSelection(model=self._filtered))
         # Zeroes the theme's padding on the item wrappers, so a cell is exactly
         # the card and the gaps are exactly _spacing.
         self.add_css_class("rom-grid")
@@ -261,8 +336,13 @@ class RomGrid(Gtk.GridView):
 
         # Menu key / Shift+F10 opens the focused card's context menu, and
         # Return launches it: the keyboard counterparts of the pointer. Both
-        # used to come free with GtkFlowBox's own child activation.
+        # used to come free with GtkFlowBox's own child activation. Capture
+        # phase: the cell wrapping a card is a GtkListItemWidget, whose own
+        # binding takes Enter and Space on the way up and, with the cell not
+        # activatable, drops them -- in the bubble phase this controller never
+        # saw either key (issue 914).
         key = Gtk.EventControllerKey()
+        key.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         key.connect("key-pressed", self._on_grid_key_pressed)
         self.add_controller(key)
 
@@ -279,10 +359,138 @@ class RomGrid(Gtk.GridView):
         # Both want an ancestry that only exists once the grid is in a window.
         self._watch_root_focus()
         self.selection.attach()
+        # A console page coming back on screen gets its cards back; on a
+        # grouped page that is the page's call, group by group, as it lays
+        # them out.
+        if not self._in_grouped_page():
+            self.set_dormant(False)
 
     def _on_unmap(self, *_args):
         self._unwatch_root_focus()
         dismiss_context_popover()
+        # A page the user left keeps its entries and its scroll position, but
+        # not its cards and their textures: ten console visits used to add
+        # about 9 MB each and keep it for the life of the window (issue 900).
+        self.set_dormant(True)
+
+    def _in_grouped_page(self):
+        return isinstance(self.get_parent(), GroupedScroll)
+
+    # -- dormancy ----------------------------------------------------------
+
+    def is_dormant(self):
+        return not self._awake
+
+    def set_dormant(self, dormant):
+        """Let go of the cards (``True``) or take the model back (``False``).
+
+        GTK keeps up to thirty rows of cards alive around a grid's anchor
+        however small the part of it on screen is, and with one grid per
+        console on a grouped page that multiplied by the number of groups:
+        "All" on a 3000-game library built 1843 cards for a viewport showing
+        nine (issue 899). A grid that is nowhere near the viewport holds no
+        model instead, so GTK tears its cards down, and it reports the height
+        its rows would take so the page and its scrollbar do not move.
+
+        A console page's grid does the same when its page is unmapped
+        (issue 900) and takes its scroll position back on waking.
+        """
+        dormant = bool(dormant)
+        if dormant == (not self._awake):
+            return
+        if dormant:
+            vadj = self.get_vadjustment()
+            self._sleep_scroll = vadj.get_value() if vadj is not None else None
+            self._awake = False
+            # Tearing the cards down bumps every card's generation, so the
+            # fetches still queued for them return before doing any work.
+            self.set_model(None)
+            return
+        self._awake = True
+        self.set_model(Gtk.NoSelection(model=self._filtered))
+        if not self._in_grouped_page() and self._sleep_scroll:
+            # Attaching a model puts the view's anchor at the top. The page's
+            # own scroll is restored at once, and once more after the layout
+            # that the new model queues, in case GTK moved it meanwhile.
+            self._restore_sleep_scroll()
+            if self._restore_source is None:
+                self._restore_source = GLib.idle_add(self._restore_sleep_scroll_idle)
+
+    def _restore_sleep_scroll_idle(self):
+        self._restore_source = None
+        self._restore_sleep_scroll()
+        return GLib.SOURCE_REMOVE
+
+    def _restore_sleep_scroll(self):
+        vadj = self.get_vadjustment()
+        target = self._sleep_scroll
+        if vadj is None or target is None or not self._awake:
+            return
+        target = max(0.0, min(target, vadj.get_upper() - vadj.get_page_size()))
+        if abs(vadj.get_value() - target) >= 1:
+            vadj.set_value(target)
+
+    def _probe_card(self):
+        """A card like the ones the factory builds, for measuring only."""
+        if self._probe is None:
+            self._probe = RomItem(self._card_ctx)
+            self._probe.set_margin_top(self._card_margin)
+            self._probe.set_margin_bottom(self._card_margin)
+        return self._probe
+
+    def _row_height(self):
+        """How tall one row of cards is, margins included.
+
+        Read off a card on screen when there is one, else off the probe:
+        an unparented card measures exactly as a realized one does, CSS
+        padding and all, so the height a dormant grid reports is the height
+        it will take when it wakes.
+        """
+        if self._measured_row_height is None:
+            card = next(iter(self._bound.values()), None) or self._probe_card()
+            self._measured_row_height = card.measure(Gtk.Orientation.VERTICAL, -1)[1]
+        return self._measured_row_height
+
+    def _columns_for(self, for_size):
+        """The column count a width calls for, as _retune_columns would set."""
+        if self.compact:
+            return 1
+        if for_size is None or for_size < 0:
+            return self._column_state[0] if self._column_state else 1
+        available = self._available_width(for_size)
+        if available <= 0:
+            return 1
+        columns, _slack = columns_and_slack(
+            available, self._card_allocation_width(), len(self._entries), spacing=self._spacing
+        )
+        return max(1, min(columns, len(self._entries) or 1))
+
+    def _dormant_height(self, for_size):
+        """The height the rows would take, with no card built to measure."""
+        count = self._filtered.get_n_items()
+        if count == 0:
+            return 0
+        rows = -(-count // self._columns_for(for_size))
+        return rows * self._row_height()
+
+    def teardown(self):
+        """Let go of everything the page no longer shows (issue 900).
+
+        A re-render used to replace the scroller's child and leave the old
+        grid -- its cards, their textures, its entries and the selection --
+        for the garbage collector to find the cycle. Dropping the model and
+        the entries here returns the memory when the page is rebuilt.
+        """
+        self.set_dormant(True)
+        if self._restore_source is not None:
+            GLib.source_remove(self._restore_source)
+            self._restore_source = None
+        self._bound.clear()
+        self._store.remove_all()
+        self._entries = []
+        self._by_path = {}
+        self._visible_cache = None
+        self._probe = None
 
     # -- the model ---------------------------------------------------------
 
@@ -295,21 +503,36 @@ class RomGrid(Gtk.GridView):
 
         The window decides *what* the filter is; matching happens here, over
         the model, because a virtualized grid has no widget to hide for a ROM
-        that is off screen.
+        that is off screen. ``query`` is the box's text; it is parsed into
+        words here (issue 906), and a query that only grew tells GTK so, which
+        re-checks the entries still showing instead of the whole page.
         """
-        query = (query or "").lower()
+        tokens = parse_query(query)
         only_missing = bool(only_missing_artwork)
-        if (query, only_missing) == (self._query, self._only_missing_artwork):
+        if (tokens, only_missing) == (self._query, self._only_missing_artwork):
             # Still re-seed: a card's artwork state may have settled since.
             self.sync_visible_selection()
             return
-        self._query = query
+        change = refinement(self._query, tokens)
+        if only_missing != self._only_missing_artwork:
+            change = "stricter" if only_missing and change in ("same", "stricter") else "different"
+        self._query = tokens
         self._only_missing_artwork = only_missing
-        self._filter.changed(Gtk.FilterChange.DIFFERENT)
+        self._filter.changed(FILTER_CHANGES[change])
         self.sync_visible_selection()
+
+    def filter_pending(self):
+        """How many entries an incremental filter has still to look at; 0 when settled."""
+        return self._filtered.get_pending()
+
+    def connect_count_changed(self, callback):
+        """Call ``callback(grid)`` whenever the filter lets a different number through."""
+        self._count_listeners.append(callback)
 
     def _on_filtered_changed(self, *_args):
         self._visible_cache = None
+        for callback in self._count_listeners:
+            callback(self)
 
     def entries(self):
         """Every ROM on this page, in model order."""
@@ -317,7 +540,7 @@ class RomGrid(Gtk.GridView):
 
     def count(self):
         """How many ROMs this grid is showing -- what the filter lets through."""
-        return len(self.visible_entries())
+        return self._filtered.get_n_items()
 
     def visible_entries(self):
         """The ROMs the filter currently lets through, in visual order."""
@@ -350,6 +573,8 @@ class RomGrid(Gtk.GridView):
     # -- the factory -------------------------------------------------------
 
     def _on_factory_setup(self, _factory, list_item):
+        global _cards_built
+        _cards_built += 1
         card = RomItem(self._card_ctx)
         # GtkGridView has no row spacing of its own, so the vertical gap is
         # half of it on each card. The horizontal gap comes from the cell
@@ -366,11 +591,17 @@ class RomGrid(Gtk.GridView):
         list_item.set_child(card)
 
     def _on_factory_bind(self, _factory, list_item):
+        self._bind_cell(list_item)
+
+    def _bind_cell(self, list_item):
         card = list_item.get_child()
         entry = list_item.get_item()
         if card is None or entry is None:
             return
         card.bind(entry)
+        # "item n of m" for a screen reader (issue 915): the position in the
+        # filtered model, which is the order on screen.
+        card.set_position_in_set(list_item.get_position(), self._filtered.get_n_items())
         self._bound[entry] = card
         if self._focused_card is card:
             # It kept the focus through the rebind, so this is where the user
@@ -460,7 +691,12 @@ class RomGrid(Gtk.GridView):
         if self._frame_color_for_rom is None:
             return self._base_frame_path
         color = self._frame_color_for_rom(rom)
-        return cartridge_frame_svg(rom["console"], color) or self._base_frame_path
+        try:
+            return self._frame_by_color[color]
+        except KeyError:
+            path = cartridge_frame_svg(rom["console"], color) or self._base_frame_path
+            self._frame_by_color[color] = path
+            return path
 
     def refresh_rom_frame(self, rom):
         """Re-resolve one card's shell after its cartridge color changed.
@@ -476,6 +712,30 @@ class RomGrid(Gtk.GridView):
             card.set_cartridge_frame(self._frame_path_for_rom(entry.rom))
         return True
 
+    def set_rom_launching(self, rom, launching):
+        """Put one card into, or out of, the "Starting…" state (issue 904)."""
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card.set_launching(launching)
+        return True
+
+    def refresh_rom_play_state(self, rom):
+        """Re-read one card's play caption and resume badge (issue 910).
+
+        After a game ends: the automatic state it may have left and the time
+        it added are what the card shows. Off screen, the next bind reads them.
+        """
+        entry = self._by_path.get(str(rom.get("path", "")))
+        if entry is None:
+            return False
+        card = self._bound.get(entry)
+        if card is not None:
+            card.sync_play_state()
+        return True
+
     def refresh_rom_artwork(self, rom, fade=False):
         """Re-fetch one card's artwork after a cover or label file changed."""
         entry = self._by_path.get(str(rom.get("path", "")))
@@ -485,15 +745,19 @@ class RomGrid(Gtk.GridView):
         if card is not None:
             card._refresh_cover_after_change(fade=fade)
         else:
-            # Off screen: the state is stale until something shows it again,
-            # and the cover cache is keyed by mtime, so the next bind re-reads
-            # the new file by itself.
-            entry.has_artwork = None
+            # Off screen: forget what was resolved, so the next bind looks
+            # the art up again rather than trusting the remembered path.
+            entry.forget_artwork()
         return True
 
     # -- layout ------------------------------------------------------------
 
     def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.VERTICAL and not self._awake:
+            # No cards to measure: the rows' height, from the row count the
+            # width allows and a card measured off screen (issue 899).
+            height = self._dormant_height(for_size)
+            return height, height, -1, -1
         if orientation == Gtk.Orientation.VERTICAL and 0 <= for_size < self._card_size[0]:
             # Asked how tall the page is at a width no card fits in -- which
             # the content stack does for a frame while it swaps pages.
@@ -527,6 +791,50 @@ class RomGrid(Gtk.GridView):
         # are allocated an empty cell on the way to the second.
         self._retune_columns(width)
         Gtk.GridView.do_size_allocate(self, width, height, baseline)
+        self._queue_fetch_promotion()
+
+    def _queue_fetch_promotion(self):
+        """After a layout, move the on-screen cards' fetches to the front.
+
+        GTK binds the rows it keeps around the anchor as well as the ones on
+        screen, and the pool takes the fetches in arrival order, so after a
+        zoom or a page switch the visible cards used to wait behind the rows
+        below them (issue 899). Coalesced onto one idle per layout burst.
+        """
+        if self._promotion_pending or not self._bound:
+            return
+        self._promotion_pending = True
+        GLib.idle_add(self._promote_visible_fetches)
+
+    def _promote_visible_fetches(self):
+        self._promotion_pending = False
+        for card in self.visible_cards():
+            card.promote_pending_fetch()
+        return GLib.SOURCE_REMOVE
+
+    def visible_cards(self):
+        """The bound cards whose cell overlaps the grid's own allocation.
+
+        A GtkGridView lays its cells out in viewport coordinates, so a cell
+        is on screen when it overlaps ``[0, height)`` -- on a grouped page
+        the allocation is the slice the page handed this grid, so the same
+        test holds there.
+        """
+        height = self.get_height()
+        if height <= 0:
+            return []
+        visible = []
+        for card in list(self._bound.values()):
+            wrapper = card.get_parent()
+            if wrapper is None:
+                continue
+            ok, bounds = wrapper.compute_bounds(self)
+            if not ok:
+                continue
+            top = bounds.get_y()
+            if top + bounds.get_height() > 0 and top < height:
+                visible.append(card)
+        return visible
 
     def _retune_columns(self, width=None):
         """Pack the cards left-to-right with fixed gaps, like an icon view.
@@ -595,10 +903,10 @@ class RomGrid(Gtk.GridView):
         them tighter than they fit and the grid wraps a column early.
         """
         if self._measured_card_width is None:
-            card = next(iter(self._bound.values()), None)
-            if card is None:
-                # Before the first card exists; recomputed once one does.
-                return self._card_size[0]
+            # Off the probe before the first card exists: it measures as the
+            # real thing, so the column count never has to change once a
+            # card is built (which also keeps a dormant grid's height right).
+            card = next(iter(self._bound.values()), None) or self._probe_card()
             self._measured_card_width = max(
                 self._card_size[0], card.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
             )
@@ -632,14 +940,16 @@ class RomGrid(Gtk.GridView):
         is_menu_key = keyval == Gdk.KEY_Menu or (
             keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK
         )
-        launches = keyval in (
-            Gdk.KEY_Return,
-            Gdk.KEY_KP_Enter,
-            Gdk.KEY_ISO_Enter,
-            Gdk.KEY_space,
-            Gdk.KEY_KP_Space,
-        ) and not (state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
-        if not (is_menu_key or launches):
+        enter = keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter)
+        # Alt+Return opens the game's details (issue 913).
+        details = enter and bool(state & Gdk.ModifierType.ALT_MASK)
+        launches = (
+            enter or keyval in (Gdk.KEY_space, Gdk.KEY_KP_Space)
+        ) and not (
+            state
+            & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.ALT_MASK)
+        )
+        if not (is_menu_key or launches or details):
             return False
         root = self.get_root()
         card = self.item_for_widget(root.get_focus()) if root else None
@@ -647,6 +957,8 @@ class RomGrid(Gtk.GridView):
             return False
         if is_menu_key:
             card.show_context_menu()
+        elif details:
+            card.open_details()
         else:
             self._launch_rom(card.rom)
         return True
@@ -691,6 +1003,9 @@ class RomGrid(Gtk.GridView):
         entry = visible[position]
         if self._grab_focus_on(entry):
             return True
+        # A sleeping group has nothing to scroll to; it wakes here and the
+        # page reveal below keeps it awake.
+        self.set_dormant(False)
         self._reveal_on_page(position)
         self.scroll_to(position, Gtk.ListScrollFlags.FOCUS, None)
         GLib.idle_add(self._grab_focus_when_realized, entry)

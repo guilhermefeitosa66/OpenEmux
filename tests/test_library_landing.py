@@ -14,6 +14,7 @@ from openemux.ui.scopes import (
     FAVORITES_ID,
     LIBRARY_EMPTY_ID,
     collection_scope,
+    RECENT_ID,
     default_landing_view,
     landing_view,
     sidebar_row_ids,
@@ -274,6 +275,33 @@ class RescanQueueTests(unittest.TestCase):
         stub._queue_rescan(console=None, show_toast=False)
         stub._run_pending_rescan()
         self.assertEqual(stub.started, [(None, True)])
+
+
+class TheRecentlyPlayedRowTests(unittest.TestCase):
+    """The "Recently played" row and landing page (issue 910)."""
+
+    def test_nothing_played_means_no_row(self):
+        self.assertNotIn(RECENT_ID, sidebar_row_ids(["FC", "SFC"], (), has_favorites=True))
+
+    def test_the_first_launch_puts_it_right_under_all(self):
+        self.assertEqual(
+            sidebar_row_ids(["FC", "SFC"], ["best-of-snes"], has_favorites=True, has_recent=True),
+            [ALL_CONSOLES_ID, RECENT_ID, FAVORITES_ID, collection_scope("best-of-snes"), "FC", "SFC"],
+        )
+
+    def test_an_empty_library_gets_no_row_whatever_was_played(self):
+        self.assertEqual(sidebar_row_ids([], (), has_recent=True), [])
+
+    def test_a_library_with_history_opens_on_it(self):
+        self.assertEqual(default_landing_view(has_favorites=True, has_recent=True), RECENT_ID)
+        self.assertEqual(default_landing_view(has_favorites=True), FAVORITES_ID)
+        self.assertEqual(
+            landing_view(["FC"], "NOPE", has_favorites=False, has_recent=True), RECENT_ID
+        )
+
+    def test_the_page_is_a_destination_only_while_the_row_exists(self):
+        self.assertEqual(landing_view(["FC"], RECENT_ID, has_recent=True), RECENT_ID)
+        self.assertEqual(landing_view(["FC"], RECENT_ID, has_recent=False), ALL_CONSOLES_ID)
 
 
 if __name__ == "__main__":

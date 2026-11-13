@@ -45,7 +45,9 @@ class ActionMapTests(unittest.TestCase):
         self.assertEqual(action_for_token("3"), "favorite")
 
     def test_start_confirms_and_shoulders_switch_console(self):
-        self.assertEqual(action_for_token("7"), "confirm")
+        # Start opens the on-screen keyboard and Guide toggles TV mode (issue 914).
+        self.assertEqual(action_for_token("7"), "search")
+        self.assertEqual(action_for_token("8"), "tv_mode")
         self.assertEqual(action_for_token("4"), "prev_console")
         self.assertEqual(action_for_token("5"), "next_console")
 
@@ -475,6 +477,31 @@ class TheNavigatorLifecycleTests(unittest.TestCase):
             nav.start()
             nav.stop()
         thread.assert_called_once()
+
+
+class TheConfirmCancelSwapTests(unittest.TestCase):
+    """Issue 914: Nintendo-style confirm on the east button, when asked for."""
+
+    def setUp(self):
+        self.actions = []
+        self.nav = GamepadNavigator(on_action=self.actions.append)
+
+    def test_off_by_default_the_south_button_confirms(self):
+        self.assertEqual(self.nav.action_for("0"), "confirm")
+        self.assertEqual(self.nav.action_for("1"), "back")
+
+    def test_on_the_two_trade_places_and_nothing_else_moves(self):
+        self.nav.swap_confirm_cancel = True
+        self.assertEqual(self.nav.action_for("0"), "back")
+        self.assertEqual(self.nav.action_for("1"), "confirm")
+        self.assertEqual(self.nav.action_for("2"), "context")
+        self.assertIsNone(self.nav.action_for("nope"))
+
+    def test_the_dispatch_goes_through_the_swap(self):
+        self.nav.swap_confirm_cancel = True
+        self.nav._dispatch("1", True, RepeatClock(), HoldClock(), False)
+        self.nav._dispatch("1", False, RepeatClock(), HoldClock(), False)
+        self.assertIn("confirm", self.actions)
 
 
 class TheTriggerEdgesTests(unittest.TestCase):

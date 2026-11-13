@@ -143,7 +143,7 @@ class GamepadNavigatorDeviceTests(unittest.TestCase):
             (BTN_EAST, "back"),
             (BTN_NORTH, "context"),
             (BTN_WEST, "favorite"),
-            (BTN_START, "confirm"),
+            (BTN_START, "search"),  # the on-screen keyboard (issue 914)
         ):
             with self.subTest(button=hex(code)):
                 self.actions.clear()

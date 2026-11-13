@@ -168,15 +168,15 @@
   "get.download": "Baixar",
   "get.all": "Todas as versões e arquivos →",
   "news.eyebrow": "Novidades",
-  "news.title": "<h2>Botões que seguram, e botões que combinam.</h2>",
-  "news.lede": "<p class=\"lede\">O OpenEmux 1.23 é sobre os controles na tela do Android: jogos que pedem dois botões ao mesmo tempo agora dão para jogar no vidro.</p>",
-  "news.items": "<ul class=\"news-list\"><li><strong>Modo âncora.</strong> Ligue a tecla da âncora e o primeiro botão que você aperta fica segurado enquanto o dedo desliza para os outros. Segure Y, deslize para o B, e você continua correndo enquanto pula.</li><li><strong>Botões combo.</strong> Crie um botão que aperta até três de uma vez, como Y+B, L+R ou L+R+A, e coloque onde quiser na skin.</li><li><strong>Qualquer formato, e cara de apertado.</strong> Cada botão pode ser círculo, pílula, quadrado arredondado ou triângulo, e acende enquanto está pressionado.</li><li><strong>Um menu de pausa novo.</strong> Continuar, Reiniciar, Salvar e Carregar no topo, o resto em blocos, e o slot de save lembrado em cada jogo.</li></ul>",
+  "news.title": "<h2>Biblioteca grande que continua rápida, e seus jogos antes dos downloads.</h2>",
+  "news.lede": "<p class=\"lede\">O OpenEmux 1.23.4 é sobre velocidade, no desktop e no Android, e sobre os momentos em que o app deixava você no escuro.</p>",
+  "news.items": "<ul class=\"news-list\"><li><strong>Biblioteca grande, rápida.</strong> Com 3000 jogos, “Todos” abre em menos de um segundo em vez de três, e o app usa quase metade da memória.</li><li><strong>Seus jogos antes dos downloads.</strong> Escolha a pasta de ROMs e a biblioteca já abre; o emulador de cada console baixa na primeira vez que você joga. Ao abrir um jogo aparece “Iniciando…”, e no fim, quanto tempo você jogou.</li><li><strong>Jogados recentemente, detalhes do jogo e modo TV.</strong> Continue de onde parou, veja core, shader, saves e tempo de jogo num lugar só, e jogue do sofá com F11 ou o botão Guide.</li><li><strong>Android menor, mais rápido, e pausa pelo controle.</strong> O APK ficou menor e abre em cerca de metade do tempo, e segurar Start no controle abre o menu de pausa.</li></ul>",
   "news.notes": "Ler as notas da versão →",
   "news.all": "Todas as versões →",
-  "news.anim_label": "Animação: a tecla da âncora acende, um dedo segura o Y e desliza para o B enquanto o personagem na tela pula, depois aparece um botão combo Y+B e ele é apertado",
-  "news.step1": "Ligue a âncora.",
-  "news.step2": "Segure o Y e deslize para o B.",
-  "news.step3": "Ou aperte um combo Y+B.",
+  "news.anim_label": "Animação: a pasta de ROMs é escolhida, a biblioteca se enche de cartuchos enquanto a barra de download dos emuladores ainda corre, depois um jogo é clicado e mostra que está iniciando",
+  "news.step1": "Escolha a pasta de ROMs.",
+  "news.step2": "Os jogos aparecem na hora.",
+  "news.step3": "Jogue, e o emulador baixa.",
   "news.earlier_title": "<h3>Versões anteriores</h3>",
-  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">9 nov. 2026</time></a>Trocar e editar a skin pelo menu de pausa, saves com a imagem inteira, e continuar jogando enquanto um jogo chega.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.1\">1.21.1 <time datetime=\"2026-11-07\">7 nov. 2026</time></a>Corrige o app Android fechando ao escolher um idioma nas Configurações.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.21.0\">1.21 <time datetime=\"2026-11-07\">7 nov. 2026</time></a>Remapeie num desenho do controle, botões que não faziam nada no jogo voltaram, e um modo portátil no Windows que é portátil de verdade.</li></ul>"
+  "news.earlier": "<ul class=\"news-past\"><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.3\">1.23.3 <time datetime=\"2026-11-12\">12 nov. 2026</time></a>Escolha o formato de cada botão na tela do Android, com triângulos arredondados e cara de apertado.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.23.0\">1.23 <time datetime=\"2026-11-12\">12 nov. 2026</time></a>Modo âncora e botões combo nos controles na tela do Android: jogos que pedem dois botões ao mesmo tempo agora dão para jogar no vidro.</li><li><a href=\"https://github.com/guilhermefeitosa66/OpenEmux/releases/tag/v1.22.0\">1.22 <time datetime=\"2026-11-09\">9 nov. 2026</time></a>Trocar e editar a skin pelo menu de pausa, saves com a imagem inteira, e continuar jogando enquanto um jogo chega.</li></ul>"
 }

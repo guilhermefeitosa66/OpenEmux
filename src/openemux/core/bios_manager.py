@@ -93,10 +93,18 @@ def scan_all_bios_status(config_manager):
     return result
 
 
-def find_missing_required_for_core(config_manager, console, core_filename):
+def find_missing_required_for_core(config_manager, console, core_filename, ensure_dir=True):
+    """The required files ``core_filename`` lacks for ``console``, by label.
+
+    ``ensure_dir=False`` is for a check that only looks (the sidebar's
+    warnings, issue 911): creating the folder is a courtesy for the one
+    console about to be launched, not something to do to every console in
+    the library at start-up.
+    """
     system_id = resolve_system_id(console)
     bios_dir = get_console_bios_dir(config_manager, system_id)
-    _ensure_readable_dir(bios_dir)
+    if ensure_dir:
+        _ensure_readable_dir(bios_dir)
     missing = []
     for entry in get_required_for_core(system_id, core_filename):
         evaluated = _evaluate_entry(entry, bios_dir)

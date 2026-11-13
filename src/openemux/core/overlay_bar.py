@@ -36,6 +36,7 @@ import re
 import shutil
 from pathlib import Path
 
+from openemux import __version__
 from openemux.core import bezels
 from openemux.core.atomic_write import atomic_write_bytes, atomic_write_text
 from openemux.core.platform import cfg_path
@@ -70,6 +71,11 @@ MARGIN = 60.0 / 720.0
 #: Where ``stage_assets`` puts the copies, under the runtime directory.
 STAGED_DIR_NAME = "overlay"
 
+#: Beside the staged copy: which OpenEmux put it there. A new version copies
+#: everything again, so the size-and-mtime check below only has to catch
+#: what changed within one version (issue 904).
+STAGED_VERSION_FILE = ".openemux-version"
+
 #: The bar's pages with a bezel drawn under them, written per launch beside
 #: the staged bar (``write_bezel_overlay``), and the bezel's image there.
 BEZEL_CFG_NAME = "openemux-bar-bezel.cfg"
@@ -89,24 +95,46 @@ def stage_assets(runtime_dir):
     Flatpak it sits under OpenEmux's ``/app``, and the RetroArch Flatpak sees
     neither that nor ``/usr``, ``/opt`` or an AppImage's mount -- the bar
     simply never appeared (issue #482). The runtime directory already holds
-    the ``--appendconfig`` file, so every RetroArch reads it. A file already
-    there with the same bytes is left alone. Falls back to the package's
-    folder, with a warning, when the copy cannot be made.
+    the ``--appendconfig`` file, so every RetroArch reads it. A copy left by
+    this same version, as large as the source and no older, is left alone
+    (a byte-for-byte comparison of every file ran on each launch, issue
+    904). Falls back to the package's folder, with a warning, when the copy
+    cannot be made.
     """
     target = Path(runtime_dir) / STAGED_DIR_NAME
     try:
         target.mkdir(parents=True, exist_ok=True)
+        stamp = target / STAGED_VERSION_FILE
+        same_version = _read_stamp(stamp) == __version__
         for source in OVERLAY_DIR.iterdir():
             if not source.is_file():
                 continue
             copy = target / source.name
-            if copy.is_file() and copy.read_bytes() == source.read_bytes():
+            if same_version and _copy_is_current(copy, source):
                 continue
             shutil.copyfile(source, copy)
+        if not same_version:
+            stamp.write_text(__version__, encoding="utf-8")
     except OSError as exc:
         logger.warning("in-game bar: cannot copy its files to %s: %s", target, exc)
         return OVERLAY_DIR
     return target
+
+
+def _read_stamp(stamp):
+    try:
+        return stamp.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def _copy_is_current(copy, source):
+    """Same size and not older than the source: good enough within a version."""
+    try:
+        copied, shipped = copy.stat(), source.stat()
+    except OSError:
+        return False
+    return copied.st_size == shipped.st_size and copied.st_mtime_ns >= shipped.st_mtime_ns
 
 
 def write_bezel_overlay(overlay_dir, bezel_png, translucent=False, margin_active=True):

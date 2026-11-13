@@ -719,6 +719,9 @@
             </ul>
           </details></li>
         <li><details open><summary><a href="#favorites">收藏</a></summary></details></li>
+        <li><details open><summary><a href="#recent">最近玩过</a></summary></details></li>
+        <li><details open><summary><a href="#details">游戏详情</a></summary></details></li>
+        <li><details open><summary><a href="#tv-mode">电视模式</a></summary></details></li>
         <li><details open><summary><a href="#cores">内核和着色器</a></summary>
             <ul>
               <li><a href="#cores-game">针对单个游戏</a></li>
@@ -783,6 +786,8 @@
           <p>侧边栏从上到下列出游戏库的各个页面：</p>
           <ul>
             <li><span class="ui">全部</span>：所有游戏，按主机分组。</li>
+            <li><span class="ui">最近玩过</span>：最近启动过的游戏，最新的排在最前。这一行在第一次启动游戏后出现。参见
+              <a href="#recent">最近玩过</a>。</li>
             <li><span class="ui">收藏</span>：你加了星标的游戏。只有在收藏了游戏之后，这一行才会出现。参见<a href="#favorites">收藏</a>。</li>
             <li>你创建的自定义列表（如果有的话）。这里是 <span class="ui">Couch co-op</span>。参见<a href="#playlists">自定义列表</a>。</li>
             <li>每台有游戏的主机各占一行，写作其简称加名称，例如 <span class="ui">SFC - Super Nintendo</span>。</li>
@@ -917,7 +922,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">首次启动</h3>
-          <p>第一次运行时，OpenEmux 会显示<span class="ui">正在准备首次设置</span>窗口，同时创建配置、建立 ROM、BIOS 和封面文件夹、准备输入配置和自定义列表，并下载你的主机所需的 libretro 内核。这通常只需十秒左右；其余内核会在你使用应用时继续在后台下载，标题栏下方的横幅会显示下载进度。</p>
+          <p>首次运行时，OpenEmux 会短暂显示<span class="ui">正在准备首次设置</span>窗口，用于创建配置、建立 ROM、BIOS
+            和封面文件夹，并准备输入配置和播放列表。随后游戏库立即打开：libretro 核心和着色器包在后台下载，进度显示在标题栏
+            下方的横幅中，你的主机所用的核心优先。在核心到达前启动的游戏会当场下载该核心。离线时应用同样会打开，横幅会说明
+            下次启动时将获取的内容。</p>
           <p>你的设置保存在 <code>~/.openemux/</code> 中，游戏保存在 <code>~/games/roms/</code> 中，每台主机一个文件夹。</p>
 
           <h3 id="install-source">从源码构建</h3>
@@ -1125,6 +1133,50 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           </div>
           <figure class="shot"><img loading="lazy" width="1880" height="1280" src="../../manual/img/favorites-view.webp" alt="按主机分组的“收藏”页面，框出了它所在的行" /></figure>
           <p><span class="ui">收藏</span>页面汇集了这些游戏，按主机分组。收藏了游戏之后，它的那一行才会出现在侧边栏中；当没有其他可以返回的页面时，OpenEmux 会在启动时打开它。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="recent">
+          <span class="eyebrow">游戏库</span>
+          <h2>最近玩过</h2>
+          <p>每次启动都会被记住。玩过任何游戏之后，<span class="ui">最近玩过</span>一行会出现在
+            <span class="ui">全部</span>下方，OpenEmux 也会改为打开这一页：最近的 20 个游戏，最新的排在最前，每张卡片都写着
+            你何时玩过、玩了多久。</p>
+          <p>时间从游戏启动算到关闭，并跨多次游玩累计。其他页面上的<span class="ui">最近玩过</span>排序用的也是同一套计时。</p>
+          <p>要从上次离开的地方继续，请打开<span class="ui">从上次离开的地方继续</span>，它在
+            <span class="ui">设置 › 视频</span>中。此后 RetroArch 会在退出时保存游戏，并在下次启动时载入该存档；带有这种存档的
+            卡片角上会有一个小小的播放标记，卡片菜单中的<span class="ui">重新开始</span>可跳过一次该存档。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="details">
+          <span class="eyebrow">游戏库</span>
+          <h2>游戏详情</h2>
+          <p>每个游戏都有详情页：在其菜单中选择<span class="ui">游戏详情…</span>，在卡片上按 <kbd>Alt</kbd>+<kbd>Enter</kbd>，或在手柄上按 Ⓧ。
+            它显示封面、你何时玩过、玩了多久、文件，以及<span class="ui">开始</span>。</p>
+          <p>下方是<span class="ui">内核</span>、<span class="ui">着色器</span>和<span class="ui">卡带颜色</span>三行，显示生效的值及其来源
+            （主机默认，或此游戏）；一个小箭头可将该行恢复为主机默认。再往下是带<span class="ui">载入</span>的即时存档、封面图操作、
+            游戏所属的播放列表，以及<span class="ui">在文件管理器中显示</span>、<span class="ui">重命名…</span>和<span class="ui">删除 ROM…</span>。</p>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="chapter" id="tv-mode">
+          <span class="eyebrow">游戏库</span>
+          <h2>电视模式</h2>
+          <p>按 <kbd>F11</kbd> 或手柄上的 Guide 键，游戏库会进入适合沙发的全屏模式：侧边栏消失，游戏架变大，标题和提示变大，
+            聚焦的卡片获得更粗的边框。再按同一个键，或按 <kbd>Esc</kbd>，即可回到桌面布局。你的缩放设置不会被改动。</p>
+          <p>手持手柄时，底部的提示会使用该手柄的字母（Xbox 为 A B X Y，任天堂为 B A Y X，PlayStation 为四个图形）；设置 › 系统中的
+            <span class="ui">手柄按键标签</span>可强制某一系列，<span class="ui">交换确认和取消</span>可把确认放到右侧键。以 Xbox
+            字母为例的按键表：</p>
+          <ul>
+            <li><strong>A</strong> 开始聚焦的游戏；长按进入选择。</li>
+            <li><strong>B</strong> 返回主机列表；<strong>X</strong> 打开游戏详情；<strong>Y</strong> 切换收藏。</li>
+            <li><strong>LB/RB</strong> 切换主机，在<span class="ui">全部</span>页面中则在主机分组之间跳转。</li>
+            <li><strong>Menu</strong>（Start）打开屏幕键盘：方向键在字母网格中移动，边输入边筛选游戏库；完成后落在第一个匹配项上。</li>
+            <li><strong>View</strong>（Select）打开主菜单；<strong>Guide</strong> 键开关电视模式。</li>
+            <li>按住 <strong>LT/RT</strong> 并用方向键可扩展选择。</li>
+          </ul>
+          <p>减少动画和大字体在这里和其他地方一样遵循你的 GNOME 设置。</p>
         </section>
 
         <!-- ============================================================ -->

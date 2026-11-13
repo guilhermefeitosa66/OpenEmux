@@ -1,4 +1,6 @@
 import copy
+import json
+import logging
 from pathlib import Path
 
 import yaml
@@ -8,6 +10,11 @@ from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.paths import from_stored_path, get_project_root, store_path, with_stored_keys
 from openemux.core.systems import SYSTEM_IDS, resolve_system_id
 from openemux.core.video_driver import default_video_driver, preset_backends
+
+logger = logging.getLogger(__name__)
+
+#: Bump when the cached index's shape changes; an older file is rebuilt.
+INDEX_CACHE_VERSION = 1
 
 DEFAULT_SHADERS_CONFIG_FILE = store_path("shaders")
 DISABLED_SHADER_ID = "disabled"
@@ -238,18 +245,27 @@ class ShaderConfigStore:
 
 
 class ShaderCatalog:
-    def __init__(self, runtime_dir=None, project_root=None):
+    def __init__(self, runtime_dir=None, project_root=None, cache_file=None):
         self.runtime_dir = Path(runtime_dir or store_path("runtime")).expanduser()
         self.project_root = Path(project_root).expanduser() if project_root else get_project_root()
+        # The index on disk, keyed by the search directories' mtimes (issue
+        # 904): the walk over the packs' thousands of files used to run on the
+        # first launch of every process. ``None`` keeps the index in memory only.
+        self.cache_file = Path(cache_file).expanduser() if cache_file else None
         self._index = None
+        self._rescan = False
 
     def refresh(self):
         """Forget the preset index, so the next lookup rebuilds it.
 
         A shader pack can now arrive after the window opened, in the
         background (issue #442), and the index would go on not knowing it.
+        The rebuild walks the directories whatever the cache says: a pack
+        extracted into a directory that already existed may leave its mtime
+        where it was.
         """
         self._index = None
+        self._rescan = True
 
     def label_for_shader(self, shader_id):
         shader_id = normalize_shader_id(shader_id)
@@ -324,8 +340,68 @@ class ShaderCatalog:
 
     def _ensure_index(self):
         if self._index is None:
-            self._index = self._build_index()
+            stamps = self._stamps()
+            index = None if self._rescan else self._load_cache(stamps)
+            if index is None:
+                index = self._build_index()
+                self._store_cache(stamps, index)
+            self._rescan = False
+            self._index = index
         return self._index
+
+    # -- the on-disk cache ---------------------------------------------------
+    def _stamps(self):
+        """``{directory: mtime_ns}`` of the search directories that exist."""
+        stamps = {}
+        for base in self._shader_search_dirs():
+            try:
+                stamps[str(base)] = base.stat().st_mtime_ns
+            except OSError:
+                continue
+        return stamps
+
+    def _load_cache(self, stamps):
+        if self.cache_file is None:
+            return None
+        try:
+            raw = json.loads(self.cache_file.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError) as exc:
+            quarantine_state_file(self.cache_file, exc)
+            return None
+        if (
+            not isinstance(raw, dict)
+            or raw.get("version") != INDEX_CACHE_VERSION
+            or raw.get("stamps") != stamps
+            or not isinstance(raw.get("presets"), dict)
+        ):
+            return None
+        index = {}
+        for shader_id, backends in raw["presets"].items():
+            if not isinstance(backends, dict):
+                continue
+            index[shader_id] = {
+                backend: Path(path) for backend, path in backends.items() if isinstance(path, str)
+            }
+        return index
+
+    def _store_cache(self, stamps, index):
+        if self.cache_file is None:
+            return
+        payload = {
+            "version": INDEX_CACHE_VERSION,
+            "stamps": stamps,
+            "presets": {
+                shader_id: {backend: str(path) for backend, path in backends.items()}
+                for shader_id, backends in index.items()
+            },
+        }
+        try:
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write_text(self.cache_file, json.dumps(payload), durable=False)
+        except OSError as exc:
+            logger.warning("shader index not cached: path=%s error=%s", self.cache_file, exc)
 
     def _build_index(self):
         index = {}

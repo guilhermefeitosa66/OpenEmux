@@ -54,6 +54,9 @@ class PlayHistory:
                 entries[from_stored_path(str(path))] = {
                     "last_played": _as_float(entry.get("last_played")),
                     "play_count": _as_int(entry.get("play_count")),
+                    # Seconds played across every session (issue 910); a
+                    # history from before it reads as never timed.
+                    "play_seconds": _as_float(entry.get("play_seconds")),
                 }
         return entries
 
@@ -76,19 +79,53 @@ class PlayHistory:
         entry = self._entries.get(str(rom_path))
         return entry["play_count"] if entry else 0
 
+    def play_seconds(self, rom_path):
+        """Seconds played across every session; 0.0 for a game never timed."""
+        entry = self._entries.get(str(rom_path))
+        return entry.get("play_seconds", 0.0) if entry else 0.0
+
     def has_history(self):
         return bool(self._entries)
+
+    def recent(self, limit=20):
+        """The last ``limit`` ROM paths played, most recent first."""
+        played = [
+            (entry["last_played"], path)
+            for path, entry in self._entries.items()
+            if entry["last_played"] > 0
+        ]
+        played.sort(reverse=True)
+        return [path for _stamp, path in played[:limit]]
 
     # -- updates -----------------------------------------------------------
     def record_launch(self, rom_path):
         """Stamp a launch and persist it. Returns the timestamp written."""
         key = str(rom_path)
         now = float(self._clock())
-        entry = self._entries.setdefault(key, {"last_played": 0.0, "play_count": 0})
+        entry = self._entries.setdefault(
+            key, {"last_played": 0.0, "play_count": 0, "play_seconds": 0.0}
+        )
         entry["last_played"] = now
         entry["play_count"] += 1
         self.save()
         return now
+
+    def record_play_time(self, rom_path, seconds):
+        """Add a session's length to the game's play time (issue 910).
+
+        Called when the game ends with how long the process ran; a session
+        that died at once adds nothing worth counting.
+        """
+        key = str(rom_path)
+        seconds = max(0.0, float(seconds or 0.0))
+        if seconds < 1.0:
+            return self.play_seconds(key)
+        entry = self._entries.setdefault(
+            key, {"last_played": 0.0, "play_count": 0, "play_seconds": 0.0}
+        )
+        entry["play_seconds"] = entry.get("play_seconds", 0.0) + seconds
+        self.save()
+        return entry["play_seconds"]
 
     def forget(self, rom_path):
         """Drop a ROM's history (the file was deleted)."""
@@ -109,6 +146,16 @@ def _as_float(value):
         return max(0.0, float(value))
     except (TypeError, ValueError):
         return 0.0
+
+
+def format_play_time(seconds):
+    """``"1 h 20 min"``, ``"12 min"`` or ``"under a minute"``-style parts.
+
+    Returns ``(hours, minutes)`` so the caller can pick its own translated
+    wording; both zero for anything under a minute.
+    """
+    total = int(max(0.0, float(seconds or 0.0)) // 60)
+    return total // 60, total % 60
 
 
 def _as_int(value):

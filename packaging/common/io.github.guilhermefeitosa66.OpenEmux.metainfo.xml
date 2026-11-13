@@ -87,6 +87,20 @@
   </keywords>
 
   <releases>
+    <release version="1.23.4" date="2026-11-13">
+      <description>
+        <p>A release about speed and about the moments where the app used to leave you guessing.</p>
+        <ul>
+          <li>A big library opens in under a second and holds about half the memory</li>
+          <li>The library opens before any emulator downloads; each core comes on its console's first launch</li>
+          <li>Launching a game shows what it is doing, and the end of a game says how long you played</li>
+          <li>Recently played, with resume from the last automatic save state</li>
+          <li>BIOS warnings before a launch fails, and a faster search that finds words in any order</li>
+          <li>A game details dialog, a fullscreen TV mode and accessible names on the cards</li>
+          <li>Android: a smaller APK that starts faster, pause with the controller, a Continue playing row and a sort menu</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.23.3" date="2026-11-12">
       <description>
         <p>An Android release about the on-screen buttons. The desktop app has no changes.</p>

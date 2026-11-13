@@ -45,11 +45,13 @@ class TaskBanner:
     def __len__(self):
         return len(self._tasks)
 
-    def begin(self, kind, label, total=0, on_cancel=None):
+    def begin(self, kind, label, total=0, on_cancel=None, cancel_label=None):
         """Register a background task. ``on_cancel`` makes it interruptible.
 
         A cancellable task gets a Cancel button on the progress banner; the
         callback is expected to signal the worker, not to block waiting for it.
+        ``cancel_label`` names the button when "Cancel" is the wrong word --
+        the running game's is "Stop" (issue 904).
         """
         self._seq += 1
         task_id = f"{kind}-{self._seq}"
@@ -61,6 +63,7 @@ class TaskBanner:
             "total": int(total or 0),
             "pending": True,
             "on_cancel": on_cancel,
+            "cancel_label": cancel_label,
             "cancelling": False,
         }
         self.refresh()
@@ -126,7 +129,7 @@ class TaskBanner:
 
         # Offer Cancel only while the task is actually interruptible.
         if task.get("on_cancel") and not task.get("cancelling"):
-            self._banner.set_button_label(self._t("banner.cancel"))
+            self._banner.set_button_label(task.get("cancel_label") or self._t("banner.cancel"))
             self._cancel_task_id = task["id"]
         else:
             self._banner.set_button_label(None)

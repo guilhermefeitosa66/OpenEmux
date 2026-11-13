@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_FILE_MODE = 0o644
 
 
-def atomic_write_text(path, text, encoding="utf-8", mode=None, errors=None):
+def atomic_write_text(path, text, encoding="utf-8", mode=None, errors=None, durable=True):
     """Write ``text`` to ``path`` without ever leaving it truncated.
 
     ``mode`` sets the permissions explicitly (a credential store asks for
@@ -35,12 +35,21 @@ def atomic_write_text(path, text, encoding="utf-8", mode=None, errors=None):
     new one gets :data:`DEFAULT_FILE_MODE`. The parent directory is created if
     it is missing, so callers do not each repeat the ``mkdir``.
 
+    ``durable=False`` skips the two fsyncs -- of the content and of the
+    directory entry -- and keeps only the atomic rename: the file is still
+    never seen half-written, but a power loss right after the save may lose
+    the save. For a file that is rebuilt by use and written on every click
+    (``session.json``) that is the right trade, and on an HDD or an SD card
+    it is the difference between a free click and a 10 to 50 ms stall
+    (issue 905). The config, the playlists and the collections keep the
+    default.
+
     Returns the path written. Errors propagate -- the caller decides whether a
     failed save is worth reporting -- and the temporary file is cleaned up on
     the way out, so a failure never litters the directory.
     """
     return _replace_atomically(
-        path, lambda handle: handle.write(text), "w", encoding, mode, errors
+        path, lambda handle: handle.write(text), "w", encoding, mode, errors, durable=durable
     )
 
 
@@ -57,14 +66,14 @@ def _copy_stream(source, handle, chunk_size, on_chunk=None):
     return copied
 
 
-def _replace_atomically(path, write_body, open_mode, encoding, mode, errors=None):
+def _replace_atomically(path, write_body, open_mode, encoding, mode, errors=None, durable=True):
     """Write through a temporary file and rename it over ``path``."""
-    staged = _stage(path, write_body, open_mode, encoding, mode, errors)
+    staged = _stage(path, write_body, open_mode, encoding, mode, errors, durable=durable)
     staged.commit(replace=True)
     return staged.path
 
 
-def _stage(path, write_body, open_mode, encoding, mode, errors=None):
+def _stage(path, write_body, open_mode, encoding, mode, errors=None, durable=True):
     """Write the content into a temporary file beside ``path``, on the disk."""
     path = Path(path)
     directory = path.parent
@@ -86,12 +95,15 @@ def _stage(path, write_body, open_mode, encoding, mode, errors=None):
             # Without it the rename can land before the content does, and a
             # power loss leaves an intact name over an empty file.
             handle.flush()
-            os.fsync(handle.fileno())
+            if durable:
+                os.fsync(handle.fileno())
         os.chmod(tmp_path, mode)
     except BaseException:
         tmp_path.unlink(missing_ok=True)
         raise
-    return StagedFile(path, tmp_path, written if isinstance(written, int) else None)
+    return StagedFile(
+        path, tmp_path, written if isinstance(written, int) else None, durable=durable
+    )
 
 
 class StagedFile:
@@ -104,11 +116,13 @@ class StagedFile:
     scanner picks up; :meth:`discard` removes it.
     """
 
-    def __init__(self, path, tmp_path, size=None):
+    def __init__(self, path, tmp_path, size=None, durable=True):
         self.path = Path(path)
         self.tmp_path = Path(tmp_path)
         self.size = size
         self.done = False
+        #: Whether the directory entry is synced on commit; see atomic_write_text.
+        self.durable = durable
 
     def commit(self, replace=True):
         """Rename the content into place.
@@ -128,7 +142,8 @@ class StagedFile:
             self.discard()
             raise
         self.done = True
-        _fsync_directory(self.path.parent)
+        if self.durable:
+            _fsync_directory(self.path.parent)
         return self.path
 
     def _commit_new(self):
