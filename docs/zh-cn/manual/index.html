@@ -920,7 +920,10 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">首次启动</h3>
-          <p>第一次运行时，OpenEmux 会显示<span class="ui">正在准备首次设置</span>窗口，同时创建配置、建立 ROM、BIOS 和封面文件夹、准备输入配置和自定义列表，并下载你的主机所需的 libretro 内核。这通常只需十秒左右；其余内核会在你使用应用时继续在后台下载，标题栏下方的横幅会显示下载进度。</p>
+          <p>首次运行时，OpenEmux 会短暂显示<span class="ui">正在准备首次设置</span>窗口，用于创建配置、建立 ROM、BIOS
+            和封面文件夹，并准备输入配置和播放列表。随后游戏库立即打开：libretro 核心和着色器包在后台下载，进度显示在标题栏
+            下方的横幅中，你的主机所用的核心优先。在核心到达前启动的游戏会当场下载该核心。离线时应用同样会打开，横幅会说明
+            下次启动时将获取的内容。</p>
           <p>你的设置保存在 <code>~/.openemux/</code> 中，游戏保存在 <code>~/games/roms/</code> 中，每台主机一个文件夹。</p>
 
           <h3 id="install-source">从源码构建</h3>

@@ -920,7 +920,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">Le premier lancement</h3>
-          <p>Au premier lancement, OpenEmux affiche une fenêtre <span class="ui">Préparation de la configuration initiale</span> pendant qu’il crée sa configuration, crée les dossiers des ROMs, des BIOS et des jaquettes, prépare les profils d’entrée et les playlists, et télécharge les cœurs libretro dont vos consoles ont besoin. Cela prend en général une dizaine de secondes ; le reste des cœurs continue de se télécharger en arrière-plan pendant que vous utilisez l’application, et un bandeau sous l’en-tête montre leur progression.</p>
+          <p>Au premier démarrage, OpenEmux affiche un instant la fenêtre <span class="ui">Préparation de la configuration initiale</span> pendant qu’il crée sa configuration, les dossiers ROM, BIOS et jaquettes, et
+            prépare les profils de manette et les listes. La bibliothèque s’ouvre aussitôt après : les cœurs libretro et
+            les paquets de shaders se téléchargent en arrière-plan, leur progression dans une bannière sous l’en-tête,
+            les cœurs de vos consoles d’abord. Un jeu lancé avant l’arrivée de son cœur le télécharge sur-le-champ.
+            Hors ligne, l’application s’ouvre quand même et la bannière dit ce qui sera récupéré au prochain démarrage.</p>
           <p>Vos paramètres se trouvent dans <code>~/.openemux/</code>, et vos jeux dans <code>~/games/roms/</code>, un dossier par console.</p>
 
           <h3 id="install-source">Compiler depuis les sources</h3>
@@ -1155,6 +1159,19 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
         </section>
 
         <!-- ============================================================ -->
+            carte active reçoit un contour plus épais. La même touche ou le même bouton, ou <kbd>Échap</kbd>, ramène la
+            disposition de bureau. Votre zoom n’est pas touché.</p>
+          <p>Manette en main, les indications du bas utilisent les lettres de cette manette (A B X Y sur une Xbox, B A Y X sur une
+            Nintendo, les quatre formes sur une PlayStation) ; <span class="ui">Étiquettes des boutons de la manette</span>
+            dans Paramètres › Système force une famille, et <span class="ui">Inverser confirmer et annuler</span> met confirmer
+            sur le bouton de droite. La carte, avec les lettres Xbox :</p>
+          <ul>
+            <li><strong>A</strong> lance le jeu actif ; maintenez-le pour commencer une sélection.</li>
+            <li><strong>B</strong> revient à la liste des consoles ; <strong>X</strong> ouvre les détails du jeu ; <strong>Y</strong>
+              bascule le favori.</li>
+            <li><strong>LB/RB</strong> changent de console et, sur <span class="ui">Tous</span>, sautent entre les groupes de consoles.</li>
+            <li><strong>Menu</strong> (Start) ouvre le clavier à l’écran : une grille de lettres parcourue à la croix, qui filtre la
+              bibliothèque au fil de la saisie ; Terminé se pose sur le premier résultat.</li>
         <!-- ============================================================ -->
         <section class="chapter" id="cores">
           <span class="eyebrow">Émulation</span>

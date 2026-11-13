@@ -284,6 +284,33 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         """Scan the core directories on a worker, so the first menu finds them scanned."""
         Thread(target=self.core_catalog.warm_up, daemon=True, name="openemux-core-catalog").start()
 
+    def _on_assets_banner_clicked(self, _banner):
+        self.assets_banner.set_revealed(False)
+        self._start_deferred_asset_download()
+
+    def _on_covers_banner_clicked(self, _banner):
+        self.covers_banner.set_revealed(False)
+        self._start_cover_sync(scope="all", selected_console=None)
+
+    def prepare_console_core(self, console, on_progress=None, cancel_event=None):
+        """Have a core for ``console`` before a launch, fetching it when none is there.
+
+        ``"ready"`` when the launcher resolves one (or just downloaded one),
+        ``"cancelled"`` or ``"failed"`` otherwise (issue 909). Called from
+        the session's launch worker, never on the main thread.
+        """
+        launcher = self.runtime_manager.retroarch_launcher
+        if launcher.resolve_core_path(console):
+            return "ready"
+        state = FirstBootBootstrapper(self.config_manager).download_console_core(
+            console, on_progress=on_progress, cancel_event=cancel_event
+        )
+        if state == "ready":
+            # The catalog cached what was on disk; the launcher resolves
+            # through it (issue 908).
+            self.core_catalog.refresh()
+        return state
+
     def _start_deferred_asset_download(self):
         """Fetch the cores and shaders the first boot left for later.
 
@@ -326,6 +353,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _on_deferred_assets_done_ui(self, task_id, summary):
         self._core_job_running = False
         self.tasks.finish(task_id)
+        # Owed still, and not by the user's choice: say so where it stays
+        # readable, with a way to try again now (issue 909).
+        failed = bool(summary.get("failed")) or bool(summary.get("error"))
+        self.assets_banner.set_revealed(failed and not summary.get("cancelled"))
         # Both catalogs cached what was on disk when the window opened; the
         # cores and presets that just arrived are invisible until they rescan.
         # Each catalog is one object for the window and the launcher (issues
@@ -1660,8 +1691,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         Deferred to the idle loop so the main window paints first and the
         assistant lands on top of a ready-to-use library.
         """
-        if self.config_manager.get_show_welcome_on_startup():
-            GLib.idle_add(self._open_welcome)
+        if not self.config_manager.get_show_welcome_on_startup():
+            return
+        if not self.visible_consoles:
+            # A tour before there is anything to tour is forgotten (issue
+            # 909): it opens once the first scan has found games.
+            self._welcome_pending = True
+            return
+        GLib.idle_add(self._open_welcome)
 
     def maybe_report_recovered_state(self):
         """Tell the user when a state file was set aside on the way in.
@@ -2143,6 +2180,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.visible_consoles = discovered
         self.sidebar.sync_footer()
         self.sidebar.rebuild(self.visible_consoles)
+        if self.visible_consoles and self._welcome_pending:
+            self._welcome_pending = False
+            GLib.idle_add(self._open_welcome)
 
         if self.visible_consoles:
             self.pages.add(ALL_CONSOLES_ID, self.t("sidebar.all"))
@@ -2167,6 +2207,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # Drag-and-drop is the fastest way in and used to go unmentioned
             # here: the page only offered "choose a folder", so the one thing
             # someone with a folder of ROMs open would try was undocumented.
+            # Most people installing a frontend already keep a folder of
+            # games: pointing at it is the common case and the suggested
+            # action; importing files one by one comes second (issue 909).
             empty = Adw.StatusPage(
                 icon_name="folder-download-symbolic",
                 title=self.t("library.empty.title"),
@@ -2174,15 +2217,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             )
             actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
             actions.set_halign(Gtk.Align.CENTER)
-            import_btn = Gtk.Button(label=self.t("library.empty.action"))
-            import_btn.add_css_class("suggested-action")
-            import_btn.add_css_class("pill")
-            import_btn.connect("clicked", lambda _b: self.imports.open_picker())
-            actions.append(import_btn)
             choose = Gtk.Button(label=self.t("library.empty.choose"))
+            choose.add_css_class("suggested-action")
             choose.add_css_class("pill")
             choose.connect("clicked", lambda _b: self._choose_roms_path())
             actions.append(choose)
+            import_btn = Gtk.Button(label=self.t("library.empty.action"))
+            import_btn.add_css_class("pill")
+            import_btn.connect("clicked", lambda _b: self.imports.open_picker())
+            actions.append(import_btn)
             empty.set_child(actions)
             self.content_stack.add_titled(empty, LIBRARY_EMPTY_ID, "Library")
 
@@ -2397,6 +2440,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.config_manager.get_playlists_dir() / "collections",
             entries_loader=self.playlist_manager.entries_for_paths,
         )
+        self._offer_covers_after_scan = True
         self._rescan_all_consoles(show_toast=False)
 
         if unwritable:
@@ -3059,6 +3103,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.tasks.finish(task_id)
         self.refresh_library(preferred_view=origin_view)
         self._on_search_changed(self.search_entry)
+        if self._offer_covers_after_scan:
+            # The folder was just chosen: the covers are the next thing a new
+            # library wants, and nothing used to suggest them (issue 909).
+            self._offer_covers_after_scan = False
+            total = int(summary.get("total_roms") or 0)
+            if total > 0 and not self._cover_sync_running:
+                self.covers_banner.set_title(self.t("banner.covers.offer", count=total))
+                self.covers_banner.set_revealed(True)
         if summary.get("error"):
             self._toast(self.t("toast.scan_failed", error=summary["error"]), timeout=6)
             return False
@@ -3198,6 +3250,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             toast.set_timeout(3)
             self.toast_overlay.add_toast(toast)
             return
+        # However the sync was started, the offer is answered.
+        self.covers_banner.set_revealed(False)
 
         # A caller can hand in the exact ROMs to cover (a selection); otherwise
         # the scope decides how much of the library is read.

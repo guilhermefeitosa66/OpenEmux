@@ -273,16 +273,16 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** none.
 - **Steps:** As a QA person: install the `.deb`/`.rpm`/AppImage on a machine with no network and
   launch it for the first time.
-- **Expected:** First boot completes on the cores the package already ships. It used to end at
-  "bootstrap failed": the manifest fetch raised straight out of the download step, so the
-  bundled-assets fallback was never consulted (issue #211). With no bundled cores either, it still
-  fails — but the message names the real reason (`URLError: Network is unreachable`, not
-  "something failed") and the step is **not** recorded as completed, so a retry retries it.
-  Offline, the background download of the remaining cores (RT-316) fails quietly and stays owed
-  for the next launch; it never turns the completed first boot into a failure.
+- **Expected:** The first boot completes and the library opens with its empty state (issue 909): no
+  download gates the window any more, so there is no "bootstrap failed" to hit offline. The
+  background sweep (RT-316) fails quietly, stays owed for the next launch, and the window shows a
+  banner, "Some cores and shaders could not be downloaded…", with "Retry". A package that ships
+  cores plays on them meanwhile; one that does not says so at the first launch of a game (the core
+  download for that console fails with "Could not download the core for …").
 - **Check:** suite files `tests/test_first_boot.py`
-  (`test_offline_falls_back_to_the_bundled_cores`,
-  `test_offline_without_bundled_cores_fails_with_the_real_reason`),
+  (`test_offline_the_first_boot_completes_and_owes_the_downloads`,
+  `test_an_empty_listing_leaves_the_debt_owed`), `tests/test_window.py`
+  (`test_a_background_download_that_failed_leaves_a_notice_with_retry`),
   `tests/test_retroarch_buildbot_updater.py`
   (`test_an_offline_manifest_is_a_counted_failure_not_a_crash`).
   Run as a probe it would seed the real `~/.openemux` and ROM tree, which is why it stays in the
@@ -378,20 +378,24 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   costs a first boot real time (issue #240).
 - **Check:** `tests/test_retroarch_buildbot_updater.py` (`DownloadPacingTests`).
 
-### RT-316 — First boot waits only for the cores the consoles use
+### RT-316 — First boot waits for no download: the cores come down under the banner, playable set first
 - **Area:** Startup
 - **Mode:** AUTO-SUITE
 - **Preconditions:** A **throwaway** `HOME` with the bootstrap pending, and network.
-- **Steps:** As a QA person: launch first boot and watch the "Downloading cores" counter.
-- **Expected:** The counter stops at the number of distinct cores the console table names (35 on
-  x86_64 Linux), not at the ~240 the buildbot lists, and the shader pack the video driver reads
-  comes down with them (`shaders_glsl` for Linux's `gl`, `shaders_slang` for Windows' `d3d11`).
-  Every console is playable when the main window opens. The first boot used to block on every core
-  and both packs: 240 requests and 747 MiB, measured at 44.4 s against about 12 s for this set
-  (issue #442). What was left out is recorded as owed (`setup.bootstrap.deferred_assets:
-  pending`); inside Flatpak, or with the updater off, nothing is owed. Cores that later go
-  missing from disk are restored at start-up without re-running the first boot (RT-370).
-- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForThePlayableSetTests`),
+- **Steps:** As a QA person: launch first boot, time the main window, and watch the banner.
+- **Expected:** The first-boot window shows the cheap steps only (configuration, folders, input
+  profiles, playlists, runtime folders) and the main window is up within seconds (issue 909; it used
+  to wait on the 35 curated cores, the core info and a shader pack, issue #442). The whole download
+  is recorded as owed (`setup.bootstrap.deferred_assets: pending`) and the banner's "Downloading
+  cores" sweep fetches it: the curated cores first, then the core info, then the other cores a
+  picker lists, then the shader pack the video driver reads (`shaders_glsl` for Linux's `gl`,
+  `shaders_slang` for Windows' `d3d11`) and the other one. A game launched before its core arrived
+  fetches that console's core on the spot ("Preparing Super Nintendo… (1/2)" on the banner, Stop
+  cancels it) and then starts. Inside Flatpak, or with the updater off, nothing is owed. Cores that
+  later go missing from disk are restored at start-up without re-running the first boot (RT-370).
+- **Check:** suite files `tests/test_first_boot.py` (`TheFirstBootWaitsForNoDownloadTests`,
+  `TheDeferredDownloadTests`, `DownloadingACoreOnDemandTests`), `tests/test_window.py`
+  (`PreparingAConsoleCoreTests`), `tests/test_game_session.py` (`ACoreFetchedOnLaunchTests`),
   `tests/test_systems.py` (`TheCuratedCoreSetTests`), `tests/test_retroarch_buildbot_updater.py`
   (`ASweepOverPartOfTheListingTests`, `WhichShaderPackTheDriverReadsTests`,
   `OneShaderPackOfTwoTests`).
@@ -17157,6 +17161,12 @@ has no Android device, so these are `MANUAL`.
   `test_launch_anyway_runs_without_the_bios`), `tests/test_runtime_manager.py`
   (`test_launch_anyway_skips_the_bios_check_at_the_launcher`).
 
+### RT-1041 — Search on a large library: incremental filtering, words in any order, scope, empty state and Enter
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the 3000-game synthetic library (`tools/perf/gen_library.py`) on the All page.
+- **Steps:**
+  1. Press `Ctrl+F`, type "alpha saga" letter by letter under a profiler.
   2. Type "zelda link"; type "pokemon" against a game named "Pokémon".
   3. Type a query that matches nothing; click "Clear search".
   4. On a console page type a query, click "Search everywhere".
@@ -17174,6 +17184,23 @@ has no Android device, so these are `MANUAL`.
   `test_a_small_page_filters_in_one_go_and_a_big_one_in_slices`), `tests/test_grid_group.py`
   (`test_a_section_follows_its_grid_as_an_incremental_filter_settles`), `tests/test_window.py`
   (`TheSearchFieldTests`).
+
+### RT-1042 — A new library: the folder first, the covers offered, the tour once there is something to tour
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a throwaway `HOME`, first boot done, no games.
+- **Steps:**
+  1. Read the empty state; click its suggested action and pick a folder of games.
+  2. When the scan ends, read the banner; click its button.
+  3. Note when the welcome tour appears.
+- **Expected:** 1: "Choose your ROM folder" is the suggested (blue) action and "Import files…" the
+  second pill (issue 909; it was the other way round). 2: the banner reads "Fetch covers for N
+  games?" with "Fetch covers", which starts the library-wide artwork sync and hides the offer; a
+  sync started any other way hides it too; a scan that finds nothing offers nothing. 3: the tour
+  opens only once the library has games (or on request from the menu), never over an empty library.
+- **Check:** suite files `tests/test_window.py` (`TheFirstLibraryTests`,
+  `test_choosing_the_folder_is_the_suggested_action_and_import_the_second`,
+  `test_the_tour_waits_for_the_first_games`).
 
   long it was played (or "Never played"), the file, "Play" and the favorite toggle. 2: Core, Shader
   and (where the console has shells) Cartridge color rows show the value in effect; the subtitle

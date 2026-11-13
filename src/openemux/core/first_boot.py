@@ -12,7 +12,7 @@ from openemux.core.retroarch_buildbot_updater import (
     shader_pack_for,
 )
 from openemux.core.scanner import RomScanner
-from openemux.core.systems import SYSTEM_IDS, curated_core_filenames
+from openemux.core.systems import SYSTEM_IDS, curated_core_filenames, get_runtime_core_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -165,64 +165,24 @@ class FirstBootBootstrapper:
         return self.updater.ensure_environment()
 
     def _step_retroarch_cores(self, on_event=None):
-        """Download what makes every console playable, and owe the rest.
+        """Owe every download to the background; the window opens at once.
 
-        This step holds the first-boot window open, and it used to fetch every
-        core the buildbot lists and both shader packs: 240 requests and 747
-        MiB, of which the app names 35 cores (issue #442). It now waits for
-        those, for the core info files and for the one shader pack the video
-        driver reads, and records the remainder as owed for
-        ``download_deferred_assets`` to fetch once the window is up.
+        This step used to hold the first-boot window on the curated cores,
+        the core info and a shader pack (issue #442: still 35 requests and
+        minutes on a slow line), and raised when offline with nothing local,
+        so the app would not open at all without a connection. Now nothing
+        is fetched here (issue 909): the whole set is recorded as owed and
+        ``download_deferred_assets`` brings it down under the window's banner,
+        playable set first; a game whose core has not arrived yet fetches it
+        on launch. Offline, the debt simply stays owed for the next start.
         """
         if is_running_in_flatpak():
             # Cores are managed by the RetroArch Flatpak's own updater; OpenEmux
             # must not download binaries into its sandbox.
             return {"skipped": "flatpak", "cores": {}, "shaders": {}, "warning": None}
-
-        def _progress(evt):
-            if on_event:
-                on_event(evt)
-
-        primary_pack = self._primary_shader_pack()
-        cores_summary = self.updater.download_all(
-            on_progress=_progress, only=curated_core_filenames()
-        )
-        info_summary = self.updater.install_core_info(on_progress=_progress)
-        shaders_summary = self.updater.download_shader_packs_if_missing(
-            on_progress=_progress, packs=[primary_pack] if primary_pack else []
-        )
-        total_failures = int(cores_summary.get("failed", 0)) + int(shaders_summary.get("failed", 0))
-        if total_failures > 0 and not self.updater.has_local_runtime_assets():
-            raise RuntimeError(
-                "RetroArch asset update failed and no local bundled assets were found. "
-                "Connect to the internet or provide local cores/shaders. "
-                f"({_first_failure_reason(cores_summary, shaders_summary)})"
-            )
-
-        warning = None
-        if total_failures > 0:
-            warning = (
-                "RetroArch update had failures, continuing with local bundled assets."
-            )
-            logger.warning(
-                "first boot fell back to the bundled assets: %s",
-                _first_failure_reason(cores_summary, shaders_summary),
-            )
-        if info_summary.get("failed"):
-            # Not counted above: without the .info files the pickers name
-            # cores after their filenames, which is how it always was.
-            logger.warning(
-                "first boot continues without core info: %s",
-                _first_failure_reason(info_summary),
-            )
         if self.updater.settings.get("enabled", True):
             self.config_manager.mark_deferred_assets_pending()
-        return {
-            "cores": cores_summary,
-            "core_info": info_summary,
-            "shaders": shaders_summary,
-            "warning": warning,
-        }
+        return {"deferred": True, "cores": {}, "shaders": {}, "warning": None}
 
     def _primary_shader_pack(self):
         return shader_pack_for(self.config_manager.get_retroarch_video_driver())
@@ -234,42 +194,69 @@ class FirstBootBootstrapper:
         return dirs
 
     def download_deferred_assets(self, on_progress=None, cancel_event=None):
-        """Fetch what the first boot left for later: the other cores and shaders.
+        """Fetch everything the first boot owes, the playable set first.
 
-        Run from a background thread once the main window is up. The debt is
+        Run from a background thread once the main window is up (issue 909):
+        the curated cores, the core info and the shader pack the video driver
+        reads come first, since they are what makes every console playable;
+        the other cores a picker lists and the other pack follow. The debt is
         cleared only by a sweep that finished clean; a failure or a
         cancellation leaves it owed, and the next launch tries again. Never
         raises, for the same reason ``download_all`` does not.
         """
         primary_pack = self._primary_shader_pack()
         curated = curated_core_filenames()
+        playable_summary = self.updater.download_all(
+            on_progress=on_progress, only=curated, cancel_event=cancel_event
+        )
+        cancelled = bool(cancel_event is not None and cancel_event.is_set())
+        if not cancelled:
+            info_summary = self.updater.install_core_info(on_progress=on_progress)
+            if info_summary.get("failed"):
+                # Not counted as a failure: without the .info files the
+                # pickers name cores after their filenames, as they always did.
+                logger.warning(
+                    "continuing without core info: %s", _first_failure_reason(info_summary)
+                )
         if self.updater.settings.get("download_all_cores"):
             wanted = None
         else:
             # Only what some picker would list: the cores whose .info names
-            # a supported system, from the info files the first boot
-            # installed. The ~200 others are an opt-in (issue 908).
+            # a supported system, from the info files just installed. The
+            # ~200 others are an opt-in (issue 908).
             wanted = [
                 name
                 for name in pickable_core_filenames(self._core_info_dirs())
                 if name not in set(curated)
             ]
-        cores_summary = self.updater.download_all(
-            on_progress=on_progress,
-            only=wanted,
-            skip=curated,
-            cancel_event=cancel_event,
-        )
-        cancelled = bool(cancel_event is not None and cancel_event.is_set())
+        if cancelled:
+            cores_summary = {"total": 0, "downloaded": 0, "failed": 0, "failures": [], "cancelled": 0}
+        else:
+            cores_summary = self.updater.download_all(
+                on_progress=on_progress,
+                only=wanted,
+                skip=curated,
+                cancel_event=cancel_event,
+            )
+        cancelled = cancelled or bool(cancel_event is not None and cancel_event.is_set())
         if cancelled:
             shaders_summary = {"total": 0, "downloaded": 0, "failed": 0, "failures": []}
         else:
+            # The pack the driver reads first, then the other one.
+            packs = ([primary_pack] if primary_pack else []) + [
+                pack for pack in SHADER_PACKS.values() if pack != primary_pack
+            ]
             shaders_summary = self.updater.download_shader_packs_if_missing(
-                on_progress=on_progress,
-                packs=[pack for pack in SHADER_PACKS.values() if pack != primary_pack],
+                on_progress=on_progress, packs=packs
             )
-        failed = int(cores_summary.get("failed", 0)) + int(shaders_summary.get("failed", 0))
-        cancelled = cancelled or bool(cores_summary.get("cancelled"))
+        failed = (
+            int(playable_summary.get("failed", 0))
+            + int(cores_summary.get("failed", 0))
+            + int(shaders_summary.get("failed", 0))
+        )
+        cancelled = cancelled or bool(cores_summary.get("cancelled")) or bool(
+            playable_summary.get("cancelled")
+        )
         if not failed and not cancelled:
             self.config_manager.mark_deferred_assets_done()
         else:
@@ -277,14 +264,34 @@ class FirstBootBootstrapper:
                 "deferred asset download left owed: failed=%d cancelled=%s first=%s",
                 failed,
                 cancelled,
-                _first_failure_reason(cores_summary, shaders_summary),
+                _first_failure_reason(playable_summary, cores_summary, shaders_summary),
             )
         return {
+            "playable": playable_summary,
             "cores": cores_summary,
             "shaders": shaders_summary,
             "failed": failed,
             "cancelled": cancelled,
         }
+
+    def download_console_core(self, console, on_progress=None, cancel_event=None):
+        """Fetch the cores ``console`` names, for a launch that found none (issue 909).
+
+        ``"ready"`` when one came down, ``"cancelled"`` when the event was
+        set, ``"failed"`` otherwise; ``"ready"`` at once inside Flatpak or
+        with the updater off, where the launcher is the one to say what is
+        missing.
+        """
+        if is_running_in_flatpak() or not self.updater.settings.get("enabled", True):
+            return "ready"
+        summary = self.updater.download_all(
+            on_progress=on_progress,
+            only=get_runtime_core_candidates(console),
+            cancel_event=cancel_event,
+        )
+        if cancel_event is not None and cancel_event.is_set():
+            return "cancelled"
+        return "ready" if int(summary.get("downloaded", 0)) > 0 else "failed"
 
     def missing_curated_cores(self, ignore_unavailable=True):
         """The cores some console names that no searched directory holds.

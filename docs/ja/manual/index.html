@@ -920,7 +920,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">初回起動</h3>
-          <p>初めて起動すると、OpenEmux は<span class="ui">初回セットアップを準備しています</span>というウィンドウを表示し、その間に設定を作成し、ROM・BIOS・カバーのフォルダーを作り、入力プロファイルとプレイリストを用意し、お使いのコンソールに必要な libretro コアをダウンロードします。通常は10秒ほどで終わります。残りのコアはアプリを使っている間もバックグラウンドでダウンロードが続き、ヘッダーの下のバナーに進行状況が表示されます。</p>
+          <p>初回起動時、OpenEmux は設定の作成、ROM・BIOS・カバーのフォルダーの作成、入力プロファイルとプレイリストの準備の間、
+            <span class="ui">初回セットアップを準備しています</span>のウィンドウを一瞬表示します。その直後にライブラリが開きます。
+            libretro コアとシェーダーパックはバックグラウンドでダウンロードされ、進行状況はヘッダー下のバナーに表示され、
+            お使いのコンソールのコアが先に届きます。コアが届く前に起動したゲームは、その場でコアを取得します。オフラインでも
+            アプリは同じように開き、バナーに次回の起動時に取得するものが表示されます。</p>
           <p>設定は <code>~/.openemux/</code> に、ゲームは <code>~/games/roms/</code> にコンソールごとのフォルダーで保存されます。</p>
 
           <h3 id="install-source">ソースからのビルド</h3>

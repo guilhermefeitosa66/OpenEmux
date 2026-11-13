@@ -920,7 +920,11 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">A primeira execução</h3>
-          <p>Na primeira vez que roda, o OpenEmux mostra uma janela <span class="ui">Preparando configuração inicial</span> enquanto cria a configuração, monta as pastas de ROMs, BIOS e capas, prepara os perfis de controle e as playlists, e baixa os núcleos libretro de que seus consoles precisam. Isso costuma levar uns dez segundos; o resto dos núcleos continua baixando em segundo plano enquanto você usa o app, e uma faixa sob o cabeçalho mostra o progresso.</p>
+          <p>Na primeira vez, o OpenEmux mostra por um instante a janela <span class="ui">Preparando configuração inicial</span> enquanto cria a configuração, as pastas de ROMs, BIOS e capas e prepara perfis de controle e
+            playlists. A biblioteca abre logo em seguida: os cores libretro e os pacotes de shaders baixam em segundo
+            plano, com o progresso num banner sob o cabeçalho, primeiro os cores que seus consoles usam. Um jogo aberto
+            antes de o core chegar baixa esse core na hora. Sem internet, o app abre do mesmo jeito e o banner diz o
+            que será buscado na próxima vez.</p>
           <p>Suas configurações ficam em <code>~/.openemux/</code>, e seus jogos em <code>~/games/roms/</code>, uma pasta por console.</p>
 
           <h3 id="install-source">Compilando a partir do código-fonte</h3>

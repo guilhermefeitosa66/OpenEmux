@@ -131,6 +131,34 @@ class AnEmptyLibraryTests(WindowCase):
     def test_search_is_switched_off_with_nothing_to_search(self):
         self.assertFalse(self.win.search_entry.get_sensitive())
 
+    def test_choosing_the_folder_is_the_suggested_action_and_import_the_second(self):
+        # Issue 909: most people already keep a folder of games.
+        page = self.win.content_stack.get_child_by_name(LIBRARY_EMPTY_ID)
+        actions = page.get_child()
+        first = actions.get_first_child()
+        second = first.get_next_sibling()
+        self.assertEqual(first.get_label(), self.said("library.empty.choose"))
+        self.assertTrue(first.has_css_class("suggested-action"))
+        self.assertEqual(second.get_label(), self.said("library.empty.action"))
+        self.assertFalse(second.has_css_class("suggested-action"))
+        with mock.patch.object(self.win, "_choose_roms_path") as choose:
+            first.emit("clicked")
+        choose.assert_called_once()
+
+    def test_the_tour_waits_for_the_first_games(self):
+        # Issue 909: a tour before there is anything to tour is forgotten.
+        self.config.set_show_welcome_on_startup(True)
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.win.maybe_show_welcome()
+        idle_add.assert_not_called()
+        self.assertTrue(self.win._welcome_pending)
+        self.home.add_rom("SFC", "Chrono Trigger.sfc")
+        self.win.playlist_manager.scan_and_rebuild_playlist("SFC")
+        with mock.patch.object(window_module.GLib, "idle_add") as idle_add:
+            self.win.refresh_library()
+        idle_add.assert_any_call(self.win._open_welcome)
+        self.assertFalse(self.win._welcome_pending)
+
     def test_an_empty_library_has_no_view_to_remember(self):
         # Overwriting the stored view with the empty page would throw away the
         # console the user was on before the drive went missing (issue #383).
@@ -2325,6 +2353,102 @@ class BootstrapReportingTests(WindowCase):
     def test_an_application_that_cannot_bootstrap_is_left_alone(self):
         self.win._trigger_bootstrap_retry()
         self.assertEqual(self.toasts, [])
+
+
+@needs_display
+class TheFirstLibraryTests(WindowCase):
+    """Issue 909: the covers offer after the folder is chosen, the offline notice."""
+
+    def _scan_done(self, total_roms):
+        self.win._on_rescan_all_done_ui(
+            "task", {"consoles": {}, "total_consoles": 1, "total_roms": total_roms, "failed": {}},
+            False, None,
+        )
+
+    def test_a_chosen_folder_asks_for_covers_once_the_scan_counted_the_games(self):
+        self.win._offer_covers_after_scan = True
+        self._scan_done(3)
+        self.assertTrue(self.win.covers_banner.get_revealed())
+        self.assertEqual(
+            self.win.covers_banner.get_title(), self.said("banner.covers.offer", count=3)
+        )
+        self.assertFalse(self.win._offer_covers_after_scan)
+        with mock.patch.object(self.win, "_start_cover_sync") as sync:
+            self.win.covers_banner.emit("button-clicked")
+        sync.assert_called_once_with(scope="all", selected_console=None)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_a_scan_that_found_nothing_or_was_not_asked_for_offers_nothing(self):
+        self._scan_done(3)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+        self.win._offer_covers_after_scan = True
+        self._scan_done(0)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_starting_a_sync_any_other_way_answers_the_offer(self):
+        self.win.covers_banner.set_revealed(True)
+        with mock.patch.object(self.win, "_start_artwork_sync"):
+            self.win._start_cover_sync(scope="all", selected_console=None)
+        self.assertFalse(self.win.covers_banner.get_revealed())
+
+    def test_the_folder_picker_arms_the_offer(self):
+        self.assertFalse(self.win._offer_covers_after_scan)
+        chosen = mock.Mock()
+        chosen.get_path.return_value = str(self.tmp / "elsewhere")
+        dialog = mock.Mock()
+        dialog.select_folder_finish.return_value = chosen
+        with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
+            self.win._on_roms_path_chosen(dialog, None)
+        self.assertTrue(self.win._offer_covers_after_scan)
+        rescan.assert_called_once()
+
+    def test_a_background_download_that_failed_leaves_a_notice_with_retry(self):
+        self.win._on_deferred_assets_done_ui("task", {"failed": 3, "cancelled": False})
+        self.assertTrue(self.win.assets_banner.get_revealed())
+        self.assertEqual(self.win.assets_banner.get_title(), self.said("banner.assets.failed"))
+        with mock.patch.object(self.win, "_start_deferred_asset_download") as retry:
+            self.win.assets_banner.emit("button-clicked")
+        retry.assert_called_once()
+        self.assertFalse(self.win.assets_banner.get_revealed())
+
+    def test_a_clean_or_cancelled_download_leaves_no_notice(self):
+        self.win._on_deferred_assets_done_ui("task", {"failed": 0, "cancelled": False})
+        self.assertFalse(self.win.assets_banner.get_revealed())
+        self.win._on_deferred_assets_done_ui("task", {"failed": 2, "cancelled": True})
+        self.assertFalse(self.win.assets_banner.get_revealed())
+        self.win._on_deferred_assets_done_ui("task", {"error": "boom"})
+        self.assertTrue(self.win.assets_banner.get_revealed())
+
+
+@needs_display
+class PreparingAConsoleCoreTests(WindowCase):
+    """Issue 909: a launch that found no core fetches the console's first."""
+
+    def test_a_console_with_a_core_is_ready_at_once(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        with mock.patch.object(launcher, "resolve_core_path", return_value="/cores/x.so"), mock.patch.object(
+            window_module.FirstBootBootstrapper, "download_console_core"
+        ) as download:
+            self.assertEqual(self.win.prepare_console_core("SFC"), "ready")
+        download.assert_not_called()
+
+    def test_a_missing_core_is_downloaded_and_the_catalog_told(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        with mock.patch.object(launcher, "resolve_core_path", return_value=None), mock.patch.object(
+            window_module.FirstBootBootstrapper, "download_console_core", return_value="ready"
+        ) as download, mock.patch.object(self.win.core_catalog, "refresh") as refresh:
+            self.assertEqual(self.win.prepare_console_core("SFC", on_progress=None), "ready")
+        self.assertEqual(download.call_args[0][0], "SFC")
+        refresh.assert_called_once()
+
+    def test_a_failed_or_cancelled_download_is_passed_on_untouched(self):
+        launcher = self.win.runtime_manager.retroarch_launcher
+        for state in ("failed", "cancelled"):
+            with mock.patch.object(launcher, "resolve_core_path", return_value=None), mock.patch.object(
+                window_module.FirstBootBootstrapper, "download_console_core", return_value=state
+            ), mock.patch.object(self.win.core_catalog, "refresh") as refresh:
+                self.assertEqual(self.win.prepare_console_core("SFC"), state)
+            refresh.assert_not_called()
 
 
 @needs_display

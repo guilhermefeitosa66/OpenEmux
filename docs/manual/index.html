@@ -948,11 +948,12 @@ flatpak install -y openemux io.github.guilhermefeitosa66.OpenEmux</code></pre>
           <pre><code>Get-FileHash .\OpenEmux-*-setup.exe -Algorithm SHA256</code></pre>
 
           <h3 id="install-first">The first launch</h3>
-          <p>The first time it runs, OpenEmux shows a <span class="ui">Preparing first-time setup</span> window while
-            it creates its configuration, makes the ROMs, BIOS and covers folders, prepares input profiles and
-            playlists, and downloads the libretro cores your consoles need. That usually takes about ten seconds; the
-            rest of the cores keep downloading in the background while you use the app, and a banner under the header
-            shows their progress.</p>
+          <p>The first time it runs, OpenEmux shows a <span class="ui">Preparing first-time setup</span> window for a
+            moment while it creates its configuration, makes the ROMs, BIOS and covers folders and prepares input
+            profiles and playlists. The library opens right after: the libretro cores and the shader packs download in
+            the background, with their progress in a banner under the header, the cores your consoles use first. A
+            game you launch before its core has arrived fetches that core on the spot. Offline, the app opens all the
+            same and the banner says what will be fetched at the next start.</p>
           <p>Your settings live in <code>~/.openemux/</code>, and your games in <code>~/games/roms/</code>, one folder
             per console.</p>
 

@@ -144,6 +144,43 @@ class _SessionCase(WindowCase):
             )
             patcher.start()
             self.addCleanup(patcher.stop)
+        # The launch runs on a worker and reports back on the idle loop
+        # (issue 904); both are stepped by hand here.
+        _Worker.deferred = None
+        for patcher in (
+            mock.patch.object(session_module, "_run_in_worker", _Worker.run),
+            mock.patch.object(session_module.GLib, "idle_add", lambda cb, *args: cb(*args)),
+        ):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        # The BIOS check reads the real launcher, which the fake runtime lacks.
+        self.missing_bios = []
+        bios_patch = mock.patch.object(
+            self.win, "missing_bios_for_console", side_effect=lambda _console: list(self.missing_bios)
+        )
+        bios_patch.start()
+        self.addCleanup(bios_patch.stop)
+        # So does the core check (issue 909): "ready" unless a test says otherwise.
+        self.core_state = "ready"
+        self.core_calls = []
+
+        def _prepare(console, on_progress=None, cancel_event=None):
+            self.core_calls.append((console, on_progress, cancel_event))
+            return self.core_state
+
+        core_patch = mock.patch.object(self.win, "prepare_console_core", side_effect=_prepare)
+        core_patch.start()
+        self.addCleanup(core_patch.stop)
+
+    def defer_worker(self):
+        """Hold the launch worker until :meth:`run_worker`."""
+        _Worker.deferred = []
+        self.addCleanup(setattr, _Worker, "deferred", None)
+
+    def run_worker(self):
+        pending, _Worker.deferred = _Worker.deferred, []
+        for target in pending:
+            target()
 
 
 @needs_display
