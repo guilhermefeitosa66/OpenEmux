@@ -18717,15 +18717,20 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 ### RT-1176 — Big Picture shows the covers and cartridges at the largest zoom
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
-- **Preconditions:** the desktop library at 100% zoom (or any zoom).
+- **Preconditions:** the desktop library at 75% zoom (or any zoom other than 200%), a console page
+  in cover view and another in cartridge view (or one page with its own layout).
 - **Steps:**
-  1. Enter Big Picture and open a console.
+  1. Enter Big Picture and open a console; switch to the other one with LB/RB.
   2. Press Ctrl+minus.
-  3. Leave Big Picture.
-- **Expected:** 1: the covers (and the cartridges, on a cartridge page) are at 200%, the largest
-  zoom, whatever the desktop had. 2: nothing changes; the zoom is fixed in the mode and the
-  desktop's setting is not written. 3: the desktop is back at the zoom it had before.
-- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`).
+  3. Leave Big Picture and open both consoles again on the desktop.
+- **Expected:** 1: the game grid itself is built at 200%, the largest zoom, whatever the desktop
+  (or the page's own layout) had: the covers and the cartridges are visibly twice the size of the
+  desktop's 100%, on every page opened in the mode. 2: nothing changes; the zoom is fixed in the
+  mode and the desktop's setting is not written. 3: every page is back at the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`,
+  `test_a_page_opened_in_big_picture_follows_the_mode_both_ways`,
+  `test_a_scope_with_its_own_zoom_still_gets_big_pictures`).
 
 ### RT-1177 — A game opened from Big Picture starts fullscreen
 - **Area:** Navigation
@@ -18738,3 +18743,16 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   2: the game opens windowed again, as the desktop setting says; the setting itself never changed.
 - **Check:** suite files `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`),
   `tests/test_retroarch_launcher.py` (`test_the_launch_mode_setting_reaches_the_launch_both_ways`).
+
+### RT-1178 — Starting straight into Big Picture opens the games at 200%
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 100% zoom; Settings › "Big Picture" › start in Big
+  Picture on (or the app run with `--big-picture`).
+- **Steps:**
+  1. Close OpenEmux and open it again.
+  2. Open a console in Big Picture's library.
+  3. Leave Big Picture.
+- **Expected:** 1–2: the app opens in Big Picture and the game grid is at 200% from the first page,
+  with no zoom change needed. 3: the desktop is at 100%, the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_starting_in_big_picture_opens_the_games_at_its_zoom`).
