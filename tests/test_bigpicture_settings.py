@@ -160,100 +160,128 @@ class SettingsCase(BigPictureCase):
 
 @needs_display
 class ThePage(SettingsCase):
-    def test_opens_on_library_with_the_sections_on_the_left(self):
+    def test_opens_on_the_android_list_with_nothing_chosen(self):
         page = self.open_settings()
         self.assertIs(self.visible_page(), page)
         self.assertIs(page, self.shell._settings)
+        self.assertEqual(self.shell.tab, "settings")
         self.assertEqual(page.get_tag(), "bp-settings")
-        self.assertEqual(page.current, "library")
-        self.assertEqual(list(page.buttons), list(settings_module.SECTION_NAMES))
-        self.assertTrue(page.buttons["library"].has_css_class("bp-current"))
-        self.assertTrue(page.buttons["library"].has_css_class("bp-section"))
-        self.assertFalse(page.buttons["video"].has_css_class("bp-current"))
-        self.assertEqual(page.stack.get_visible_child_name(), "library")
-        self.assertTrue(page.sections["library"].built)
-        self.assertFalse(page.sections["video"].built)
-        self.assertIs(self.focus_widget(), page.sections["library"].rows["roms_path"])
+        self.assertIsNone(page.current)
+        self.assertEqual(page.stack.get_visible_child_name(), "empty")
+        self.assertIs(self.focus_widget(), page.bios_card)
+        names = list(page.entries)
+        self.assertEqual(names[:5], ["bios", "theme", "language", "achievements", "artwork"])
+        consoles = [name for name in names if name.startswith(settings_module.CONSOLE_PREFIX)]
+        self.assertEqual(consoles, [f"console:{c}" for c in self.win.visible_consoles])
+        self.assertEqual(names[-5:], ["roms", "controllers", "updates", "system", "about"])
+        # Every console entry says its core and shader.
+        first = page.entries[consoles[0]]
+        self.assertIn(" · ", first.subtitle_label.get_label())
         glyphs = self.win.navigation.glyphs()
         hints = page.hints(glyphs, self.win.t)
-        self.assertEqual(hints[0], (glyphs["confirm"], self.said("big_picture.hints.change")))
-        self.assertEqual(hints[2], (glyphs["consoles"], self.said("big_picture.hints.section")))
+        self.assertEqual(hints[0], (glyphs["confirm"], self.said("big_picture.hints.open")))
+        self.assertEqual(hints[2], (glyphs["consoles"], self.said("big_picture.hints.tabs")))
         self.assertFalse(page.show_section("nonsense"))
 
-        # The shoulders walk the sections, wrapping, and land on the first row.
+        # A opens an entry on the right and goes into it; B comes back to the list.
+        page.entries["theme"].emit("clicked")
+        self.pump()
+        self.assertEqual(page.current, "theme")
+        self.assertTrue(page.entries["theme"].has_css_class("bp-current"))
+        self.assertEqual(page.stack.get_visible_child_name(), "theme")
+        self.assertIs(self.focus_widget(), page.sections["theme"].rows["theme"])
+        hints = page.hints(glyphs, self.win.t)
+        self.assertEqual(hints[0], (glyphs["confirm"], self.said("big_picture.hints.change")))
+        self.press("back")
+        self.assertIs(self.focus_widget(), page.entries["theme"])
+        self.assertIs(self.visible_page(), page)
+        # On the list, B goes to the Library tab, never out of the mode.
+        self.press("back")
+        self.assertIs(self.visible_page(), self.shell.shelf)
+        self.assertTrue(self.win.big_picture)
+        # Back to desktop is the list's last entry.
+        with mock.patch.object(self.win, "toggle_big_picture") as toggle:
+            page.desktop_row.emit("clicked")
+        toggle.assert_called_once()
+
+    def test_the_shoulders_walk_the_tabs_from_the_list(self):
+        page = self.open_settings()
         self.assertTrue(self.shell.step_console(1))
         self.pump()
-        self.assertEqual(page.current, "bios")
-        self.assertTrue(page.sections["bios"].built)
-        self.assertIs(self.focus_widget(), page.sections["bios"].rows["reload"])
+        self.assertEqual(self.shell.tab, "library")
+        self.shell.open_settings()
+        self.pump()
         self.assertTrue(self.shell.step_console(-1))
         self.pump()
-        self.assertEqual(page.current, "library")
-        self.assertTrue(self.shell.step_console(-1))
-        self.pump()
+        self.assertEqual(self.shell.tab, "import")
+        self.assertIsNot(self.visible_page(), page)
+
+    def test_the_desktop_page_names_still_land(self):
+        page = self.open_settings("library")
+        self.assertEqual(page.current, "roms")
+        page.show_section("video")
         self.assertEqual(page.current, "system")
-        # So does A on a section button.
-        page.buttons["video"].emit("clicked")
-        self.pump()
-        self.assertEqual(page.current, "video")
-        self.assertIs(self.focus_widget(), page.sections["video"].rows["view_mode"])
-        # B leaves Settings, never the mode.
-        self.press("back")
-        self.assertIs(self.visible_page(), self.shell.home)
-        self.assertTrue(self.win.big_picture)
+        page.show_section("cores", console="SFC")
+        self.assertEqual(page.current, "console:SFC")
+        page.show_section("cores")
+        self.assertEqual(page.current, f"console:{self.win.visible_consoles[0]}")
+        with mock.patch.object(page, "_consoles", return_value=[]):
+            self.assertFalse(page.show_section("cores"))
+        page.show_section("console:N64")
+        self.assertEqual(page.current, "console:N64")
+        self.assertIn("console:N64", page.sections)
 
     def test_opening_on_a_section_builds_that_one_and_reopening_reads_everything_again(self):
-        page = self.open_settings("video")
-        self.assertEqual(page.current, "video")
-        self.assertTrue(page.sections["video"].built)
-        self.assertFalse(page.sections["library"].built)
-        row = page.sections["video"].rows["view_mode"]
-        self.press("back")
+        page = self.open_settings("roms")
+        self.assertEqual(page.current, "roms")
+        self.assertTrue(page.sections["roms"].built)
+        self.assertFalse(page.sections["system"].built)
+        row = page.sections["roms"].rows["import_mode"]
+        self.shell.switch_tab("library")
+        self.pump()
         # Changed on the desktop meanwhile: the rows are built again on the way in.
         self.config.set_import_mode("link")
-        self.open_settings("library")
-        self.assertIsNot(page.sections["video"].rows.get("view_mode"), None)
+        self.shell.switch_tab("settings")
+        self.pump()
+        self.assertIsNot(page.sections["roms"].rows["import_mode"], row)
         self.assertEqual(
-            page.sections["library"].rows["import_mode"].value_label.get_label(),
+            page.sections["roms"].rows["import_mode"].value_label.get_label(),
             self.said("import_mode.link"),
         )
-        self.shell.step_console(-1)
+        # Pointed at an entry the page shows it; one never built yet is built.
+        page.show_section("system")
         self.pump()
-        self.assertEqual(page.current, "system")
         self.assertTrue(page.sections["system"].built)
-        page.show_section("video")
-        self.pump()
-        self.assertEqual(page.current, "video")
-        self.assertIsNot(page.sections["video"].rows["view_mode"], row)
 
     def test_coming_back_from_a_chooser_keeps_the_rows_and_the_focus(self):
-        page = self.open_settings("video")
-        row = page.sections["video"].rows["view_mode"]
+        page = self.open_settings("roms")
+        row = page.sections["roms"].rows["import_mode"]
+        page.focus_pane()
         row.emit("clicked")
         self.pump()
         self.assertTrue(page._returning)
-        chooser = self.shell._chooser
-        self.assertIs(self.visible_page(), chooser)
-        self.assertEqual(chooser.get_title(), self.said("settings.ui.view_mode.title"))
-        with mock.patch.object(self.win, "_apply_view_mode") as apply_mode:
-            self.pick("list")
-        apply_mode.assert_called_once_with("list")
+        self.assertIs(self.visible_page(), self.shell._chooser)
+        self.pick("link")
         self.assertIs(self.visible_page(), page)
         self.assertFalse(page._returning)
-        self.assertIs(page.sections["video"].rows["view_mode"], row)
-        self.assertEqual(row.value_label.get_label(), self.said("view_mode.list"))
+        self.assertIs(page.sections["roms"].rows["import_mode"], row)
         self.assertIs(self.focus_widget(), row)
-        # Home while a chooser is open: the pending return is void.
+        # Another tab while a chooser is open: the pending return is void.
         row.emit("clicked")
         self.pump()
         self.assertTrue(page._returning)
         self.shell.go_home()
         self.pump()
+        self.shell.open_settings()
+        self.pump()
         self.assertFalse(page._returning)
-        # A row that is gone is no place to land: the section's first row is.
+        # A row that is gone is no place to land: the entry on the list is.
         page._focus_row = Row("gone")
-        self.open_settings()
-        self.assertIs(self.focus_widget(), page.sections["video"].rows["view_mode"])
+        self.assertTrue(page.focus_default())
+        self.assertIs(self.focus_widget(), page.entries["roms"])
+        page._focus_row = Row("gone")
+        self.assertTrue(page.focus_pane())
+        self.assertIs(self.focus_widget(), page.sections["roms"].rows["roms_path"])
 
     def test_the_input_section_is_placed_pointed_at_a_console_and_refreshed(self):
         self.fake_input_module()
@@ -265,18 +293,37 @@ class ThePage(SettingsCase):
         self.assertIs(page.input, section)
         self.assertIs(page.stack.get_child_by_name("input"), section.widget)
         self.assertIn(("select", "SFC"), section.calls)
-        self.assertIn("focus", section.calls)
-        self.assertIs(self.focus_widget(), section.widget)
+        self.assertTrue(page.entries["controllers"].has_css_class("bp-current"))
         self.assertNotIn("refresh", section.calls)
         # Pointed at another console while on screen.
         page.show_section("input", console="FC")
         self.assertEqual(section.calls[-1], ("select", "FC"))
-        # Reopened from home: refreshed, not rebuilt.
-        self.press("back")
-        self.open_settings()
+        self.assertTrue(page.focus_pane())
+        self.assertIn("focus", section.calls)
+        # Reopened from another tab: refreshed, not rebuilt.
+        self.shell.switch_tab("library")
+        self.pump()
+        self.shell.switch_tab("settings")
+        self.pump()
         self.assertEqual(len(_FakeInputSection.instances), 1)
         self.assertIn("refresh", section.calls)
         self.assertFalse(section.has_unsaved())
+        # B from Input goes back to Controllers; from the list Input is under Controllers.
+        page.focus_entry()
+        self.assertIs(self.focus_widget(), page.entries["controllers"])
+        with mock.patch.object(page, "pane_has_focus", return_value=True):
+            self.assertTrue(page.handle_back())
+        self.pump()
+        self.assertEqual(page.current, "controllers")
+
+    def test_the_controllers_entry_opens_the_mapping(self):
+        self.fake_input_module()
+        page = self.open_settings("controllers")
+        rows = page.sections["controllers"].rows
+        rows["mapping"].emit("clicked")
+        self.pump()
+        self.assertEqual(page.current, "input")
+        self.assertEqual(page.stack.get_visible_child_name(), "input")
 
     def test_without_its_module_the_input_section_says_so(self):
         self.swap_input_module(None)
@@ -290,30 +337,49 @@ class ThePage(SettingsCase):
             self.said("big_picture.settings.input.unavailable.title"),
         )
         self.assertIsNone(section.first_row())
-        # Nothing to land on in the column: the pad lands on the section button.
-        self.assertTrue(page.focus_default())
-        self.assertIs(self.focus_widget(), page.buttons["input"])
+        # Nothing to land on in the pane: the pad lands on the list's entry.
+        self.assertTrue(page.focus_pane())
+        self.assertIs(self.focus_widget(), page.entries["controllers"])
         page.show_section("input")
         self.assertEqual(page.stack.get_visible_child_name(), "input")
 
-    def test_the_roms_path_row_follows_the_window(self):
+    def test_the_list_values_and_the_language_change(self):
         page = self.open_settings()
+        self.assertEqual(page.entries["roms"].value_label.get_label(), str(self.config.get_roms_path()))
+        self.assertEqual(page.bios_card.subtitle_label.get_label() != "", True)
+        with mock.patch.object(settings_module, "scan_all_bios_status", return_value={}):
+            page.sync_entries()
+        self.assertEqual(page.bios_card.subtitle_label.get_label(), self.said("big_picture.settings.bios.ok"))
+        page.show_section("theme")
+        self.assertEqual(page.retranslate(), GLib.SOURCE_REMOVE)
+        self.assertEqual(page.current, "theme")
+        self.assertIn("theme", page.entries)
+        # Flatpak builds have no update entry: the remote updates them.
+        with mock.patch.object(settings_module, "is_running_in_flatpak", return_value=True):
+            page._build_entries()
+        self.assertNotIn("updates", page.entries)
+        with mock.patch.object(page.win, "visible_consoles", []):
+            self.assertEqual(page._consoles(), list(SYSTEM_IDS))
+
+    def test_the_roms_path_row_follows_the_window(self):
+        page = self.open_settings("roms")
         self.config.set_roms_path(str(self.tmp / "elsewhere"))
         page.refresh_roms_path()
         self.assertEqual(
-            page.sections["library"].rows["roms_path"].value_label.get_label(),
+            page.sections["roms"].rows["roms_path"].value_label.get_label(),
             str(self.config.get_roms_path()),
         )
+        self.assertEqual(page.entries["roms"].value_label.get_label(), str(self.config.get_roms_path()))
         fresh = settings_module.SettingsPage(self.shell)
         fresh.refresh_roms_path()  # not built yet: nothing to refresh
-        self.assertFalse(fresh.sections["library"].built)
+        self.assertFalse(fresh.sections["roms"].built)
 
 
 @needs_display
 class TheLibrarySection(SettingsCase):
     def test_the_folder_rows_and_the_import_mode(self):
-        page = self.open_settings("library")
-        rows = page.sections["library"].rows
+        page = self.open_settings("roms")
+        rows = page.sections["roms"].rows
         self.assertEqual(rows["roms_path"].value_label.get_label(), str(self.config.get_roms_path()))
         with mock.patch.object(self.win, "_choose_roms_path") as choose:
             rows["roms_path"].emit("clicked")
@@ -330,8 +396,8 @@ class TheLibrarySection(SettingsCase):
         self.assertEqual(rows["import_mode"].value_label.get_label(), self.said("import_mode.link"))
 
     def test_scan_asks_for_a_scope_and_sync_opens_the_covers_page(self):
-        page = self.open_settings("library")
-        rows = page.sections["library"].rows
+        page = self.open_settings("roms")
+        rows = page.sections["roms"].rows
         self.win.sidebar.select("SFC")
         self.pump()
         rows["scan"].emit("clicked")
@@ -351,13 +417,16 @@ class TheLibrarySection(SettingsCase):
         with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
             self.pick(settings_module.ALL_CONSOLES_ID)
         rescan.assert_called_once_with(show_toast=True)
+        page.show_section("artwork")
+        self.pump()
+        rows = page.sections["artwork"].rows
         rows["sync"].emit("clicked")
         self.pump()
         self.assertIs(self.visible_page(), self.shell._covers)
 
     def test_the_console_order_moves_with_left_and_right(self):
-        page = self.open_settings("library")
-        library = page.sections["library"]
+        page = self.open_settings("roms")
+        library = page.sections["roms"]
         consoles, present = library._console_order_list()
         self.assertEqual(set(consoles), set(self.win.visible_consoles))
         first, second = consoles[0], consoles[1]
@@ -397,8 +466,8 @@ class TheLibrarySection(SettingsCase):
         self.assertEqual(library.rows["order:empty"].kind, ROW_INFO)
 
     def test_the_artwork_providers_reorder_toggle_and_show_the_account_rows(self):
-        page = self.open_settings("library")
-        library = page.sections["library"]
+        page = self.open_settings("artwork")
+        library = page.sections["artwork"]
         ids = [entry["id"] for entry in self.config.get_artwork_providers()]
         rows = library.rows
         self.assertIsInstance(rows[f"provider:{ids[0]}"], settings_module.OrderedRow)
@@ -452,8 +521,8 @@ class TheLibrarySection(SettingsCase):
         self.assertTrue(library.rows["ss_hint_embedded"].get_visible())
 
     def test_the_screenscraper_account_is_typed_on_the_keyboard(self):
-        page = self.open_settings("library")
-        rows = page.sections["library"].rows
+        page = self.open_settings("artwork")
+        rows = page.sections["artwork"].rows
         self.assertEqual(rows["ss_user"].value_label.get_label(), self.said("big_picture.settings.empty"))
         rows["ss_user"].emit("clicked")
         self.pump()
@@ -607,32 +676,23 @@ class TheBiosSection(SettingsCase):
 
 
 @needs_display
-class TheVideoSection(SettingsCase):
-    def test_appearance_launch_and_bar_rows(self):
-        page = self.open_settings("video")
-        video = page.sections["video"]
-        rows = video.rows
-        rows["sort_order"].emit("clicked")
-        self.pump()
-        self.assertEqual(self.chooser_ids(), list(settings_module.SORT_ORDERS))
-        with mock.patch.object(self.win, "_apply_sort_order") as apply_sort:
-            self.pick("name_desc")
-        apply_sort.assert_called_once_with("name_desc")
-        self.assertEqual(rows["sort_order"].value_label.get_label(), self.said("sort_order.name_desc"))
-
-        shader_row = rows["shader:SFC"]
-        rows["show_all_shaders"].emit("clicked")
-        self.assertTrue(self.config.get_shader_settings()["show_all_shaders"])
-        self.assertIsNot(video.rows["shader:SFC"], shader_row)
-        rows["fullscreen"].emit("clicked")
-        self.assertTrue(self.config.get_ui_settings()["start_games_fullscreen"])
+class TheConsoleSection(SettingsCase):
+    def test_the_games_rows_live_under_system(self):
+        page = self.open_settings("system")
+        system = page.sections["system"]
+        rows = system.rows
         with mock.patch.object(self.win, "_reload_current_page") as reload:
             rows["resume"].emit("clicked")
         self.assertTrue(self.config.get_auto_resume())
         reload.assert_called_once()
         rows["translucent"].emit("clicked")
         self.assertTrue(self.config.get_ui_settings()["translucent_game_bar"])
-
+        console = page._console_section("SFC")
+        console.build()
+        page._stale.clear()
+        rows["show_all_shaders"].emit("clicked")
+        self.assertTrue(self.config.get_shader_settings()["show_all_shaders"])
+        self.assertIn("console:SFC", page._stale)
         # Restore asks first.
         self.config.set_shader_for_console("SFC", "crt_easymode")
         self.ask(rows["restore_shaders"], "cancel")
@@ -642,11 +702,9 @@ class TheVideoSection(SettingsCase):
         self.assertIn(self.said("toast.shaders.defaults_restored"), self.toasts)
 
     def test_a_shader_per_console_including_one_the_catalog_does_not_list(self):
-        page = self.open_settings("video")
-        video = page.sections["video"]
-        self.assertEqual(
-            [key for key in video.rows if key.startswith("shader:")], [f"shader:{c}" for c in SYSTEM_IDS]
-        )
+        page = self.open_settings("console:SFC")
+        video = page.sections["console:SFC"]
+        self.assertEqual([key for key in video.rows if key.startswith("shader:")], ["shader:SFC"])
         video.rows["shader:SFC"].emit("clicked")
         self.pump()
         options, selected = video._shader_options("SFC")
@@ -658,14 +716,16 @@ class TheVideoSection(SettingsCase):
         self.assertEqual(
             video.rows["shader:SFC"].value_label.get_label(), self.win.shader_catalog.label_for_shader(other)
         )
+        self.assertIn(self.win.shader_catalog.label_for_shader(other), video.summary())
         # A stored id the short list does not know is offered anyway.
         self.config.set_shader_for_console("FC", "some_unknown_preset")
-        video._build_shader_rows()
-        options, selected = video._shader_options("FC")
+        fc = page._console_section("FC")
+        fc.build()
+        options, selected = fc._shader_options("FC")
         self.assertEqual(selected, "some_unknown_preset")
         self.assertIn("some_unknown_preset", [shader_id for shader_id, _label in options])
         self.assertEqual(
-            video.rows["shader:FC"].value_label.get_label(),
+            fc.rows["shader:FC"].value_label.get_label(),
             self.win.shader_catalog.label_for_shader("some_unknown_preset"),
         )
 
@@ -676,13 +736,15 @@ class TheVideoSection(SettingsCase):
         pixbuf.savev(str(path), "png", [], [])
         return path
 
-    def test_bezels_per_4_3_console_with_the_picker_for_a_custom_image(self):
-        page = self.open_settings("video")
-        video = page.sections["video"]
+    def test_bezels_for_a_4_3_console_with_the_picker_for_a_custom_image(self):
+        page = self.open_settings("console:MD")
+        video = page.sections["console:MD"]
         rows = video.rows
-        self.assertEqual(
-            {key.split(":")[1] for key in rows if key.startswith("bezel:")}, set(bezels.BEZEL_CONSOLES)
-        )
+        self.assertEqual([key for key in rows if key.startswith("bezel:")], ["bezel:MD"])
+        # A console with no bezels has no row.
+        gb = page._console_section("GB")
+        gb.build()
+        self.assertNotIn("bezel:GB", gb.rows)
         self.assertEqual(rows["bezel:MD"].value_label.get_label(), self.said("bezel.none"))
         rows["bezel:MD"].emit("clicked")
         self.pump()
@@ -727,26 +789,16 @@ class TheVideoSection(SettingsCase):
         self.assertEqual(len(dialogs), 2)
         self.assertEqual(self.config.get_bezel_for_console("MD"), "custom")
 
-
-@needs_display
-class TheCoresSection(SettingsCase):
-    def test_without_installed_cores_every_console_says_so(self):
+    def test_without_installed_cores_the_console_says_so(self):
         # The devbox may have RetroArch's own cores on disk: this test is about none.
         patcher = mock.patch.object(self.win.core_catalog, "cores_for_console", return_value=[])
         patcher.start()
         self.addCleanup(patcher.stop)
-        page = self.open_settings("cores")
-        cores = page.sections["cores"]
-        self.assertTrue(all(cores.rows[f"core:{c}"].kind == ROW_INFO for c in SYSTEM_IDS))
+        page = self.open_settings("console:SFC")
+        cores = page.sections["console:SFC"]
+        self.assertEqual(cores.rows["core:SFC"].kind, ROW_INFO)
         self.assertFalse(cores.options_group.get_visible())
-        self.assertIs(self.focus_widget(), cores.rows["download_all"])
-        with mock.patch.object(self.win, "_start_deferred_asset_download") as start:
-            cores.rows["download_all"].emit("clicked")
-            self.assertTrue(self.config.get_retroarch_updater_settings()["download_all_cores"])
-            start.assert_called_once()
-            cores.rows["download_all"].emit("clicked")
-            self.assertFalse(self.config.get_retroarch_updater_settings()["download_all_cores"])
-            start.assert_called_once()
+        self.assertIn(self.said("settings.cores.none"), cores.summary())
 
     def test_a_console_with_cores_gets_a_picker_and_its_core_options(self):
         installed = [_Core("mednafen_psx_hw_libretro.so", "Beetle PSX HW"), _Core("pcsx_rearmed_libretro.so", "PCSX")]
@@ -755,8 +807,8 @@ class TheCoresSection(SettingsCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
-        page = self.open_settings("cores")
-        cores = page.sections["cores"]
+        page = self.open_settings("console:PS")
+        cores = page.sections["console:PS"]
         row = cores.rows["core:PS"]
         self.assertEqual(row.value_label.get_label(), self.said("settings.cores.automatic", core="Beetle PSX HW"))
         self.assertEqual(row.subtitle_label.get_label(), self.said("settings.cores.auto_resolves", core="Beetle PSX HW"))
@@ -805,9 +857,10 @@ class TheCoresSection(SettingsCase):
 @needs_display
 class TheSystemSection(SettingsCase):
     def test_language_theme_and_the_interface_rows(self):
-        page = self.open_settings("system")
-        system = page.sections["system"]
+        page = self.open_settings("language")
+        system = page.sections["language"]
         rows = system.rows
+        page.focus_pane()
         self.assertIs(self.focus_widget(), rows["language"])
         rows["language"].emit("clicked")
         self.pump()
@@ -824,9 +877,10 @@ class TheSystemSection(SettingsCase):
         apply_language.assert_called_once_with("pt_BR")
         # Every label is built again once the chooser has popped.
         self.assertIsNot(system.rows["language"], rows["language"])
-        self.assertEqual(page.buttons["system"].get_label(), self.said("prefs.page.system"))
-        self.assertIs(self.focus_widget(), system.rows["language"])
-        rows = system.rows
+        self.assertEqual(page.entries["system"].title_label.get_label(), self.said("prefs.page.system"))
+        page.show_section("theme")
+        self.pump()
+        rows = page.sections["theme"].rows
 
         rows["theme"].emit("clicked")
         self.pump()
@@ -844,6 +898,9 @@ class TheSystemSection(SettingsCase):
             rows["tips"].emit("clicked")
         self.assertFalse(self.config.get_ui_settings()["show_tips"])
         tips.assert_called_once_with(False)
+        page.show_section("controllers")
+        self.pump()
+        rows = page.sections["controllers"].rows
         rows["gamepad_nav"].emit("clicked")
         self.assertFalse(self.config.get_ui_settings()["gamepad_navigation"])
         rows["glyphs"].emit("clicked")
@@ -854,12 +911,23 @@ class TheSystemSection(SettingsCase):
         self.assertEqual(rows["glyphs"].value_label.get_label(), self.said("controller.family.playstation"))
         rows["swap"].emit("clicked")
         self.assertTrue(self.config.get_swap_confirm_cancel())
+        # The pause menu's gesture (issue 957): stored and handed to the navigator.
+        rows["pause_trigger"].emit("clicked")
+        self.pump()
+        self.assertEqual(self.chooser_ids(), list(settings_module.pause_trigger.MODES))
+        self.pick("hold_start")
+        self.assertEqual(self.config.get_big_picture_settings()["pause_trigger"], "hold_start")
+        self.win.gamepad_navigator.pause_trigger.set_mode.assert_called_with("hold_start")
+        self.assertEqual(rows["pause_trigger"].value_label.get_label(), self.said("big_picture.pause_trigger.hold_start"))
 
     def test_the_big_picture_rows_apply_live(self):
         page = self.open_settings("system")
         rows = page.sections["system"].rows
         rows["bp_start"].emit("clicked")
         self.assertTrue(self.config.get_big_picture_settings()["start"])
+        page.show_section("theme")
+        self.pump()
+        rows = page.sections["theme"].rows
         self.assertEqual(rows["bp_text_size"].number_label.get_label(), "100%")
         with mock.patch.object(self.shell, "apply_scale") as apply_scale:
             self.assertTrue(rows["bp_text_size"].step(1))
@@ -896,6 +964,9 @@ class TheSystemSection(SettingsCase):
         with mock.patch.object(self.win, "show_bug_report") as report:
             rows["report"].emit("clicked")
         report.assert_called_once()
+        page.show_section("share")
+        self.pump()
+        rows = page.sections["share"].rows
         rows["device_name"].emit("clicked")
         self.pump()
         self.assertEqual(self.shell._text_entry.get_title(), self.said("prefs.share.device_name"))
@@ -945,8 +1016,9 @@ class TheSystemSection(SettingsCase):
         self.assertIn(self.said("toast.saves.failed", error="corrupt"), self.toasts)
 
     def test_retroachievements_sign_in_and_out(self):
-        page = self.open_settings("system")
-        system = page.sections["system"]
+        page = self.open_settings("achievements")
+        system = page.sections["achievements"]
+        page.focus_pane()
         store = self.config.achievements
         self.assertFalse(store.is_signed_in())
         rows = system.rows
@@ -1034,6 +1106,43 @@ class TheSystemSection(SettingsCase):
         with mock.patch.object(settings_module, "is_running_in_flatpak", return_value=True):
             system.build()
         self.assertFalse(system.rows["verify_cores"].get_visible())
+
+
+@needs_display
+class TheUpdatesAndAbout(SettingsCase):
+    def test_check_now_reports_either_way(self):
+        page = self.open_settings("updates")
+        rows = page.sections["updates"].rows
+        self.assertEqual(rows["version"].title_label.get_label(),
+                         self.said("big_picture.settings.version", version=settings_module.__version__))
+        with mock.patch.object(settings_module, "check_for_update_async") as check:
+            rows["check"].emit("clicked")
+        self.assertEqual(rows["check"].subtitle_label.get_label(), self.said("big_picture.settings.updates.checking"))
+        on_done = check.call_args.args[1]
+        on_done(None)
+        self.pump()
+        self.assertEqual(rows["check"].subtitle_label.get_label(), self.said("big_picture.settings.updates.current"))
+        with mock.patch.object(self.win, "_on_update_check_done") as done:
+            page.sections["updates"]._on_checked({"version": "9.9.9"})
+        done.assert_called_once_with({"version": "9.9.9"})
+        self.assertEqual(rows["check"].subtitle_label.get_label(),
+                         self.said("banner.update.available", version="9.9.9"))
+        # Rebuilt elsewhere meanwhile: the answer has no row to land on, and that is fine.
+        page.sections["updates"].rows.pop("check")
+        self.assertEqual(page.sections["updates"]._on_checked(None), GLib.SOURCE_REMOVE)
+
+    def test_a_flatpak_says_where_its_updates_come_from(self):
+        page = self.open_settings("updates")
+        with mock.patch.object(settings_module, "is_running_in_flatpak", return_value=True):
+            page.sections["updates"].build()
+        self.assertIn("flatpak", page.sections["updates"].rows)
+        self.assertNotIn("check", page.sections["updates"].rows)
+
+    def test_about_opens_the_dialog(self):
+        page = self.open_settings("about")
+        with mock.patch.object(self.win, "_show_about") as about:
+            page.sections["about"].rows["about"].emit("clicked")
+        about.assert_called_once()
 
 
 def _children(box):

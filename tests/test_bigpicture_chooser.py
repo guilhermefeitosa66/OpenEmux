@@ -53,12 +53,12 @@ class TheChooserPage(BigPictureCase):
         page.rows[2].emit("clicked")
         self.pump()
         self.assertEqual(picked, ["c"])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
         # A second A before the pop lands picks nothing and pops nothing.
         page.rows[2].emit("clicked")
         self.pump()
         self.assertEqual(picked, ["c"])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
 
     def test_b_keeps_what_was_there(self):
         self.show()
@@ -69,7 +69,7 @@ class TheChooserPage(BigPictureCase):
         self.assertEqual(page.get_title(), "Pick one")
         self.press("back")
         self.assertEqual(picked, [])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
 
     def test_reopening_resets_the_list_and_an_unknown_current_lands_on_the_first_row(self):
         self.show()
@@ -120,7 +120,7 @@ class TheTextEntryPage(BigPictureCase):
         page.osk.done()
         self.pump()
         self.assertEqual(done, ["abx "])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
         # The page is gone: nothing more is handed back.
         page.osk.done()
         self.assertEqual(done, ["abx "])
@@ -137,9 +137,9 @@ class TheTextEntryPage(BigPictureCase):
         page.osk.cancel()
         self.pump()
         self.assertEqual(done, [])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
         page.osk.cancel()  # already popped: nothing happens
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
 
         self.shell.open_text_entry("Name", "q", done.append)
         self.pump()
@@ -148,7 +148,7 @@ class TheTextEntryPage(BigPictureCase):
         self.assertIs(self.visible_page(), page)
         self.press("back")
         self.assertEqual(done, [])
-        self.assertIs(self.visible_page(), self.shell.home)
+        self.assertIs(self.visible_page(), self.shell.shelf)
 
 
 if __name__ == "__main__":

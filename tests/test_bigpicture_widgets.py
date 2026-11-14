@@ -1,4 +1,4 @@
-"""The pieces Big Picture's pages are made of (issue 914)."""
+"""The pieces Big Picture's pages are made of (issues 914, 957)."""
 
 import time
 import unittest
@@ -23,13 +23,14 @@ if HAVE_DISPLAY:
         ROW_NUMBER,
         ROW_SWITCH,
         ROW_TEXT,
+        Banner,
+        Chip,
         HintBar,
-        Rail,
-        RailTile,
         Row,
+        Segments,
         Tile,
     )
-    from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
+    from openemux.ui.bigpicture.rail import NavRail
 
 
 def _pump():
@@ -94,7 +95,7 @@ class RowTests(unittest.TestCase):
 
 
 @needs_display
-class TileAndRailTests(unittest.TestCase):
+class TileTests(unittest.TestCase):
     def test_a_tile_shows_a_badge_an_icon_or_a_picture(self):
         calls = []
         tile = Tile("All games", "3 games", badge="ALL", style="bp-all", on_activate=lambda: calls.append(1))
@@ -160,77 +161,87 @@ class TileAndRailTests(unittest.TestCase):
         long_min, _n, _b, _bb = tall.measure(Gtk.Orientation.HORIZONTAL, -1)
         self.assertEqual(short_min, long_min)
 
-    def test_rail_entries_by_scope_kind(self):
-        self.assertEqual(widgets.rail_entry_for_scope(ALL_CONSOLES_ID, "All", "all")[5], "bp-all")
-        self.assertEqual(widgets.rail_entry_for_scope(FAVORITES_ID, "Fav", "favorites")[2], "★")
-        self.assertEqual(widgets.rail_entry_for_scope(RECENT_ID, "Recent", "recent")[4], "document-open-recent-symbolic")
-        self.assertEqual(widgets.rail_entry_for_scope("col:x", "X", "collection")[4], "user-bookmarks-symbolic")
-        with_texture = widgets.rail_entry_for_scope("SFC", "Super Nintendo", "console")
-        self.assertIsNotNone(with_texture[3])
-        without = widgets.rail_entry_for_scope("ZZZ", "Nothing", "console")
-        self.assertEqual(without[2], "ZZZ")
+    def test_a_row_shows_a_tag_before_its_value(self):
+        row = Row("Core", kind=ROW_CHOICE, value="Snes9x")
+        self.assertFalse(row.tag_label.get_visible())
+        row.set_tag("DEFAULT")
+        self.assertTrue(row.tag_label.get_visible())
+        self.assertEqual(row.tag_label.get_label(), "DEFAULT")
+        row.set_tag(None)
+        self.assertFalse(row.tag_label.get_visible())
 
-    def test_the_rail_selects_steps_and_wraps(self):
+
+@needs_display
+class TheAndroidPiecesTests(unittest.TestCase):
+    def test_chips_mark_current_and_on(self):
+        calls = []
+        chip = Chip("NES", on_activate=lambda: calls.append(1))
+        self.assertTrue(chip.has_css_class("bp-chip"))
+        chip.emit("clicked")
+        self.assertEqual(calls, [1])
+        chip.set_current(True)
+        self.assertTrue(chip.has_css_class("bp-current"))
+        chip.set_current(False)
+        self.assertFalse(chip.has_css_class("bp-current"))
+        chip.set_on(True)
+        self.assertTrue(chip.is_on())
+        chip.set_on(False)
+        self.assertFalse(chip.is_on())
+        Chip("quiet").emit("clicked")
+
+    def test_segments_pick_and_mark(self):
         picked = []
-        rail = Rail(picked.append)
-        rail.set_entries([
-            widgets.rail_entry_for_scope(ALL_CONSOLES_ID, "All", "all"),
-            widgets.rail_entry_for_scope("FC", "NES", "console"),
-            widgets.rail_entry_for_scope("SFC", "SNES", "console"),
-        ])
-        self.assertEqual(rail.ids(), [ALL_CONSOLES_ID, "FC", "SFC"])
-        self.assertFalse(rail.move(1) and False)  # nothing current yet: lands on the first + 1
-        self.assertEqual(picked, ["FC"])
-        self.assertTrue(rail.select("SFC"))
-        self.assertFalse(rail.select("SFC"))
-        self.assertFalse(rail.select(None))
-        self.assertFalse(rail.select("nope"))
-        self.assertTrue(rail.move(1))
-        self.assertEqual(rail.current_id, ALL_CONSOLES_ID)
-        self.assertTrue(rail.move(-1))
-        self.assertEqual(rail.current_id, "SFC")
-        self.assertIsNone(rail.tile_for("nope"))
-        rail.set_shoulder_labels("L", "R")
-        self.assertEqual(rail.left_shoulder.get_label(), "L")
-        rail.tiles[0].emit("clicked")
-        self.assertEqual(rail.current_id, ALL_CONSOLES_ID)
-        # Not laid out yet: nothing to scroll to.
-        with mock.patch.object(rail.tiles[0], "get_allocation", return_value=mock.Mock(width=0)):
-            self.assertEqual(rail._scroll_to(rail.tiles[0]), GLib.SOURCE_REMOVE)
-        rail.set_entries([])
-        self.assertFalse(rail.move(1))
-        self.assertFalse(rail.focus_current())
+        segments = Segments([("a", "view-grid-symbolic", "A"), ("b", "view-list-symbolic", "B")], picked.append)
+        segments.buttons["b"].emit("clicked")
+        self.assertEqual(picked, ["b"])
+        segments.set_current("a")
+        self.assertEqual(segments.current, "a")
+        self.assertTrue(segments.buttons["a"].has_css_class("bp-current"))
+        self.assertFalse(segments.buttons["b"].has_css_class("bp-current"))
 
-    def test_the_rail_scrolls_the_current_tile_into_view(self):
-        rail = Rail(lambda _id: None)
-        rail.set_entries([widgets.rail_entry_for_scope(f"C{i}", f"Console {i}", "console") for i in range(12)])
-        window = Gtk.Window()
-        window.set_default_size(400, 200)
-        window.set_child(rail)
-        window.present()
-        adjustment = rail.scroller.get_hadjustment()
-        # The strip is only measured once the window is laid out, which
-        # happens on the frame clock, not on present(): wait for it.
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline and adjustment.get_upper() <= adjustment.get_page_size():
-            _pump()
-            time.sleep(0.01)
-        self.assertGreater(adjustment.get_upper(), adjustment.get_page_size())
-        rail.mark_current("C11")
-        _pump()
-        self.assertGreater(adjustment.get_value(), 0)
-        rail.mark_current("C0")
-        _pump()
-        self.assertEqual(adjustment.get_value(), 0)
-        self.assertTrue(rail.focus_current())
-        window.destroy()
+    def test_a_banner_shows_its_task_and_progress(self):
+        calls = []
+        banner = Banner(on_activate=lambda: calls.append(1))
+        banner.show("Fetching labels", "19 of 133", 19 / 133)
+        self.assertEqual(banner.title_label.get_label(), "Fetching labels")
+        self.assertEqual(banner.detail_label.get_label(), "· 19 of 133")
+        self.assertTrue(banner.progress.get_visible())
+        banner.show("Scanning", None, 4.0)
+        self.assertEqual(banner.progress.get_fraction(), 1.0)
+        banner.show("Waiting")
+        self.assertFalse(banner.progress.get_visible())
+        self.assertEqual(banner.detail_label.get_label(), "")
+        banner.emit("clicked")
+        self.assertEqual(calls, [1])
+        Banner().emit("clicked")
 
-    def test_a_rail_tile_marks_current(self):
-        tile = RailTile("FC", "NES", badge_text="FC")
-        tile.set_current(True)
-        self.assertTrue(tile.has_css_class("bp-current"))
-        tile.set_current(False)
-        self.assertFalse(tile.has_css_class("bp-current"))
+    def test_the_small_helpers(self):
+        state = widgets.empty_state("view-reveal-symbolic", "Nothing here")
+        self.assertEqual(state.label.get_label(), "Nothing here")
+        heading = widgets.page_heading("Shelf", "3 games")
+        self.assertTrue(heading.subtitle_label.get_visible())
+        self.assertFalse(widgets.page_heading("Shelf").subtitle_label.get_visible())
+        self.assertEqual(widgets.caps("Appearance").get_label(), "APPEARANCE")
+        calls = []
+        button = widgets.icon_button("starred-symbolic", "Favorite", lambda: calls.append(1))
+        button.emit("clicked")
+        self.assertEqual(calls, [1])
+        self.assertIsNone(widgets.icon_button("starred-symbolic").get_tooltip_text())
+        self.assertEqual(widgets.console_badge_text("sfcxyz"), "SFCX")
+
+    def test_the_navigation_rail(self):
+        picked = []
+        rail = NavRail(lambda key: key, picked.append)
+        self.assertEqual(rail.current, "library")
+        self.assertFalse(rail.get_hexpand())
+        rail.buttons["import"].emit("clicked")
+        self.assertEqual(picked, ["import"])
+        rail.mark("settings")
+        self.assertTrue(rail.buttons["settings"].has_css_class("bp-current"))
+        self.assertFalse(rail.buttons["library"].has_css_class("bp-current"))
+        self.assertEqual(rail.neighbour(1), "library")
+        rail.current = "nowhere"
+        self.assertEqual(rail.neighbour(1), "recent")
 
 
 @needs_display
@@ -246,10 +257,8 @@ class HintBarAndHelpersTests(unittest.TestCase):
         self.assertFalse(bar.slots[0][1].has_css_class("bp-confirm"))
         bar.set_hints([(str(i), "x") for i in range(12)])
         self.assertEqual(sum(1 for slot in bar.slots if slot[0].get_visible()), widgets.MAX_HINTS)
-        bar.set_context("Row 1 of 6")
-        self.assertEqual(bar.context_label.get_label(), "Row 1 of 6")
-        bar.set_context(None)
-        self.assertEqual(bar.context_label.get_label(), "")
+        # Centered, as on Android.
+        self.assertEqual(bar.row.get_halign(), Gtk.Align.CENTER)
 
     def test_the_crumb_and_the_text_helpers(self):
         crumb = widgets.crumb(["Library", "", "Super Nintendo"])
@@ -281,6 +290,9 @@ class HintBarAndHelpersTests(unittest.TestCase):
         shell.make_status_box = lambda: Gtk.Box()
         page = widgets.BigPage(shell, "Title", crumbs=["A", "B"], tag="bp-x")
         self.assertEqual(page.get_tag(), "bp-x")
+        # No crumbs at all: a tab's first page has its own big title.
+        bare = widgets.BigPage(shell, "Shelf", crumbs=[])
+        self.assertIsNone(bare.crumb_host.get_first_child().get_first_child())
         page.set_crumbs(["C"])
         self.assertIsInstance(page.scrolled(Gtk.Box()), Gtk.ScrolledWindow)
         self.assertEqual(page.hints({"confirm": "A", "back": "B"}, shell.win.t), [("A", "hints.confirm"), ("B", "hints.back")])

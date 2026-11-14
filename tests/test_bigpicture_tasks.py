@@ -1,4 +1,4 @@
-"""Big Picture's import and cover-sync pages (issue 914), and the progress panel they share.
+"""Big Picture's cover-sync page (issue 914) and its progress panel.
 
 Against the real window with the mode on: the rows are checked for what
 they ask the window to do, the panel for following the window's banner the
@@ -18,42 +18,13 @@ from tests.gtk_display import HAVE_DISPLAY, needs_display
 from openemux.ui.bigpicture import theme  # noqa: E402
 
 if HAVE_DISPLAY:
-    from openemux.ui.bigpicture.tasks import CoversPage, ImportPage, ProgressPanel
-
-
-@needs_display
-class TheImportPage(BigPictureCase):
-    def test_the_rows_reach_the_windows_flows(self):
-        page = self.shell.open_import()
-        self.pump()
-        self.assertIsInstance(page, ImportPage)
-        self.assertIs(self.visible_page(), page)
-        self.assertEqual(page.get_tag(), "bp-import")
-        self.assertIs(self.shell.open_import(), page)
-        with mock.patch.object(self.win.imports, "open_picker") as picker:
-            page.pick_row.emit("clicked")
-        picker.assert_called_once()
-        with mock.patch.object(self.win, "_choose_roms_path") as folder:
-            page.folder_row.emit("clicked")
-        folder.assert_called_once()
-        with mock.patch.object(self.win, "receive_games") as receive:
-            page.receive_row.emit("clicked")
-        receive.assert_called_once()
-        with mock.patch.object(self.win, "_rescan_all_consoles") as rescan:
-            page.rescan_row.emit("clicked")
-        rescan.assert_called_once_with(show_toast=True)
-        self.assertEqual(page.pick_row.subtitle_label.get_label(), self.said("big_picture.tasks.import.files.subtitle"))
-        hints = page.hints(self.win.navigation.glyphs(), self.win.t)
-        self.assertEqual([label for _g, label in hints], [self.said("big_picture.hints.choose"), self.said("hints.back")])
-        self.show()
-        self.assertTrue(page.focus_default())
-        self.assertIs(self.focus_widget(), page.pick_row)
+    from openemux.ui.bigpicture.tasks import CoversPage, ProgressPanel
 
 
 @needs_display
 class TheProgressPanel(BigPictureCase):
     def test_it_mirrors_the_banner_from_begin_to_finish(self):
-        page = self.shell.open_import()
+        page = self.shell.open_covers()
         self.pump()
         panel = page.panel
         self.assertIsInstance(panel, ProgressPanel)
@@ -161,7 +132,7 @@ class TheCoversPage(BigPictureCase):
 
 class TheDialogTheme(unittest.TestCase):
     def test_the_dialogs_and_the_pages_get_their_rules(self):
-        css = theme.stylesheet(1.0, dark=True)
+        css = theme.stylesheet(1.0)
         for selector in (
             ".big-picture dialog.alert .message-area .title-2",
             ".big-picture dialog row .title",
@@ -169,14 +140,14 @@ class TheDialogTheme(unittest.TestCase):
             ".big-picture dialog carouselindicatordots",
             ".big-picture statuspage .title",
             ".big-picture .bp-details-cover",
-            ".big-picture .bp-tile.bp-state",
+            ".big-picture .bp-state",
             ".big-picture .bp-panel",
             ".big-picture .bp-side",
             ".big-picture .bp-first-boot",
         ):
             self.assertIn(selector, css)
         self.assertIn(f"min-width: {theme.SIZES['cover_w']}px", css)
-        self.assertIn(f"min-width: {theme.SIZES['side']}px", theme.stylesheet(1.0, dark=False))
+        self.assertIn(f"min-width: {theme.SIZES['side']}px", theme.stylesheet(1.0))
 
 
 if __name__ == "__main__":
