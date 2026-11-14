@@ -15378,6 +15378,425 @@ engine's mute state, whatever muted the game.
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
 
+### RT-1045 — Big Picture: the couch layout replaces the zoomed desktop
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
+  pipeline's virtual pad), a library with several consoles and a game played at least once.
+- **Steps:**
+  1. Press F11 (or the pad's Guide button, or the screen button in the header bar, or "Big
+     Picture" in the main menu); take a screenshot and scale it to 25%.
+  2. On the home page press Down, then Right twice, then A on a console tile.
+  3. Press RB/R1 twice, then LB/L1; then Start, type "mar" on the keyboard, press Start again.
+  4. Plug a PlayStation pad (or set Settings › System › "Controller button labels" to
+     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button.
+  5. Press B until the home page shows, then Guide (or F11, or "Back to desktop").
+- **Expected:** 1: the window goes fullscreen and the desktop layout is replaced by the home page:
+  "Continue playing", "Consoles" and "System" rows, a hint bar along the bottom with the pad's
+  letters, titles 40 px and rows 24 px at 1080p, still readable at 25%. The user's zoom setting
+  is untouched; the grids under the rail are drawn at 150% at least. 2: the focus walks the
+  rows; A opens the library page with the console rail over that console's games, its tile
+  marked and centred. 3: the rail steps to the next console and back with the focus staying in
+  the games; Start slides the keyboard over the games, each letter filters them at once, Start
+  again lands on the first match. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family),
+  the confirm key drawn filled; with the swap on, the east button confirms and the labels follow.
+  5: B pops one page at a time and never leaves the mode; Guide, F11 or "Back to desktop" bring
+  the desktop layout back exactly as it was (sidebar, page, zoom). Reduced motion follows
+  RT-1044's class; GNOME's large text scales the labels as everywhere else.
+- **Check:** suite files `tests/test_bigpicture_shell.py`, `tests/test_bigpicture_pages.py`,
+  `tests/test_bigpicture_widgets.py`, `tests/test_bigpicture_osk.py`, `tests/test_controller_glyphs.py`,
+  `tests/test_navigation.py`, `tests/test_navigation_controller.py`
+  (`test_big_picture_and_the_keyboard_go_through_the_window`), `tests/test_ui_gamepad.py`,
+  `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_escape_in_big_picture_is_b_and_never_leaves_the_mode`,
+  `test_the_capture_handler_takes_escape_only_in_big_picture`).
+
+### RT-1148 — The home page: continue playing, the consoles, the system row
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library and a game played at least once.
+- **Steps:**
+  1. Enter Big Picture; `make devbox-shot OUT=$SCRATCH/bp-home.png`.
+  2. Press Down twice and Right three times; `make devbox-shot OUT=$SCRATCH/bp-home-focus.png`.
+  3. Press A.
+- **Expected:** 1: the page reads "Library" with the clock at the right; "Continue playing" holds
+  the last games as wide cards with their cover, name and "console · when · how long"; "Consoles"
+  holds All, Recently played, Favorites (when they exist), each playlist and each console with
+  games, with its icon and count; "System" holds Search, Import ROMs, Sync covers, Share nearby,
+  Settings and Back to desktop. The focus starts on the first continue card (or the first console
+  tile). 2: the focused system tile is filled with the purple accent, its icon and name in white,
+  with no ring around it. 3: the tile's action runs
+  (Search opens the library with the keyboard; Settings the settings page).
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheHomePage`), `tests/test_bigpicture_pages.py`
+  (`ContinueCards`); the screenshots show the three rows and the filled tile.
+
+### RT-1149 — The console rail replaces the sidebar
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1183, 1184.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with three or more consoles.
+- **Steps:**
+  1. Open a console from the home page.
+  2. Press RB/R1 three times, LB/L1 once; then Tab and Shift+Tab on a keyboard.
+  3. Press Up until the focus is on the rail; press Right twice, then A.
+  4. Star a game (Y); press B; look at the rail.
+- **Expected:** 1: the library page shows the rail across the top (LB and RB drawn at its ends,
+  the current scope marked and centred) and that scope's games under it; the focus is on the
+  first card. 2: each press moves the current scope by one, wrapping at the ends, and reloads the
+  games under it; the focus stays in the games. Tab and Shift+Tab do the same from a keyboard.
+  3: from the rail, Right moves the focus along the tiles and A opens that scope with the focus
+  back on the games. 4: when a scope appears or goes (the first favorite, an emptied playlist), the
+  rail rebuilds and keeps the current one marked.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheLibraryPage`),
+  `tests/test_bigpicture_pages.py` (`TheLibraryPageCorners`), `tests/test_bigpicture_widgets.py`
+  (`TileAndRailTests`).
+
+### RT-1150 — The search keyboard slides over the games
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1190.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console with several games.
+- **Steps:**
+  1. On the library page press Start (Ctrl+F on a keyboard).
+  2. Walk to "M", press A, then "A", press A; press X; press Y; press A on "R".
+  3. Press Start (or Done); then press Start and B.
+  4. From the home page press Start.
+- **Expected:** 1: a sheet with the letter grid slides up over the games and the first key is
+  focused; the field reads the query and in which scope it searches. 2: each letter goes into the
+  search box at once and the games filter; X deletes the last letter, Y types a space (never as the
+  first character). 3: Done closes the sheet and puts the focus on the first match; B closes it
+  too; with the query emptied, the search bar closes with it. 4: the library opens on the current
+  scope with the sheet already up.
+- **Check:** suite files `tests/test_bigpicture_osk.py`, `tests/test_bigpicture_shell.py`
+  (`test_the_search_sheet_types_into_the_search_box`), `tests/test_bigpicture_pages.py`
+  (`test_the_search_sheet_toggles_and_respects_a_disabled_search`).
+
+### RT-1151 — The quick menu is the View button's page of everything else
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1189, 1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a cover sync running for step 3.
+- **Steps:**
+  1. Press View (Select / Share / −; Menu on a keyboard).
+  2. Walk the tiles; press B.
+  3. Start a cover sync, open the menu again.
+  4. Choose "Back to desktop"; then "Quit OpenEmux".
+- **Expected:** 1: a dialog with the tiles Search, Import ROMs, Sync covers, Share nearby, Receive
+  games, Rescan library, Settings, Back to desktop and Quit OpenEmux (red), the first one focused,
+  the hints reading A Choose · B Close. 2: B closes it and the focus returns where it was. 3: a
+  "Stop" tile leads the list, naming the task; A on it stops the sync. 4: the first leaves the
+  mode; the second quits the app.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheQuickMenu`).
+
+### RT-1152 — The hint bar always says what the buttons do
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1198.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, no pad connected; then a pad.
+- **Steps:**
+  1. Enter the mode with the mouse (the header button) and look at the bottom bar.
+  2. Connect a pad and press any button; open a dialog (Y on a game then "Remove"); enter
+     selection mode (hold A on a card).
+- **Expected:** 1: the hints are shown even before any key is pressed, with the keyboard's keys
+  standing in (Enter, Esc, Tab, Ctrl+F, Menu, F11). 2: the hints switch to the pad's letters with
+  the confirm key drawn filled; a dialog reads Confirm · Close; selection mode keeps its own
+  hints. The desktop's own hint slots stay empty while the mode is on and come back after it.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheNavigatorInBigPicture`).
+
+### RT-1153 — Everything scales with the window and the text size
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. `make devbox-res RES=1280x720`, then `RES=1920x1080`; `make devbox-shot` after each.
+  2. Settings › System › "Big Picture text size": step it to 150%, then back to 100%.
+  3. Switch the theme to light.
+- **Expected:** 1: every size follows the window's height (1080 is the design's: titles 40 px,
+  rows 24 px, hints 22 px, a 64 px hint bar; 720 draws them at two thirds). 2: the text size
+  multiplies the same scale, live. 3: the surfaces follow the light theme, the purple accent stays.
+  The stylesheet is regenerated only when the scale or the theme actually changes, and released
+  when the window closes.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheTheme`,
+  `test_the_stylesheet_is_released_when_the_window_closes`), `tests/test_bigpicture_pages.py`
+  (`test_the_scale_falls_back_to_the_monitor_and_then_the_design`).
+
+### RT-1154 — Leaving the mode lands on the desktop exactly as it was
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1182.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop on a console page at 100% zoom with the sidebar shown.
+- **Steps:**
+  1. Enter Big Picture, open another console from the rail, press Guide.
+  2. Enter again, press Escape three times on the home page.
+- **Expected:** 1: the desktop layout comes back, not fullscreen, the sidebar where it was, the
+  page stack back in the content pane on the console the rail left it on, the zoom at 100%, the
+  focus on the games; the toast says "Back to the desktop". 2: Escape is B: it pops pages and
+  closes the search sheet, and on the home page it does nothing -- it never leaves the mode. F11,
+  Guide, "Back to desktop" and the quick menu are the ways out.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
+  `tests/test_window.py` (`test_escape_in_big_picture_is_b_and_never_leaves_the_mode`).
+
+### RT-1160 — A game's details is a page: the cover, the save states, the rows
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox; a game with a cover and two save states, one
+  with a screenshot.
+- **Steps:**
+  1. On the library, focus that game and press X (Alt+Enter on a keyboard);
+     `make devbox-shot OUT=$SCRATCH/bp-details.png`.
+  2. Press RB; `make devbox-shot OUT=$SCRATCH/bp-details-next.png`.
+  3. Press B.
+- **Expected:** 1: the page reads "<console> › <game>"; the cover on the left with up to three
+  tiles under it ("Continue / Automatic save" when the game resumes, then "Slot N" with its date
+  and screenshot); on the right the title, "<console> · Never played" (or when and for how long),
+  then the rows "Continue" (or "Play") in the soft accent, with the focus (filled solid purple), "Start fresh" (only when
+  resuming), "Load state" ("N saved", or greyed "No save states yet"), "Favorite", "Settings for
+  this game" (Core, Shader, "Cartridge color" only where the console has two or more shells),
+  "Library and file" (Playlists, Artwork, "Rename…", "Share Nearby…", "Delete ROM…" in red) and the
+  file path; the hints read A Choose · B Back · Y Favorite · LB/RB Previous / next game. 2: the
+  page reloads in place for the next game of the grid, wrapping at the end. 3: back on the grid.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePage`, `TheShoulders`); the
+  screenshots show the two columns and the focused row filled with the accent.
+
+### RT-1161 — Continue, Start fresh and the save states launch the game
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a game with an automatic state and the slots 0 and 3 saved; "Resume where I
+  left off" on.
+- **Steps:**
+  1. Open its details; press A on "Continue".
+  2. Press A on "Start fresh".
+  3. Press A on the "Slot 3" tile; then A on "Load state" and pick a slot.
+  4. Open the details of a game with no state.
+- **Expected:** 1: the accent row reads "Continue" with "Play picks up where you left off", and A
+  launches the game resuming it (the "Continue" tile does the same). 2: launches once without the
+  automatic state. 3: launches into that slot; the chooser lists only the saved slots, each with
+  its date. 4: "Play", no "Start fresh", no tiles, "Load state" greyed with "No save states yet".
+- **Check:** suite file `tests/test_bigpicture_details.py`
+  (`test_play_continue_and_start_fresh_follow_the_automatic_state`,
+  `test_save_states_become_tiles_and_a_chooser`).
+
+### RT-1162 — The per-game settings are choosers that say where the value comes from
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a console with two cores installed.
+- **Steps:**
+  1. On a game's details press A on "Core"; pick the second core.
+  2. Press A on "Core" again; pick the same core; then pick "Console default (…)".
+  3. The same on "Shader"; on "Cartridge color" where the console has shells.
+- **Expected:** 1: the chooser lists "Console default (X)" first, then the cores, the current one
+  marked; after the pick the row's value is the core, its subtitle "Set for this game", and the
+  toast says the core was set. 2: picking the current value writes nothing (no toast); the default
+  clears the override and the row goes back to "Console default (X)" with no subtitle.
+  3: likewise; "Cartridge color" is absent for a console with a single shell.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`TheSettingsRows`).
+
+### RT-1163 — Favorite from the row, from Y, and on the meta line
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a game that is not a favorite.
+- **Steps:**
+  1. On its details press A on "Favorite".
+  2. Press Y (Ctrl+D) anywhere on the page.
+- **Expected:** 1: the switch turns on, the toast "… added to favorites", the meta line gains
+  "★ Favorite" and Favorites appears on the rail. 2: everything toggles back.
+- **Check:** suite file `tests/test_bigpicture_details.py`
+  (`test_the_favorite_switch_the_pad_and_the_meta_line`).
+
+### RT-1164 — Playlists and artwork from the details page
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; one playlist; a game with a cover on disk.
+- **Steps:**
+  1. Press A on "Playlists"; pick the playlist; pick it again; pick "New playlist".
+  2. Press A on "Artwork"; try "Fetch artwork", "Choose cover image" and "Remove cover image".
+- **Expected:** 1: each playlist says "✓ In this playlist" or "Not in it yet"; a pick toggles
+  membership and the chooser comes straight back with the mark redrawn; the row lists the
+  playlists the game is in; "New playlist" opens the name prompt and the game goes into the new
+  one. 2: Fetch starts one sync (box art and, where a frame exists, the label), replacing what is
+  on disk, and the page's cover reloads when it ends; Choose opens the system picker; Remove is
+  offered only with a cover on disk and asks "Remove cover image" first (B cancels), then the cover
+  goes, the toast says so and the placeholder shows.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePlaylistsArtworkAndFileRows`).
+
+### RT-1165 — Rename, Share nearby and Delete from the details page
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1189.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; two games on the same console.
+- **Steps:**
+  1. Press A on "Rename…"; type a new name on the keyboard page; Done.
+  2. Rename again to the other game's name.
+  3. Press A on "Share Nearby…"; then on "Delete ROM…"; confirm.
+- **Expected:** 1: the file and the library entry are renamed and the page follows the game (new
+  title, new path). 2: the toast "… already exists" and the page keeps the game. 3: the Share
+  nearby dialog opens with that game; "Delete ROM…" asks the desktop's "Delete …?" question first,
+  and once the game is gone the details page pops back to the grid.
+- **Check:** suite files `tests/test_bigpicture_details.py`
+  (`test_rename_goes_through_the_keyboard_and_follows_the_game`,
+  `test_share_delete_focus_and_the_hints`), `tests/test_bigpicture_pages.py`
+  (`test_deleting_the_game_a_details_page_shows_pops_it`).
+
+### RT-1166 — Import and Sync covers are pages with the progress beside the options
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1192.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox with the synthetic library.
+- **Steps:**
+  1. From home open "Import ROMs"; `make devbox-shot OUT=$SCRATCH/bp-import.png`.
+  2. Press A on "Rescan library"; `make devbox-shot OUT=$SCRATCH/bp-import-running.png` while it
+     runs.
+  3. Open "Sync covers"; `make devbox-shot OUT=$SCRATCH/bp-covers.png`.
+  4. Press A on a console row; `make devbox-shot OUT=$SCRATCH/bp-covers-running.png`; press A on
+     "Stop".
+- **Expected:** 1: the lead text and the rows "Choose files…", "Scan a folder…", "Receive games",
+  "Rescan library" on the left; on the right the "In progress" panel reading "Nothing is running
+  right now…". 2: the panel shows the banner's title ("Starting ROM scan…", then "Scanning ROMs
+  (n/m)"), a bar when the task has a total and a spinner when not, and a red "Stop" while it can be
+  stopped; the corner chip shows the same title. 3: "Every console" with the game count and one row
+  per console with games; on the right the panel and "Providers, in order" listing the enabled
+  providers as the config orders them, with the note about Settings › Library. 4: the sync starts
+  for that console (toast "Cover sync started…"); "Stop" marks it stopping and disappears; when it
+  ends the panel is idle again.
+- **Check:** suite file `tests/test_bigpicture_tasks.py` (`TheImportPage`, `TheProgressPanel`,
+  `TheCoversPage`); the screenshots show the panel with the bar and "Stop".
+
+### RT-1168 — Settings is a two-column page the shoulders walk
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Open "Settings" from the home page's "System" row (or the quick menu).
+  2. Press RB/R1 once, then LB/L1 twice; press A on the "Video" button at the left.
+  3. Press B.
+- **Expected:** 1: the page shows Library, BIOS, Input, Video, Cores and System down the left,
+  "Library" marked, the crumbs reading "Settings › Library", and the focus on the "ROMs folder"
+  row; the hints read A Change · B Back · LB/RB Section. 2: each shoulder press marks the previous
+  or next section (wrapping at the ends) and lands the focus on its first row; A on a section
+  button does the same. 3: B returns to the home page and never leaves the mode.
+- **Check:** suite file `tests/test_bigpicture_settings.py` (`ThePage`).
+
+### RT-1169 — A choice opens a full-page list that pops when picked
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, Settings › Video.
+- **Steps:**
+  1. Press A on "Sort order".
+  2. Press Down once and A.
+  3. Press A on "Sort order" again, then B.
+- **Expected:** 1: a page lists every order as a row, the one in force marked ● and focused, the
+  crumbs reading "Settings › Video › Sort order", the hints A Pick · B Keep current. 2: the list
+  pops, the row's value reads the new order and the focus is back on that row; the library is
+  re-sorted (same as the desktop's combo). 3: B pops the list and the value is unchanged.
+- **Check:** suite files `tests/test_bigpicture_chooser.py` (`TheChooserPage`),
+  `tests/test_bigpicture_settings.py` (`test_coming_back_from_a_chooser_keeps_the_rows_and_the_focus`).
+
+### RT-1175 — The focus fills the item with the accent, and the console icons have no box
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least two consoles that have icons.
+- **Steps:**
+  1. On the home page, walk the "Consoles" row with Right; `make devbox-shot OUT=$SCRATCH/bp-focus-home.png`.
+  2. Open a console, walk the rail and then the games; `make devbox-shot OUT=$SCRATCH/bp-focus-grid.png`.
+  3. Open Settings and walk a section with a switch and a number row; then open a game's details.
+- **Expected:** 1: the focused tile turns solid purple (#7C3AED) with white name, count and icon;
+  no ring, halo or enlargement is drawn, so nothing is clipped at the edges of the row. The
+  console icons sit straight on the tile, with no square of another colour behind them. 2: the
+  focused rail tile and the focused game card fill with the purple the same way; the current console
+  on the rail stays in the soft purple. 3: the focused row is purple with white text; a switch on it
+  reads white when on, and the number pill stays legible; "Continue"/"Play" and the suggested
+  buttons are drawn in the soft purple until focused, so only one item on screen is solid purple.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheTheme`); the screenshots show the
+  filled focus and no badge background.
+
+### RT-1176 — Big Picture shows the covers and cartridges at the largest zoom
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1199.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 75% zoom (or any zoom other than 200%), a console page
+  in cover view and another in cartridge view (or one page with its own layout).
+- **Steps:**
+  1. Enter Big Picture and open a console; switch to the other one with LB/RB.
+  2. Press Ctrl+minus.
+  3. Leave Big Picture and open both consoles again on the desktop.
+- **Expected:** 1: the game grid itself is built at 200%, the largest zoom, whatever the desktop
+  (or the page's own layout) had: the covers and the cartridges are visibly twice the size of the
+  desktop's 100%, on every page opened in the mode. 2: nothing changes; the zoom is fixed in the
+  mode and the desktop's setting is not written. 3: every page is back at the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`,
+  `test_a_page_opened_in_big_picture_follows_the_mode_both_ways`,
+  `test_a_scope_with_its_own_zoom_still_gets_big_pictures`).
+
+### RT-1178 — Starting straight into Big Picture opens the games at 200%
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1199.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 100% zoom; Settings › "Big Picture" › start in Big
+  Picture on (or the app run with `--big-picture`).
+- **Steps:**
+  1. Close OpenEmux and open it again.
+  2. Open a console in Big Picture's library.
+  3. Leave Big Picture.
+- **Expected:** 1–2: the app opens in Big Picture and the game grid is at 200% from the first page,
+  with no zoom change needed. 3: the desktop is at 100%, the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_starting_in_big_picture_opens_the_games_at_its_zoom`).
+
+### RT-1179 — Big Picture home tile names stay on one line
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least five consoles; locale pt_BR
+  (Settings › System › "Idioma").
+- **Steps:**
+  1. `make devbox-res RES=2560x1440`, open the home page; `make devbox-shot OUT=$SCRATCH/bp-home-1440.png`.
+  2. `make devbox-res RES=1920x1080`; `make devbox-shot OUT=$SCRATCH/bp-home-1080.png`.
+  3. Switch the locale to Français and to Español; capture the home page each time.
+  4. Big Picture Settings › "Text size" at the maximum; walk the "Sistema" row to its last tile.
+  5. Press Menu to open the quick menu.
+- **Expected:** 1 and 2: the "Sistema" row reads "Buscar", "Importar ROMs", "Sincronizar capas",
+  "Compartilhar por perto", "Configurações", "Voltar ao desktop", each an icon and one line of
+  text, all six side by side; in "Consoles", "Jogados recentemente", "Game Boy Advance" and
+  "Super Nintendo" are on one line, and every console tile has the same width. No word anywhere is
+  split with a hyphen and no name is cut mid-letter. 3: the same; a name too long for its tile ends
+  in "…". 4: the names stay whole; the row scrolls with the focus instead of squeezing the tiles.
+  5: the quick menu tile names are on one line, none hyphenated.
+- **Check:** suite files `tests/test_bigpicture_widgets.py`
+  (`test_a_tile_name_stays_on_one_line_and_never_breaks_a_word`), `tests/test_bigpicture_shell.py`
+  (`test_the_stylesheet_is_scoped_and_scaled`); the screenshots show no hyphenated word.
+
 ### RT-341 — The site states the relationship with OpenEmu in every language
 - **Retired:** 2026-11-13 (no issue; the website moved to its own repository).
 - **Reason:** The site left this repository: it lives in
@@ -17565,39 +17984,6 @@ has no Android device, so these are `MANUAL`.
 - **Check:** suite files `tests/test_rom_card_widget.py` (`WhatAScreenReaderHearsTests`),
   `tests/test_window.py` (`test_the_card_transitions_follow_the_desktops_animation_setting`).
 
-### RT-1045 — Big Picture: the couch layout replaces the zoomed desktop
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
-  pipeline's virtual pad), a library with several consoles and a game played at least once.
-- **Steps:**
-  1. Press F11 (or the pad's Guide button, or the screen button in the header bar, or "Big
-     Picture" in the main menu); take a screenshot and scale it to 25%.
-  2. On the home page press Down, then Right twice, then A on a console tile.
-  3. Press RB/R1 twice, then LB/L1; then Start, type "mar" on the keyboard, press Start again.
-  4. Plug a PlayStation pad (or set Settings › System › "Controller button labels" to
-     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button.
-  5. Press B until the home page shows, then Guide (or F11, or "Back to desktop").
-- **Expected:** 1: the window goes fullscreen and the desktop layout is replaced by the home page:
-  "Continue playing", "Consoles" and "System" rows, a hint bar along the bottom with the pad's
-  letters, titles 40 px and rows 24 px at 1080p, still readable at 25%. The user's zoom setting
-  is untouched; the grids under the rail are drawn at 150% at least. 2: the focus walks the
-  rows; A opens the library page with the console rail over that console's games, its tile
-  marked and centred. 3: the rail steps to the next console and back with the focus staying in
-  the games; Start slides the keyboard over the games, each letter filters them at once, Start
-  again lands on the first match. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family),
-  the confirm key drawn filled; with the swap on, the east button confirms and the labels follow.
-  5: B pops one page at a time and never leaves the mode; Guide, F11 or "Back to desktop" bring
-  the desktop layout back exactly as it was (sidebar, page, zoom). Reduced motion follows
-  RT-1044's class; GNOME's large text scales the labels as everywhere else.
-- **Check:** suite files `tests/test_bigpicture_shell.py`, `tests/test_bigpicture_pages.py`,
-  `tests/test_bigpicture_widgets.py`, `tests/test_bigpicture_osk.py`, `tests/test_controller_glyphs.py`,
-  `tests/test_navigation.py`, `tests/test_navigation_controller.py`
-  (`test_big_picture_and_the_keyboard_go_through_the_window`), `tests/test_ui_gamepad.py`,
-  `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
-  `test_escape_in_big_picture_is_b_and_never_leaves_the_mode`,
-  `test_the_capture_handler_takes_escape_only_in_big_picture`).
-
 ## Android — Pause with the controller
 
 The controller combination that opens the pause sheet while a game plays (issue 924;
@@ -18255,126 +18641,6 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_the_capture_handler_takes_escape_only_in_big_picture`); the app log says `big picture: on`
   once per press (`make devbox-app ACTION=log`).
 
-### RT-1148 — The home page: continue playing, the consoles, the system row
-- **Area:** Navigation
-- **Mode:** AUTO-UI
-- **Preconditions:** the devbox with the synthetic library and a game played at least once.
-- **Steps:**
-  1. Enter Big Picture; `make devbox-shot OUT=$SCRATCH/bp-home.png`.
-  2. Press Down twice and Right three times; `make devbox-shot OUT=$SCRATCH/bp-home-focus.png`.
-  3. Press A.
-- **Expected:** 1: the page reads "Library" with the clock at the right; "Continue playing" holds
-  the last games as wide cards with their cover, name and "console · when · how long"; "Consoles"
-  holds All, Recently played, Favorites (when they exist), each playlist and each console with
-  games, with its icon and count; "System" holds Search, Import ROMs, Sync covers, Share nearby,
-  Settings and Back to desktop. The focus starts on the first continue card (or the first console
-  tile). 2: the focused system tile is filled with the purple accent, its icon and name in white,
-  with no ring around it. 3: the tile's action runs
-  (Search opens the library with the keyboard; Settings the settings page).
-- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheHomePage`), `tests/test_bigpicture_pages.py`
-  (`ContinueCards`); the screenshots show the three rows and the filled tile.
-
-### RT-1149 — The console rail replaces the sidebar
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** a library with three or more consoles.
-- **Steps:**
-  1. Open a console from the home page.
-  2. Press RB/R1 three times, LB/L1 once; then Tab and Shift+Tab on a keyboard.
-  3. Press Up until the focus is on the rail; press Right twice, then A.
-  4. Star a game (Y); press B; look at the rail.
-- **Expected:** 1: the library page shows the rail across the top (LB and RB drawn at its ends,
-  the current scope marked and centred) and that scope's games under it; the focus is on the
-  first card. 2: each press moves the current scope by one, wrapping at the ends, and reloads the
-  games under it; the focus stays in the games. Tab and Shift+Tab do the same from a keyboard.
-  3: from the rail, Right moves the focus along the tiles and A opens that scope with the focus
-  back on the games. 4: when a scope appears or goes (the first favorite, an emptied playlist), the
-  rail rebuilds and keeps the current one marked.
-- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheLibraryPage`),
-  `tests/test_bigpicture_pages.py` (`TheLibraryPageCorners`), `tests/test_bigpicture_widgets.py`
-  (`TileAndRailTests`).
-
-### RT-1150 — The search keyboard slides over the games
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** a console with several games.
-- **Steps:**
-  1. On the library page press Start (Ctrl+F on a keyboard).
-  2. Walk to "M", press A, then "A", press A; press X; press Y; press A on "R".
-  3. Press Start (or Done); then press Start and B.
-  4. From the home page press Start.
-- **Expected:** 1: a sheet with the letter grid slides up over the games and the first key is
-  focused; the field reads the query and in which scope it searches. 2: each letter goes into the
-  search box at once and the games filter; X deletes the last letter, Y types a space (never as the
-  first character). 3: Done closes the sheet and puts the focus on the first match; B closes it
-  too; with the query emptied, the search bar closes with it. 4: the library opens on the current
-  scope with the sheet already up.
-- **Check:** suite files `tests/test_bigpicture_osk.py`, `tests/test_bigpicture_shell.py`
-  (`test_the_search_sheet_types_into_the_search_box`), `tests/test_bigpicture_pages.py`
-  (`test_the_search_sheet_toggles_and_respects_a_disabled_search`).
-
-### RT-1151 — The quick menu is the View button's page of everything else
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on; a cover sync running for step 3.
-- **Steps:**
-  1. Press View (Select / Share / −; Menu on a keyboard).
-  2. Walk the tiles; press B.
-  3. Start a cover sync, open the menu again.
-  4. Choose "Back to desktop"; then "Quit OpenEmux".
-- **Expected:** 1: a dialog with the tiles Search, Import ROMs, Sync covers, Share nearby, Receive
-  games, Rescan library, Settings, Back to desktop and Quit OpenEmux (red), the first one focused,
-  the hints reading A Choose · B Close. 2: B closes it and the focus returns where it was. 3: a
-  "Stop" tile leads the list, naming the task; A on it stops the sync. 4: the first leaves the
-  mode; the second quits the app.
-- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheQuickMenu`).
-
-### RT-1152 — The hint bar always says what the buttons do
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on, no pad connected; then a pad.
-- **Steps:**
-  1. Enter the mode with the mouse (the header button) and look at the bottom bar.
-  2. Connect a pad and press any button; open a dialog (Y on a game then "Remove"); enter
-     selection mode (hold A on a card).
-- **Expected:** 1: the hints are shown even before any key is pressed, with the keyboard's keys
-  standing in (Enter, Esc, Tab, Ctrl+F, Menu, F11). 2: the hints switch to the pad's letters with
-  the confirm key drawn filled; a dialog reads Confirm · Close; selection mode keeps its own
-  hints. The desktop's own hint slots stay empty while the mode is on and come back after it.
-- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheNavigatorInBigPicture`).
-
-### RT-1153 — Everything scales with the window and the text size
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on.
-- **Steps:**
-  1. `make devbox-res RES=1280x720`, then `RES=1920x1080`; `make devbox-shot` after each.
-  2. Settings › System › "Big Picture text size": step it to 150%, then back to 100%.
-  3. Switch the theme to light.
-- **Expected:** 1: every size follows the window's height (1080 is the design's: titles 40 px,
-  rows 24 px, hints 22 px, a 64 px hint bar; 720 draws them at two thirds). 2: the text size
-  multiplies the same scale, live. 3: the surfaces follow the light theme, the purple accent stays.
-  The stylesheet is regenerated only when the scale or the theme actually changes, and released
-  when the window closes.
-- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheTheme`,
-  `test_the_stylesheet_is_released_when_the_window_closes`), `tests/test_bigpicture_pages.py`
-  (`test_the_scale_falls_back_to_the_monitor_and_then_the_design`).
-
-### RT-1154 — Leaving the mode lands on the desktop exactly as it was
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** the desktop on a console page at 100% zoom with the sidebar shown.
-- **Steps:**
-  1. Enter Big Picture, open another console from the rail, press Guide.
-  2. Enter again, press Escape three times on the home page.
-- **Expected:** 1: the desktop layout comes back, not fullscreen, the sidebar where it was, the
-  page stack back in the content pane on the console the rail left it on, the zoom at 100%, the
-  focus on the games; the toast says "Back to the desktop". 2: Escape is B: it pops pages and
-  closes the search sheet, and on the home page it does nothing -- it never leaves the mode. F11,
-  Guide, "Back to desktop" and the quick menu are the ways out.
-- **Check:** suite files `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
-  `tests/test_window.py` (`test_escape_in_big_picture_is_b_and_never_leaves_the_mode`).
-
 ### RT-1155 — Big Picture Settings › Input: the desktop's Input page as rows
 - **Area:** Input
 - **Mode:** AUTO-SUITE
@@ -18448,129 +18714,6 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   as the destructive answer; Cancel stays, Discard leaves and drops the change.
 - **Check:** suite file `tests/test_bigpicture_input.py` (`SavingAndResetting`).
 
-### RT-1160 — A game's details is a page: the cover, the save states, the rows
-- **Area:** Navigation
-- **Mode:** AUTO-UI
-- **Preconditions:** Big Picture on in the devbox; a game with a cover and two save states, one
-  with a screenshot.
-- **Steps:**
-  1. On the library, focus that game and press X (Alt+Enter on a keyboard);
-     `make devbox-shot OUT=$SCRATCH/bp-details.png`.
-  2. Press RB; `make devbox-shot OUT=$SCRATCH/bp-details-next.png`.
-  3. Press B.
-- **Expected:** 1: the page reads "<console> › <game>"; the cover on the left with up to three
-  tiles under it ("Continue / Automatic save" when the game resumes, then "Slot N" with its date
-  and screenshot); on the right the title, "<console> · Never played" (or when and for how long),
-  then the rows "Continue" (or "Play") in the soft accent, with the focus (filled solid purple), "Start fresh" (only when
-  resuming), "Load state" ("N saved", or greyed "No save states yet"), "Favorite", "Settings for
-  this game" (Core, Shader, "Cartridge color" only where the console has two or more shells),
-  "Library and file" (Playlists, Artwork, "Rename…", "Share Nearby…", "Delete ROM…" in red) and the
-  file path; the hints read A Choose · B Back · Y Favorite · LB/RB Previous / next game. 2: the
-  page reloads in place for the next game of the grid, wrapping at the end. 3: back on the grid.
-- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePage`, `TheShoulders`); the
-  screenshots show the two columns and the focused row filled with the accent.
-
-### RT-1161 — Continue, Start fresh and the save states launch the game
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** a game with an automatic state and the slots 0 and 3 saved; "Resume where I
-  left off" on.
-- **Steps:**
-  1. Open its details; press A on "Continue".
-  2. Press A on "Start fresh".
-  3. Press A on the "Slot 3" tile; then A on "Load state" and pick a slot.
-  4. Open the details of a game with no state.
-- **Expected:** 1: the accent row reads "Continue" with "Play picks up where you left off", and A
-  launches the game resuming it (the "Continue" tile does the same). 2: launches once without the
-  automatic state. 3: launches into that slot; the chooser lists only the saved slots, each with
-  its date. 4: "Play", no "Start fresh", no tiles, "Load state" greyed with "No save states yet".
-- **Check:** suite file `tests/test_bigpicture_details.py`
-  (`test_play_continue_and_start_fresh_follow_the_automatic_state`,
-  `test_save_states_become_tiles_and_a_chooser`).
-
-### RT-1162 — The per-game settings are choosers that say where the value comes from
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on; a console with two cores installed.
-- **Steps:**
-  1. On a game's details press A on "Core"; pick the second core.
-  2. Press A on "Core" again; pick the same core; then pick "Console default (…)".
-  3. The same on "Shader"; on "Cartridge color" where the console has shells.
-- **Expected:** 1: the chooser lists "Console default (X)" first, then the cores, the current one
-  marked; after the pick the row's value is the core, its subtitle "Set for this game", and the
-  toast says the core was set. 2: picking the current value writes nothing (no toast); the default
-  clears the override and the row goes back to "Console default (X)" with no subtitle.
-  3: likewise; "Cartridge color" is absent for a console with a single shell.
-- **Check:** suite file `tests/test_bigpicture_details.py` (`TheSettingsRows`).
-
-### RT-1163 — Favorite from the row, from Y, and on the meta line
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on; a game that is not a favorite.
-- **Steps:**
-  1. On its details press A on "Favorite".
-  2. Press Y (Ctrl+D) anywhere on the page.
-- **Expected:** 1: the switch turns on, the toast "… added to favorites", the meta line gains
-  "★ Favorite" and Favorites appears on the rail. 2: everything toggles back.
-- **Check:** suite file `tests/test_bigpicture_details.py`
-  (`test_the_favorite_switch_the_pad_and_the_meta_line`).
-
-### RT-1164 — Playlists and artwork from the details page
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on; one playlist; a game with a cover on disk.
-- **Steps:**
-  1. Press A on "Playlists"; pick the playlist; pick it again; pick "New playlist".
-  2. Press A on "Artwork"; try "Fetch artwork", "Choose cover image" and "Remove cover image".
-- **Expected:** 1: each playlist says "✓ In this playlist" or "Not in it yet"; a pick toggles
-  membership and the chooser comes straight back with the mark redrawn; the row lists the
-  playlists the game is in; "New playlist" opens the name prompt and the game goes into the new
-  one. 2: Fetch starts one sync (box art and, where a frame exists, the label), replacing what is
-  on disk, and the page's cover reloads when it ends; Choose opens the system picker; Remove is
-  offered only with a cover on disk and asks "Remove cover image" first (B cancels), then the cover
-  goes, the toast says so and the placeholder shows.
-- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePlaylistsArtworkAndFileRows`).
-
-### RT-1165 — Rename, Share nearby and Delete from the details page
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on; two games on the same console.
-- **Steps:**
-  1. Press A on "Rename…"; type a new name on the keyboard page; Done.
-  2. Rename again to the other game's name.
-  3. Press A on "Share Nearby…"; then on "Delete ROM…"; confirm.
-- **Expected:** 1: the file and the library entry are renamed and the page follows the game (new
-  title, new path). 2: the toast "… already exists" and the page keeps the game. 3: the Share
-  nearby dialog opens with that game; "Delete ROM…" asks the desktop's "Delete …?" question first,
-  and once the game is gone the details page pops back to the grid.
-- **Check:** suite files `tests/test_bigpicture_details.py`
-  (`test_rename_goes_through_the_keyboard_and_follows_the_game`,
-  `test_share_delete_focus_and_the_hints`), `tests/test_bigpicture_pages.py`
-  (`test_deleting_the_game_a_details_page_shows_pops_it`).
-
-### RT-1166 — Import and Sync covers are pages with the progress beside the options
-- **Area:** Navigation
-- **Mode:** AUTO-UI
-- **Preconditions:** Big Picture on in the devbox with the synthetic library.
-- **Steps:**
-  1. From home open "Import ROMs"; `make devbox-shot OUT=$SCRATCH/bp-import.png`.
-  2. Press A on "Rescan library"; `make devbox-shot OUT=$SCRATCH/bp-import-running.png` while it
-     runs.
-  3. Open "Sync covers"; `make devbox-shot OUT=$SCRATCH/bp-covers.png`.
-  4. Press A on a console row; `make devbox-shot OUT=$SCRATCH/bp-covers-running.png`; press A on
-     "Stop".
-- **Expected:** 1: the lead text and the rows "Choose files…", "Scan a folder…", "Receive games",
-  "Rescan library" on the left; on the right the "In progress" panel reading "Nothing is running
-  right now…". 2: the panel shows the banner's title ("Starting ROM scan…", then "Scanning ROMs
-  (n/m)"), a bar when the task has a total and a spinner when not, and a red "Stop" while it can be
-  stopped; the corner chip shows the same title. 3: "Every console" with the game count and one row
-  per console with games; on the right the panel and "Providers, in order" listing the enabled
-  providers as the config orders them, with the note about Settings › Library. 4: the sync starts
-  for that console (toast "Cover sync started…"); "Stop" marks it stopping and disappears; when it
-  ends the panel is idle again.
-- **Check:** suite file `tests/test_bigpicture_tasks.py` (`TheImportPage`, `TheProgressPanel`,
-  `TheCoversPage`); the screenshots show the panel with the bar and "Stop".
-
 ### RT-1167 — The desktop's dialogs and the first-boot screen are drawn for the couch
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
@@ -18589,40 +18732,10 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_app_bootstrap.py` (`test_opening_into_big_picture_dresses_the_progress_screen`,
   `test_its_labels_carry_the_big_picture_classes`).
 
-### RT-1168 — Settings is a two-column page the shoulders walk
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on.
-- **Steps:**
-  1. Open "Settings" from the home page's "System" row (or the quick menu).
-  2. Press RB/R1 once, then LB/L1 twice; press A on the "Video" button at the left.
-  3. Press B.
-- **Expected:** 1: the page shows Library, BIOS, Input, Video, Cores and System down the left,
-  "Library" marked, the crumbs reading "Settings › Library", and the focus on the "ROMs folder"
-  row; the hints read A Change · B Back · LB/RB Section. 2: each shoulder press marks the previous
-  or next section (wrapping at the ends) and lands the focus on its first row; A on a section
-  button does the same. 3: B returns to the home page and never leaves the mode.
-- **Check:** suite file `tests/test_bigpicture_settings.py` (`ThePage`).
-
-### RT-1169 — A choice opens a full-page list that pops when picked
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on, Settings › Video.
-- **Steps:**
-  1. Press A on "Sort order".
-  2. Press Down once and A.
-  3. Press A on "Sort order" again, then B.
-- **Expected:** 1: a page lists every order as a row, the one in force marked ● and focused, the
-  crumbs reading "Settings › Video › Sort order", the hints A Pick · B Keep current. 2: the list
-  pops, the row's value reads the new order and the focus is back on that row; the library is
-  re-sorted (same as the desktop's combo). 3: B pops the list and the value is unchanged.
-- **Check:** suite files `tests/test_bigpicture_chooser.py` (`TheChooserPage`),
-  `tests/test_bigpicture_settings.py` (`test_coming_back_from_a_chooser_keeps_the_rows_and_the_focus`).
-
 ### RT-1170 — A text value is typed on the on-screen keyboard
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on, Settings › System › "Share nearby".
+- **Preconditions:** Big Picture on, Settings › "Device name" (under SHARE NEARBY).
 - **Steps:**
   1. Press A on "Device name"; type "Couch" with A on the keys; press X once; press A on "Done".
   2. Press A on "Device name" again; type a letter; press A on "Cancel" (or B).
@@ -18640,7 +18753,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 ### RT-1171 — Left and Right reorder consoles and artwork providers
 - **Area:** Library
 - **Mode:** AUTO-SUITE
-- **Preconditions:** Big Picture on, a library with two or more consoles; Settings › Library.
+- **Preconditions:** Big Picture on, a library with two or more consoles; Settings › "ROM folder"
+  for the console order, Settings › "Artwork providers" for the providers.
 - **Steps:**
   1. Focus the first row under "Console order"; press Left, then Right.
   2. Focus the first row under "Artwork providers"; press Right; press A on the row.
@@ -18658,7 +18772,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; signed in to RetroAchievements for step 3.
 - **Steps:**
-  1. Settings › Video › "Restore defaults": press A, then B.
+  1. Settings › System › "Restore defaults": press A, then B.
   2. Settings › System › Saves › "Import saves": press A, then A on "Choose a backup…".
   3. Settings › System › RetroAchievements › "Sign out": press A, then A on "Sign out".
 - **Expected:** 1: an alert with Cancel focused; B closes it and the shaders are untouched (the
@@ -18696,42 +18810,6 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_bigpicture_config.py`, `tests/test_bigpicture_shell.py`
   (`test_the_setting_and_the_flag_open_the_mode_at_start`).
 
-### RT-1175 — The focus fills the item with the accent, and the console icons have no box
-- **Area:** Navigation
-- **Mode:** AUTO-UI
-- **Preconditions:** Big Picture on, a library with at least two consoles that have icons.
-- **Steps:**
-  1. On the home page, walk the "Consoles" row with Right; `make devbox-shot OUT=$SCRATCH/bp-focus-home.png`.
-  2. Open a console, walk the rail and then the games; `make devbox-shot OUT=$SCRATCH/bp-focus-grid.png`.
-  3. Open Settings and walk a section with a switch and a number row; then open a game's details.
-- **Expected:** 1: the focused tile turns solid purple (#7C3AED) with white name, count and icon;
-  no ring, halo or enlargement is drawn, so nothing is clipped at the edges of the row. The
-  console icons sit straight on the tile, with no square of another colour behind them. 2: the
-  focused rail tile and the focused game card fill with the purple the same way; the current console
-  on the rail stays in the soft purple. 3: the focused row is purple with white text; a switch on it
-  reads white when on, and the number pill stays legible; "Continue"/"Play" and the suggested
-  buttons are drawn in the soft purple until focused, so only one item on screen is solid purple.
-- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheTheme`); the screenshots show the
-  filled focus and no badge background.
-
-### RT-1176 — Big Picture shows the covers and cartridges at the largest zoom
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** the desktop library at 75% zoom (or any zoom other than 200%), a console page
-  in cover view and another in cartridge view (or one page with its own layout).
-- **Steps:**
-  1. Enter Big Picture and open a console; switch to the other one with LB/RB.
-  2. Press Ctrl+minus.
-  3. Leave Big Picture and open both consoles again on the desktop.
-- **Expected:** 1: the game grid itself is built at 200%, the largest zoom, whatever the desktop
-  (or the page's own layout) had: the covers and the cartridges are visibly twice the size of the
-  desktop's 100%, on every page opened in the mode. 2: nothing changes; the zoom is fixed in the
-  mode and the desktop's setting is not written. 3: every page is back at the zoom it had before.
-- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
-  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`,
-  `test_a_page_opened_in_big_picture_follows_the_mode_both_ways`,
-  `test_a_scope_with_its_own_zoom_still_gets_big_pictures`).
-
 ### RT-1177 — A game opened from Big Picture starts fullscreen
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
@@ -18744,48 +18822,13 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite files `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`),
   `tests/test_retroarch_launcher.py` (`test_the_launch_mode_setting_reaches_the_launch_both_ways`).
 
-### RT-1178 — Starting straight into Big Picture opens the games at 200%
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** the desktop library at 100% zoom; Settings › "Big Picture" › start in Big
-  Picture on (or the app run with `--big-picture`).
-- **Steps:**
-  1. Close OpenEmux and open it again.
-  2. Open a console in Big Picture's library.
-  3. Leave Big Picture.
-- **Expected:** 1–2: the app opens in Big Picture and the game grid is at 200% from the first page,
-  with no zoom change needed. 3: the desktop is at 100%, the zoom it had before.
-- **Check:** suite file `tests/test_window.py` (`test_starting_in_big_picture_opens_the_games_at_its_zoom`).
-
-### RT-1179 — Big Picture home tile names stay on one line
-- **Area:** Navigation
-- **Mode:** AUTO-UI
-- **Preconditions:** Big Picture on, a library with at least five consoles; locale pt_BR
-  (Settings › System › "Idioma").
-- **Steps:**
-  1. `make devbox-res RES=2560x1440`, open the home page; `make devbox-shot OUT=$SCRATCH/bp-home-1440.png`.
-  2. `make devbox-res RES=1920x1080`; `make devbox-shot OUT=$SCRATCH/bp-home-1080.png`.
-  3. Switch the locale to Français and to Español; capture the home page each time.
-  4. Big Picture Settings › "Text size" at the maximum; walk the "Sistema" row to its last tile.
-  5. Press Menu to open the quick menu.
-- **Expected:** 1 and 2: the "Sistema" row reads "Buscar", "Importar ROMs", "Sincronizar capas",
-  "Compartilhar por perto", "Configurações", "Voltar ao desktop", each an icon and one line of
-  text, all six side by side; in "Consoles", "Jogados recentemente", "Game Boy Advance" and
-  "Super Nintendo" are on one line, and every console tile has the same width. No word anywhere is
-  split with a hyphen and no name is cut mid-letter. 3: the same; a name too long for its tile ends
-  in "…". 4: the names stay whole; the row scrolls with the focus instead of squeezing the tiles.
-  5: the quick menu tile names are on one line, none hyphenated.
-- **Check:** suite files `tests/test_bigpicture_widgets.py`
-  (`test_a_tile_name_stays_on_one_line_and_never_breaks_a_word`), `tests/test_bigpicture_shell.py`
-  (`test_the_stylesheet_is_scoped_and_scaled`); the screenshots show no hyphenated word.
-
 ### RT-1180 — The Big Picture game grid only scrolls down, never sideways
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a console with a dozen games or more, one of them with a long title
   (e.g. "The Legend of Zelda - A Link to the Past (USA) (Rev 1)").
 - **Steps:**
-  1. Enter Big Picture and open that console from the rail.
+  1. Enter Big Picture and open that console from the Shelf.
   2. Scroll sideways over the games (touchpad, or Shift + mouse wheel); press D-pad right along a
      row until the last game of the row.
   3. Scroll down with the wheel, or D-pad down, to the last game.
@@ -18796,3 +18839,254 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   4: the previous and next console open, as before.
 - **Check:** suite file `tests/test_bigpicture_pages.py`
   (`test_a_long_title_never_widens_the_columns_past_the_screen`).
+
+### RT-1181 — Big Picture opens on the Shelf: the rail, the console cards in their colors
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`) with the synthetic
+  library, locale English.
+- **Steps:**
+  1. Start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf.png`.
+- **Expected:** On the left, the rail: the app's logo, then "Library" (on a purple pill),
+  "Recent", "Import", "Settings". On the right, "Shelf" in big letters with "N consoles · M games"
+  under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
+  cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
+  its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left, its short
+  code ("NES", "SNES", "PS1") over its name and "N games" under it. The clock in the top right
+  corner. The hint bar at the bottom, centered: Enter Open · Alt+Enter Order · Ctrl+F Search ·
+  Tab Tabs. The whole mode is dark whatever the desktop theme. The focused card sits on a dark
+  purple plate; no ring, no glow.
+- **Check:** the screenshot shows all of the above; `tests/test_bigpicture_shell.py`
+  (`TheShelf`, `TheTabs`).
+
+### RT-1182 — LB and RB walk the tabs from a tab's first page; B goes back to the Library
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, the Shelf showing.
+- **Steps:**
+  1. Press RB four times (Tab on a keyboard), then LB once.
+  2. On "Recent", press B; on the Shelf press B again.
+- **Expected:** 1: Library → Recent → Import → Settings → Library, then back to Settings; the pill
+  follows the tab. 2: B on another tab's first page lands on the Shelf; B on the Shelf does
+  nothing and never leaves the mode.
+- **Check:** `tests/test_bigpicture_shell.py` (`TheTabs`).
+
+### RT-1183 — A console card opens its games beside the detail pane
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1181 done.
+- **Steps:**
+  1. Press A on the "NES" card; `make devbox-shot OUT=$SCRATCH/bp-games.png`.
+- **Expected:** On the left: "‹ Shelf" with a search and a filter button; "NES" as the eyebrow,
+  "Nintendo (NES)" in big letters and "N games"; the console chips (All · Favorites · NES · GB ...)
+  with NES white; the filter chips "Favorites · N", "Has save state · N", "Missing artwork · N",
+  "Never played · N"; "Cartridges" with a three-way switch; the cartridges three to a row. On the
+  right, the pane reads "Select a game to see it here". Hints: Enter Details · Ctrl+D Favorite ·
+  Alt+Enter Options · Tab Console · Menu Select · Esc Shelf.
+- **Check:** the screenshot shows the above; `tests/test_bigpicture_games.py` (`TheGamesPage`).
+
+### RT-1184 — LB and RB change the console chip and the games follow
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the games page of a console, the focus on a game.
+- **Steps:**
+  1. Press RB, then LB.
+- **Expected:** the next chip becomes current (white) and the grid shows its games, the focus
+  still in the grid; LB comes back. The chips row scrolls, the grid never does sideways.
+- **Check:** `tests/test_bigpicture_games.py`
+  (`test_the_shoulders_walk_the_chips_and_the_focus_stays_in_the_grid`).
+
+### RT-1185 — The filter chips count and filter the games
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console where one game is a favorite.
+- **Steps:**
+  1. Press A on "Favorites · 1"; press it again.
+  2. Press the filter button (the "⋯" at the top) twice.
+- **Expected:** 1: the chip turns purple and only the favorite is listed; again, every game comes
+  back. 2: the chips row hides and comes back; a chip that was on stays on.
+- **Check:** `tests/test_bigpicture_games.py` (`test_the_filter_chips_count_and_filter`).
+
+### RT-1186 — The view switch is Big Picture's own
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop shows a console as covers.
+- **Steps:**
+  1. In Big Picture, on that console, press A on the list button of the switch; then on covers.
+  2. Leave Big Picture.
+- **Expected:** 1: the heading reads "List", then "Covers", and the games follow. 2: the desktop
+  shows that console exactly as before (its own view untouched).
+- **Check:** `tests/test_bigpicture_games.py` (`test_the_view_switch_is_big_pictures_own`).
+
+### RT-1187 — All games is grouped by console with a header per console
+- **Area:** Library
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1183 done.
+- **Steps:**
+  1. Press LB until "All" is current; `make devbox-shot OUT=$SCRATCH/bp-all.png`.
+- **Expected:** "ALL CONSOLES" over "All games"; the games under one header per console (icon,
+  name, "N games").
+- **Check:** the screenshot shows the headers.
+
+### RT-1188 — A on a game shows it in the pane: Play, the states, the per-game rows
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1183 done, the synthetic library; run the app with
+  `GSK_RENDERER=cairo` (the devbox's GL renderer can stop redrawing).
+- **Steps:**
+  1. Press A on a game; `make devbox-shot OUT=$SCRATCH/bp-pane.png`.
+  2. Press X; press B.
+- **Expected:** 1: the pane shows the expand, star and share buttons, the art with "Search
+  artwork…" under it, the title with a pencil, "Console · Core · never played", a purple "Play"
+  (focused), "Save states" with "None yet. Save from the in-game menu.", and the Core and Shader
+  rows with a "DEFAULT" tag. The hints read Play · Favorite · Share · Back. 2: X fills the star
+  (the game is a favorite); B puts the focus back on the game in the grid.
+- **Check:** the screenshot; `tests/test_bigpicture_games.py`
+  (`test_a_game_shows_in_the_pane_and_b_goes_back_to_the_grid`), `tests/test_bigpicture_details.py`.
+
+### RT-1189 — Y on a game opens its options; Menu selects several
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the games page, the focus on a game.
+- **Steps:**
+  1. Press Y; press B.
+  2. Press Menu (Start on the pad); press A on two games; press X; press B.
+- **Expected:** 1: a page lists "Share nearby", "Rename", "Artwork", "Core", "Playlists",
+  "Remove from library"; B closes it. 2: multi-select: A toggles a game, X selects all, Y would
+  remove the selection (asking first), View shares it, B leaves.
+- **Check:** `tests/test_bigpicture_games.py` (`test_y_opens_the_options_sheet`),
+  `tests/test_bigpicture_shell.py` (`test_the_resolution_of_every_context`).
+
+### RT-1190 — Search works with the pad: the keyboard over the games
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, the Shelf showing.
+- **Steps:**
+  1. Press View (Ctrl+F); type "C" with A on the keys; type "h" on a real keyboard.
+  2. Press Start (Done).
+- **Expected:** 1: "All games" opens and the keyboard slides up over it; each letter (pad or
+  keyboard) filters the games live and the page says "Searching “ch”". 2: the keyboard goes, the
+  filter stays.
+- **Check:** `tests/test_bigpicture_games.py` (`TheSearch`).
+
+### RT-1191 — Recent lists the games played last
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** two games played; then a fresh library.
+- **Steps:**
+  1. Open the "Recent" tab; press A on the first row.
+  2. With nothing played, open "Recent".
+- **Expected:** 1: the games played, newest first (at most 12), each with its last save state's
+  screenshot (or its art) and "Console · played ..."; A opens the game's page. 2: "Nothing played
+  yet".
+- **Check:** `tests/test_bigpicture_games.py` (`TheRecentTab`).
+
+### RT-1192 — Import: choose files or a folder with the pad
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a folder with a subfolder and two .sfc files.
+- **Steps:**
+  1. Open the "Import" tab; press A on "Choose files".
+  2. Press A on a file; press Y.
+  3. Press A on "Choose a whole folder"; enter the subfolder; press B; press Y.
+- **Expected:** 1: the tab shows the intro, "Choose files" (purple), "Choose a whole folder",
+  "Receive games" and "ACCEPTED FORMATS" with every console's extensions (".zip" included); the
+  browser lists folders first, then only importable files. 2: the file is marked (✓) and Y
+  imports it, each file to the console its extension names. 3: A enters, B goes up a folder, Y
+  imports the folder on screen.
+- **Check:** `tests/test_bigpicture_games.py` (`TheImportTab`, `TheFileBrowser`).
+
+### RT-1193 — Settings: Android's list on the left, the entry on the right
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Open the "Settings" tab; `make devbox-shot OUT=$SCRATCH/bp-settings.png`.
+  2. Press A on "Theme"; press B; walk to a console entry and press A.
+- **Expected:** 1: "Settings"; the BIOS card ("N consoles need files"); APPEARANCE (Theme,
+  Language); ACHIEVEMENTS (RetroAchievements); ARTWORK (Artwork providers); CONSOLES (one entry per
+  console with games, "core · shader" under it); SHARE NEARBY (Device name); GENERAL (ROM folder,
+  Controllers, Check for updates — not in a Flatpak —, System, About and licenses); "Back to
+  desktop" last. The right side reads "Choose a setting on the left". 2: the entry opens on the
+  right with the focus in it; B goes back to the list; a console shows its core, shader, bezel
+  (4:3 consoles) and core options.
+- **Check:** the screenshot; `tests/test_bigpicture_settings.py` (`ThePage`, `TheConsoleSection`).
+
+### RT-1194 — Settings › Controllers chooses what opens the pause menu
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Settings › "Controllers" › "Open the pause menu with": pick "Hold Start".
+- **Expected:** the choices are "Guide button" (the default), "Hold Start", "Start + Select",
+  "L3 + R3" and "Off"; the pick is stored and the pad reader uses it at once. "Button mapping"
+  opens the controller drawing on the right.
+- **Check:** `tests/test_bigpicture_settings.py`
+  (`test_language_theme_and_the_interface_rows`, `test_the_controllers_entry_opens_the_mapping`).
+
+### RT-1195 — A game starts behind a splash with its art
+- **Area:** Navigation
+- **Mode:** MANUAL
+- **Preconditions:** Big Picture on, a real game and its core.
+- **Steps:**
+  1. Press Play on a game.
+  2. Launch a game whose core is missing (or a broken file).
+- **Expected:** 1: the screen goes black with the game's art in the middle and "Starting
+  <core>" under it until the game's window takes over. 2: the splash says why it closed straight
+  away, with "Show log" and "Close" (B closes it).
+- **Check:** human only (needs RetroArch); the logic is `tests/test_bigpicture_pause.py`
+  (`TheSplash`, `TheGameSessionHooks`).
+
+### RT-1196 — Guide during a game opens the pause menu
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** Big Picture on, a pad with a Guide button, a game running.
+- **Steps:**
+  1. Press Guide.
+  2. Press A on "Save"; move the slot slider with LB/RB; press A on "Load".
+  3. Press Guide again; toggle "Fast forward"; press A on "Continue".
+  4. Press Guide; "Quit"; confirm.
+- **Expected:** 1: the game pauses and the menu covers the screen: the title, "Playing for N min ·
+  <core>", Continue (purple) and Restart, Save and Load with the slot ("Slot 0 · empty"), the
+  slider and "See all", then Fast forward, Slow motion, Screenshot, Audio, RetroArch menu and Quit
+  (red). 2: Save writes the slot (Load turns on, "Saved to slot N"); Load loads it and the game
+  resumes. 3: fast forward is on when the game resumes. 4: the game ends and Big Picture comes back.
+  If the menu cannot come to the front within two seconds, RetroArch's own menu opens instead.
+- **Check:** human only (needs RetroArch and a pad); the logic is
+  `tests/test_bigpicture_pause.py` (`ThePauseMenu`), `tests/test_pause_session.py`.
+
+### RT-1197 — Hold Start opens the pause menu; a short press still reaches the game
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** RT-1194 with "Hold Start"; a game running in Big Picture.
+- **Steps:**
+  1. Tap Start; then hold it for one second; then press Guide.
+- **Expected:** the tap acts in the game (its own Start); the hold opens the pause menu; Guide no
+  longer does.
+- **Check:** human only; the gesture is `tests/test_pause_trigger.py` and
+  `tests/test_ui_gamepad.py` (`ThePauseGestureDuringAGameTests`).
+
+### RT-1198 — The keyboard and the mouse still work in Big Picture
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, no pad connected.
+- **Steps:**
+  1. Click a rail tab, a console card, a chip and a game; press Tab, Ctrl+F, Ctrl+D, Alt+Enter,
+     Menu and Escape on the games page.
+- **Expected:** clicks do what A does; Tab is RB, Ctrl+F searches, Ctrl+D is X (favorite),
+  Alt+Enter is Y (options), Menu selects several, Escape is B; the hints show those keys.
+- **Check:** `tests/test_bigpicture_shell.py` (`test_the_keyboard_keys_stand_in_for_the_pad`,
+  `test_the_hints_are_the_pages_and_always_shown`).
+
+### RT-1199 — Big Picture shows three cartridges to a row beside the pane
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 75% zoom.
+- **Steps:**
+  1. Enter Big Picture and open a console.
+  2. Leave Big Picture.
+- **Expected:** 1: the games are at 125%, three cartridges to a row beside the detail pane. 2: the
+  desktop is at 75% again.
+- **Check:** `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
+  `tests/test_window.py`.
