@@ -123,6 +123,14 @@ class ShelfPage(BigPage):
     def refresh(self):
         """Rebuild the cards from the library as it is now."""
         t = self.win.t
+        # The library can change under the pad (a scan, a sync ending): the
+        # card it was on comes back focused, not dropped with the old ones.
+        focus = self.win.get_focus()
+        focused = next(
+            (card.scope_id for card in self.cards
+             if focus is not None and (focus is card or focus.is_ancestor(card))),
+            None,
+        )
         child = self.grid.get_first_child()
         while child is not None:
             following = child.get_next_sibling()
@@ -146,6 +154,13 @@ class ShelfPage(BigPage):
         )
         self.heading.subtitle_label.set_visible(True)
         self.sync_banners()
+        if focused is not None:
+            card = next((card for card in self.cards if card.scope_id == focused), None)
+            if card is not None:
+                card.grab_focus()
+            else:
+                # Its scope is gone (the last favorite unstarred): the first card.
+                self.focus_default()
 
     def _games_label(self, count):
         t = self.win.t

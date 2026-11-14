@@ -236,6 +236,28 @@ class TheShelf(BigPictureCase):
         with mock.patch.object(shelf, "cards", []):
             self.assertTrue(shelf.focus_default() is not None)
 
+    def test_a_rebuild_keeps_the_focus_on_its_card(self):
+        # A scan or a sync ending rebuilds the cards under the pad (issue 957).
+        shelf = self.shell.shelf
+        self.show()
+        card = next(card for card in shelf.cards if card.scope_id == "SFC")
+        card.grab_focus()
+        self.pump()
+        shelf.refresh()
+        self.pump()
+        self.assertEqual(self.focus_widget().scope_id, "SFC")
+        self.assertIsNot(self.focus_widget(), card)
+        # Its scope gone: the first card.
+        scopes = [scope for scope in self.shell.library_scopes() if scope != "SFC"]
+        with mock.patch.object(self.shell, "library_scopes", return_value=scopes):
+            shelf.refresh()
+        self.pump()
+        self.assertIs(self.focus_widget(), shelf.cards[0])
+        # Not on a card: the focus is left where it is.
+        shelf.import_button.grab_focus()
+        shelf.refresh()
+        self.assertIs(self.focus_widget(), shelf.import_button)
+
     def test_recently_played_has_a_tab_not_a_card(self):
         self.win.play_history.record_launch(self.rom("SFC")["path"])
         self.win.refresh_library()

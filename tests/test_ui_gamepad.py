@@ -410,7 +410,7 @@ class StaleSuspendFlagTests(unittest.TestCase):
     #: so a press emits its action immediately and nothing else can mask it.
     PRESS_CODE = BTN_GAMEPAD + 4
 
-    def _drive_one_pass(self, flip_during_select):
+    def _drive_one_pass(self, flip_during_select, before_run=None):
         actions = []
         suspended = [False]
         real_open = os.open
@@ -450,6 +450,8 @@ class StaleSuspendFlagTests(unittest.TestCase):
              patch("openemux.core.ui_gamepad._read_axis_ranges", lambda fd, codes: {}), \
              patch("openemux.core.ui_gamepad.select.select", _fake_select), \
              patch("openemux.core.ui_gamepad.os.read", _fake_read):
+            if before_run is not None:
+                before_run(nav)
             nav._run()
 
         self.assertEqual(len(delivered), 1, "the press was never read")
@@ -461,6 +463,27 @@ class StaleSuspendFlagTests(unittest.TestCase):
     def test_the_same_press_is_acted_on_while_not_suspended(self):
         self.assertEqual(self._drive_one_pass(flip_during_select=False),
                          ["prev_console"])
+
+    def test_a_suspension_starting_forgets_the_pause_gesture(self):
+        # The chord that opened the pause menu is let go while the menu shows,
+        # unseen by the trigger; back in the game, half of it must not fire
+        # again (issue 957).
+        from openemux.core.pause_trigger import START, SELECT, START_SELECT
+
+        navs = []
+
+        def _open_the_menu_with_the_chord(nav):
+            nav._watch_game = lambda: True  # a game runs in Big Picture
+            nav.pause_trigger.set_mode(START_SELECT)
+            nav.pause_trigger.feed(START, True, 0.0)
+            self.assertTrue(nav.pause_trigger.feed(SELECT, True, 0.0))
+            navs.append(nav)
+
+        self._drive_one_pass(flip_during_select=True, before_run=_open_the_menu_with_the_chord)
+        trigger = navs[0].pause_trigger
+        self.assertFalse(trigger.feed(START, True, 1.0))
+        self.assertFalse(trigger.feed(START, False, 1.1))
+        self.assertFalse(trigger.feed(START, True, 1.2))
 
 
 class TheNavigatorLifecycleTests(unittest.TestCase):

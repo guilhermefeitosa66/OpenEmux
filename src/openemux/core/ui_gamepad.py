@@ -477,6 +477,10 @@ class GamepadNavigator(NavigatorCore):
                         pad.tracker.release_all()
                     repeat.clear()
                     hold.clear()
+                    # The pause gesture too: the buttons that opened the pause
+                    # menu were let go while it showed, unseen by the trigger,
+                    # which would otherwise fire on half the chord (issue 957).
+                    self.pause_trigger.reset()
                 was_suspended = suspended
 
                 timeout = IDLE_POLL
@@ -502,6 +506,7 @@ class GamepadNavigator(NavigatorCore):
                             pad.tracker.release_all()
                         repeat.clear()
                         hold.clear()
+                        self.pause_trigger.reset()
                     was_suspended = suspended
 
                 for fd in readable:

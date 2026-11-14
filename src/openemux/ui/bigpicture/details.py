@@ -278,6 +278,25 @@ class GameDetail(Gtk.Box):
         self._load_cover()
         self._sync_shown()
 
+    def refresh(self):
+        """Re-read the game shown, its art kept: a game just ended (issue 957).
+
+        Playing it leaves new save states, an automatic one (Play becomes
+        Continue) and a "played" line; the pane must not keep the old ones.
+        A state tile that held the focus is rebuilt, so the focus goes to Play.
+        """
+        if self.rom is None:
+            return False
+        focus = self.win.get_focus()
+        in_states = focus is not None and focus.is_ancestor(self.states_box)
+        self._read_states()
+        self._sync_meta()
+        self._sync_play_rows()
+        self._build_states()
+        if in_states:
+            self.play_button.grab_focus()
+        return True
+
     def _sync_shown(self):
         """What a pane shows only when there is room: the file's path."""
         self.path_note.set_visible(self.expanded)

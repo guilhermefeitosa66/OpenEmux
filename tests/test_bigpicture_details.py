@@ -460,6 +460,41 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
 
 
 @needs_display
+class AfterAGame(_DetailsCase):
+    """A game that just ended: the pane and the page re-read it (issue 957)."""
+
+    def test_the_library_changing_refreshes_a_detail_showing_the_game(self):
+        self.show()
+        detail = self.open()
+        pane = self.shell.library.detail
+        pane.load(self.game)
+        self.assertTrue(detail.states_empty.get_visible())
+        self.state(2)
+        self.win.play_history.record_launch(self.game["path"])
+        # Nothing yet: the tiles were built when the game was loaded.
+        self.assertEqual(detail.state_tiles, [])
+        self.shell.on_library_changed()
+        self.pump()
+        for shown in (detail, pane):
+            self.assertEqual([tile.slot for tile in shown.state_tiles], [2])
+            self.assertFalse(shown.states_empty.get_visible())
+            self.assertNotIn(self.said("details.never_played"), shown.meta_label.get_label())
+
+    def test_a_focused_state_tile_hands_the_focus_to_play(self):
+        self.show()
+        self.state(1)
+        detail = self.open()
+        detail.state_tiles[0].grab_focus()
+        self.pump()
+        self.assertTrue(detail.refresh())
+        self.pump()
+        self.assertIs(self.focus_widget(), detail.play_button)
+        # Nothing loaded: nothing to re-read.
+        detail.rom = None
+        self.assertFalse(detail.refresh())
+
+
+@needs_display
 class TheShoulders(_DetailsCase):
     def test_the_shoulders_walk_the_games_of_the_page(self):
         self.shell.open_library("SFC")

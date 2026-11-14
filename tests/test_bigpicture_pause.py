@@ -204,6 +204,25 @@ class TheGameSessionHooks(BigPictureCase):
             session.poll()
         toast.assert_called_once()
 
+    def test_a_game_that_ends_before_taking_the_screen_closes_the_splash(self):
+        session = self.win.game
+        splash = self.shell.splash
+        result = {"rom": self.rom("SFC"), "ran_for": 3.0, "exit_code": 0}
+        with mock.patch.object(splash_module.cover_cache, "submit"):
+            splash.show_starting(self.rom("SFC"))
+        self.assertTrue(splash.shown)
+        with mock.patch.object(self.win.runtime_manager, "poll_active", return_value=result), mock.patch.object(
+            session, "_toast_now"
+        ):
+            session.poll()
+        self.assertFalse(splash.shown)
+        # Already gone: nothing to close.
+        with mock.patch.object(self.win.runtime_manager, "poll_active", return_value=result), mock.patch.object(
+            session, "_toast_now"
+        ), mock.patch.object(splash, "close") as close:
+            session.poll()
+        close.assert_not_called()
+
     def test_outside_the_mode_there_is_no_splash(self):
         self.leave()
         self.assertIsNone(self.win.game._splash())

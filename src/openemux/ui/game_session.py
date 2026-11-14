@@ -453,6 +453,11 @@ class GameSession:
                 else:
                     self._toast_now(title, 10, show_log=True)
             else:
+                splash = self._splash()
+                if splash is not None and splash.shown:
+                    # Over before its window ever took the screen: the splash
+                    # must not wait out its ceiling over the library (issue 957).
+                    splash.close()
                 # What the player did, in their words (issue 904): the game's
                 # title and the time; the exit code only when it is not zero,
                 # with the log one click away.

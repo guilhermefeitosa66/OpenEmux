@@ -834,6 +834,9 @@ class SdlNavigator(NavigatorCore):
                     self._queue.clear()
                     repeat.clear()
                     hold.clear()
+                    # The pause gesture's held buttons too (issue 957): see
+                    # GamepadNavigator._run.
+                    self.pause_trigger.reset()
                 was_suspended = suspended
 
                 while self._queue:

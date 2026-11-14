@@ -315,6 +315,10 @@ class BigPictureShell(Gtk.Box):
         self.shelf.refresh()
         if self._recent is not None:
             self._recent.refresh()
+        # A game that just ended has new states and a new "played" line.
+        self.library.detail.refresh()
+        if self._details is not None:
+            self._details.detail.refresh()
 
     def on_scope_changed(self, scope_id):
         """The window moved to another page (the sidebar, a shoulder)."""
