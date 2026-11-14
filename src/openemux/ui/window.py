@@ -23,6 +23,7 @@ from openemux.core.library_view import (
     SORT_PLATFORM,
     SORT_ORDERS_NEEDING_HISTORY,
     VIEW_MODES,
+    ZOOM_LEVELS,
     can_zoom,
     normalize_sort_order,
     normalize_view_mode,
@@ -107,9 +108,10 @@ logger = logging.getLogger(__name__)
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 8
 
-#: Big Picture (issue 914) never shows the cards smaller than this zoom:
-#: three metres away, the shelf a desktop reads at 100% is unreadable.
-BIG_PICTURE_MIN_ZOOM = 1.5
+#: Big Picture (issue 914) always shows the covers and the cartridges at the
+#: largest zoom: three metres away, the shelf a desktop reads at 100% is
+#: unreadable. The user's own zoom is left alone and comes back on the way out.
+BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
 
 
 
@@ -1055,7 +1057,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _apply_zoom(self, zoom):
         """Resize the artwork on every grid-based layout and remember it."""
         zoom = normalize_zoom(zoom)
-        if zoom == self._zoom:
+        if zoom == self._zoom or getattr(self, "_big_picture", False):
+            # Big Picture's zoom is fixed; the desktop's stays as it was.
             return
         self._write_scope_display("zoom", zoom)
         self._sync_zoom_controls()
@@ -1086,7 +1089,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     @property
     def _zoom(self):
         if getattr(self, "_big_picture", False):
-            return max(self._display_settings["zoom"], BIG_PICTURE_MIN_ZOOM)
+            return BIG_PICTURE_ZOOM
         return self._display_settings["zoom"]
 
     @property
@@ -1749,10 +1752,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
         The desktop layout is never torn down: the shell borrows the page
         stack and gives it back, so leaving lands on the very desktop that
-        was there. The zoom floor comes from ``BIG_PICTURE_MIN_ZOOM``; the
-        user's own zoom setting is left alone.
+        was there. The zoom is ``BIG_PICTURE_ZOOM`` while the mode is on and
+        games open fullscreen; the user's own settings are left alone.
         """
         self._big_picture = not self._big_picture
+        self._set_launch_fullscreen(self._big_picture)
         if self._big_picture:
             shell = self._ensure_big_picture_shell()
             self.add_css_class("big-picture")
@@ -1774,6 +1778,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         )
         self.navigation.refresh_hints(force=True)
         return self._big_picture
+
+    def _set_launch_fullscreen(self, enabled):
+        runtime = getattr(self, "runtime_manager", None)
+        launcher = getattr(runtime, "retroarch_launcher", None)
+        if launcher is not None:
+            launcher.force_fullscreen = enabled
 
     def _wants_big_picture_at_start(self):
         application = self.get_application()

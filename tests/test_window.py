@@ -2507,11 +2507,22 @@ class TheGameAndInputHandoffTests(WindowCase):
             self.assertTrue(self.win.toggle_big_picture())
             self.assertTrue(self.win.has_css_class("big-picture"))
             self.assertEqual(self.win.mode_stack.get_visible_child_name(), "big-picture")
-            self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_MIN_ZOOM)
+            # The largest zoom, whatever the desktop's; zooming does nothing
+            # there and never touches the desktop's setting.
+            self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
+            self.assertEqual(window_module.BIG_PICTURE_ZOOM, max(window_module.ZOOM_LEVELS))
+            self.win._step_zoom(-1)
+            self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
+            self.assertEqual(self.config.get_display_settings(self.win._current_scope())["zoom"], 1.0)
+            # Games open fullscreen while the mode is on.
+            launcher = self.win.runtime_manager.retroarch_launcher
+            self.assertTrue(launcher.force_fullscreen)
             full.assert_called_once()
             self.assertIn(self.said("big_picture.toast.on"), self.toasts)
             self.assertFalse(self.win.toggle_big_picture())
             unfull.assert_called_once()
+            self.assertFalse(launcher.force_fullscreen)
+            self.assertEqual(self.win._zoom, 1.0)
         self.assertFalse(self.win.has_css_class("big-picture"))
         self.assertEqual(self.win.mode_stack.get_visible_child_name(), "desktop")
         self.assertEqual(self.win._zoom, 1.0)
