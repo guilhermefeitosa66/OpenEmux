@@ -3,7 +3,7 @@
 Everything on a TV is read from three metres away, so every size here is a
 multiple of one number: the height of the window over 1080 (the design was
 drawn at 1080p), times the user's "Text size" preference. GTK's CSS cannot
-multiply, so the stylesheet is generated -- ``stylesheet(scale, dark)`` --
+multiply, so the stylesheet is generated -- ``stylesheet(scale)`` --
 and reloaded when the window changes size or the preference moves.
 
 The palette is the Android app's, so a player who uses both sees one

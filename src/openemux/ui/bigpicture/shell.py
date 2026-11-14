@@ -177,6 +177,15 @@ class BigPictureShell(Gtk.Box):
         self.hint_bar.set_hints([])
         self._force_dark(False)
 
+    def adopt_color_scheme(self):
+        """The desktop theme just changed from inside Big Picture.
+
+        The new scheme is the one to give back on the way out, and Big
+        Picture stays dark meanwhile.
+        """
+        self._color_scheme = None
+        self._force_dark(True)
+
     def _force_dark(self, on):
         """Big Picture is always dark, as Android's gamepad layout is (issue 957).
 

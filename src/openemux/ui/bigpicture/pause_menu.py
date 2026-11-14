@@ -21,16 +21,16 @@ instead, so the pad is never left with nothing to steer.
 """
 
 import logging
-from datetime import datetime
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from openemux.core import save_states
 from openemux.core.pause_session import MAX_SLOT, MIN_SLOT, PauseSession
+from openemux.ui.bigpicture.details import stamp
 from openemux.ui.bigpicture.splash import core_label
 from openemux.ui.bigpicture.widgets import Row, Tile, once
 
@@ -41,10 +41,6 @@ ACTIVATION_TIMEOUT_MS = 2000
 #: How long after Save the slot is read again: RetroArch writes the file
 #: after the command, on its own frame.
 SAVE_SETTLE_MS = 600
-
-
-def stamp(mtime):
-    return datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
 
 
 class SlotScale(Gtk.Scale):
@@ -87,6 +83,11 @@ class PauseMenuWindow(Adw.Window):
         self.set_title(t("big_picture.pause.title"))
         self.set_decorated(False)
         self.connect("close-request", self._on_close_request)
+        # The window's own keys: the main window's handler never sees them,
+        # and the keyboard hints promise Esc as B.
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._on_key)
+        self.add_controller(keys)
 
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
@@ -218,7 +219,11 @@ class PauseMenuWindow(Adw.Window):
         """The gesture happened: pause the game, come up over it."""
         self.rom = rom
         session = self.session_for(rom)
-        session.pause()
+        if not session.pause():
+            # The game never got the command: a menu over it would leave it
+            # running with nothing reading the pad.
+            logger.warning("pause menu: the game did not take the pause command")
+            return False
         self.win.pause_menu_open = True
         self.stack.set_visible_child_name("main")
         self.note_label.set_label("")
@@ -267,6 +272,12 @@ class PauseMenuWindow(Adw.Window):
         # Alt+F4 or the compositor: the same as Continue, the window kept.
         self.resume()
         return True
+
+    def _on_key(self, _controller, keyval, _keycode, _state):
+        """Escape is B, as on every other Big Picture page."""
+        if keyval != Gdk.KEY_Escape:
+            return False
+        return self.handle_back()
 
     # -- the pad -------------------------------------------------------------------------
     def handle_back(self):

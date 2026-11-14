@@ -157,10 +157,15 @@ class GameSession:
         self._launching = rom
         self._stop_requested = False
         splash = self._splash()
-        if splash is not None and announce:
-            # Big Picture: the game's art until its window takes the screen
-            # (issue 957).
-            splash.show_starting(rom)
+        if splash is not None:
+            if announce:
+                # Big Picture: the game's art until its window takes the
+                # screen (issue 957).
+                splash.show_starting(rom)
+            else:
+                # No splash for this launch: a quick death must not be told
+                # on the last one's, with that game's art.
+                splash.rom = None
         self.win.set_rom_launching(rom, True)
         self._launch_task = self.win.tasks.begin(
             "launch",
@@ -229,7 +234,11 @@ class GameSession:
                 self.win.runtime_manager.stop_active()
             splash = self._splash()
             if splash is not None:
-                splash.wait_for_game()
+                if self._stop_requested:
+                    # Stopped before it came up: no window will take over.
+                    splash.close()
+                else:
+                    splash.wait_for_game()
             if announce:
                 self._toast_now(
                     self.win.t(

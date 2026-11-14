@@ -14,9 +14,7 @@ states are found with one directory listing per console
 Pure and widget-free: one test file, the repo's core-module convention.
 """
 
-from pathlib import Path
-
-from openemux.core.save_states import stems_with_states
+from openemux.core.save_states import rom_state_stem, stems_with_states
 
 FAVORITES = "favorites"
 HAS_STATE = "has_state"
@@ -55,7 +53,7 @@ class RomFacts:
         if facet == FAVORITES:
             return path in self.favorites
         if facet == HAS_STATE:
-            return Path(path).stem in self._stems_for(rom.get("console", ""))
+            return rom_state_stem(path) in self._stems_for(rom.get("console", ""))
         if facet == MISSING_ARTWORK:
             return not self._has_artwork(rom)
         if facet == NEVER_PLAYED:

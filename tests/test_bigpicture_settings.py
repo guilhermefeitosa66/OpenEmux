@@ -893,10 +893,11 @@ class TheSystemSection(SettingsCase):
         self.assertEqual(self.chooser_ids(), list(settings_module.THEMES))
         with mock.patch.object(settings_module.theming, "apply_theme") as apply_theme, mock.patch.object(
             self.win, "_sync_theme_button"
-        ) as sync_button:
+        ) as sync_button, mock.patch.object(self.shell, "adopt_color_scheme") as adopt:
             self.pick("dark")
         apply_theme.assert_called_once_with("dark")
         sync_button.assert_called_once()
+        adopt.assert_called_once()
         self.assertEqual(self.config.get_ui_settings()["theme"], "dark")
         self.assertEqual(rows["theme"].value_label.get_label(), self.said("theme.dark"))
 

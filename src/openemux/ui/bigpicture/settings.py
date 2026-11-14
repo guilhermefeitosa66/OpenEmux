@@ -1152,6 +1152,7 @@ class SystemSection(Section):
     def _set_theme(self, name):
         applied = self.config.set_theme(name)
         theming.apply_theme(applied)
+        self.shell.adopt_color_scheme()
         # "System" that lands on the same appearance emits no notify::dark,
         # so the header icon is refreshed here rather than left to that.
         self.win._sync_theme_button()

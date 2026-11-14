@@ -820,7 +820,8 @@ class SdlNavigator(NavigatorCore):
             while not self._cancel.is_set():
                 if not self._queue:
                     timeout = IDLE_POLL
-                    for pending in (repeat.next_deadline(), hold.next_deadline()):
+                    for pending in (repeat.next_deadline(), hold.next_deadline(),
+                                    self.pause_trigger.next_deadline(time.monotonic())):
                         if pending is not None:
                             timeout = min(timeout, pending)
                     self._cancel.wait(timeout)

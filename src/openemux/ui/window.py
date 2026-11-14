@@ -3046,6 +3046,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.pages.ensure_recent_loaded()
         for grid in self.pages.grids():
             grid.refresh_rom_play_state(rom)
+        # Big Picture's chips count states and plays, and Recent lists them.
+        self._notify_big_picture_library()
 
     def launch_rom_at_state(self, rom, slot):
         """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""

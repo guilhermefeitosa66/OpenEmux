@@ -480,7 +480,8 @@ class GamepadNavigator(NavigatorCore):
                 was_suspended = suspended
 
                 timeout = IDLE_POLL
-                for deadline in (repeat.next_deadline(), hold.next_deadline()):
+                for deadline in (repeat.next_deadline(), hold.next_deadline(),
+                                 self.pause_trigger.next_deadline(time.monotonic())):
                     if deadline is not None:
                         timeout = min(timeout, deadline)
                 try:

@@ -113,6 +113,14 @@ class TheGamesPage(BigPictureCase):
         self.assertFalse(predicate(self.rom("SFC", 1)))
         self.assertEqual(self.shell.facet_filter()[0], key)
         self.assertFalse(games.set_facets({library_facets.FAVORITES}))  # no change
+        # A star given with the chip on reaches the games, not only the count.
+        other = self.rom("SFC", 1)
+        self.win._toggle_favorite_from_ui(other)
+        self.pump()
+        self.assertTrue(self.pump_until(lambda: grid.count() == 2))
+        self.win._toggle_favorite_from_ui(other)
+        self.pump()
+        self.assertTrue(self.pump_until(lambda: grid.count() == 1))
         chip.emit("clicked")
         self.pump()
         self.assertTrue(self.pump_until(lambda: grid.count() == 2))

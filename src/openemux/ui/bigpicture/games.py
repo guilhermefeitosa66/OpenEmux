@@ -225,6 +225,10 @@ class GamesPage(BigPage):
         self._sync_heading()
         self._facts = None
         self.sync_facets()
+        if self.active_facets and self._attached:
+            # The grid's predicate holds the facts it was given: a star or a
+            # state that changed since must reach the games, not only the counts.
+            self.win.apply_library_filters()
         self.sync_search()
         self.sync_banners()
 

@@ -493,6 +493,19 @@ class TheShellCorners(BigPictureCase):
         self.assertEqual(style.get_color_scheme(), before)
         shell._force_dark(False)  # nothing to restore twice
 
+    def test_a_theme_chosen_inside_is_the_one_given_back(self):
+        shell = self.shell
+        style = Adw.StyleManager.get_default()
+        original = shell._color_scheme
+        self.addCleanup(style.set_color_scheme, original)
+        # The Appearance entry applies the new theme, then hands it over.
+        style.set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
+        shell.adopt_color_scheme()
+        self.assertEqual(style.get_color_scheme(), Adw.ColorScheme.FORCE_DARK)
+        self.assertEqual(shell._color_scheme, Adw.ColorScheme.FORCE_LIGHT)
+        self.leave()
+        self.assertEqual(style.get_color_scheme(), Adw.ColorScheme.FORCE_LIGHT)
+
     def test_pushing_a_page_already_on_the_stack_pops_back_to_it(self):
         shell = self.shell
         self.show()

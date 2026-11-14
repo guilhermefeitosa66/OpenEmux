@@ -11,7 +11,7 @@ from tests.bigpicture_harness import BigPictureCase
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
 if HAVE_DISPLAY:
-    from gi.repository import GdkPixbuf, GLib
+    from gi.repository import Gdk, GdkPixbuf, GLib
 
     from openemux.core import pause_session
     from openemux.ui.bigpicture import pause_menu as pause_module
@@ -142,6 +142,24 @@ class TheGameSessionHooks(BigPictureCase):
             session._finish_start(rom, (True, None), None, False)
         wait.assert_called_once()
         self.win.runtime_manager.stop_active = mock.Mock()
+        # Stopped while it came up: no window will take over, the splash goes.
+        session._stop_requested = True
+        with mock.patch.object(splash, "wait_for_game") as wait, mock.patch.object(
+            splash, "close"
+        ) as close, mock.patch.object(session, "_toast_now"):
+            session._finish_start(rom, (True, None), None, False)
+        wait.assert_not_called()
+        close.assert_called_once()
+        session._stop_requested = False
+        # A launch with no splash of its own (a state) forgets the last game.
+        splash.rom = rom
+        with mock.patch.object(splash, "show_starting") as starting, mock.patch(
+            "openemux.ui.game_session._run_in_worker"
+        ):
+            session._start(rom, {}, announce=False)
+        starting.assert_not_called()
+        self.assertIsNone(splash.rom)
+        session._launching = None
         # Failed: the error goes on the splash, not in a toast.
         session._launch_task = self.win.tasks.begin("launch", "x")
         splash.shown = True
@@ -241,6 +259,12 @@ class ThePauseMenu(BigPictureCase):
         menu.continue_tile.emit("clicked")
         self.assertFalse(self.win.pause_menu_open)
         self.assertEqual(self.sent, [pause_session.PAUSE, pause_session.PAUSE])
+        # Escape is B: back to the game; any other key is left alone.
+        self.open()
+        self.assertFalse(menu._on_key(None, Gdk.KEY_a, 0, 0))
+        self.assertTrue(self.win.pause_menu_open)
+        self.assertTrue(menu._on_key(None, Gdk.KEY_Escape, 0, 0))
+        self.assertFalse(self.win.pause_menu_open)
         # The same game: the same session, its toggles kept.
         session = menu.session
         self.open()
@@ -250,6 +274,11 @@ class ThePauseMenu(BigPictureCase):
         # Closed by the compositor: Continue too.
         self.open()
         self.assertTrue(menu._on_close_request())
+        self.assertFalse(self.win.pause_menu_open)
+
+    def test_a_game_that_does_not_take_the_pause_stays_without_a_menu(self):
+        with mock.patch.object(self.win.runtime_manager, "send_command", return_value=False):
+            self.assertFalse(self.win.open_pause_menu())
         self.assertFalse(self.win.pause_menu_open)
 
     def test_save_load_and_the_slot(self):
