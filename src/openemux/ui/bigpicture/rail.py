@@ -63,6 +63,9 @@ class NavRail(Gtk.Box):
     def __init__(self, t, on_select):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=18)
         self.add_css_class("bp-rail")
+        # Set, not left to the children: an expanding icon inside a tab
+        # would make the whole rail take the screen's spare width.
+        self.set_hexpand(False)
         self.on_select = on_select
         self.current = TAB_LIBRARY
         logo = Gtk.Image.new_from_icon_name(LOGO_ICON)

@@ -62,8 +62,10 @@ BP_KEYBOARD_GLYPHS = {
     "confirm": "Enter",
     "confirm_hold": "Enter⏳",
     "back": "Esc",
-    "context": "Alt+Enter",
-    "favorite": "Ctrl+D",
+    # The pad's X and Y, as keys (issue 957): Ctrl+D is the favorite, as on
+    # the desktop, and X is the favorite in Big Picture's games.
+    "context": "Ctrl+D",
+    "favorite": "Alt+Enter",
     "consoles": "Tab",
     "menu": "Menu",
     "start": "Ctrl+F",
@@ -515,6 +517,16 @@ class NavigationController:
                 if self.current_context() == CTX_BP_GRID:
                     self._cmd_selection_enter()
                     self.refresh_hints()
+                return True
+            # The pad's X and Y, as keys (BP_KEYBOARD_GLYPHS): the page's
+            # own meaning, whatever the desktop binds them to.
+            ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
+            alt = bool(state & Gdk.ModifierType.ALT_MASK)
+            if ctrl and keyval in (Gdk.KEY_d, Gdk.KEY_D):
+                self.dispatch("context")
+                return True
+            if alt and keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter):
+                self.dispatch("favorite")
                 return True
             # Tab and Shift+Tab are the keyboard's shoulders: the tabs, or
             # the console chips on the games page.

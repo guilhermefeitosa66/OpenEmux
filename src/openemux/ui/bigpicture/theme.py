@@ -597,6 +597,10 @@ def stylesheet(scale=1.0):
     border-left: 1px solid {p['divider']};
     background-image: radial-gradient(circle at 60% 0%, rgba(124, 58, 237, 0.28), transparent 55%);
 }}
+.big-picture .bp-pane .bp-details-cover {{
+    min-width: {s('pane_art_h') * 3 // 4}px;
+    min-height: {s('pane_art_h') * 3 // 4}px;
+}}
 .big-picture .bp-pane-art {{
     min-height: {s('pane_art_h')}px;
 }}

@@ -331,6 +331,7 @@ class BigPictureShell(Gtk.Box):
 
     def show_game(self, rom):
         """A game activated in the grid: its detail pane (Android's A)."""
+        logger.info("big picture: show %s", rom.get("name", ""))
         if self.visible_page() is self.library:
             self.library.show_game(rom)
             return True

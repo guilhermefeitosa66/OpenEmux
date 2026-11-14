@@ -120,13 +120,20 @@ class GamesPage(BigPage):
         self.chips_scroller.set_child(self.chips_box)
         left.append(self.chips_scroller)
 
+        # In a scroller of its own, like the console chips: four chips with
+        # their counts are wider than the column on a 1280 px screen, and a
+        # row that cannot shrink pushes the whole window wider than itself.
         self.facets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         for facet in library_facets.FACETS:
             chip = Chip(t(FACET_KEYS[facet]), on_activate=lambda facet=facet: self.toggle_facet(facet))
             chip.facet = facet
             self.facets_box.append(chip)
             self.facet_chips[facet] = chip
-        left.append(self.facets_box)
+        self.facets_scroller = Gtk.ScrolledWindow()
+        self.facets_scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        self.facets_scroller.set_propagate_natural_height(True)
+        self.facets_scroller.set_child(self.facets_box)
+        left.append(self.facets_scroller)
 
         self.search_label = Gtk.Label(xalign=0.0)
         self.search_label.add_css_class("bp-pane-meta")
@@ -356,7 +363,7 @@ class GamesPage(BigPage):
 
     def toggle_filters(self):
         """The filter button: the chips row in and out (the filters stay on)."""
-        self.facets_box.set_visible(not self.facets_box.get_visible())
+        self.facets_scroller.set_visible(not self.facets_scroller.get_visible())
 
     # -- search --------------------------------------------------------------------------
     def sync_search(self):

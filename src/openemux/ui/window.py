@@ -108,10 +108,12 @@ logger = logging.getLogger(__name__)
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 8
 
-#: Big Picture (issue 914) always shows the covers and the cartridges at the
-#: largest zoom: three metres away, the shelf a desktop reads at 100% is
-#: unreadable. The user's own zoom is left alone and comes back on the way out.
-BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
+#: Big Picture (issue 914) always shows the covers and the cartridges at one
+#: zoom of its own, the user's being left alone and back on the way out. Since
+#: the games share the screen with the detail pane (issue 957), it is the zoom
+#: that lays three cartridges to a row beside it, as Android does; the couch
+#: scale (``bigpicture.theme``) already makes everything else bigger.
+BIG_PICTURE_ZOOM = ZOOM_LEVELS[3]
 
 
 
