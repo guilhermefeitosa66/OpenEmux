@@ -156,6 +156,11 @@ class GameSession:
         """Run the launch on a worker; ``_finish_start`` picks up on the main loop."""
         self._launching = rom
         self._stop_requested = False
+        splash = self._splash()
+        if splash is not None and announce:
+            # Big Picture: the game's art until its window takes the screen
+            # (issue 957).
+            splash.show_starting(rom)
         self.win.set_rom_launching(rom, True)
         self._launch_task = self.win.tasks.begin(
             "launch",
@@ -222,6 +227,9 @@ class GameSession:
             if self._stop_requested:
                 # Stop was pressed while the process was still coming up.
                 self.win.runtime_manager.stop_active()
+            splash = self._splash()
+            if splash is not None:
+                splash.wait_for_game()
             if announce:
                 self._toast_now(
                     self.win.t(
@@ -237,8 +245,11 @@ class GameSession:
         else:
             self.win.tasks.finish(self._launch_task)
             self._launch_task = None
+            splash = self._splash()
             if self._stop_requested and not error_msg:
                 # Cancelled by the user: nothing to report.
+                if splash is not None:
+                    splash.close()
                 return GLib.SOURCE_REMOVE
             if error_msg:
                 # Logged as well as toasted: the toast is gone in five
@@ -249,7 +260,13 @@ class GameSession:
                     "launch failed: console=%s rom=%s error=%s",
                     rom["console"], rom["name"], error_msg,
                 )
-                self._toast_now(self._error_text(error_msg), 5)
+                if splash is not None and splash.shown:
+                    # Big Picture says it on the splash, not in a toast (issue 957).
+                    splash.show_error(self._error_text(error_msg))
+                else:
+                    self._toast_now(self._error_text(error_msg), 5)
+            elif splash is not None:
+                splash.close()
         return GLib.SOURCE_REMOVE
 
     def stop(self):
@@ -420,7 +437,12 @@ class GameSession:
                 # It never started. Say so, and say what the log said -- the
                 # exit code alone reads exactly like a clean quit (#226).
                 title = self.win.t("toast.launch_died", name=name, reason=reason)
-                self._toast_now(title, 10, show_log=True)
+                splash = self._splash()
+                if splash is not None and splash.rom is not None:
+                    # Big Picture: on the splash, with the log a button away (issue 957).
+                    splash.show_error(title)
+                else:
+                    self._toast_now(title, 10, show_log=True)
             else:
                 # What the player did, in their words (issue 904): the game's
                 # title and the time; the exit code only when it is not zero,
@@ -435,6 +457,13 @@ class GameSession:
             if rom.get("path"):
                 self.win.on_game_ended(rom)
         return True
+
+    def _splash(self):
+        """Big Picture's launch splash, while the mode is on; else None."""
+        win = self.win
+        if getattr(win, "_big_picture", False) and getattr(win, "big_picture_shell", None) is not None:
+            return win.big_picture_shell.splash
+        return None
 
     def _game_name(self, rom):
         """The game's title for a message: the index's name, else the file's stem."""

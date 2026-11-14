@@ -1,4 +1,4 @@
-"""The import and cover-sync pages of Big Picture (issue 914).
+"""The cover-sync page of Big Picture (issue 914; Import has a tab of its own, issue 957).
 
 On the desktop both are a header-bar button and a banner: the button opens
 a picker or a dialog, the banner then says what is running. A pad user
@@ -135,37 +135,6 @@ class _TasksPage(BigPage):
         return [(g["confirm"], t("big_picture.hints.choose")), (g["back"], t("hints.back"))]
 
 
-class ImportPage(_TasksPage):
-    def __init__(self, shell):
-        t = shell.t
-        super().__init__(shell, t("big_picture.tile.import"), "bp-import", "big_picture.tasks.import.lead")
-        win = shell.win
-        # Looked up at the click, not bound here: the window's flows are what
-        # a test patches, and what a relaunch replaces.
-        self.pick_row = self._row(
-            t("big_picture.tasks.import.files"), t("big_picture.tasks.import.files.subtitle"),
-            lambda: win.imports.open_picker(),
-        )
-        self.folder_row = self._row(
-            t("big_picture.tasks.import.folder"), t("big_picture.tasks.import.folder.subtitle"),
-            lambda: win._choose_roms_path(),
-        )
-        self.receive_row = self._row(
-            t("big_picture.tile.receive"), t("big_picture.tile.receive.subtitle"),
-            lambda: win.receive_games(),
-        )
-        self.rescan_row = self._row(
-            t("big_picture.tile.rescan"), t("big_picture.tile.rescan.subtitle"),
-            lambda: win._rescan_all_consoles(show_toast=True),
-        )
-
-    def refresh(self):
-        self.panel.refresh()
-
-    def focus_default(self):
-        return self.pick_row.grab_focus()
-
-
 class CoversPage(_TasksPage):
     def __init__(self, shell):
         t = shell.t
@@ -262,4 +231,4 @@ class CoversPage(_TasksPage):
         return self.all_row.grab_focus()
 
 
-__all__ = ["ProgressPanel", "ImportPage", "CoversPage"]
+__all__ = ["ProgressPanel", "CoversPage"]

@@ -32,20 +32,28 @@ CTX_GRID = "grid"
 CTX_GRID_SELECTION = "grid-selection"
 CTX_SIDEBAR = "sidebar"
 CTX_OTHER = "other"
-# Big Picture, the couch layout: the focus is on its home rows, its console
-# rail, a page of rows, its on-screen keyboard, or the library grid under
-# the rail (which keeps the grid's own behaviours, with the mode's exits).
-CTX_BP_HOME = "bp-home"
-CTX_BP_LIBRARY = "bp-library"
+# Big Picture, the couch layout, Android's gamepad layout (issue 957): the
+# focus is on the Shelf, the games page's chips, a game's detail pane, the
+# tab rail, a page of rows, the search keyboard, the library grid (which
+# keeps the grid's own behaviours, with the mode's buttons), the pad file
+# browser or the in-game pause menu.
+CTX_BP_SHELF = "bp-shelf"
+CTX_BP_GAMES = "bp-games"
+CTX_BP_PANE = "bp-pane"
 CTX_BP_RAIL = "bp-rail"
 CTX_BP_PAGE = "bp-page"
 CTX_BP_OSK = "bp-osk"
 CTX_BP_GRID = "bp-grid"
+CTX_BP_BROWSER = "bp-browser"
+CTX_BP_PAUSE = "bp-pause"
+# The grid in multi-select (the Menu button, as on Android).
+CTX_BP_SELECTION = "bp-selection"
 # The text keyboard page (a settings value): its keyboard takes X, Y,
-# Start and LT, which on any other page go to the library's search.
+# Start and LT, which on any other page go to the page.
 CTX_BP_TEXT = "bp-text"
 BP_CONTEXTS = {
-    CTX_BP_HOME, CTX_BP_LIBRARY, CTX_BP_RAIL, CTX_BP_PAGE, CTX_BP_OSK, CTX_BP_GRID, CTX_BP_TEXT,
+    CTX_BP_SHELF, CTX_BP_GAMES, CTX_BP_PANE, CTX_BP_RAIL, CTX_BP_PAGE, CTX_BP_OSK, CTX_BP_GRID,
+    CTX_BP_BROWSER, CTX_BP_PAUSE, CTX_BP_SELECTION, CTX_BP_TEXT,
 }
 
 #: What the keyboard presses for each pad action, for the hints of Big
@@ -62,6 +70,9 @@ BP_KEYBOARD_GLYPHS = {
     "guide": "F11",
     "directions": "✚",
     "range": "Shift+✚",
+    # Android's View (search) and Menu (multi-select) buttons, as keys.
+    "search": "Ctrl+F",
+    "select": "Menu",
 }
 
 # Input sources for the hint bar.
@@ -102,10 +113,15 @@ def resolve(context, action):
       ("big-picture",)           Big Picture on and off (the couch layout)
       ("osk",)                   open the on-screen keyboard over the search box
       ("bp-back",)               Big Picture: close the keyboard, else pop the page
-      ("bp-console-delta", n)    Big Picture: the rail's previous/next scope
+      ("bp-console-delta", n)    Big Picture: the previous/next tab or console chip
       ("bp-search",)             Big Picture: the search keyboard over the games
-      ("bp-quick-menu",)         Big Picture: the View button's quick menu
-      ("bp-details",)            Big Picture: the focused game's details page
+      ("bp-details",)            Big Picture: the focused game's detail pane
+      ("bp-options",)            Big Picture: the focused game's options sheet
+      ("bp-remove-selected",)    Big Picture: remove the selected games (asks first)
+      ("bp-share-selected",)     Big Picture: share the selected games
+      ("bp-pause-back",)         Big Picture: the pause menu's B
+      ("bp-pause-close",)        Big Picture: back to the game
+      ("bp-pause-slot", n)       Big Picture: the pause menu's save slot
       ("bp-osk", action)         Big Picture: a pad shortcut on the keyboard
       ("bp-page-action", action) Big Picture: X or Y, for the page to take
       ("open-menu",)             open the window's primary (hamburger) menu
@@ -229,13 +245,26 @@ _ARROW_ACTIONS = {
 
 
 def _resolve_big_picture(context, action):
-    """The couch layout's half of :func:`resolve`.
+    """The couch layout's half of :func:`resolve`, Android's buttons (issue 957).
 
-    The pad means the same thing on every page: A opens, B goes back one
-    level and never leaves the mode, the shoulders walk the console rail,
-    Start is search, View is the quick menu and Guide is the way out. The
-    grid under the rail keeps its own A-hold, X and Y.
+    A opens, B goes back one level and never leaves the mode, the shoulders
+    walk the tabs (or the console chips on the games page), View is search
+    and Guide is the way out. On the games: A shows the detail pane, X is
+    the favorite, Y the options sheet and Menu multi-select. The pad's
+    "menu" action is View; its "search" action is Menu (Start).
     """
+    if context == CTX_BP_PAUSE:
+        if action in _DIRECTIONS:
+            return ("move", action)
+        if action == "confirm":
+            return ("activate",)
+        if action == "back":
+            return ("bp-pause-back",)
+        if action in ("big_picture", "search"):
+            return ("bp-pause-close",)
+        if action in ("prev_console", "next_console"):
+            return ("bp-pause-slot", -1 if action == "prev_console" else 1)
+        return ("noop",)
     if action == "big_picture":
         return ("big-picture",)
     if context == CTX_BP_OSK:
@@ -245,8 +274,6 @@ def _resolve_big_picture(context, action):
             return ("activate",)
         if action in ("back", "context", "favorite", "search", "range"):
             return ("bp-osk", action)
-        if action == "menu":
-            return ("bp-quick-menu",)
         return ("noop",)
     if context == CTX_BP_TEXT:
         if action in _DIRECTIONS:
@@ -255,33 +282,49 @@ def _resolve_big_picture(context, action):
             return ("activate",)
         if action == "back":
             return ("bp-back",)
-        if action == "menu":
-            return ("bp-quick-menu",)
         if action in ("context", "favorite", "search", "range"):
             return ("bp-page-action", action)
+        return ("noop",)
+    if context == CTX_BP_SELECTION:
+        if action in _DIRECTIONS:
+            return ("selection-move", action)
+        if action == "confirm":
+            return ("toggle-select",)
+        if action == "context":
+            return ("selection-select-all",)
+        if action == "favorite":
+            return ("bp-remove-selected",)
+        if action == "menu":
+            return ("bp-share-selected",)
+        if action in ("back", "search"):
+            return ("selection-exit",)
         return ("noop",)
     if action in _DIRECTIONS:
         return ("move", action)
     if action == "back":
         return ("bp-back",)
     if action == "menu":
-        return ("bp-quick-menu",)
-    if action == "search":
         return ("bp-search",)
     if action == "prev_console":
         return ("bp-console-delta", -1)
     if action == "next_console":
         return ("bp-console-delta", 1)
-    if action == "confirm":
-        return ("activate",)
     if context == CTX_BP_GRID:
+        if action == "confirm":
+            return ("bp-details",)
         if action == "confirm_hold":
             return ("selection-enter",)
         if action == "context":
-            return ("bp-details",)
-        if action == "favorite":
             return ("favorite",)
+        if action == "favorite":
+            return ("bp-options",)
+        if action == "search":
+            return ("selection-enter",)
         return ("noop",)
+    if action == "confirm":
+        return ("activate",)
+    if action == "search":
+        return ("bp-search",)
     if action in ("context", "favorite"):
         return ("bp-page-action", action)
     return ("noop",)
@@ -466,12 +509,15 @@ class NavigationController:
             return False
 
         if self._big_picture_on():
-            # The keyboard's View button: the quick menu, from anywhere.
+            # The keyboard's Menu key is the pad's Menu: multi-select on the
+            # games, as on Android (issue 957).
             if keyval == Gdk.KEY_Menu and self._active_popover() is None:
-                self._cmd_bp_quick_menu()
+                if self.current_context() == CTX_BP_GRID:
+                    self._cmd_selection_enter()
+                    self.refresh_hints()
                 return True
-            # Tab and Shift+Tab are the keyboard's shoulders: the console
-            # rail, from wherever the focus is on the library page.
+            # Tab and Shift+Tab are the keyboard's shoulders: the tabs, or
+            # the console chips on the games page.
             if keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
                 delta = -1 if (keyval == Gdk.KEY_ISO_Left_Tab or state & Gdk.ModifierType.SHIFT_MASK) else 1
                 if self.window.big_picture_shell.step_console(delta):
@@ -524,6 +570,11 @@ class NavigationController:
         if action == "range_off":
             self.range_held = False
             return False
+        if action == "pause_menu":
+            # The pause gesture during a game (issue 957): not a navigation
+            # action, the window opens its menu over the game.
+            self.window.open_pause_menu()
+            return False
         self.dispatch(action)
         return False
 
@@ -564,7 +615,14 @@ class NavigationController:
     # ----- context resolution ---------------------------------------------
 
     def _focus_widget(self):
-        return self.window.get_focus()
+        return self._focus_root().get_focus()
+
+    def _focus_root(self):
+        """The window the pad steers: Big Picture's pause menu while it shows (issue 957)."""
+        pause = getattr(self.window, "pause_menu", None)
+        if pause is not None and getattr(self.window, "pause_menu_open", False):
+            return pause
+        return self.window
 
     def _scope_for(self, widget):
         """Innermost popover or dialog holding ``widget``, else None."""
@@ -609,8 +667,11 @@ class NavigationController:
                 in_grid = True
                 break
             node = node.get_parent()
+        pause = getattr(self.window, "pause_menu", None)
+        if pause is not None and getattr(self.window, "pause_menu_open", False):
+            return CTX_BP_PAUSE
         if in_grid and getattr(self.window, "selection_mode_active", False):
-            return CTX_GRID_SELECTION
+            return CTX_BP_SELECTION if self._big_picture_on() else CTX_GRID_SELECTION
         if self._big_picture_on():
             if in_grid:
                 return CTX_BP_GRID
@@ -726,7 +787,7 @@ class NavigationController:
         focus = self._focus_widget()
         # Scope the move to the open menu/dialog so it cannot escape into the
         # window behind it.
-        scope = self._active_popover() or self._scope_for(focus) or self.window
+        scope = self._active_popover() or self._scope_for(focus) or self._focus_root()
         if focus is None and scope is self.window:
             self._cmd_focus_grid()
             return
@@ -861,17 +922,37 @@ class NavigationController:
     def _cmd_bp_search(self):
         self.window.big_picture_shell.open_search()
 
-    def _cmd_bp_quick_menu(self):
-        self._remember_restore_target()
-        self.window.big_picture_shell.open_quick_menu()
-
     def _cmd_bp_details(self):
         item = self.window._focused_rom_item()
         if item is not None:
-            self.window.big_picture_shell.open_details(item.rom)
+            self.window.big_picture_shell.show_game(item.rom)
+
+    def _cmd_bp_options(self):
+        item = self.window._focused_rom_item()
+        if item is not None:
+            self.window.big_picture_shell.library.open_options(item.rom)
+
+    def _cmd_bp_remove_selected(self):
+        roms = list(getattr(self.window, "_selected_roms", []) or [])
+        if roms:
+            self.window._confirm_delete_roms(roms)
+
+    def _cmd_bp_share_selected(self):
+        roms = list(getattr(self.window, "_selected_roms", []) or [])
+        if roms:
+            self.window.share_roms(roms)
+
+    def _cmd_bp_pause_back(self):
+        self.window.pause_menu.handle_back()
+
+    def _cmd_bp_pause_close(self):
+        self.window.pause_menu.resume()
+
+    def _cmd_bp_pause_slot(self, delta):
+        self.window.pause_menu.step_slot(delta)
 
     def _cmd_bp_osk(self, action):
-        self.window.big_picture_shell.library.osk.handle_action(action)
+        self.window.big_picture_shell.osk.handle_action(action)
 
     def _cmd_bp_page_action(self, action):
         page = self.window.big_picture_shell.visible_page()
@@ -1057,15 +1138,26 @@ class NavigationController:
     def _big_picture_hints(self, source, context):
         """The couch layout's hints: the pad's letters, or the keys that stand in."""
         t = self.window.t
-        g = self.glyphs() if source == SOURCE_GAMEPAD else dict(BP_KEYBOARD_GLYPHS)
-        if context == CTX_GRID_SELECTION:
+        if source == SOURCE_GAMEPAD:
+            g = dict(self.glyphs())
+            # Android's View searches and Menu selects (issue 957); the
+            # glyph table names them by the desktop's actions.
+            g["search"] = g["menu"]
+            g["select"] = g["start"]
+        else:
+            g = dict(BP_KEYBOARD_GLYPHS)
+        if context in (CTX_BP_SELECTION, CTX_GRID_SELECTION):
             return [
-                (g["confirm"], t("hints.select_toggle")),
-                (g["range"], t("hints.select_range")),
-                (g["favorite"], t("hints.select_all")),
-                (g["context"], t("hints.select_actions")),
-                (g["back"], t("hints.select_exit")),
+                (g["confirm"], t("big_picture.hints.select")),
+                (g["context"], t("hints.select_all")),
+                (g["favorite"], t("big_picture.hints.remove")),
+                (g["search"], t("big_picture.hints.share")),
+                (g["back"], t("big_picture.hints.done")),
             ]
         if context in (CTX_DIALOG, CTX_POPOVER):
             return [(g["confirm"], t("hints.confirm")), (g["back"], t("hints.close"))]
+        if context == CTX_BP_PAUSE:
+            return self.window.pause_menu.hints(g, t)
+        if context == CTX_BP_GRID:
+            return self.window.big_picture_shell.library.grid_hints(g, t)
         return self.window.big_picture_shell.hints_for(context, g)

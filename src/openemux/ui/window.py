@@ -206,7 +206,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         #: Guide button, the header button or the "Start in Big Picture"
         #: setting. The shell is built on first use.
         self._big_picture = False
-        #: Big Picture's in-game pause menu is showing (issue 957).
+        #: Big Picture's in-game pause menu, built on first use, and whether
+        #: it is showing (issue 957).
+        self.pause_menu = None
         self.pause_menu_open = False
         self.big_picture_shell = None
         # The card transitions follow the desktop's animation setting (issue
@@ -1770,6 +1772,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
             self.big_picture_shell = BigPictureShell(self)
             self.mode_stack.add_named(self.big_picture_shell, "big-picture")
+            self.mode_stack.add_named(self.big_picture_shell.splash, "bp-splash")
             self.connect("close-request", self._on_close_release_big_picture)
         return self.big_picture_shell
 
@@ -1829,6 +1832,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if not self._big_picture:
             self.toggle_big_picture()
         return GLib.SOURCE_REMOVE
+
+    def open_pause_menu(self):
+        """The pause gesture during a game: Big Picture's pause menu (issue 957)."""
+        runtime = self.runtime_manager
+        if not self._big_picture or not runtime.is_running() or self.pause_menu_open:
+            return False
+        active = dict(runtime.active_rom or {})
+        if not active.get("path"):
+            return False
+        active["name"] = self.game._game_name(active)
+        if self.pause_menu is None:
+            from openemux.ui.bigpicture.pause_menu import PauseMenuWindow
+
+            self.pause_menu = PauseMenuWindow(self)
+        return self.pause_menu.open(active)
 
     def open_onscreen_keyboard(self):
         """The pad's way into the search box (issue 914)."""
@@ -3018,6 +3036,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is rebuilt when it has been built at all, and the game's card on
         every other page re-reads its play state.
         """
+        if self.pause_menu is not None and self.pause_menu_open:
+            # The game is gone under its pause menu (issue 957).
+            self.pause_menu.close_menu()
         self.sidebar.sync_recent_row()
         if self.pages.grid_for(RECENT_ID) is not None or self.current_console == RECENT_ID:
             self.pages.ensure_recent_loaded()
@@ -3215,13 +3236,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # forget_rom drops the ROM from FAVORITES.list too, so the last
         # favorite can go this way as well as through the star.
         self.sidebar.sync_favorites_row()
-        # Big Picture: a details page open on a game that just went has
-        # nothing left to show; back to the grid.
+        # Big Picture: a detail showing a game that just went has nothing
+        # left to show (issue 957).
         if deleted and self._big_picture:
-            page = self.big_picture_shell.visible_page()
-            gone = {rom["path"] for rom in roms}
-            if (getattr(page, "rom", None) or {}).get("path") in gone:
-                self.big_picture_shell.pop()
+            self.big_picture_shell.forget_games({rom["path"] for rom in roms})
 
     def _sync_covers_for_selection(self):
         selected = list(self._selected_roms)

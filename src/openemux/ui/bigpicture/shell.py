@@ -119,8 +119,12 @@ class BigPictureShell(Gtk.Box):
         from openemux.ui.bigpicture.games import GamesPage
         from openemux.ui.bigpicture.shelf import ShelfPage
 
+        from openemux.ui.bigpicture.splash import LaunchSplash
+
         self.shelf = ShelfPage(self)
         self.library = GamesPage(self)
+        #: The launch splash; the window puts it in its mode stack.
+        self.splash = LaunchSplash(self)
         self.nav.add(self.shelf)
         self._watch_page(self.shelf)
         self._watch_page(self.library)
@@ -166,6 +170,7 @@ class BigPictureShell(Gtk.Box):
         """The mode is ending: give the pages back, the theme back, stop the clock."""
         self._active = False
         self._stop_clock()
+        self.splash.close()
         self.hide_search()
         self.switch_tab(TAB_LIBRARY, focus=False)
         self.library.detach_content()
@@ -444,7 +449,10 @@ class BigPictureShell(Gtk.Box):
         self.switch_tab(TAB_LIBRARY)
 
     def handle_back(self):
-        """B, or Escape: the keyboard, the page's own back, the page, the Library tab."""
+        """B, or Escape: the splash, the keyboard, the page's own back, the page, the Library tab."""
+        if self.splash.shown:
+            self.splash.close()
+            return True
         if self.search_open:
             self.hide_search()
             return True
@@ -543,6 +551,8 @@ class BigPictureShell(Gtk.Box):
     # -- contexts and hints -----------------------------------------------------------------
     def context_for(self, focus):
         """Where the focus is, for the navigator: the keyboard, the rail, the page's part."""
+        if self.splash.shown:
+            return CTX_PAGE
         if focus is not None:
             if focus.is_ancestor(self.osk):
                 return CTX_OSK
@@ -561,6 +571,8 @@ class BigPictureShell(Gtk.Box):
     def hints_for(self, context, glyphs):
         """The hint pairs for a shell context, by the page that owns it."""
         t = self.t
+        if self.splash.shown:
+            return self.splash.hints(glyphs, t)
         if context == CTX_OSK:
             return [
                 (glyphs["confirm"], t("big_picture.hints.type")),
