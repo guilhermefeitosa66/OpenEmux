@@ -326,6 +326,9 @@ class PauseMenuWindow(Adw.Window):
         self._sync_slot()
 
     def _sync_slot(self):
+        if self.session is None:
+            # A settle timer outlived the session (the game ended meanwhile).
+            return
         t, slot = self.t, self.session.slot
         used = any(state.slot == slot for state in self._states())
         self.slot_label.set_label(t("details.states.slot", slot=slot))

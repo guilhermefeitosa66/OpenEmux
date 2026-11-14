@@ -491,7 +491,10 @@ class TheFileBrowser(BigPictureCase):
         self.press("back")
         self.assertEqual(page.folder, self.root)
         self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.rows[0]))
-        self.assertFalse(page.handle_back())  # where it opened: B closes it
+        # Past where it opened: a download folder is outside the library.
+        self.assertTrue(page.handle_back())
+        self.assertEqual(page.folder, self.root.parent)
+        page.load(self.root)
         hints = page.hints(self.win.navigation.glyphs(), self.win.t)
         self.assertEqual(hints[1][1], self.said("big_picture.browser.import_folder"))
         self.assertTrue(page.on_pad_action("favorite"))

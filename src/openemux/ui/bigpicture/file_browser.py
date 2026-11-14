@@ -3,8 +3,8 @@
 GTK's file chooser cannot be driven with a pad, so Import opens this page
 instead (maintainer decision 3), in the Android list style: the folder on
 top, then its folders and the files OpenEmux can import. A enters a folder
-or marks a file, X marks too, B goes up a folder (and, in the folder it
-opened in, closes), Y hands over what is marked -- or, choosing a whole
+or marks a file, X marks too, B goes up a folder (at the root of the
+disk, it closes), Y hands over what is marked -- or, choosing a whole
 folder, the folder on screen.
 """
 
@@ -158,8 +158,9 @@ class FileBrowserPage(BigPage):
         return True
 
     def handle_back(self):
-        """B: up a folder; in the folder the browser opened in, close it."""
-        if self.folder is None or self.folder == self.start:
+        """B: up a folder, past where it opened (a download folder, a USB
+        drive are outside the library); at the root, close."""
+        if self.folder is None:
             return False
         above = pad_browser.parent(self.folder)
         if above is None:

@@ -310,6 +310,7 @@ class ThePauseMenu(BigPictureCase):
         self.assertEqual(menu.session.slot, 3)
         menu.session = None
         menu._on_slot_changed(4)  # no session: nothing
+        menu._sync_slot()  # a settle timer after the game: nothing
 
     def test_see_all_lists_the_states_and_a_loads_one(self):
         menu = self.open()
