@@ -16110,9 +16110,9 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
   4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
-  and does nothing on the empty slot; both carry the down and up arrow icons of the save and load
-  keys under the game (issue 881); there are no slot arrows (the slot slider and "See all" sit
-  under the row, RT-996). Step 2 says "State saved to slot N"
+  and does nothing on the empty slot; both carry the outlined floppy icons, with a down and an up
+  arrow, of the save and load keys under the game (issues 881 and 945); there are no slot arrows
+  (the slot slider and "See all" sit under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
   was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
   "Restart" are translated, "Save" and "Load" keep their icons, and no text is cut off.
@@ -16133,13 +16133,36 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
 - **Expected:** Step 1: under the header, two rows of two: "Continue" (purple) and "Restart", then
   "Save" with "Slot N · Empty" and "Load" (faded). The four buttons are the same width and height,
   with the same gap between the columns in both rows, so their left and right edges line up. "Save"
-  and "Load" show the same down and up arrow icons as the strip's save and load keys. Step 2: every
+  and "Load" show the same outlined floppy icons, with a down and an up arrow, as the strip's save
+  and load keys (issue 945). Step 2: every
   label is whole except, where it does not fit, the slot line under "Save", which ends in "…"; "Save"
   and "Load" always keep their icons ("Restart" may drop its icon in Tamil so the word fits). Step 3:
   the same layout in light. Step 4: the left column starts with the same grid.
 - **Check:** human only (`adb shell uiautomator dump`: the four buttons share two left edges and
   two right edges).
 
+
+### RT-1145 — Save and load are the desktop's outlined floppy, on the pause sheet and every skin
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone at about 360 dp wide, a game of a console with a bundled skin (Game Boy
+  Advance), its skin set to the console's own colours.
+- **Steps:**
+  1. Look at the save and load keys on the strip under the game, then open the in-game menu.
+  2. Turn the phone to landscape and look at the same keys.
+  3. In "Skin", pick the Game Boy Advance's "White", then "Clear blue", then "Dark", and look at the
+     keys each time.
+  4. Pick a drawn skin (one that is not a bundled package) and turn fast forward on.
+  5. Press the save key, play a few seconds, then press the load key.
+- **Expected:** Step 1: the save key shows a floppy disk with a down arrow at its bottom right, the
+  load key the same floppy with an up arrow; both are outlined, not solid, and the menu's "Save"
+  and "Load" buttons show the same two icons in their text colour, matching the desktop's in-game
+  bar. Steps 2 and 3: the floppies are legible at the keys' size on the console's colours, on the
+  light, the translucent and the dark shells, and each arrow stays clear of the floppy's outline. Step 4: the
+  drawn strip's save and load are the same outlined floppies; turbo, slow motion and the anchor look
+  as before and fast forward is still solid, its lit pill unchanged. Step 5: the state saves and
+  loads as before.
+- **Check:** human only.
 ### RT-974 — The menu opens under the game and stretches up by its handle
 - **Area:** Android — Pause sheet on a phone in portrait
 - **Mode:** MANUAL
