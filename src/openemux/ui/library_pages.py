@@ -526,7 +526,7 @@ class LibraryPages:
         grid = RomGrid(
             console,
             roms,
-            win.on_launch_game,
+            win.on_grid_activate,
             win._toggle_favorite_from_ui,
             win._reveal_rom_in_files,
             win._choose_cover_for_rom,

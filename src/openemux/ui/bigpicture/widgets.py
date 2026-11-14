@@ -1,8 +1,8 @@
 """The pieces every Big Picture page is made of.
 
 Rows a D-pad walks (a switch, a choice, a number, a text field, an action),
-tiles for the home rows and the quick menu, the console rail, the hint bar
-and the page frame with its safe inset. Every one is a real ``Gtk.Button``
+tiles, chips, the view switch, the task banners, the hint bar and the page
+frame with its safe inset (issue 957: the Android gamepad layout's pieces). Every one is a real ``Gtk.Button``
 or a box of them, so GTK's own focus chain, the window's ``.keynav-active``
 ring and the navigator's ``activate`` all work without special cases.
 """
@@ -13,7 +13,6 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
-from openemux.ui.console_icons import console_texture
 
 #: Row kinds. The kind decides what sits at the end of the row and what the
 #: pad's A and Left/Right do on it.
@@ -87,6 +86,12 @@ class Row(Gtk.Button):
         text.append(self.subtitle_label)
         box.append(text)
 
+        # Android's "DEFAULT" tag before a value the console decides.
+        self.tag_label = Gtk.Label()
+        self.tag_label.add_css_class("bp-tag")
+        self.tag_label.set_valign(Gtk.Align.CENTER)
+        self.tag_label.set_visible(False)
+        box.append(self.tag_label)
         self.value_label = Gtk.Label(xalign=1.0)
         self.value_label.add_css_class("bp-row-value")
         self.value_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
@@ -142,6 +147,11 @@ class Row(Gtk.Button):
             self.number_label.set_label(str(value))
         else:
             self.value_label.set_label("" if value is None else str(value))
+
+    def set_tag(self, text):
+        """A small caps tag before the value ("DEFAULT"); None hides it."""
+        self.tag_label.set_label(text or "")
+        self.tag_label.set_visible(bool(text))
 
     def set_subtitle(self, subtitle):
         self.subtitle_label.set_label(subtitle or "")
@@ -293,146 +303,25 @@ def console_badge_text(console_id):
     return str(console_id or "")[:4].upper()
 
 
-class RailTile(Gtk.Button):
-    """One stop on the console rail."""
+class HintBar(Gtk.Box):
+    """The bar along the bottom: what the pad's buttons do right now.
 
-    def __init__(self, scope_id, name, badge_text=None, texture=None, icon_name=None,
-                 style=None):
-        super().__init__()
-        self.scope_id = scope_id
-        self.add_css_class("bp-rail-tile")
-        self.add_css_class("flat")
-        if style:
-            self.add_css_class(style)
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        box.set_valign(Gtk.Align.CENTER)
-        box.append(make_badge(badge_text, texture, icon_name))
-        # Not ellipsized: inside the rail's scroller a tile is allocated its
-        # minimum width, and an ellipsizable label's minimum is the ellipsis.
-        self.name_label = Gtk.Label(label=name)
-        box.append(self.name_label)
-        self.set_child(box)
-
-    def set_current(self, current):
-        if current:
-            self.add_css_class("bp-current")
-        else:
-            self.remove_css_class("bp-current")
-
-
-class Rail(Gtk.Box):
-    """The console rail: every library scope in a row, one of them current.
-
-    ``on_select(scope_id)`` fires when a tile is activated or the shoulders
-    move the current one. The current tile is marked and scrolled into view.
+    Centered under the content, as on Android: the confirm key a round
+    accent, the others dark, the shoulders on one pill.
     """
 
-    def __init__(self, on_select, shoulder_labels=("LB", "RB")):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.on_select = on_select
-        self.tiles = []
-        self.current_id = None
-        self.left_shoulder = Gtk.Label(label=shoulder_labels[0])
-        self.left_shoulder.add_css_class("bp-shoulder")
-        self.left_shoulder.set_valign(Gtk.Align.CENTER)
-        self.append(self.left_shoulder)
-        self.scroller = Gtk.ScrolledWindow()
-        self.scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
-        self.scroller.set_hexpand(True)
-        self.strip = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.scroller.set_child(self.strip)
-        self.append(self.scroller)
-        self.right_shoulder = Gtk.Label(label=shoulder_labels[1])
-        self.right_shoulder.add_css_class("bp-shoulder")
-        self.right_shoulder.set_valign(Gtk.Align.CENTER)
-        self.append(self.right_shoulder)
-
-    def set_shoulder_labels(self, left, right):
-        self.left_shoulder.set_label(left)
-        self.right_shoulder.set_label(right)
-
-    def set_entries(self, entries):
-        """``entries``: ``(scope_id, name, badge_text, texture, icon_name, style)``."""
-        for tile in self.tiles:
-            self.strip.remove(tile)
-        self.tiles = []
-        for scope_id, name, badge_text, texture, icon_name, style in entries:
-            tile = RailTile(scope_id, name, badge_text, texture, icon_name, style)
-            tile.connect("clicked", self._on_tile_clicked)
-            self.strip.append(tile)
-            self.tiles.append(tile)
-        self.mark_current(self.current_id)
-
-    def ids(self):
-        return [tile.scope_id for tile in self.tiles]
-
-    def tile_for(self, scope_id):
-        for tile in self.tiles:
-            if tile.scope_id == scope_id:
-                return tile
-        return None
-
-    def mark_current(self, scope_id):
-        """Highlight ``scope_id`` without selecting it (the page did)."""
-        self.current_id = scope_id
-        for tile in self.tiles:
-            tile.set_current(tile.scope_id == scope_id)
-        tile = self.tile_for(scope_id)
-        if tile is not None:
-            GLib.idle_add(self._scroll_to, tile)
-
-    def _scroll_to(self, tile):
-        adjustment = self.scroller.get_hadjustment()
-        allocation = tile.get_allocation()
-        if allocation.width <= 0:
-            return GLib.SOURCE_REMOVE
-        page = adjustment.get_page_size()
-        target = allocation.x + allocation.width / 2 - page / 2
-        adjustment.set_value(max(0.0, min(target, adjustment.get_upper() - page)))
-        return GLib.SOURCE_REMOVE
-
-    def select(self, scope_id):
-        if scope_id is None or scope_id == self.current_id:
-            return False
-        if self.tile_for(scope_id) is None:
-            return False
-        self.mark_current(scope_id)
-        self.on_select(scope_id)
-        return True
-
-    def move(self, delta):
-        """The shoulders: the previous or next stop, wrapping around."""
-        ids = self.ids()
-        if not ids:
-            return False
-        index = ids.index(self.current_id) if self.current_id in ids else 0
-        return self.select(ids[(index + delta) % len(ids)])
-
-    def focus_current(self):
-        tile = self.tile_for(self.current_id) or (self.tiles[0] if self.tiles else None)
-        if tile is None:
-            return False
-        return tile.grab_focus()
-
-    def _on_tile_clicked(self, tile):
-        self.select(tile.scope_id)
-
-
-class HintBar(Gtk.Box):
-    """The bar along the bottom: what the pad's buttons do right now."""
-
     def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
         self.add_css_class("bp-hints")
         self.set_valign(Gtk.Align.END)
-        self.context_label = Gtk.Label(xalign=0.0)
-        self.context_label.add_css_class("bp-hint")
-        self.context_label.set_hexpand(True)
-        self.context_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.append(self.context_label)
+        self.row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
+        self.row.set_halign(Gtk.Align.CENTER)
+        self.row.set_hexpand(True)
+        self.append(self.row)
         self.slots = []
         for _ in range(MAX_HINTS):
             slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            slot.set_valign(Gtk.Align.CENTER)
             key = Gtk.Label()
             key.add_css_class("bp-key")
             text = Gtk.Label()
@@ -443,11 +332,8 @@ class HintBar(Gtk.Box):
             slot.append(key)
             slot.append(text)
             slot.set_visible(False)
-            self.append(slot)
+            self.row.append(slot)
             self.slots.append((slot, key, text))
-
-    def set_context(self, text):
-        self.context_label.set_label(text or "")
 
     def set_hints(self, pairs, confirm_glyph=None):
         pairs = list(pairs)[:MAX_HINTS]
@@ -463,6 +349,163 @@ class HintBar(Gtk.Box):
                 slot.set_visible(True)
             else:
                 slot.set_visible(False)
+
+
+def icon_button(icon_name, tooltip=None, on_click=None):
+    """A round button with one icon: the pane's expand, star and share."""
+    widget = Gtk.Button.new_from_icon_name(icon_name)
+    widget.add_css_class("bp-icon-button")
+    if tooltip:
+        widget.set_tooltip_text(tooltip)
+    if on_click is not None:
+        widget.connect("clicked", lambda _b: on_click())
+    return widget
+
+
+class Chip(Gtk.Button):
+    """A pill: a console chip, a filter chip. ``set_state`` marks it."""
+
+    def __init__(self, label, on_activate=None):
+        super().__init__(label=label)
+        self.add_css_class("bp-chip")
+        self.on_activate = on_activate
+        self.connect("clicked", lambda _b: self.on_activate() if self.on_activate else None)
+
+    def set_current(self, current):
+        """The chip of the scope on screen: white, as on Android."""
+        _set_class(self, "bp-current", current)
+
+    def set_on(self, on):
+        """A filter chip that is on: the accent's soft tone."""
+        _set_class(self, "bp-on", on)
+
+    def is_on(self):
+        return self.has_css_class("bp-on")
+
+
+def _set_class(widget, name, present):
+    if present:
+        widget.add_css_class(name)
+    else:
+        widget.remove_css_class(name)
+
+
+class Segments(Gtk.Box):
+    """Android's segmented control: one icon button per choice, one current.
+
+    ``choices`` are ``(id, icon_name, tooltip)``; ``on_pick(id)`` runs when
+    a segment is activated.
+    """
+
+    def __init__(self, choices, on_pick):
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        self.add_css_class("bp-segments")
+        self.set_valign(Gtk.Align.CENTER)
+        self.on_pick = on_pick
+        self.buttons = {}
+        self.current = None
+        for choice_id, icon_name, tooltip in choices:
+            button = Gtk.Button.new_from_icon_name(icon_name)
+            button.add_css_class("bp-segment")
+            button.set_tooltip_text(tooltip)
+            button.connect("clicked", lambda _b, choice_id=choice_id: self.on_pick(choice_id))
+            self.append(button)
+            self.buttons[choice_id] = button
+
+    def set_current(self, choice_id):
+        self.current = choice_id
+        for button_id, button in self.buttons.items():
+            _set_class(button, "bp-current", button_id == choice_id)
+
+
+class Banner(Gtk.Button):
+    """A task banner, Android's: an icon, the task, its progress, a chevron.
+
+    A on it opens what it is about (``on_activate``); the line under it is
+    the progress, hidden while the task does not know its total.
+    """
+
+    def __init__(self, icon_name="emblem-synchronizing-symbolic", on_activate=None):
+        super().__init__()
+        self.add_css_class("bp-banner")
+        self.on_activate = on_activate
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        column.set_valign(Gtk.Align.CENTER)
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        self.icon = Gtk.Image.new_from_icon_name(icon_name)
+        row.append(self.icon)
+        self.title_label = Gtk.Label(xalign=0.0)
+        self.title_label.add_css_class("bp-banner-title")
+        self.title_label.set_ellipsize(Pango.EllipsizeMode.END)
+        row.append(self.title_label)
+        self.detail_label = Gtk.Label(xalign=0.0)
+        self.detail_label.add_css_class("bp-banner-detail")
+        self.detail_label.set_hexpand(True)
+        self.detail_label.set_ellipsize(Pango.EllipsizeMode.END)
+        row.append(self.detail_label)
+        chevron = Gtk.Label(label="›")
+        chevron.add_css_class("bp-row-chevron")
+        row.append(chevron)
+        column.append(row)
+        self.progress = Gtk.ProgressBar()
+        self.progress.set_visible(False)
+        column.append(self.progress)
+        self.set_child(column)
+        self.connect("clicked", lambda _b: self.on_activate() if self.on_activate else None)
+
+    def show(self, title, detail=None, fraction=None):
+        self.title_label.set_label(title or "")
+        self.detail_label.set_label(f"· {detail}" if detail else "")
+        if fraction is None:
+            self.progress.set_visible(False)
+        else:
+            self.progress.set_fraction(max(0.0, min(1.0, float(fraction))))
+            self.progress.set_visible(True)
+
+
+def empty_state(icon_name, text):
+    """Android's empty pane: an icon on a tile and one line under it."""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+    box.add_css_class("bp-empty")
+    box.set_halign(Gtk.Align.CENTER)
+    box.set_valign(Gtk.Align.CENTER)
+    box.set_vexpand(True)
+    tile = Gtk.Box()
+    tile.add_css_class("bp-empty-icon")
+    tile.set_halign(Gtk.Align.CENTER)
+    image = Gtk.Image.new_from_icon_name(icon_name)
+    image.set_hexpand(True)
+    image.set_halign(Gtk.Align.CENTER)
+    tile.append(image)
+    box.append(tile)
+    label = Gtk.Label(label=text)
+    label.set_wrap(True)
+    label.set_justify(Gtk.Justification.CENTER)
+    box.append(label)
+    box.label = label
+    return box
+
+
+def page_heading(title, subtitle=None):
+    """A big page title ("Shelf", "Settings") with its line under it."""
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    box.title_label = Gtk.Label(label=title, xalign=0.0)
+    box.title_label.add_css_class("bp-page-title")
+    box.title_label.set_ellipsize(Pango.EllipsizeMode.END)
+    box.append(box.title_label)
+    box.subtitle_label = Gtk.Label(label=subtitle or "", xalign=0.0)
+    box.subtitle_label.add_css_class("bp-page-subtitle")
+    box.subtitle_label.set_ellipsize(Pango.EllipsizeMode.END)
+    box.subtitle_label.set_visible(bool(subtitle))
+    box.append(box.subtitle_label)
+    return box
+
+
+def caps(text):
+    """A section's small caps title ("APPEARANCE", "ACCEPTED FORMATS")."""
+    label = Gtk.Label(label=(text or "").upper(), xalign=0.0)
+    label.add_css_class("bp-caps")
+    return label
 
 
 def eyebrow(text):
@@ -516,27 +559,6 @@ def button(label, on_click=None, suggested=False, destructive=False):
     return widget
 
 
-def rail_entry_for_scope(scope_id, name, kind, texture=None):
-    """A rail or tile description for a library scope.
-
-    ``kind`` is ``"all"``, ``"favorites"``, ``"recent"``, ``"collection"`` or
-    ``"console"``; the styling and the badge follow it.
-    """
-    if kind == "all":
-        return (scope_id, name, "ALL", None, None, "bp-all")
-    if kind == "favorites":
-        return (scope_id, name, "★", None, None, "bp-favorites")
-    if kind == "recent":
-        return (scope_id, name, None, None, "document-open-recent-symbolic", None)
-    if kind == "collection":
-        return (scope_id, name, None, None, "user-bookmarks-symbolic", None)
-    if texture is None:
-        texture = console_texture(scope_id)
-    if texture is not None:
-        return (scope_id, name, None, texture, None, None)
-    return (scope_id, name, console_badge_text(scope_id), None, None, None)
-
-
 class BigPage(Adw.NavigationPage):
     """A Big Picture page: the safe inset, a top bar, a body, no header bar.
 
@@ -561,7 +583,7 @@ class BigPage(Adw.NavigationPage):
         self.top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
         self.crumb_host = Gtk.Box()
         self.crumb_host.set_hexpand(True)
-        self.set_crumbs(crumbs or [title])
+        self.set_crumbs([title] if crumbs is None else crumbs)
         self.top_bar.append(self.crumb_host)
         self.top_bar.append(shell.make_status_box())
         self.frame.append(self.top_bar)

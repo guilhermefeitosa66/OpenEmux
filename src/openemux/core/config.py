@@ -21,6 +21,8 @@ from openemux.core.platform import (
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
+    DEFAULT_VIEW_MODE,
+    VIEW_MODES,
     DEFAULT_ZOOM,
     DISPLAY_KEYS,
     normalize_display_value,
@@ -50,6 +52,7 @@ from openemux.core.session_store import SessionStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
+from openemux.core.pause_trigger import normalize_mode as normalize_pause_trigger
 from openemux.core.update_checker import (
     DEFAULT_API_URL as DEFAULT_UPDATE_API_URL,
     DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
@@ -437,6 +440,8 @@ DEFAULT_CONFIG = {
         # The couch layout: whether OpenEmux opens in it, and how big its
         # text is drawn, as a percentage of the design's.
         "big_picture": {"start": False, "text_size": 100},
+        # Big Picture's own view mode and the in-game pause menu's gesture
+        # (issue 957) live in the same mapping, read with their defaults.
     },
     # A picture beside 4:3 games on a wide window, per console (issue #507).
     # A console absent from console_overrides has none; custom_names keeps
@@ -497,6 +502,11 @@ DEFAULT_BIG_PICTURE_TEXT_SIZE = 100
 MIN_BIG_PICTURE_TEXT_SIZE = 80
 MAX_BIG_PICTURE_TEXT_SIZE = 150
 BIG_PICTURE_TEXT_SIZE_STEP = 10
+
+
+def normalize_big_picture_view_mode(value):
+    """Big Picture's view mode: one of the library's, cartridges by default."""
+    return value if value in VIEW_MODES else DEFAULT_VIEW_MODE
 
 
 def normalize_big_picture_text_size(value):
@@ -1265,7 +1275,23 @@ class ConfigManager:
             "text_size": normalize_big_picture_text_size(
                 big_picture.get("text_size", DEFAULT_BIG_PICTURE_TEXT_SIZE)
             ),
+            "view_mode": normalize_big_picture_view_mode(big_picture.get("view_mode")),
+            "pause_trigger": normalize_pause_trigger(big_picture.get("pause_trigger")),
         }
+
+    def set_big_picture_view_mode(self, mode):
+        """Big Picture's games view (issue 957); the desktop's scopes keep theirs."""
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["view_mode"] = normalize_big_picture_view_mode(mode)
+        self.save_config_soon()
+        return big_picture["view_mode"]
+
+    def set_big_picture_pause_trigger(self, mode):
+        """What opens the pause menu during a game (issue 957)."""
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["pause_trigger"] = normalize_pause_trigger(mode)
+        self.save_config_soon()
+        return big_picture["pause_trigger"]
 
     def set_big_picture_start(self, enabled):
         big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})

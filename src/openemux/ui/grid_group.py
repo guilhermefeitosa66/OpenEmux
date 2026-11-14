@@ -153,7 +153,7 @@ class GridGroup:
         return sum(grid.count() for grid in self.grids())
 
     # ----- filtering ------------------------------------------------------
-    def set_filter(self, query="", only_missing_artwork=False):
+    def set_filter(self, query="", only_missing_artwork=False, extra=None):
         """Filter every group, and hide the ones the search leaves empty.
 
         A header over no games is exactly the state the grouping exists to
@@ -161,7 +161,7 @@ class GridGroup:
         cleared.
         """
         for section in self.sections:
-            section.grid.set_filter(query, only_missing_artwork=only_missing_artwork)
+            section.grid.set_filter(query, only_missing_artwork=only_missing_artwork, extra=extra)
             section.sync_to_filter()
 
     # ----- selection ------------------------------------------------------

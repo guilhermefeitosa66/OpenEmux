@@ -206,6 +206,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         #: Guide button, the header button or the "Start in Big Picture"
         #: setting. The shell is built on first use.
         self._big_picture = False
+        #: Big Picture's in-game pause menu is showing (issue 957).
+        self.pause_menu_open = False
         self.big_picture_shell = None
         # The card transitions follow the desktop's animation setting (issue
         # 915): a class on the window the CSS keys off.
@@ -271,13 +273,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # A running game owns the pad; so does the remapping dialog. The
             # preferences switch pauses the reader without tearing the thread
             # down.
+            # Big Picture's pause menu, open over a paused game, takes the pad
+            # back while it shows (issue 957).
             should_suspend=lambda: (
                 not self._gamepad_nav_enabled
                 or self.input_capture_active
-                or self.runtime_manager.is_running()
+                or (self.runtime_manager.is_running() and not self.pause_menu_open)
+            ),
+            # While a game runs in Big Picture, the pad is still watched for
+            # the pause gesture, and only for it (issue 957).
+            watch_game=lambda: (
+                self._big_picture
+                and self._gamepad_nav_enabled
+                and not self.pause_menu_open
+                and self.runtime_manager.is_running()
             ),
         )
         self.gamepad_navigator.swap_confirm_cancel = self.config_manager.get_swap_confirm_cancel()
+        self.gamepad_navigator.pause_trigger.set_mode(
+            self.config_manager.get_big_picture_settings()["pause_trigger"]
+        )
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
@@ -1088,6 +1103,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         settings = dict(self.config_manager.get_display_settings(scope))
         if getattr(self, "_big_picture", False):
             settings["zoom"] = BIG_PICTURE_ZOOM
+            # The games page's view switch (issue 957): Big Picture's own
+            # view, so the desktop's per-scope choice is never touched.
+            settings["view_mode"] = self.config_manager.get_big_picture_settings()["view_mode"]
             # Not a saved key: tells the grid its cards wear the couch
             # layout's big titles, which must not widen them (issue 954).
             settings["big_picture"] = True
@@ -3752,6 +3770,17 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def on_launch_game(self, rom):
         self.game.launch(rom)
 
+    def on_grid_activate(self, rom):
+        """A card activated (Enter, a click): launch it, or in Big Picture show it.
+
+        Big Picture's A on a game opens its detail pane, as on Android; Play
+        is there (issue 957).
+        """
+        if self._big_picture and self.big_picture_shell is not None:
+            self.big_picture_shell.show_game(rom)
+            return
+        self.on_launch_game(rom)
+
     def apply_input_changes_to_running_game(self):
         """Carry a saved remap into the running game (issue #129).
 
@@ -3869,9 +3898,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         the thing virtualization takes away (#219). The window still decides
         *what* the filter is.
         """
+        extra = None
+        if self._big_picture and self.big_picture_shell is not None:
+            # The games page's filter chips (issue 957).
+            extra = self.big_picture_shell.facet_filter()
         grid.set_filter(
             self.search_entry.get_text(),
             only_missing_artwork=self._filter_missing_artwork,
+            extra=extra,
         )
         self._sync_search_empty_state()
 

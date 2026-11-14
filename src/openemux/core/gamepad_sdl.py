@@ -849,5 +849,6 @@ class SdlNavigator(NavigatorCore):
                         self._emit(self._on_action, action)
                     for action in hold.due_actions():
                         self._emit(self._on_action, f"{action}_hold")
+                self._watch_tick(suspended)
         finally:
             self._pump.unsubscribe(self)
