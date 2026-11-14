@@ -26,6 +26,11 @@ from openemux.core import (
 )
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
 from openemux.core.paths import is_running_in_flatpak
+from openemux.core.config import (
+    BIG_PICTURE_TEXT_SIZE_STEP,
+    MAX_BIG_PICTURE_TEXT_SIZE,
+    MIN_BIG_PICTURE_TEXT_SIZE,
+)
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader, make_held_reader
 from openemux.core.gamepad_reader import describe_token
@@ -2402,6 +2407,32 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         interface_group.add(self._swap_confirm_row)
         page.add(interface_group)
 
+        # The couch layout: whether to open in it, and how big its text is.
+        # The same two settings its own Settings page offers, so a change made
+        # at the desk reaches the TV and the other way round.
+        big_picture_group = Adw.PreferencesGroup(title=self.t("prefs.group.big_picture"))
+        big_picture = self.config.get_big_picture_settings()
+        self._big_picture_start_row = Adw.SwitchRow(
+            title=self.t("settings.system.big_picture.start.title"),
+            subtitle=self.t("settings.system.big_picture.start.subtitle"),
+        )
+        self._big_picture_start_row.set_active(big_picture["start"])
+        self._big_picture_start_row.connect("notify::active", self._on_big_picture_start_changed)
+        big_picture_group.add(self._big_picture_start_row)
+        self._big_picture_text_size_row = Adw.SpinRow.new_with_range(
+            MIN_BIG_PICTURE_TEXT_SIZE, MAX_BIG_PICTURE_TEXT_SIZE, BIG_PICTURE_TEXT_SIZE_STEP
+        )
+        self._big_picture_text_size_row.set_title(self.t("settings.system.big_picture.text_size.title"))
+        self._big_picture_text_size_row.set_subtitle(
+            self.t("settings.system.big_picture.text_size.subtitle")
+        )
+        self._big_picture_text_size_row.set_value(big_picture["text_size"])
+        self._big_picture_text_size_row.connect(
+            "notify::value", self._on_big_picture_text_size_changed
+        )
+        big_picture_group.add(self._big_picture_text_size_row)
+        page.add(big_picture_group)
+
         welcome_group = Adw.PreferencesGroup(title=self.t("prefs.group.welcome"))
         self._welcome_startup_row = Adw.SwitchRow(
             title=self.t("settings.system.welcome.startup.title"),
@@ -2784,6 +2815,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
     def _on_welcome_startup_changed(self, row, *_a):
         self.config.set_show_welcome_on_startup(row.get_active())
+
+    def _on_big_picture_start_changed(self, row, *_a):
+        self.config.set_big_picture_start(row.get_active())
+
+    def _on_big_picture_text_size_changed(self, row, *_a):
+        self.config.set_big_picture_text_size(int(row.get_value()))
+        # Live when the mode is on: the shell regenerates its stylesheet.
+        shell = getattr(self.win, "big_picture_shell", None)
+        if shell is not None:
+            shell.apply_scale()
 
     def _on_open_welcome(self, _row):
         # Close Preferences first so the assistant is not stacked over it.

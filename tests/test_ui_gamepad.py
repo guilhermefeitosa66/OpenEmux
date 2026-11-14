@@ -47,7 +47,7 @@ class ActionMapTests(unittest.TestCase):
     def test_start_confirms_and_shoulders_switch_console(self):
         # Start opens the on-screen keyboard and Guide toggles TV mode (issue 914).
         self.assertEqual(action_for_token("7"), "search")
-        self.assertEqual(action_for_token("8"), "tv_mode")
+        self.assertEqual(action_for_token("8"), "big_picture")
         self.assertEqual(action_for_token("4"), "prev_console")
         self.assertEqual(action_for_token("5"), "next_console")
 
