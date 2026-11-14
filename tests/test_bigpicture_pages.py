@@ -63,6 +63,43 @@ class ContinueCards(BigPictureCase):
 
 
 @needs_display
+class TheGameGridOnlyScrollsDown(BigPictureCase):
+    """Sideways is the rail's, never the games' (issue 954)."""
+
+    LONG = "Zelda no Densetsu - Kamigami no Triforce, a very long title (Japan) (Rev 1)"
+    # Short titles first, so the grid measures its columns off a short card
+    # and only meets the long one further down -- the order that overflowed.
+    library = {
+        "SFC": [f"A{i:02d}.sfc" for i in range(30)] + [f"{LONG}.sfc"],
+        "GBA": ["Short.gba"],
+    }
+
+    def test_a_long_title_never_widens_the_columns_past_the_screen(self):
+        self.win.set_default_size(1280, 720)
+        self.show()
+        self.shell.open_library("SFC")
+        grid = self.win.pages.grid_for("SFC")
+
+        def long_card():
+            for card in grid._bound.values():
+                if card.name_label.get_label().startswith("Zelda"):
+                    return card
+            return None
+
+        self.assertTrue(self.pump_until(lambda: long_card() is not None and grid.get_width() > 0))
+        self.pump()
+        card = long_card()
+        # The card is no wider than the column the grid planned for it...
+        self.assertLessEqual(
+            card.measure(Gtk.Orientation.HORIZONTAL, -1)[0], grid._card_allocation_width()
+        )
+        # ...so the games span exactly the width on screen: nothing to scroll to.
+        adjustment = grid.get_hadjustment()
+        self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 0.5)
+        self.assertEqual(adjustment.get_value(), 0)
+
+
+@needs_display
 class TheLibraryPageCorners(BigPictureCase):
     def test_attaching_twice_and_detaching_twice_are_harmless(self):
         library = self.shell.library

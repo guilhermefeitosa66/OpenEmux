@@ -18778,3 +18778,21 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite files `tests/test_bigpicture_widgets.py`
   (`test_a_tile_name_stays_on_one_line_and_never_breaks_a_word`), `tests/test_bigpicture_shell.py`
   (`test_the_stylesheet_is_scoped_and_scaled`); the screenshots show no hyphenated word.
+
+### RT-1180 — The Big Picture game grid only scrolls down, never sideways
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console with a dozen games or more, one of them with a long title
+  (e.g. "The Legend of Zelda - A Link to the Past (USA) (Rev 1)").
+- **Steps:**
+  1. Enter Big Picture and open that console from the rail.
+  2. Scroll sideways over the games (touchpad, or Shift + mouse wheel); press D-pad right along a
+     row until the last game of the row.
+  3. Scroll down with the wheel, or D-pad down, to the last game.
+  4. Press LB and RB.
+- **Expected:** 1: the games fill the screen width in rows; no horizontal scrollbar, and a long
+  title is cut short (it ends in an ellipsis) instead of widening its card. 2: the page does not
+  move sideways; D-pad right walks along the row. 3: every game is reachable by scrolling down.
+  4: the previous and next console open, as before.
+- **Check:** suite file `tests/test_bigpicture_pages.py`
+  (`test_a_long_title_never_widens_the_columns_past_the_screen`).

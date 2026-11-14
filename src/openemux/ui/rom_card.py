@@ -518,11 +518,15 @@ class RomItem(Gtk.Box):
         self.name_label = Gtk.Label()
         self.name_label.set_halign(label_align)
         self.name_label.set_xalign(0.0 if compact else 0.5)
-        if compact:
-            self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
-        else:
+        # Ellipsized in both shapes, so a title never makes its card wider
+        # than the art. GtkGridView sizes every column to the widest card it
+        # has built, so one long title in a big font -- Big Picture's -- made
+        # the columns overflow the viewport and the page scroll sideways
+        # (issue 954). The preview cut above still keeps the usual title
+        # whole; the ellipsis only shows when that cut does not fit.
+        self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
+        if not compact:
             self.name_label.set_max_width_chars(self._preview_limit + 3)
-            self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
         self.name_label.add_css_class("rom-title")
         text_box.append(self.name_label)
 
