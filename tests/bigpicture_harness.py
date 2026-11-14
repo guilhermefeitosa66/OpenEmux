@@ -38,6 +38,10 @@ class BigPictureCase(WindowCase):
         if not self.win.big_picture:
             self.win.toggle_big_picture()
         self.shell = self.win.big_picture_shell
+        # No slide between pages: a page's ``shown`` comes when the slide
+        # ends, by the clock, and puts the focus on the page's default --
+        # after whatever the test did meanwhile on a slow runner.
+        self.shell.nav.set_animate_transitions(False)
         self.pump()
         return self.shell
 
