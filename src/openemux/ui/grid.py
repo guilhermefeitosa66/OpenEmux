@@ -290,6 +290,7 @@ class RomGrid(Gtk.GridView):
             # state (issue 910).
             play_caption=play_caption,
             has_auto_state=has_auto_state,
+            fit_titles=bool(self.ui_settings.get("big_picture")),
             frame_for_rom=self._frame_path_for_rom,
             context_services=context_services,
             on_launch=self._launch_rom,

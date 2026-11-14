@@ -10,7 +10,7 @@ from tests.bigpicture_harness import BigPictureCase
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
 if HAVE_DISPLAY:
-    from gi.repository import GdkPixbuf, GLib, Gtk
+    from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
     from openemux.ui import navigation
     from openemux.ui.bigpicture import home as home_module
@@ -97,6 +97,16 @@ class TheGameGridOnlyScrollsDown(BigPictureCase):
         adjustment = grid.get_hadjustment()
         self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 0.5)
         self.assertEqual(adjustment.get_value(), 0)
+        self.assertEqual(card.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+
+    def test_the_desktop_keeps_its_titles_whole(self):
+        # Only Big Picture's big titles are cut to the card; leaving the
+        # mode rebuilds the grid with the desktop's titles as they were.
+        self.leave()
+        self.assertNotIn("big_picture", self.win.display_settings_for("SFC"))
+        grid = self.show_with_cards("SFC")
+        card = next(iter(grid._bound.values()))
+        self.assertEqual(card.name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
 
 
 @needs_display

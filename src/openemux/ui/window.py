@@ -1088,6 +1088,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         settings = dict(self.config_manager.get_display_settings(scope))
         if getattr(self, "_big_picture", False):
             settings["zoom"] = BIG_PICTURE_ZOOM
+            # Not a saved key: tells the grid its cards wear the couch
+            # layout's big titles, which must not widen them (issue 954).
+            settings["big_picture"] = True
         return settings
 
     @property
