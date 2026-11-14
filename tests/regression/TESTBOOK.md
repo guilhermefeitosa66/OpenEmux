@@ -18879,8 +18879,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Steps:**
   1. Press A on the "NES" card; `make devbox-shot OUT=$SCRATCH/bp-games.png`.
 - **Expected:** On the left: "‹ Shelf" with a search and a filter button; "NES" as the eyebrow,
-  "Nintendo (NES)" in big letters and "N games"; the console chips (All · Favorites · NES · GB ...)
-  with NES white; the filter chips "Favorites · N", "Has save state · N", "Missing artwork · N",
+  "Nintendo (NES)" in big letters and "N games"; the console chips (All · Favorites · NES · GB ...),
+  each with its icon left of the name (RT-1200), with NES white; the filter chips "Favorites · N", "Has save state · N", "Missing artwork · N",
   "Never played · N"; "Cartridges" with a three-way switch; the cartridges three to a row. On the
   right, the pane reads "Select a game to see it here". Hints: Enter Details · Ctrl+D Favorite ·
   Alt+Enter Options · Tab Console · Menu Select · Esc Shelf.
@@ -19099,3 +19099,22 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   desktop is at 75% again.
 - **Check:** `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
   `tests/test_window.py`.
+
+### RT-1200 — The console chips show the console icon beside the short name
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920x1080 (`make devbox-res RES=1920x1080`), the app in Big
+  Picture, a playlist "Couch" with a game in it.
+- **Steps:**
+  1. Open a console's games (A on its card); `make devbox-shot OUT=$SCRATCH/bp-chips.png`.
+  2. Press RB, then walk the focus up to the chips; take another screenshot.
+  3. `make devbox-res RES=1280x720`; take another screenshot.
+- **Expected:** 1: every console chip shows the console's pixel-art icon (the shelf card's art) at
+  the left of its short name, sharp, every source pixel a square, no blur; "All" shows a grid
+  glyph, "Favorites" a star, "Couch" a bookmark. The chips are as tall as the filter chips below.
+  2: the white current chip and the purple focused chip both read clearly with their icon. 3: the
+  icons shrink with the chips and stay inside them. A console with no icon file shows its
+  symbolic icon instead (suite only).
+- **Check:** the screenshots show the above; `tests/test_bigpicture_games.py`
+  (`test_every_chip_shows_an_icon_beside_its_name`, `test_a_console_with_no_art_takes_its_symbolic_icon`),
+  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`).
