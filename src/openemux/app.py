@@ -55,9 +55,19 @@ class OpenEmuxApplication(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID,
                          flags=gi.repository.Gio.ApplicationFlags.FLAGS_NONE)
+        # `openemux --big-picture`: open straight into the couch layout, for
+        # a launcher entry or a Steam shortcut. The window reads the flag.
+        self.add_main_option(
+            "big-picture", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
+            "Open in Big Picture, the couch layout for a TV and a controller", None,
+        )
+        self.start_big_picture = False
         self.config_manager = ConfigManager()
         self._bootstrap_running = False
         self._bootstrap_window = None
+        # The Big Picture stylesheet the first-boot screen carries while the
+        # app opens straight into the mode; None the rest of the time.
+        self._bootstrap_css = None
         self._housekeeping_done = False
         self.main_window = None
         # Window handles the Windows shell was told are OpenEmux, by window
@@ -67,6 +77,12 @@ class OpenEmuxApplication(Adw.Application):
         self._launcher = win32_shell.launcher_path()
         if self._launcher is not None:
             self.connect("window-added", self._on_window_added)
+
+    def do_handle_local_options(self, options):
+        # -1 carries on to activation; the option is remembered for the window.
+        if options.contains("big-picture"):
+            self.start_big_picture = True
+        return -1
 
     def do_activate(self):
         # Register the vendored symbolic icons before any window exists, so
@@ -264,6 +280,8 @@ class OpenEmuxApplication(Adw.Application):
             locale=locale,
             parent=parent,
         )
+        if self._wants_big_picture():
+            self._dress_for_big_picture(self._bootstrap_window)
         self._bootstrap_window.present()
         self._settle_renderer_probe(self._bootstrap_window)
         bootstrapper = FirstBootBootstrapper(self.config_manager)
@@ -277,6 +295,47 @@ class OpenEmuxApplication(Adw.Application):
             GLib.idle_add(self._finish_bootstrap_flow, result, initial_boot)
 
         Thread(target=_worker, daemon=True).start()
+
+    def _wants_big_picture(self):
+        """Whether the app is opening into the couch layout: the flag, or the setting."""
+        if self.start_big_picture:
+            return True
+        return bool(self.config_manager.get_big_picture_settings()["start"])
+
+    def _dress_for_big_picture(self, window):
+        """The first-boot screen as Big Picture draws it: full screen, the mode's sizes.
+
+        On a first start there is no main window yet to install the mode's
+        stylesheet, so the screen gets a copy of its own, sized for the
+        monitor and the text-size setting, and lets go of it when the flow
+        ends (issue 914). The window's labels already carry the classes.
+        """
+        from gi.repository import Gdk
+
+        from openemux.ui import theming
+        from openemux.ui.bigpicture import theme
+
+        window.add_css_class("big-picture")
+        window.fullscreen()
+        display = Gdk.Display.get_default()
+        monitors = display.get_monitors()
+        height = theme.DESIGN_HEIGHT
+        if monitors.get_n_items():
+            height = monitors.get_item(0).get_geometry().height
+        text_size = self.config_manager.get_big_picture_settings()["text_size"]
+        provider = Gtk.CssProvider()
+        provider.load_from_string(theme.stylesheet(theme.scale_for(height, text_size), theming.is_dark()))
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
+        )
+        self._bootstrap_css = provider
+
+    def _release_big_picture_dress(self):
+        if self._bootstrap_css is not None:
+            from gi.repository import Gdk
+
+            Gtk.StyleContext.remove_provider_for_display(Gdk.Display.get_default(), self._bootstrap_css)
+            self._bootstrap_css = None
 
     @staticmethod
     def _run_bootstrap_guarded(bootstrapper, on_event):
@@ -312,6 +371,9 @@ class OpenEmuxApplication(Adw.Application):
 
     def _finish_bootstrap_flow(self, result, initial_boot):
         self._bootstrap_running = False
+        # The main window's shell installs the mode's own stylesheet next;
+        # two copies would be matched against every widget for nothing.
+        self._release_big_picture_dress()
         if self._bootstrap_window:
             # The window asks for confirmation before closing mid-run; this
             # close is the run being over, so it must not ask.

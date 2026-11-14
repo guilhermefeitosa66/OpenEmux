@@ -28,10 +28,10 @@ _KEYWORDS = (
 #: is the context/details button, "north" the favorite; the shoulders
 #: switch consoles; "menu" is Select/View/Options/-; "start" is Start/+.
 _LABELS = {
-    XBOX: {"south": "A", "east": "B", "west": "X", "north": "Y", "shoulders": "LB/RB", "menu": "View", "start": "Menu"},
-    PLAYSTATION: {"south": "✕", "east": "○", "west": "□", "north": "△", "shoulders": "L1/R1", "menu": "Share", "start": "Options"},
-    NINTENDO: {"south": "B", "east": "A", "west": "Y", "north": "X", "shoulders": "L/R", "menu": "−", "start": "+"},
-    GENERIC: {"south": "A", "east": "B", "west": "X", "north": "Y", "shoulders": "L1/R1", "menu": "Select", "start": "Start"},
+    XBOX: {"south": "A", "east": "B", "west": "X", "north": "Y", "shoulders": "LB/RB", "menu": "View", "start": "Menu", "guide": "Guide"},
+    PLAYSTATION: {"south": "✕", "east": "○", "west": "□", "north": "△", "shoulders": "L1/R1", "menu": "Share", "start": "Options", "guide": "PS"},
+    NINTENDO: {"south": "B", "east": "A", "west": "Y", "north": "X", "shoulders": "L/R", "menu": "−", "start": "+", "guide": "Home"},
+    GENERIC: {"south": "A", "east": "B", "west": "X", "north": "Y", "shoulders": "L1/R1", "menu": "Select", "start": "Start", "guide": "Guide"},
 }
 
 
@@ -70,6 +70,8 @@ def glyphs(family, swap_confirm_cancel=False):
         "consoles": labels["shoulders"],
         "menu": labels["menu"],
         "start": labels["start"],
+        # The Guide/Home/PS button: Big Picture on and off.
+        "guide": labels["guide"],
         "directions": "✚",
         "range": "L2/R2+✚",
     }

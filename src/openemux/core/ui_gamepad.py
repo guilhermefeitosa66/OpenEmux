@@ -65,7 +65,7 @@ NAV_TOKEN_ACTIONS = {
     "6": "menu",      # Select/Back/View: the primary menu, so Preferences,
                       # Shortcuts and About are reachable without a mouse
     "7": "search",    # Start: the on-screen keyboard (issue 914)
-    "8": "tv_mode",   # Guide/Home/PS: TV mode on and off (issue 914)
+    "8": "big_picture",  # Guide/Home/PS: Big Picture on and off (issue 914)
     # The analog triggers, pressed direction only: the pad's Shift for range
     # selection (issue #78). The resting direction ("-2"/"-5") stays unmapped
     # so an idle trigger cannot read as held.

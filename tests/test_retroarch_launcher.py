@@ -668,6 +668,10 @@ class RetroArchLauncherTests(unittest.TestCase):
             cfg = _DummyConfig(base, base / "retroarch", base / f"mgba_libretro{CORE_SUFFIX}")
             launcher = RetroArchLauncher(base, cfg)
             self.assertFalse(launcher._start_fullscreen())
+            # Big Picture (issue 914) forces it on over a windowed setting.
+            launcher.force_fullscreen = True
+            self.assertTrue(launcher._start_fullscreen())
+            launcher.force_fullscreen = False
             windowed = Path(launcher._write_runtime_override("GBA")).read_text(encoding="utf-8").splitlines()
             cfg.get_ui_settings = lambda: {"start_games_fullscreen": True}
             self.assertTrue(launcher._start_fullscreen())

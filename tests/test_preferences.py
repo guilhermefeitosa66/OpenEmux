@@ -2179,6 +2179,43 @@ class TheSystemPageTests(_PreferencesCase):
 
 
 @needs_display
+class TheBigPictureGroupTests(_PreferencesCase):
+    """The couch layout's two settings, reachable from the desk as well."""
+
+    def test_the_rows_open_on_the_stored_settings(self):
+        self.assertFalse(self.prefs._big_picture_start_row.get_active())
+        self.assertEqual(self.prefs._big_picture_text_size_row.get_value(), 100)
+        self.config.set_big_picture_start(True)
+        self.config.set_big_picture_text_size(120)
+        prefs = OpenEmuxPreferences(self.win)
+        self.assertTrue(prefs._big_picture_start_row.get_active())
+        self.assertEqual(prefs._big_picture_text_size_row.get_value(), 120)
+        self.assertIs(
+            prefs._big_picture_start_row.get_ancestor(Adw.PreferencesPage), prefs._pages["system"]
+        )
+
+    def test_the_switch_stores_whether_to_start_in_big_picture(self):
+        self.prefs._big_picture_start_row.set_active(True)
+        self.assertTrue(self.config.get_big_picture_settings()["start"])
+        self.prefs._big_picture_start_row.set_active(False)
+        self.assertFalse(self.config.get_big_picture_settings()["start"])
+
+    def test_the_text_size_is_stored_and_reaches_a_running_shell(self):
+        # No shell (the mode was never entered): the value is only stored.
+        self.win.big_picture_shell = None
+        self.prefs._big_picture_text_size_row.set_value(130)
+        self.assertEqual(self.config.get_big_picture_settings()["text_size"], 130)
+        shell = mock.Mock()
+        self.win.big_picture_shell = shell
+        self.prefs._big_picture_text_size_row.set_value(140)
+        self.assertEqual(self.config.get_big_picture_settings()["text_size"], 140)
+        shell.apply_scale.assert_called_once()
+        # The spin row steps by ten, between 80 and 150.
+        adjustment = self.prefs._big_picture_text_size_row.get_adjustment()
+        self.assertEqual((adjustment.get_lower(), adjustment.get_upper(), adjustment.get_step_increment()), (80, 150, 10))
+
+
+@needs_display
 class TheAchievementsAccountTests(_PreferencesCase):
     def setUp(self):
         super().setUp()

@@ -161,6 +161,9 @@ class RetroArchLauncher:
             runtime_dir=self.config_manager.get_runtime_dir(),
             project_root=self.project_root,
         )
+        #: Set while the window is in Big Picture (issue 914): a game opened
+        #: from the couch fills the screen whatever the desktop setting says.
+        self.force_fullscreen = False
         #: The user's ``retroarch.cfg`` as last read, with the file's stamp:
         #: the override note re-reads it only when the file changed (issue 904).
         self._user_cfg_cache = None
@@ -411,7 +414,7 @@ class RetroArchLauncher:
 
     def _start_fullscreen(self):
         """Whether games open filling the screen rather than windowed (#505)."""
-        return self._ui_flag("start_games_fullscreen")
+        return self.force_fullscreen or self._ui_flag("start_games_fullscreen")
 
     def _launch_mode_overrides(self):
         """Windowed or fullscreen, as the app's setting says (issue #505).
