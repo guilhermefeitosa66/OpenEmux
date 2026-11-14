@@ -75,7 +75,6 @@ class TheGameGridOnlyScrollsDown(BigPictureCase):
     }
 
     def test_a_long_title_never_widens_the_columns_past_the_screen(self):
-        self.win.set_default_size(1280, 720)
         self.show()
         self.shell.open_library("SFC")
         grid = self.win.pages.grid_for("SFC")
