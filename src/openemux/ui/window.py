@@ -107,9 +107,9 @@ logger = logging.getLogger(__name__)
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 8
 
-#: TV mode (issue 914) never shows the cards smaller than this zoom: three
-#: metres away, the shelf a desktop reads at 100% is unreadable.
-TV_MODE_MIN_ZOOM = 1.5
+#: Big Picture (issue 914) never shows the cards smaller than this zoom:
+#: three metres away, the shelf a desktop reads at 100% is unreadable.
+BIG_PICTURE_MIN_ZOOM = 1.5
 
 
 
@@ -200,8 +200,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         #: True while "Search everywhere" moves to the All page, so the
         #: selection handler keeps the query instead of clearing it (issue 906).
         self._carrying_search_query = False
-        #: Fullscreen couch layout (issue 914), off until F11 or the Guide button.
-        self._tv_mode = False
+        #: Big Picture, the couch layout (issue 914): off until F11, the
+        #: Guide button, the header button or the "Start in Big Picture"
+        #: setting. The shell is built on first use.
+        self._big_picture = False
+        self.big_picture_shell = None
         # The card transitions follow the desktop's animation setting (issue
         # 915): a class on the window the CSS keys off.
         self._gtk_settings = Gtk.Settings.get_default()
@@ -233,7 +236,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.console_list = self.sidebar.list_box
         self.split_view.set_sidebar(self.sidebar.page)
         self.split_view.set_content(self._build_content())
-        self.toast_overlay.set_child(self.split_view)
+        # The desktop layout and Big Picture share the window: one stack,
+        # the split view on one side and the couch shell (built on first use)
+        # on the other. Nothing is torn down to switch.
+        self.mode_stack = Gtk.Stack()
+        self.mode_stack.set_hhomogeneous(False)
+        self.mode_stack.set_vhomogeneous(False)
+        self.mode_stack.add_named(self.split_view, "desktop")
+        self.toast_overlay.set_child(self.mode_stack)
 
         breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
         breakpoint.add_setter(self.split_view, "collapsed", True)
@@ -298,6 +308,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self._start_deferred_asset_download()
         self._start_update_check()
         GLib.timeout_add_seconds(1, self.game.poll)
+        # `--big-picture`, or the setting: into the couch layout once the
+        # window is on screen, so the fullscreen request has a surface.
+        if self._wants_big_picture_at_start():
+            GLib.idle_add(self._enter_big_picture_at_start)
 
     def _warm_core_catalog(self):
         """Scan the core directories on a worker, so the first menu finds them scanned."""
@@ -686,6 +700,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._translatable(lambda: self.search_button.set_tooltip_text(self.t("header.search.toggle")))
         header.pack_end(self.search_button)
 
+        # Big Picture, one click away for a mouse user too: the way to a
+        # couch layout should not depend on knowing F11 (issue 914).
+        self.big_picture_btn = Gtk.Button()
+        self.big_picture_btn.set_icon_name("video-display-symbolic")
+        self._translatable(lambda: self.big_picture_btn.set_tooltip_text(self.t("header.big_picture")))
+        self.big_picture_btn.set_action_name("win.big-picture")
+        header.pack_end(self.big_picture_btn)
+
         header.pack_end(self._build_theme_button())
 
         header.pack_end(self._build_view_mode_button())
@@ -836,6 +858,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         content_overlay.set_child(self.content_stack)
         content_overlay.add_overlay(self.search_empty)
         toolbar.set_content(content_overlay)
+        # Big Picture borrows the overlay -- the page stack and the search's
+        # empty state -- and gives it back to this toolbar view on the way out.
+        self.content_toolbar = toolbar
+        self.content_overlay = content_overlay
         # Installed on the stack rather than on each grid so that every page —
         # including the empty-library Adw.StatusPage — accepts dropped ROMs.
         self.imports.install_drop_target(self.content_stack)
@@ -1059,8 +1085,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     @property
     def _zoom(self):
-        if getattr(self, "_tv_mode", False):
-            return max(self._display_settings["zoom"], TV_MODE_MIN_ZOOM)
+        if getattr(self, "_big_picture", False):
+            return max(self._display_settings["zoom"], BIG_PICTURE_MIN_ZOOM)
         return self._display_settings["zoom"]
 
     @property
@@ -1470,6 +1496,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def set_hints(self, pairs):
         """Fill the right side of the bottom bar with (glyph, label) hints."""
         pairs = list(pairs)[:MAX_INPUT_HINTS]
+        if self._big_picture and self.big_picture_shell is not None:
+            # The couch layout has a hint bar of its own; the desktop's slots
+            # stay empty so nothing is drawn twice when the mode ends.
+            self.big_picture_shell.set_hints(pairs)
+            pairs = []
         for index, (slot, key, text) in enumerate(self._hint_slots):
             if index < len(pairs):
                 glyph, label = pairs[index]
@@ -1518,6 +1549,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # Only entries about the app itself; receiving games sits in the
         # Import button's menu.
         app_section = Gio.Menu()
+        app_section.append(self.t("menu.big_picture"), "win.big-picture")
         app_section.append(self.t("menu.preferences"), "win.preferences")
         app_section.append(self.t("menu.shortcuts"), "win.shortcuts")
         app_section.append(self.t("menu.welcome"), "win.welcome")
@@ -1560,9 +1592,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             ("zoom-in", lambda *_: self._step_zoom(1), ["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"]),
             ("zoom-out", lambda *_: self._step_zoom(-1), ["<Ctrl>minus", "<Ctrl>KP_Subtract"]),
             ("zoom-reset", lambda *_: self._apply_zoom(DEFAULT_ZOOM), ["<Ctrl>0"]),
-            # TV mode (issue 914): fullscreen, the sidebar away, bigger
-            # everything. The pad's Guide button toggles it too.
-            ("tv-mode", lambda *_: self.toggle_tv_mode(), ["F11"]),
+            # Big Picture (issue 914): the couch layout. F11 is handled in
+            # the capture phase (_on_big_picture_key), not as an accel: with
+            # both, one press toggled twice. The Guide button, the header
+            # button and the main menu reach the same action.
+            ("big-picture", lambda *_: self.toggle_big_picture(), None),
             ("quit", lambda *_: self.get_application().quit(), ["<Ctrl>q"]),
         ):
             action = Gio.SimpleAction.new(name, None)
@@ -1640,23 +1674,36 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         controller = Gtk.EventControllerKey()
         controller.connect("key-pressed", self._on_window_escape)
         self.add_controller(controller)
-        # TV mode (issue 914) collapses the split view, and the navigation
-        # view inside it pops the content page on Escape before that bubble
-        # handler runs: the sidebar came back as a full-screen page with the
-        # mode still on. Leaving the mode is decided in the capture phase
-        # instead, with anything that owns its Escape still left alone.
+        # Big Picture's keys, decided in the capture phase (issue 914). Escape:
+        # the navigation views inside the mode pop their pages on Escape
+        # before a bubble handler runs, so "back" is decided here, with
+        # anything that owns its Escape still left alone. F11: handled here
+        # rather than as an application accelerator, so the toggle no longer
+        # depends on the accel path reaching this window -- in the 1.23.5
+        # AppImage on Cinnamon it did not, while the same key worked from
+        # the Flatpak. The shortcuts window still lists F11.
         first = Gtk.EventControllerKey()
         first.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        first.connect("key-pressed", self._on_tv_mode_escape)
+        first.connect("key-pressed", self._on_big_picture_key)
         self.add_controller(first)
 
-    def _on_tv_mode_escape(self, _controller, keyval, _keycode, _state):
-        if keyval != Gdk.KEY_Escape or not self._tv_mode:
+    def _on_big_picture_key(self, _controller, keyval, _keycode, state):
+        if keyval == Gdk.KEY_F11:
+            if state & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.ALT_MASK):
+                return False
+            if self.input_capture_active:
+                return False
+            self.toggle_big_picture()
+            return True
+        if keyval != Gdk.KEY_Escape or not self._big_picture:
+            return False
+        if self.input_capture_active:
+            # The capture's own controller owns Escape: it cancels the
+            # capture, and nothing here may pop the page under it.
             return False
         if (
             self.get_visible_dialog() is not None
             or self.navigation._active_popover() is not None
-            or self.search_bar.get_search_mode()
         ):
             return False
         return self._on_window_escape(None, keyval, 0, 0)
@@ -1667,43 +1714,83 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if self._selected_roms:
             self._clear_selection()
             return True
-        if self.tv_mode:
-            # The sidebar is away in TV mode, so stepping back to it would only
-            # swap the page for a full-screen console list: Escape leaves the
-            # mode instead (issue 914).
-            self.toggle_tv_mode()
+        if self._big_picture:
+            # Escape is B: the search sheet, then the page, and at home
+            # nothing -- B never leaves the mode, so neither does Escape.
+            # One Escape too many used to land a keyboard user back on the
+            # desktop; F11 and "Back to desktop" are the ways out (issue 914).
+            self.big_picture_shell.handle_back()
             return True
         return self.navigation.escape_to_sidebar()
 
-    # ----- TV mode (issue 914) ---------------------------------------------
+    # ----- Big Picture (issue 914) ----------------------------------------
     @property
-    def tv_mode(self):
-        return self._tv_mode
+    def big_picture(self):
+        return self._big_picture
 
-    def toggle_tv_mode(self):
-        """Fullscreen with the sidebar hidden and everything sized for a couch.
+    def _ensure_big_picture_shell(self):
+        if self.big_picture_shell is None:
+            # Imported here: the mode is one of two, and a desktop session
+            # that never leaves the desktop should not pay for its widgets.
+            from openemux.ui.bigpicture.shell import BigPictureShell
 
-        The zoom floor, the bigger titles and hints and the thicker focus ring
-        come from the ``tv-mode`` class and ``TV_MODE_MIN_ZOOM``; the user's
-        own zoom setting is left alone, so leaving the mode restores the
-        desktop look exactly.
+            self.big_picture_shell = BigPictureShell(self)
+            self.mode_stack.add_named(self.big_picture_shell, "big-picture")
+            self.connect("close-request", self._on_close_release_big_picture)
+        return self.big_picture_shell
+
+    def _on_close_release_big_picture(self, *_args):
+        if self.big_picture_shell is not None:
+            self.big_picture_shell.release()
+        return False
+
+    def toggle_big_picture(self):
+        """The couch layout on and off: fullscreen, the shell in for the desktop.
+
+        The desktop layout is never torn down: the shell borrows the page
+        stack and gives it back, so leaving lands on the very desktop that
+        was there. The zoom floor comes from ``BIG_PICTURE_MIN_ZOOM``; the
+        user's own zoom setting is left alone.
         """
-        self._tv_mode = not self._tv_mode
-        if self._tv_mode:
-            self.add_css_class("tv-mode")
-            self.split_view.set_collapsed(True)
-            self.split_view.set_show_content(True)
+        self._big_picture = not self._big_picture
+        if self._big_picture:
+            shell = self._ensure_big_picture_shell()
+            self.add_css_class("big-picture")
+            self.mode_stack.set_visible_child_name("big-picture")
             self.fullscreen()
+            shell.enter()
         else:
-            self.remove_css_class("tv-mode")
+            self.big_picture_shell.leave()
+            self.mode_stack.set_visible_child_name("desktop")
+            self.remove_css_class("big-picture")
             self.unfullscreen()
-            self.split_view.set_collapsed(False)
+            self.set_hints([])
+            GLib.idle_add(self.navigation._cmd_focus_grid)
         self._reload_current_page()
-        self._toast(self.t("toast.tv_mode.on" if self._tv_mode else "toast.tv_mode.off"), timeout=2)
-        return self._tv_mode
+        logger.info("big picture: %s", "on" if self._big_picture else "off")
+        self._toast(
+            self.t("big_picture.toast.on" if self._big_picture else "big_picture.toast.off"),
+            timeout=2,
+        )
+        self.navigation.refresh_hints(force=True)
+        return self._big_picture
+
+    def _wants_big_picture_at_start(self):
+        application = self.get_application()
+        if getattr(application, "start_big_picture", False):
+            return True
+        return bool(self.config_manager.get_big_picture_settings()["start"])
+
+    def _enter_big_picture_at_start(self):
+        if not self._big_picture:
+            self.toggle_big_picture()
+        return GLib.SOURCE_REMOVE
 
     def open_onscreen_keyboard(self):
         """The pad's way into the search box (issue 914)."""
+        if self._big_picture:
+            self.big_picture_shell.open_search()
+            return None
         if not self.search_entry.get_sensitive():
             return None
         from openemux.ui.onscreen_keyboard import OnScreenKeyboard
@@ -1764,9 +1851,18 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def _toggle_search(self):
         if not self.search_button.get_sensitive():
             return
+        if self._big_picture:
+            # Ctrl+F is Start here: the keyboard over the games, not the
+            # desktop's search bar, which the mode does not show.
+            self.big_picture_shell.open_search()
+            return
         self.search_button.set_active(not self.search_button.get_active())
 
     def _open_preferences(self, page=None, console=None):
+        if self._big_picture:
+            # Settings has a page set of its own in the couch layout.
+            self.big_picture_shell.open_settings(page, console=console)
+            return
         self._preferences_dialog = OpenEmuxPreferences(self)
         if page:
             self._preferences_dialog.show_page(page)
@@ -1847,7 +1943,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         groups = (
             ("shortcuts.group.general", (
                 ("<Ctrl>f", "shortcuts.search"),
-                ("F11", "shortcuts.tv_mode"),
+                ("F11", "shortcuts.big_picture"),
                 ("<Ctrl>comma", "shortcuts.preferences"),
                 ("<Ctrl>q", "shortcuts.quit"),
             )),
@@ -2347,6 +2443,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
                 first_row = self.console_list.get_row_at_index(0)
                 if first_row:
                     self.console_list.select_row(first_row)
+            self._notify_big_picture_library()
             return
 
         self.console_list.unselect_all()
@@ -2354,6 +2451,11 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._set_search_enabled(False)
         self.content_stack.set_visible_child_name(LIBRARY_EMPTY_ID)
         self._update_window_title(None)
+        self._notify_big_picture_library()
+
+    def _notify_big_picture_library(self):
+        if self._big_picture and self.big_picture_shell is not None:
+            self.big_picture_shell.on_library_changed()
 
     def _discover_visible_consoles(self):
         """The consoles that have games, in the order the user put them in.
@@ -2447,12 +2549,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # On a collapsed (narrow) layout, reveal the content pane.
         if self.split_view.get_collapsed():
             self.split_view.set_show_content(True)
+        if self._big_picture:
+            self.big_picture_shell.on_scope_changed(self.current_console)
 
     def _sync_favorites_row_idle(self):
         self.sidebar.sync_favorites_row()
         # The same rule keeps an emptied "Recently played" row until the
         # user leaves it (issue 910).
         self.sidebar.sync_recent_row()
+        self._notify_big_picture_library()
         return GLib.SOURCE_REMOVE
 
     def _remember_view_soon(self):
@@ -2881,6 +2986,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     def open_game_details(self, rom):
         """The game details dialog (issue 913): from the menu, Alt+Return or the pad's X."""
+        if self._big_picture:
+            # The couch layout has a page for it, not a dialog.
+            self.big_picture_shell.open_details(rom)
+            return
         from openemux.ui.game_details import GameDetailsDialog
 
         GameDetailsDialog(self, rom).present(self)
@@ -2904,6 +3013,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # The first star puts the row in the sidebar, the last one takes it
         # out -- unless the user is standing on the page (issue #382).
         self.sidebar.sync_favorites_row()
+        self._notify_big_picture_library()
         return is_now_favorite
 
     def _choose_cover_for_rom(self, rom, on_done=None, kind=COVER_ART):
@@ -3061,6 +3171,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # forget_rom drops the ROM from FAVORITES.list too, so the last
         # favorite can go this way as well as through the star.
         self.sidebar.sync_favorites_row()
+        # Big Picture: a details page open on a game that just went has
+        # nothing left to show; back to the grid.
+        if deleted and self._big_picture:
+            page = self.big_picture_shell.visible_page()
+            gone = {rom["path"] for rom in roms}
+            if (getattr(page, "rom", None) or {}).get("path") in gone:
+                self.big_picture_shell.pop()
 
     def _sync_covers_for_selection(self):
         selected = list(self._selected_roms)

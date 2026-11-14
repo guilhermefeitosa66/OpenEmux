@@ -115,6 +115,21 @@ class ActivatingTheApplicationTests(_ApplicationCase):
 
 
 @needs_display
+class TheBigPictureOptionTests(_ApplicationCase):
+    def test_the_flag_is_remembered_for_the_window(self):
+        # `openemux --big-picture` (issue 914): the window reads the flag.
+        from gi.repository import GLib
+
+        self.assertFalse(self.app.start_big_picture)
+        empty = GLib.VariantDict.new(GLib.Variant("a{sv}", {}))
+        self.assertEqual(self.app.do_handle_local_options(empty), -1)
+        self.assertFalse(self.app.start_big_picture)
+        given = GLib.VariantDict.new(GLib.Variant("a{sv}", {"big-picture": GLib.Variant("b", True)}))
+        self.assertEqual(self.app.do_handle_local_options(given), -1)
+        self.assertTrue(self.app.start_big_picture)
+
+
+@needs_display
 class ThePathOutTests(_ApplicationCase):
     def test_quitting_takes_a_running_game_with_it(self):
         # Closing the library window already stops it; this covers Ctrl+Q, a
@@ -246,6 +261,33 @@ class TheBootstrapFlowTests(_ApplicationCase):
             self.app._start_bootstrap_flow(initial_boot=True)
             self.thread.call_args.kwargs["target"]()
         self.assertEqual(events[0][0], self.app._deliver_bootstrap_event)
+
+    def test_opening_into_big_picture_dresses_the_progress_screen(self):
+        # Neither the flag nor the setting: the desktop's screen, untouched.
+        self.app._start_bootstrap_flow(initial_boot=True)
+        self.windows[0].add_css_class.assert_not_called()
+        self.windows[0].fullscreen.assert_not_called()
+        self.assertIsNone(self.app._bootstrap_css)
+        # The flag: the mode's class, full screen, the mode's stylesheet.
+        self.app.start_big_picture = True
+        self.app._start_bootstrap_flow(initial_boot=True)
+        self.windows[1].add_css_class.assert_called_once_with("big-picture")
+        self.windows[1].fullscreen.assert_called_once()
+        self.assertIsNotNone(self.app._bootstrap_css)
+        # The flow ending drops the stylesheet: the main window installs its own.
+        self.app._finish_bootstrap_flow({"success": True}, initial_boot=False)
+        self.assertIsNone(self.app._bootstrap_css)
+        self.windows[1].finish.assert_called_once()
+        # The setting alone is enough too.
+        self.app.start_big_picture = False
+        self.assertFalse(self.app._wants_big_picture())
+        self.config.set_big_picture_start(True)
+        self.assertTrue(self.app._wants_big_picture())
+        self.app._start_bootstrap_flow(initial_boot=True)
+        self.windows[2].add_css_class.assert_called_once_with("big-picture")
+        self.app._release_big_picture_dress()
+        self.assertIsNone(self.app._bootstrap_css)
+        self.app._release_big_picture_dress()  # nothing to release twice
 
     def test_a_retry_from_the_ui_starts_the_flow_and_records_the_request(self):
         self.assertTrue(self.app.request_bootstrap_retry_from_ui(None))
@@ -430,6 +472,14 @@ class TheFirstBootWindowTests(_ApplicationCase):
         self.assertEqual(self.window.progress.get_text(), "0%")
         self.assertEqual(self.window.progress.get_fraction(), 0.0)
         self.assertTrue(self.window.subtitle_label.get_text())
+
+    def test_its_labels_carry_the_big_picture_classes(self):
+        # Inert on the desktop; the mode's stylesheet sizes them under the
+        # "big-picture" class the application adds (issue 914).
+        self.assertTrue(self.window.subtitle_label.has_css_class("bp-body"))
+        self.assertTrue(self.window.status_label.has_css_class("bp-note"))
+        self.assertTrue(self.window.subtitle_label.get_parent().has_css_class("bp-first-boot"))
+        self.assertFalse(self.window.has_css_class("big-picture"))
 
     def test_a_retry_is_modal_over_the_window_that_asked_for_it(self):
         parent = Adw.ApplicationWindow(application=self.app)

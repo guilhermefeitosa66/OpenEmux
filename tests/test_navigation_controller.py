@@ -547,12 +547,12 @@ class ActivatingAndMenusTests(_NavigationCase):
         with mock.patch.object(self.win, "_focused_rom_item", return_value=item):
             self.nav._cmd_context_menu()
 
-    def test_tv_mode_and_the_keyboard_go_through_the_window(self):
+    def test_big_picture_and_the_keyboard_go_through_the_window(self):
         # Issue 914: the Guide button and Start.
-        with mock.patch.object(self.win, "toggle_tv_mode") as toggle, mock.patch.object(
+        with mock.patch.object(self.win, "toggle_big_picture") as toggle, mock.patch.object(
             self.win, "open_onscreen_keyboard"
         ) as osk:
-            self.nav._cmd_tv_mode()
+            self.nav._cmd_big_picture()
             self.nav._cmd_osk()
         toggle.assert_called_once()
         osk.assert_called_once()
