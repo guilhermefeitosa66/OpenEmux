@@ -1652,7 +1652,12 @@ class SettingsPage(BigPage):
 
     def _on_entry(self, name):
         self.show_section(name)
-        GLib.idle_add(once(self.focus_pane))
+        GLib.idle_add(once(self._enter_pane))
+
+    def _enter_pane(self):
+        """Into the entry on the right; the hints follow the focus there."""
+        self.focus_pane()
+        self.win.navigation.refresh_hints(force=True)
 
     # -- sections ---------------------------------------------------------------------------
     def show_section(self, name, console=None):
@@ -1727,7 +1732,7 @@ class SettingsPage(BigPage):
         """Controllers › mapping: the desktop's Input page, on the right."""
         self._focus_row = None
         self.show_section("input")
-        GLib.idle_add(once(self.focus_pane))
+        GLib.idle_add(once(self._enter_pane))
         return True
 
     def _on_showing(self, *_args):
@@ -1824,11 +1829,13 @@ class SettingsPage(BigPage):
         """B on the right goes back to the list; from Input, back to Controllers."""
         if self.current == "input" and self.pane_has_focus():
             self.show_section("controllers")
-            GLib.idle_add(once(self.focus_pane))
+            GLib.idle_add(once(self._enter_pane))
             return True
         if self.pane_has_focus():
             self.sync_entries()
-            return self.focus_entry()
+            focused = self.focus_entry()
+            self.win.navigation.refresh_hints(force=True)
+            return focused
         return False
 
     def focus_default(self):
