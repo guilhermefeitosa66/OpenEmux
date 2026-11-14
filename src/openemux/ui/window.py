@@ -1781,6 +1781,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.set_hints([])
             GLib.idle_add(self.navigation._cmd_focus_grid)
         self._reload_current_page()
+        # A page switch in the mode syncs the header's stepper to the mode's
+        # zoom; leaving puts it back on the desktop's (issue 953).
+        self._sync_zoom_controls()
         logger.info("big picture: %s", "on" if self._big_picture else "off")
         self._toast(
             self.t("big_picture.toast.on" if self._big_picture else "big_picture.toast.off"),
