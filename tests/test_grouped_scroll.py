@@ -10,6 +10,7 @@ on screen instead.
 
 import time
 import unittest
+from unittest import mock
 
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 from tests.platform_marks import IS_WINDOWS
@@ -366,6 +367,30 @@ class TheAllPageTests(WindowCase):
         self.scroll_to(self.vadj.get_upper())
         self.assertFalse(self.sfc.is_dormant())
         self.assertTrue(self.fc.is_dormant())
+
+    def test_a_group_unmapped_by_a_search_sleeps_after_the_change(self):
+        # Issue 957, QA round 1: a search that empties a group hides it, and
+        # dropping its model from inside the filter's change aborted GTK 4.22.
+        self.scroll_to(0)
+        self.assertFalse(self.fc.is_dormant())
+        with mock.patch.object(self.fc, "get_mapped", return_value=False):
+            self.fc._on_unmap()
+            self.fc._on_unmap()  # one sleep queued, however many unmaps
+            self.assertFalse(self.fc.is_dormant())
+            source = self.fc._unmap_sleep_source
+            self.assertIsNotNone(source)
+            self.assertEqual(self.fc._sleep_if_unmapped(), GLib.SOURCE_REMOVE)
+            GLib.source_remove(source)
+        self.assertTrue(self.fc.is_dormant())
+        self.assertIsNone(self.fc._unmap_sleep_source)
+
+    def test_a_group_mapped_again_before_the_idle_stays_awake(self):
+        self.scroll_to(0)
+        self.assertFalse(self.fc.is_dormant())
+        self.fc._unmap_sleep_source = None
+        self.fc._sleep_if_unmapped()
+        self.assertTrue(self.fc.get_mapped())
+        self.assertFalse(self.fc.is_dormant())
 
     def test_a_sleeping_group_keeps_its_height_on_the_page(self):
         self.scroll_to(0)

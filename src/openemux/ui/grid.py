@@ -180,6 +180,8 @@ class RomGrid(Gtk.GridView):
         # Where the page was scrolled to when the grid went to sleep.
         self._sleep_scroll = None
         self._restore_source = None
+        # A grouped grid's sleep after an unmap, run once the unmap is over.
+        self._unmap_sleep_source = None
         # Coalesces the per-allocation promotion of the visible cards' fetches.
         self._promotion_pending = False
         # Focus memory: coming back from the sidebar restores this game. The
@@ -313,6 +315,9 @@ class RomGrid(Gtk.GridView):
         self._store.splice(0, 0, self._entries)
         self._query = ()
         self._only_missing_artwork = False
+        #: Big Picture's filter chips (issue 957): ``(key, predicate)`` or None.
+        #: The key says when the predicate changed; the predicate takes a ROM.
+        self._extra = None
         self._filter = Gtk.CustomFilter.new(self._match_entry)
         self._filtered = Gtk.FilterListModel(model=self._store, filter=self._filter)
         # Above a few hundred games the filter runs in slices on the idle
@@ -383,7 +388,21 @@ class RomGrid(Gtk.GridView):
         # A page the user left keeps its entries and its scroll position, but
         # not its cards and their textures: ten console visits used to add
         # about 9 MB each and keep it for the life of the window (issue 900).
+        if self._in_grouped_page():
+            # A group is also unmapped when a search empties it, from inside
+            # the filter's own change: dropping the model there aborts GTK
+            # 4.22 (gtk_list_item_manager_clear_model). Once it is over, then
+            # (issue 957, QA round 1).
+            if self._unmap_sleep_source is None:
+                self._unmap_sleep_source = GLib.idle_add(self._sleep_if_unmapped)
+            return
         self.set_dormant(True)
+
+    def _sleep_if_unmapped(self):
+        self._unmap_sleep_source = None
+        if not self.get_mapped():
+            self.set_dormant(True)
+        return GLib.SOURCE_REMOVE
 
     def _in_grouped_page(self):
         return isinstance(self.get_parent(), GroupedScroll)
@@ -508,9 +527,10 @@ class RomGrid(Gtk.GridView):
 
     def _match_entry(self, entry):
         """The filter predicate, run by GtkFilterListModel per entry."""
-        return entry_matches(entry, self._query, self._only_missing_artwork)
+        extra = self._extra[1] if self._extra is not None else None
+        return entry_matches(entry, self._query, self._only_missing_artwork, extra)
 
-    def set_filter(self, query="", only_missing_artwork=False):
+    def set_filter(self, query="", only_missing_artwork=False, extra=None):
         """Restrict the page to what the search and the artwork filter allow.
 
         The window decides *what* the filter is; matching happens here, over
@@ -521,15 +541,21 @@ class RomGrid(Gtk.GridView):
         """
         tokens = parse_query(query)
         only_missing = bool(only_missing_artwork)
-        if (tokens, only_missing) == (self._query, self._only_missing_artwork):
+        extra_key = extra[0] if extra is not None else None
+        current_key = self._extra[0] if self._extra is not None else None
+        if (tokens, only_missing, extra_key) == (self._query, self._only_missing_artwork, current_key):
             # Still re-seed: a card's artwork state may have settled since.
             self.sync_visible_selection()
             return
         change = refinement(self._query, tokens)
         if only_missing != self._only_missing_artwork:
             change = "stricter" if only_missing and change in ("same", "stricter") else "different"
+        if extra_key != current_key:
+            # The chips are any set: neither a refinement nor a relaxation.
+            change = "different"
         self._query = tokens
         self._only_missing_artwork = only_missing
+        self._extra = extra
         self._filter.changed(FILTER_CHANGES[change])
         self.sync_visible_selection()
 

@@ -60,7 +60,7 @@ class _Grid(_Widget):
         return len(self.visible_entries())
 
     # -- filtering
-    def set_filter(self, query="", only_missing_artwork=False):
+    def set_filter(self, query="", only_missing_artwork=False, extra=None):
         self._query = (query or "").lower()
 
     # -- selection

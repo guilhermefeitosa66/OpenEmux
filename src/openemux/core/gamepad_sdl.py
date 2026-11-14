@@ -820,7 +820,8 @@ class SdlNavigator(NavigatorCore):
             while not self._cancel.is_set():
                 if not self._queue:
                     timeout = IDLE_POLL
-                    for pending in (repeat.next_deadline(), hold.next_deadline()):
+                    for pending in (repeat.next_deadline(), hold.next_deadline(),
+                                    self.pause_trigger.next_deadline(time.monotonic())):
                         if pending is not None:
                             timeout = min(timeout, pending)
                     self._cancel.wait(timeout)
@@ -833,6 +834,9 @@ class SdlNavigator(NavigatorCore):
                     self._queue.clear()
                     repeat.clear()
                     hold.clear()
+                    # The pause gesture's held buttons too (issue 957): see
+                    # GamepadNavigator._run.
+                    self.pause_trigger.reset()
                 was_suspended = suspended
 
                 while self._queue:
@@ -849,5 +853,6 @@ class SdlNavigator(NavigatorCore):
                         self._emit(self._on_action, action)
                     for action in hold.due_actions():
                         self._emit(self._on_action, f"{action}_hold")
+                self._watch_tick(suspended)
         finally:
             self._pump.unsubscribe(self)

@@ -1,8 +1,12 @@
 """The Settings page of Big Picture: every preference, built for a pad.
 
-Two columns. On the left the six sections the desktop's Preferences dialog
-has -- Library, BIOS, Input, Video, Cores, System -- one of them current,
-LB and RB walking them. On the right the rows of that section, every one a
+Two columns, Android's (issue 957). On the left the BIOS card, then the
+entries under their headings -- Appearance (Theme, Language), Achievements,
+Artwork, one entry per console ("Snes9x · CRT Geom" under it), Share
+nearby, and General (ROM folder, Controllers, Check for updates, System,
+About) -- with Back to desktop last; LB and RB walk the tabs. A opens an
+entry on the right, "Choose a setting on the left" until one is; B goes
+back to the list. On the right the rows of that entry, every one a
 full-width card the D-pad walks: A flips a switch in place, opens a
 full-page list for a choice, the on-screen keyboard for a text value, or
 runs an action; Left and Right step a number or move a row up and down its
@@ -29,7 +33,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from openemux.core import bezels, core_options, retroachievements, rom_importer, save_backup
+from openemux.core import bezels, core_options, pause_trigger, retroachievements, rom_importer, save_backup
 from openemux.core.bios_importer import (
     REASON_ERROR,
     REASON_OTHER_CONSOLE,
@@ -39,11 +43,13 @@ from openemux.core.bios_importer import (
 from openemux.core.bios_manager import scan_all_bios_status, scan_console_bios_status
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.embedded_credentials import has_embedded_dev_credentials
-from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.paths import is_running_in_flatpak
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.share.identity import default_device_name
+from openemux.core.big_picture_shelf import full_name
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
+from openemux.core.update_checker import check_for_update_async
+from openemux import __version__
 from openemux.core.theme import THEMES
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 from openemux.ui import theming
@@ -57,24 +63,50 @@ from openemux.ui.bigpicture.widgets import (
     ROW_TEXT,
     BigPage,
     Row,
+    caps,
+    empty_state,
     eyebrow,
     note,
     once,
+    page_heading,
 )
 from openemux.ui.scopes import ALL_CONSOLES_ID
 
-#: The sections, in the order the left column lists them and LB/RB walk
-#: them, each with the key of its title (the desktop's page titles).
-SECTIONS = (
-    ("library", "prefs.page.library"),
-    ("bios", "prefs.page.bios"),
-    ("input", "prefs.page.input"),
-    ("video", "prefs.page.video"),
-    ("cores", "prefs.page.cores"),
-    ("system", "prefs.page.system"),
+#: The left column, Android's (issue 957): a heading, then its entries.
+#: An entry is ``(section, title key)``; "consoles" stands for one entry per
+#: console with games, built when the page opens.
+GROUPS = (
+    ("big_picture.settings.group.appearance", (("theme", "settings.system.theme.title"),
+                                               ("language", "settings.system.language.title"))),
+    ("big_picture.settings.group.achievements", (("achievements", "big_picture.settings.achievements"),)),
+    ("big_picture.settings.group.artwork", (("artwork", "prefs.group.artwork_providers"),)),
+    ("big_picture.settings.group.consoles", (("consoles", None),)),
+    ("big_picture.settings.group.share", (("share", "prefs.share.device_name"),)),
+    ("big_picture.settings.group.general", (("roms", "big_picture.settings.roms"),
+                                            ("controllers", "big_picture.settings.controllers"),
+                                            ("updates", "big_picture.settings.updates"),
+                                            ("system", "prefs.page.system"),
+                                            ("about", "big_picture.settings.about"))),
 )
-SECTION_NAMES = tuple(name for name, _key in SECTIONS)
-SECTION_TITLES = dict(SECTIONS)
+#: Every fixed section, in the order of the column (the BIOS card first).
+SECTION_NAMES = ("bios",) + tuple(
+    name for _group, entries in GROUPS for name, _key in entries if name != "consoles"
+) + ("input",)
+#: The desktop Preferences' page names, as callers still ask for them.
+SECTION_ALIASES = {
+    "library": "roms",
+    "video": "system",
+    "cores": "consoles",
+    "interface": "theme",
+}
+CONSOLE_PREFIX = "console:"
+PAUSE_TRIGGER_LABELS = {
+    pause_trigger.GUIDE: "big_picture.pause_trigger.guide",
+    pause_trigger.HOLD_START: "big_picture.pause_trigger.hold_start",
+    pause_trigger.START_SELECT: "big_picture.pause_trigger.start_select",
+    pause_trigger.L3_R3: "big_picture.pause_trigger.l3_r3",
+    pause_trigger.OFF: "big_picture.pause_trigger.off",
+}
 
 #: What to say when a picked bezel image is refused, per
 #: ``bezels.validate_png`` error key -- the desktop's table, kept in step.
@@ -239,6 +271,8 @@ class Section:
     """
 
     name = ""
+    #: The consoles a section's per-console rows cover.
+    consoles = SYSTEM_IDS
 
     def __init__(self, page):
         self.page = page
@@ -327,7 +361,7 @@ class UnavailableSection(Section):
 class LibrarySection(Section):
     name = "library"
 
-    def _build(self):
+    def _build_folder(self):
         t, config, win = self.t, self.config, self.win
         folder = self.group(t("prefs.group.roms_folder"))
         self.add(
@@ -347,12 +381,14 @@ class LibrarySection(Section):
             folder,
         )
 
+    def _build_maintenance(self):
+        t = self.t
         maintenance = self.group(t("prefs.group.maintenance"))
         self.add("scan", Row(t("settings.scan.title"), t("settings.scan.subtitle"), kind=ROW_ACTION,
                              on_activate=self._pick_scan_scope), maintenance)
-        self.add("sync", Row(t("settings.sync.title"), t("settings.sync.subtitle"), kind=ROW_ACTION,
-                             on_activate=self.shell.open_covers), maintenance)
 
+    def _build_order(self):
+        t = self.t
         order = self.group(t("prefs.group.console_order"), t("prefs.console_order.description"))
         order.append(note(t("big_picture.settings.reorder_hint")))
         self.order_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -361,6 +397,11 @@ class LibrarySection(Section):
         self.add("restore_order", Row(t("prefs.console_order.restore"), kind=ROW_ACTION, destructive=True,
                                       on_activate=self._confirm_restore_order), order)
 
+    def _build_artwork(self):
+        t = self.t
+        sync = self.group(t("big_picture.settings.artwork.sync"))
+        self.add("sync", Row(t("settings.sync.title"), t("settings.sync.subtitle"), kind=ROW_ACTION,
+                             on_activate=self.shell.open_covers), sync)
         providers = self.group(t("prefs.group.artwork_providers"), t("prefs.artwork_providers.description"))
         providers.append(note(t("big_picture.settings.reorder_hint")))
         self.provider_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -702,109 +743,13 @@ class BiosConsolePage(BigPage):
 
 # -- Video --------------------------------------------------------------------------------
 class VideoSection(Section):
+    """A console's shader and bezel rows (``ConsoleSection`` builds them)."""
+
     name = "video"
-
-    def _build(self):
-        t, config = self.t, self.config
-        ui = config.get_ui_settings()
-        appearance = self.group(t("prefs.group.appearance"))
-        self.add("view_mode", Row(t("settings.ui.view_mode.title"), t("settings.ui.view_mode.subtitle"),
-                                  kind=ROW_CHOICE, value=t(f"view_mode.{self._view_mode()}"),
-                                  on_activate=self._pick_view_mode), appearance)
-        self.add("sort_order", Row(t("settings.ui.sort_order.title"), t("settings.ui.sort_order.subtitle"),
-                                   kind=ROW_CHOICE, value=t(f"sort_order.{self._sort_order()}"),
-                                   on_activate=self._pick_sort_order), appearance)
-        self.add("show_all_shaders", Row(t("settings.shaders.show_all"), kind=ROW_SWITCH,
-                                         active=self._show_all_shaders(), on_activate=self._set_show_all), appearance)
-        self.add("restore_shaders", Row(t("settings.shaders.restore_defaults"), kind=ROW_ACTION, destructive=True,
-                                        on_activate=self._confirm_restore_shaders), appearance)
-
-        # Windowed or fullscreen, for every game (issue #505); RetroArch's
-        # automatic save state (issue 910). Both read at each launch.
-        launch = self.group(t("prefs.group.launch_mode"))
-        self.add("fullscreen", Row(t("settings.launch_mode.fullscreen.title"), t("settings.launch_mode.fullscreen.subtitle"),
-                                   kind=ROW_SWITCH, active=ui["start_games_fullscreen"],
-                                   on_activate=config.set_start_games_fullscreen), launch)
-        self.add("resume", Row(t("settings.launch_mode.resume.title"), t("settings.launch_mode.resume.subtitle"),
-                               kind=ROW_SWITCH, active=config.get_auto_resume(),
-                               on_activate=self._set_auto_resume), launch)
-
-        bar = self.group(t("prefs.group.game_bar"))
-        self.add("translucent", Row(t("settings.game_bar.translucent.title"), t("settings.game_bar.translucent.subtitle"),
-                                    kind=ROW_SWITCH, active=ui["translucent_game_bar"],
-                                    on_activate=config.set_translucent_game_bar), bar)
-
-        # One row per 4:3 console (issue #507): no bezel, the built-in one, or an image.
-        bezel_box = self.group(t("prefs.group.bezels"), t("settings.bezels.description"))
-        for console in SYSTEM_IDS:
-            if console not in bezels.BEZEL_CONSOLES:
-                continue
-            self.add(f"bezel:{console}", Row(console_title(console), kind=ROW_CHOICE,
-                                             on_activate=lambda console=console: self._pick_bezel(console)), bezel_box)
-            self._sync_bezel_row(console)
-        bezel_box.append(note(t("settings.bezels.footer")))
-
-        shaders = self.group(t("prefs.group.shaders"))
-        self.shader_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        shaders.append(self.shader_box)
-        self._build_shader_rows()
-
-    # -- appearance ----------------------------------------------------------------------
-    def _view_mode(self):
-        mode = self.config.get_ui_settings()["view_mode"]
-        return mode if mode in VIEW_MODES else VIEW_MODES[0]
-
-    def _sort_order(self):
-        order = self.config.get_ui_settings()["sort_order"]
-        return order if order in SORT_ORDERS else SORT_ORDERS[0]
-
-    def _pick_view_mode(self):
-        t = self.t
-        options = [{"id": mode, "label": t(f"view_mode.{mode}")} for mode in VIEW_MODES]
-        self.page.choose(self.rows["view_mode"], t("settings.ui.view_mode.title"), options, self._view_mode(),
-                         self._set_view_mode, lead=t("settings.ui.view_mode.subtitle"))
-
-    def _set_view_mode(self, mode):
-        self.win._apply_view_mode(mode)
-        self.rows["view_mode"].set_value(self.t(f"view_mode.{mode}"))
-
-    def _pick_sort_order(self):
-        t = self.t
-        options = [{"id": order, "label": t(f"sort_order.{order}")} for order in SORT_ORDERS]
-        self.page.choose(self.rows["sort_order"], t("settings.ui.sort_order.title"), options, self._sort_order(),
-                         self._set_sort_order, lead=t("settings.ui.sort_order.subtitle"))
-
-    def _set_sort_order(self, order):
-        self.win._apply_sort_order(order)
-        self.rows["sort_order"].set_value(self.t(f"sort_order.{order}"))
-
-    def _set_auto_resume(self, active):
-        self.config.set_auto_resume(active)
-        # The resume badges follow the setting, so the page on screen
-        # re-reads its cards (issue 910).
-        self.win._reload_current_page()
 
     # -- shaders ---------------------------------------------------------------------------
     def _show_all_shaders(self):
         return bool(self.config.get_shader_settings().get("show_all_shaders", False))
-
-    def _set_show_all(self, active):
-        self.config.set_show_all_shaders(active)
-        self._build_shader_rows()
-
-    def _confirm_restore_shaders(self):
-        t = self.t
-        self.page.confirm(
-            t("big_picture.settings.shaders.restore.heading"),
-            t("big_picture.settings.shaders.restore.body"),
-            t("settings.shaders.restore_defaults"),
-            self._restore_shaders,
-        )
-
-    def _restore_shaders(self):
-        self.config.reset_shader_defaults()
-        self._build_shader_rows()
-        self.win._toast(self.t("toast.shaders.defaults_restored"))
 
     def _shader_options(self, console):
         """``(options, selected)``: the catalog's list, plus the stored id when it is not in it."""
@@ -818,7 +763,7 @@ class VideoSection(Section):
     def _build_shader_rows(self):
         clear_children(self.shader_box)
         self.forget("shader:")
-        for console in SYSTEM_IDS:
+        for console in self.consoles:
             options, selected = self._shader_options(console)
             row = Row(console_title(console), kind=ROW_CHOICE, value=dict(options)[selected],
                       on_activate=lambda console=console: self._pick_shader(console))
@@ -896,36 +841,9 @@ class VideoSection(Section):
 
 # -- Cores ----------------------------------------------------------------------------------
 class CoresSection(Section):
+    """A console's core and core-option rows (``ConsoleSection`` builds them)."""
+
     name = "cores"
-
-    def _build(self):
-        t, config = self.t, self.config
-        box = self.group(t("prefs.group.cores"), t("prefs.group.cores.description"))
-        for console in SYSTEM_IDS:
-            cores = self.win.core_catalog.cores_for_console(console)
-            if not cores:
-                # Nothing installed: say so rather than offer an empty picker.
-                self.add(f"core:{console}", Row(console_title(console), t("settings.cores.none"), kind=ROW_INFO), box)
-                continue
-            row = Row(console_title(console), t("settings.cores.auto_resolves", core=cores[0].display_name),
-                      kind=ROW_CHOICE, value=self._core_label(console),
-                      on_activate=lambda console=console: self._pick_core(console))
-            self.add(f"core:{console}", row, box)
-
-        # The ~200 cores no picker lists are an opt-in (issue 908); turning it
-        # on owes the sweep again, and the window starts it right away.
-        downloads = self.group(t("prefs.group.core_downloads"))
-        self.add("download_all", Row(t("settings.cores.download_all.title"), t("settings.cores.download_all.subtitle"),
-                                     kind=ROW_SWITCH,
-                                     active=config.get_retroarch_updater_settings()["download_all_cores"],
-                                     on_activate=self._set_download_all), downloads)
-
-        # Settings the core itself understands (issue #296): only for the
-        # cores that have any, so this group is hidden on most libraries.
-        self.options_group = self.group(t("prefs.group.core_options"), t("prefs.group.core_options.description"))
-        self.options_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        self.options_group.append(self.options_box)
-        self._build_option_rows()
 
     def _core_options(self, console):
         cores = self.win.core_catalog.cores_for_console(console)
@@ -958,11 +876,6 @@ class CoresSection(Section):
         # The new core has its own options, or none at all.
         self._build_option_rows()
 
-    def _set_download_all(self, enabled):
-        self.config.set_download_all_cores(enabled)
-        if enabled:
-            self.win._start_deferred_asset_download()
-
     # -- the advanced core options --------------------------------------------------------
     def _resolved_core_for(self, console):
         """The core this console would launch with right now."""
@@ -976,7 +889,7 @@ class CoresSection(Section):
         clear_children(self.options_box)
         self.forget("option:")
         store = self.config.core_options
-        for console in SYSTEM_IDS:
+        for console in self.consoles:
             core_filename = self._resolved_core_for(console)
             options = core_options.options_for_core(core_filename)
             if not options:
@@ -1024,36 +937,79 @@ class SystemSection(Section):
         self.cheevos_password = ""
 
     def _build(self):
-        t, config, win = self.t, self.config, self.win
-        ui = config.get_ui_settings()
+        self._build_games()
+        self._build_big_picture()
+        self._build_welcome()
+        self._build_trouble()
+        self._build_saves()
+        self._build_setup()
+
+    def _build_language(self):
+        t = self.t
         language = self.group(t("prefs.group.language"))
         self.add("language", Row(t("settings.system.language.title"), t("settings.system.language.subtitle"),
                                  kind=ROW_CHOICE, value=self._language_label(self._locale()),
                                  on_activate=self._pick_language), language)
 
-        interface = self.group(t("prefs.group.interface"))
+    def _build_theme(self):
+        t, config = self.t, self.config
+        ui = config.get_ui_settings()
+        interface = self.group(t("prefs.group.interface"), t("big_picture.settings.theme.note"))
         self.add("theme", Row(t("settings.system.theme.title"), t("settings.system.theme.subtitle"), kind=ROW_CHOICE,
                               value=t(f"theme.{ui['theme']}"), on_activate=self._pick_theme), interface)
         self.add("tips", Row(t("settings.system.tips.title"), t("settings.system.tips.subtitle"), kind=ROW_SWITCH,
                              active=ui["show_tips"], on_activate=self._set_tips), interface)
+        settings = config.get_big_picture_settings()
+        self.add("bp_text_size", Row(t("settings.system.big_picture.text_size.title"),
+                                     t("settings.system.big_picture.text_size.subtitle"), kind=ROW_NUMBER,
+                                     value=f"{settings['text_size']}%", on_step=self._step_text_size), interface)
+
+    def _build_controller_rows(self):
+        t, config, win = self.t, self.config, self.win
+        ui = config.get_ui_settings()
+        pad = self.group(t("big_picture.settings.controllers.pad"))
+        self.add("pause_trigger", Row(t("big_picture.settings.pause_trigger.title"),
+                                      t("big_picture.settings.pause_trigger.subtitle"), kind=ROW_CHOICE,
+                                      value=t(PAUSE_TRIGGER_LABELS[config.get_big_picture_settings()["pause_trigger"]]),
+                                      on_activate=self._pick_pause_trigger), pad)
+        self.add("mapping", Row(t("big_picture.settings.controllers.mapping.title"),
+                                t("big_picture.settings.controllers.mapping.subtitle"), kind=ROW_ACTION,
+                                on_activate=lambda: self.page.open_input(self.rows["mapping"])), pad)
         self.add("gamepad_nav", Row(t("settings.system.gamepad_nav.title"), t("settings.system.gamepad_nav.subtitle"),
                                     kind=ROW_SWITCH, active=ui["gamepad_navigation"],
-                                    on_activate=win._apply_gamepad_navigation), interface)
+                                    on_activate=win._apply_gamepad_navigation), pad)
         self.add("glyphs", Row(t("settings.system.glyphs.title"), t("settings.system.glyphs.subtitle"), kind=ROW_CHOICE,
                                value=t(GLYPH_FAMILY_LABELS[config.get_controller_glyph_family()]),
-                               on_activate=self._pick_glyphs), interface)
+                               on_activate=self._pick_glyphs), pad)
         self.add("swap", Row(t("settings.system.swap.title"), t("settings.system.swap.subtitle"), kind=ROW_SWITCH,
-                             active=config.get_swap_confirm_cancel(), on_activate=self._set_swap), interface)
+                             active=config.get_swap_confirm_cancel(), on_activate=self._set_swap), pad)
 
+    def _build_games(self):
+        t, config = self.t, self.config
+        ui = config.get_ui_settings()
+        games = self.group(t("big_picture.settings.games"))
+        self.add("resume", Row(t("settings.launch_mode.resume.title"), t("settings.launch_mode.resume.subtitle"),
+                               kind=ROW_SWITCH, active=config.get_auto_resume(),
+                               on_activate=self._set_auto_resume), games)
+        self.add("translucent", Row(t("settings.game_bar.translucent.title"), t("settings.game_bar.translucent.subtitle"),
+                                    kind=ROW_SWITCH, active=ui["translucent_game_bar"],
+                                    on_activate=config.set_translucent_game_bar), games)
+        self.add("show_all_shaders", Row(t("settings.shaders.show_all"), kind=ROW_SWITCH,
+                                         active=bool(config.get_shader_settings().get("show_all_shaders", False)),
+                                         on_activate=self._set_show_all), games)
+        self.add("restore_shaders", Row(t("settings.shaders.restore_defaults"), kind=ROW_ACTION, destructive=True,
+                                        on_activate=self._confirm_restore_shaders), games)
+
+    def _build_big_picture(self):
+        t, config = self.t, self.config
         big_picture = self.group(t("prefs.group.big_picture"))
         settings = config.get_big_picture_settings()
         self.add("bp_start", Row(t("settings.system.big_picture.start.title"), t("settings.system.big_picture.start.subtitle"),
                                  kind=ROW_SWITCH, active=settings["start"],
                                  on_activate=config.set_big_picture_start), big_picture)
-        self.add("bp_text_size", Row(t("settings.system.big_picture.text_size.title"),
-                                     t("settings.system.big_picture.text_size.subtitle"), kind=ROW_NUMBER,
-                                     value=f"{settings['text_size']}%", on_step=self._step_text_size), big_picture)
 
+    def _build_welcome(self):
+        t, config, win = self.t, self.config, self.win
         welcome = self.group(t("prefs.group.welcome"))
         self.add("welcome_startup", Row(t("settings.system.welcome.startup.title"),
                                         t("settings.system.welcome.startup.subtitle"), kind=ROW_SWITCH,
@@ -1062,6 +1018,9 @@ class SystemSection(Section):
         self.add("welcome_open", Row(t("settings.system.welcome.open.title"), t("settings.system.welcome.open.subtitle"),
                                      kind=ROW_ACTION, on_activate=lambda: win._open_welcome()), welcome)
 
+    def _build_trouble(self):
+        t, win = self.t, self.win
+        ui = self.config.get_ui_settings()
         trouble = self.group(t("prefs.group.troubleshooting"), t("settings.system.troubleshooting.description"))
         self.add("log_panel", Row(t("settings.system.log_panel.title"), t("settings.system.log_panel.subtitle"),
                                   kind=ROW_SWITCH, active=ui["show_log_panel"],
@@ -1069,17 +1028,23 @@ class SystemSection(Section):
         self.add("report", Row(t("settings.system.report.title"), t("settings.system.report.subtitle"),
                                kind=ROW_ACTION, on_activate=lambda: win.show_bug_report()), trouble)
 
+    def _build_saves(self):
+        t = self.t
         saves = self.group(t("prefs.group.saves"))
         self.add("export_saves", Row(t("settings.system.saves.export.title"), t("settings.system.saves.export.subtitle"),
                                      kind=ROW_ACTION, on_activate=self._export_saves), saves)
         self.add("import_saves", Row(t("settings.system.saves.import.title"), t("settings.system.saves.import.subtitle"),
                                      kind=ROW_ACTION, on_activate=self._confirm_import_saves), saves)
 
+    def _build_share(self):
+        t, config = self.t, self.config
         share = self.group(t("prefs.group.share"), t("prefs.share.description", hostname=default_device_name()))
         self.add("device_name", Row(t("prefs.share.device_name"), kind=ROW_TEXT,
                                     value=self.shown(config.get_share_device_name()),
                                     on_activate=self._edit_device_name), share)
 
+    def _build_achievements(self):
+        t, config = self.t, self.config
         achievements = self.group(t("prefs.group.achievements"), t("prefs.group.achievements.description"))
         self.achievements_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         achievements.append(self.achievements_box)
@@ -1087,6 +1052,8 @@ class SystemSection(Section):
         self.cheevos_password = ""
         self._build_achievements_rows()
 
+    def _build_setup(self):
+        t, config, win = self.t, self.config, self.win
         setup = self.group(t("prefs.group.setup"))
         state = config.get_bootstrap_state()
         status = state.get("status", "pending")
@@ -1111,6 +1078,43 @@ class SystemSection(Section):
         verify.set_sensitive(not running)
         verify.set_visible(not is_running_in_flatpak())
         self.add("verify_cores", verify, setup)
+
+    def _set_auto_resume(self, active):
+        self.config.set_auto_resume(active)
+        # The resume badges follow the setting, so the page on screen
+        # re-reads its cards (issue 910).
+        self.win._reload_current_page()
+
+    def _set_show_all(self, active):
+        self.config.set_show_all_shaders(active)
+        self.page.mark_consoles_stale()
+
+    def _confirm_restore_shaders(self):
+        t = self.t
+        self.page.confirm(
+            t("big_picture.settings.shaders.restore.heading"),
+            t("big_picture.settings.shaders.restore.body"),
+            t("settings.shaders.restore_defaults"),
+            self._restore_shaders,
+        )
+
+    def _restore_shaders(self):
+        self.config.reset_shader_defaults()
+        self.page.mark_consoles_stale()
+        self.win._toast(self.t("toast.shaders.defaults_restored"))
+
+    # -- the pause menu's gesture (issue 957) ----------------------------------------------------
+    def _pick_pause_trigger(self):
+        t = self.t
+        options = [{"id": mode, "label": t(PAUSE_TRIGGER_LABELS[mode])} for mode in pause_trigger.MODES]
+        self.page.choose(self.rows["pause_trigger"], t("big_picture.settings.pause_trigger.title"), options,
+                         self.config.get_big_picture_settings()["pause_trigger"], self._set_pause_trigger,
+                         lead=t("big_picture.settings.pause_trigger.subtitle"))
+
+    def _set_pause_trigger(self, mode):
+        mode = self.config.set_big_picture_pause_trigger(mode)
+        self.win.gamepad_navigator.pause_trigger.set_mode(mode)
+        self.rows["pause_trigger"].set_value(self.t(PAUSE_TRIGGER_LABELS[mode]))
 
     # -- language ------------------------------------------------------------------------------
     def _locale(self):
@@ -1148,6 +1152,7 @@ class SystemSection(Section):
     def _set_theme(self, name):
         applied = self.config.set_theme(name)
         theming.apply_theme(applied)
+        self.shell.adopt_color_scheme()
         # "System" that lands on the same appearance emits no notify::dark,
         # so the header icon is refreshed here rather than left to that.
         self.win._sync_theme_button()
@@ -1370,15 +1375,159 @@ class SystemSection(Section):
 
 
 # -- the page ----------------------------------------------------------------------------------------
+# -- The Android entries, each a section built from the rows above ---------------------------------
+class RomsSection(LibrarySection):
+    name = "roms"
+
+    def _build(self):
+        self._build_folder()
+        self._build_maintenance()
+        self._build_order()
+
+
+class ArtworkSection(LibrarySection):
+    name = "artwork"
+
+    def _build(self):
+        self._build_artwork()
+
+
+class ThemeSection(SystemSection):
+    name = "theme"
+
+    def _build(self):
+        self._build_theme()
+
+
+class LanguageSection(SystemSection):
+    name = "language"
+
+    def _build(self):
+        self._build_language()
+
+
+class AchievementsSection(SystemSection):
+    name = "achievements"
+
+    def _build(self):
+        self._build_achievements()
+
+
+class ShareSection(SystemSection):
+    name = "share"
+
+    def _build(self):
+        self._build_share()
+
+
+class ControllersSection(SystemSection):
+    name = "controllers"
+
+    def _build(self):
+        self._build_controller_rows()
+
+
+class UpdatesSection(Section):
+    """Check for updates: the version, and a check now (not in a Flatpak)."""
+
+    name = "updates"
+
+    def _build(self):
+        t = self.t
+        box = self.group(t("big_picture.settings.updates"))
+        self.add("version", Row(t("big_picture.settings.version", version=__version__), kind=ROW_INFO), box)
+        if is_running_in_flatpak():
+            # Flatpak updates come from the remote, not from this check.
+            self.add("flatpak", Row(t("big_picture.settings.updates.flatpak"), kind=ROW_INFO), box)
+            return
+        self.add("check", Row(t("big_picture.settings.updates.check"), kind=ROW_ACTION,
+                              on_activate=self.check_now), box)
+
+    def check_now(self):
+        settings = self.config.get_update_settings()
+        row = self.rows["check"]
+        row.set_subtitle(self.t("big_picture.settings.updates.checking"))
+
+        def _on_done(release):
+            GLib.idle_add(self._on_checked, release)
+
+        check_for_update_async(__version__, _on_done, api_url=settings["api_url"],
+                               timeout=settings["timeout_seconds"])
+        return True
+
+    def _on_checked(self, release):
+        row = self.rows.get("check")
+        if release:
+            self.win._on_update_check_done(release)
+            text = self.t("banner.update.available", version=release["version"])
+        else:
+            text = self.t("big_picture.settings.updates.current")
+        if row is not None:
+            row.set_subtitle(text)
+        return GLib.SOURCE_REMOVE
+
+
+class AboutSection(Section):
+    name = "about"
+
+    def _build(self):
+        t = self.t
+        box = self.group(t("big_picture.settings.about"))
+        self.add("version", Row(t("big_picture.settings.version", version=__version__), kind=ROW_INFO), box)
+        self.add("about", Row(t("big_picture.settings.about.open"), t("big_picture.settings.about.subtitle"),
+                              kind=ROW_ACTION, on_activate=lambda: self.win._show_about()), box)
+
+
+class ConsoleSection(VideoSection, CoresSection):
+    """One console's core, shader, bezel and core options (Android's console page)."""
+
+    def __init__(self, page, console):
+        super().__init__(page)
+        self.console = console
+        self.consoles = (console,)
+        self.name = f"{CONSOLE_PREFIX}{console}"
+
+    def _build(self):
+        t, console = self.t, self.console
+        cores_box = self.group(console_title(console))
+        cores = self.win.core_catalog.cores_for_console(console)
+        if cores:
+            self.add(f"core:{console}", Row(t("context.core"), t("settings.cores.auto_resolves", core=cores[0].display_name),
+                                            kind=ROW_CHOICE, value=self._core_label(console),
+                                            on_activate=lambda: self._pick_core(console)), cores_box)
+        else:
+            self.add(f"core:{console}", Row(t("context.core"), t("settings.cores.none"), kind=ROW_INFO), cores_box)
+        self.shader_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        cores_box.append(self.shader_box)
+        self._build_shader_rows()
+        if console in bezels.BEZEL_CONSOLES:
+            self.add(f"bezel:{console}", Row(t("prefs.group.bezels"), kind=ROW_CHOICE,
+                                             on_activate=lambda: self._pick_bezel(console)), cores_box)
+            self._sync_bezel_row(console)
+        self.options_group = self.group(t("prefs.group.core_options"), t("prefs.group.core_options.description"))
+        self.options_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.options_group.append(self.options_box)
+        self._build_option_rows()
+
+    def summary(self):
+        """``Snes9x · CRT Geom``: what the left column says under the console."""
+        options, selected = self._shader_options(self.console)
+        cores = self.win.core_catalog.cores_for_console(self.console)
+        core = self._core_label(self.console) if cores else self.t("settings.cores.none")
+        return f"{core} · {dict(options)[selected]}"
+
+
 class SettingsPage(BigPage):
+    """Android's Settings: the list on the left, the chosen entry on the right."""
+
     context = "bp-page"
 
     def __init__(self, shell):
         t = shell.t
-        super().__init__(shell, t("menu.preferences"), tag="bp-settings")
+        super().__init__(shell, t("big_picture.tab.settings"), crumbs=[], tag="bp-settings")
         self.config = shell.win.config_manager
         self.t = t
-        self.current = SECTION_NAMES[0]
+        self.current = None
         self.input = None
         self._pending_console = None
         #: The row the pad was on when a chooser or the keyboard opened over
@@ -1388,48 +1537,146 @@ class SettingsPage(BigPage):
         #: does not rebuild the rows and lose the place.
         self._returning = False
         #: The sections whose values may have changed since they were built.
-        self._stale = set(SECTION_NAMES)
+        self._stale = set()
+        self.entries = {}
 
         self.body.set_orientation(Gtk.Orientation.HORIZONTAL)
-        self.body.set_spacing(40)
-        self.section_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.section_column.set_valign(Gtk.Align.START)
-        self.section_column.set_size_request(260, -1)
-        self.body.append(self.section_column)
-        self.buttons = {}
-        for name, key in SECTIONS:
-            button = Gtk.Button(label=t(key))
-            button.add_css_class("bp-section")
-            button.add_css_class("flat")
-            button.get_child().set_xalign(0.0)
-            button.connect("clicked", lambda _b, name=name: self._on_section_clicked(name))
-            self.section_column.append(button)
-            self.buttons[name] = button
+        self.body.set_spacing(32)
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        left.append(page_heading(t("big_picture.tab.settings")))
+        self.entry_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        left.append(self.entry_column)
+        self.left_scroller = scroll_to_focus(self.scrolled(left))
+        self.left_scroller.set_hexpand(False)
+        self.left_scroller.set_size_request(560, -1)
+        self.body.append(self.left_scroller)
 
         self.stack = Gtk.Stack()
         self.stack.set_hexpand(True)
         self.stack.set_vexpand(True)
         self.stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        self.stack.add_named(empty_state("emblem-system-symbolic", t("big_picture.settings.choose")), "empty")
         self.body.append(self.stack)
         self.sections = {}
-        for section_class in (LibrarySection, BiosSection, VideoSection, CoresSection, SystemSection):
+        for section_class in (BiosSection, ThemeSection, LanguageSection, AchievementsSection, ArtworkSection,
+                              ShareSection, RomsSection, ControllersSection, UpdatesSection, SystemSection,
+                              AboutSection):
             section = section_class(self)
             self.sections[section.name] = section
             self.stack.add_named(section.widget, section.name)
-
+        self._build_entries()
         self.connect("showing", self._on_showing)
-        shell.nav.connect("popped", self._on_nav_popped)
-        self._mark_current()
+
+    # -- the left column --------------------------------------------------------------------
+    def _build_entries(self):
+        """The BIOS card, the groups and their entries, Back to desktop last."""
+        t = self.t
+        clear_children(self.entry_column)
+        self.entries = {}
+        self.bios_card = Row(t("settings.bios.title"), kind=ROW_ACTION, icon_name="application-x-firmware-symbolic",
+                             on_activate=lambda: self._on_entry("bios"))
+        self.entry_column.append(self.bios_card)
+        self.entries["bios"] = self.bios_card
+        for group_key, entries in GROUPS:
+            heading = caps(t(group_key))
+            heading.set_margin_top(14)
+            self.entry_column.append(heading)
+            for name, title_key in entries:
+                if name == "consoles":
+                    for console in self._consoles():
+                        self._add_entry(f"{CONSOLE_PREFIX}{console}", full_name(console, get_system_display_name(console)))
+                    continue
+                if name == "updates" and is_running_in_flatpak():
+                    # The Flatpak is updated by its remote, not by the app.
+                    continue
+                self._add_entry(name, t(title_key))
+        desktop = Row(t("big_picture.settings.desktop"), kind=ROW_ACTION, icon_name="video-display-symbolic",
+                      on_activate=lambda: self.win.toggle_big_picture())
+        desktop.set_margin_top(14)
+        self.entry_column.append(desktop)
+        self.desktop_row = desktop
+        self.sync_entries()
+
+    def _consoles(self):
+        consoles = list(getattr(self.win, "visible_consoles", []) or [])
+        return consoles or list(SYSTEM_IDS)
+
+    def _add_entry(self, name, title):
+        row = Row(title, kind=ROW_ACTION, on_activate=lambda name=name: self._on_entry(name))
+        self.entry_column.append(row)
+        self.entries[name] = row
+        return row
+
+    def sync_entries(self):
+        """The values the left column shows under each entry."""
+        t, config = self.t, self.config
+        missing = [console for console, status in scan_all_bios_status(config).items()
+                   if any(not entry["present"] for entry in status["required"])]
+        self.bios_card.set_subtitle(
+            t("big_picture.settings.bios.missing", count=len(missing)) if missing
+            else t("big_picture.settings.bios.ok")
+        )
+        values = {
+            "theme": t(f"theme.{config.get_ui_settings()['theme']}"),
+            "language": SystemSection._language_label(self.sections["language"]._locale()),
+            "share": config.get_share_device_name() or default_device_name(),
+            "roms": str(config.get_roms_path()),
+            "controllers": t(PAUSE_TRIGGER_LABELS[config.get_big_picture_settings()["pause_trigger"]]),
+            "updates": __version__,
+            "about": __version__,
+        }
+        store = config.achievements
+        self.entries["achievements"].set_subtitle(
+            t("settings.achievements.signed_in", user=store.get_username()) if store.is_signed_in()
+            else t("settings.achievements.signed_out")
+        )
+        self.entries["artwork"].set_subtitle(t("big_picture.settings.artwork.subtitle"))
+        for name, value in values.items():
+            row = self.entries.get(name)
+            if row is not None:
+                row.set_value(value)
+        for name, row in self.entries.items():
+            if name.startswith(CONSOLE_PREFIX):
+                row.set_subtitle(self._console_section(name[len(CONSOLE_PREFIX):]).summary())
+
+    def _console_section(self, console):
+        name = f"{CONSOLE_PREFIX}{console}"
+        section = self.sections.get(name)
+        if section is None:
+            section = ConsoleSection(self, console)
+            self.sections[name] = section
+            self.stack.add_named(section.widget, name)
+        return section
+
+    def mark_consoles_stale(self):
+        self._stale |= {name for name in self.sections if name.startswith(CONSOLE_PREFIX)}
+
+    def _on_entry(self, name):
+        self.show_section(name)
+        GLib.idle_add(once(self._enter_pane))
+
+    def _enter_pane(self):
+        """Into the entry on the right; the hints follow the focus there."""
+        self.focus_pane()
+        self.win.navigation.refresh_hints(force=True)
 
     # -- sections ---------------------------------------------------------------------------
     def show_section(self, name, console=None):
-        """Make ``name`` the current section; ``console`` points Input at one.
+        """Make ``name`` the entry on the right; ``console`` points Input or Consoles at one.
 
-        Called before the page is pushed as well as while it is on screen:
-        the rows are only built when the page is visible, so an open straight
-        onto a section builds that one and nothing else.
+        The desktop Preferences' page names are understood too ("library",
+        "video", "cores", "input"...), so the window's ways in still land.
         """
-        if name not in SECTION_NAMES:
+        name = SECTION_ALIASES.get(name, name)
+        if name == "consoles":
+            target = console if console in self._consoles() else (self._consoles() or [None])[0]
+            if target is None:
+                return False
+            name = f"{CONSOLE_PREFIX}{target}"
+            console = None
+        if name.startswith(CONSOLE_PREFIX):
+            self._console_section(name[len(CONSOLE_PREFIX):])
+        elif name not in SECTION_NAMES:
             return False
         if name != self.current:
             self._focus_row = None
@@ -1442,23 +1689,11 @@ class SettingsPage(BigPage):
         return True
 
     def _mark_current(self):
-        for name, button in self.buttons.items():
-            if name == self.current:
-                button.add_css_class("bp-current")
+        for name, row in self.entries.items():
+            if name == self.current or (self.current == "input" and name == "controllers"):
+                row.add_css_class("bp-current")
             else:
-                button.remove_css_class("bp-current")
-        self.set_crumbs([self.t("menu.preferences"), self.t(SECTION_TITLES[self.current])])
-
-    def _on_section_clicked(self, name):
-        self.show_section(name)
-        GLib.idle_add(once(self.focus_default))
-
-    def step_section(self, delta):
-        """LB and RB: the previous or next section, wrapping like the rail."""
-        index = SECTION_NAMES.index(self.current)
-        self.show_section(SECTION_NAMES[(index + delta) % len(SECTION_NAMES)])
-        GLib.idle_add(once(self.focus_default))
-        return True
+                row.remove_css_class("bp-current")
 
     def _ensure(self, name):
         """Build ``name`` if it was never built or may be stale, and show it."""
@@ -1494,36 +1729,46 @@ class SettingsPage(BigPage):
         self.input = InputSection(self.shell, self)
         self.stack.add_named(self.input.widget, "input")
 
+    def open_input(self, row=None):
+        """Controllers › mapping: the desktop's Input page, on the right."""
+        self._focus_row = None
+        self.show_section("input")
+        GLib.idle_add(once(self._enter_pane))
+        return True
+
     def _on_showing(self, *_args):
         if self._returning:
             self._returning = False
+            if self.current is not None:
+                self._ensure(self.current)
+            return
+        # Opened from another tab: the desktop may have changed anything since.
+        self._stale = set(self.sections) | {"input"}
+        self._build_entries()
+        if self.current is not None:
+            self._ensure(self.current)
+            self._mark_current()
         else:
-            # Opened from home: the desktop may have changed anything since.
-            self._stale = set(SECTION_NAMES)
-        self._ensure(self.current)
-
-    def _on_nav_popped(self, _nav, page):
-        # Popped itself (B to home) with a child's return still pending: the
-        # next open is a fresh one.
-        if page is self:
-            self._returning = False
+            self.stack.set_visible_child_name("empty")
 
     def retranslate(self):
         """The language changed: every label on the page is built again."""
         t = self.t
-        self.set_title(t("menu.preferences"))
-        for name, key in SECTIONS:
-            self.buttons[name].set_label(t(key))
-        self._stale = set(SECTION_NAMES)
+        self.set_title(t("big_picture.tab.settings"))
+        self._stale = set(self.sections) | {"input"}
         self._focus_row = None
-        self.show_section(self.current)
+        self._build_entries()
+        self.shell.rail.retranslate(t)
+        if self.current is not None:
+            self.show_section(self.current)
         return GLib.SOURCE_REMOVE
 
     def refresh_roms_path(self):
-        """The window picked a new ROMs folder: the row says so at once."""
-        library = self.sections["library"]
-        if library.built:
-            library.refresh_roms_path()
+        """The window picked a new ROMs folder: the rows say so at once."""
+        roms = self.sections["roms"]
+        if roms.built:
+            roms.refresh_roms_path()
+        self.sync_entries()
 
     # -- what the rows borrow -------------------------------------------------------------
     def choose(self, row, title, options, current, on_pick, lead=None):
@@ -1548,7 +1793,7 @@ class SettingsPage(BigPage):
         return self.shell.confirm(heading, body, confirm_label, on_confirm, destructive=destructive)
 
     def _crumbs_for(self, title):
-        return [self.t("menu.preferences"), self.t(SECTION_TITLES[self.current]), title]
+        return [self.t("big_picture.tab.settings"), title]
 
     def _leave_for_child(self, row):
         self._focus_row = row
@@ -1559,8 +1804,13 @@ class SettingsPage(BigPage):
         self._focus_row = row
         GLib.idle_add(once(row.grab_focus))
 
-    # -- focus and hints ------------------------------------------------------------------
-    def focus_default(self):
+    # -- focus and the pad ----------------------------------------------------------------
+    def pane_has_focus(self):
+        focus = self.win.get_focus()
+        return focus is not None and focus.is_ancestor(self.stack)
+
+    def focus_pane(self):
+        """Into the entry on the right: its remembered row, else its first."""
         row = self._focus_row
         if row is not None and row.get_root() is not None and row.is_visible() and row.get_sensitive():
             return row.grab_focus()
@@ -1569,18 +1819,52 @@ class SettingsPage(BigPage):
         section = self.sections.get(self.current)
         if section is not None and section.focus_default():
             return True
-        return self.buttons[self.current].grab_focus()
+        return self.focus_entry()
+
+    def focus_entry(self):
+        name = "controllers" if self.current == "input" else self.current
+        row = self.entries.get(name) or self.bios_card
+        return row.grab_focus()
+
+    def handle_back(self):
+        """B on the right goes back to the list; from Input, back to Controllers."""
+        if self.current == "input" and self.pane_has_focus():
+            self.show_section("controllers")
+            GLib.idle_add(once(self._enter_pane))
+            return True
+        if self.pane_has_focus():
+            self.sync_entries()
+            focused = self.focus_entry()
+            self.win.navigation.refresh_hints(force=True)
+            return focused
+        return False
+
+    def focus_default(self):
+        if self._returning or self._focus_row is not None:
+            row = self._focus_row
+            if row is not None and row.get_root() is not None and row.is_visible() and row.get_sensitive():
+                return row.grab_focus()
+        if self.current is not None:
+            return self.focus_entry()
+        return self.bios_card.grab_focus()
 
     def hints(self, g, t):
+        if self.pane_has_focus():
+            return [
+                (g["confirm"], t("big_picture.hints.change")),
+                (g["back"], t("hints.back")),
+            ]
         return [
-            (g["confirm"], t("big_picture.hints.change")),
+            (g["confirm"], t("big_picture.hints.open")),
             (g["back"], t("hints.back")),
-            (g["consoles"], t("big_picture.hints.section")),
+            (g["consoles"], t("big_picture.hints.tabs")),
         ]
 
 
 __all__ = [
     "SettingsPage", "Section", "LibrarySection", "BiosSection", "BiosConsolePage", "VideoSection",
-    "CoresSection", "SystemSection", "UnavailableSection", "OrderedRow", "SECTIONS", "SECTION_NAMES",
+    "CoresSection", "SystemSection", "UnavailableSection", "OrderedRow", "GROUPS", "SECTION_NAMES",
+    "ConsoleSection", "RomsSection", "ArtworkSection", "ThemeSection", "LanguageSection",
+    "AchievementsSection", "ShareSection", "ControllersSection", "UpdatesSection", "AboutSection",
     "console_title", "bios_import_summary", "bios_rejection_reason",
 ]

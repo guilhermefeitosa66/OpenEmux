@@ -1,4 +1,4 @@
-"""Big Picture's game details page (issue 914): the cover, the rows, the choosers.
+"""Big Picture's game detail (issues 914, 957): the art, Play, the rows, the choosers.
 
 Built against the real window with the mode on, like the desktop dialog's
 tests: every row calls the window method the dialog calls, so what is
@@ -28,8 +28,8 @@ if HAVE_DISPLAY:
         ART_FETCH,
         ART_REMOVE,
         CONSOLE_DEFAULT,
-        MAX_STATE_TILES,
         NEW_PLAYLIST,
+        GameDetail,
         GameDetailsPage,
         StateTile,
     )
@@ -80,9 +80,10 @@ class _DetailsCase(BigPictureCase):
         self.entries.append({"title": title, "initial": initial, "on_done": on_done, **kwargs})
 
     def open(self, rom=None):
-        page = self.shell.open_details(rom or self.game)
+        """The game expanded; returns its detail, the page is ``self.page``."""
+        self.page = self.shell.open_details(rom or self.game)
         self.pump()
-        return page
+        return self.page.detail
 
     def ids(self):
         return [option["id"] for option in self.choosers[-1]["options"]]
@@ -116,39 +117,47 @@ class _DetailsCase(BigPictureCase):
 class ThePage(_DetailsCase):
     def test_one_page_shows_the_games_facts_and_is_reused(self):
         page = self.open()
-        self.assertIsInstance(page, GameDetailsPage)
-        self.assertIs(self.visible_page(), page)
-        self.assertEqual(page.get_tag(), "bp-details")
+        self.assertIsInstance(self.page, GameDetailsPage)
+        self.assertIsInstance(page, GameDetail)
+        self.assertIs(self.visible_page(), self.page)
+        self.assertIs(self.page.rom, self.game)
+        self.assertEqual(self.page.get_tag(), "bp-details")
         self.assertEqual(page.title_label.get_label(), self.game["name"])
         meta = page.meta_label.get_label()
         self.assertIn(self.win.sidebar.label_for("SFC"), meta)
+        self.assertIn("Snes9x", meta)
         self.assertIn(self.said("details.never_played"), meta)
-        self.assertNotIn(self.said("big_picture.details.favorite_mark"), meta)
         self.assertEqual(page.path_note.get_label(), self.game["path"])
-        self.assertEqual(page.play_row.title_label.get_label(), self.said("details.play"))
+        self.assertTrue(page.path_note.get_visible())  # expanded: there is room for it
+        self.assertEqual(page.play_label.get_label(), self.said("details.play"))
         self.assertFalse(page.fresh_row.get_visible())
-        self.assertFalse(page.states_box.get_visible())
+        self.assertFalse(page.states_scroller.get_visible())
+        self.assertTrue(page.states_empty.get_visible())
         # Played: the caption takes the place of "never played".
         other = self.rom("FC")
         self.win.play_history.record_launch(other["path"])
         self.win.play_history.record_play_time(other["path"], 600)
         again = self.shell.open_details(other)
         self.pump()
-        self.assertIs(again, page)
+        self.assertIs(again, self.page)
         self.assertEqual(page.title_label.get_label(), other["name"])
         self.assertIn(self.win.play_caption(other), page.meta_label.get_label())
+        # A core of the game's own names that core.
+        self.config.set_rom_core(other["path"], "bsnes_libretro.so")
+        self.assertEqual(page._effective_core_label(), "bsnes")
 
     def test_play_continue_and_start_fresh_follow_the_automatic_state(self):
         with mock.patch.object(self.win, "has_auto_state", return_value=True):
             page = self.open()
-        self.assertEqual(page.play_row.title_label.get_label(), self.said("big_picture.details.continue"))
-        self.assertEqual(page.play_row.subtitle_label.get_label(), self.said("card.resume.tooltip"))
+            hints = page.hints(self.win.navigation.glyphs(), self.win.t)
+        self.assertEqual(hints[0][1], self.said("big_picture.details.continue"))
+        self.assertEqual(page.play_label.get_label(), self.said("big_picture.details.continue"))
         self.assertTrue(page.fresh_row.get_visible())
-        self.assertTrue(page.states_box.get_visible())
+        self.assertTrue(page.states_scroller.get_visible())
         self.assertEqual(len(page.state_tiles), 1)
         self.assertIsNone(page.state_tiles[0].slot)
         with mock.patch.object(self.win, "on_launch_game") as launch:
-            page.play_row.emit("clicked")
+            page.play_button.emit("clicked")
             page.state_tiles[0].emit("clicked")
         self.assertEqual(launch.call_count, 2)
         launch.assert_called_with(self.game)
@@ -171,31 +180,20 @@ class ThePage(_DetailsCase):
         page._apply_cover(page._cover_job - 1, None)
         self.assertTrue(page.cover.picture.get_visible())
 
-    def test_save_states_become_tiles_and_a_chooser(self):
+    def test_every_save_state_is_a_tile(self):
         for slot, thumbnail in ((0, False), (3, True), (5, False), (7, False)):
             self.state(slot, thumbnail=thumbnail)
         page = self.open()
-        self.assertEqual([tile.slot for tile in page.state_tiles], [0, 3, 5])
-        self.assertEqual(len(page.state_tiles), MAX_STATE_TILES)
-        self.assertTrue(page.state_row.get_sensitive())
-        self.assertEqual(page.state_row.value_label.get_label(), self.said("big_picture.details.states_count", count=4))
+        self.assertEqual([tile.slot for tile in page.state_tiles], [0, 3, 5, 7])
+        self.assertFalse(page.states_empty.get_visible())
         with mock.patch.object(self.win, "launch_rom_at_state") as launch:
             page.state_tiles[1].emit("clicked")
         launch.assert_called_once_with(self.game, 3)
-        page.state_row.emit("clicked")
-        self.assertEqual(self.ids(), ["0", "3", "5", "7"])
-        self.assertEqual(self.choosers[-1]["options"][1]["label"], self.said("details.states.slot", slot=3))
-        self.assertTrue(self.choosers[-1]["options"][1]["subtitle"])
-        with mock.patch.object(self.win, "launch_rom_at_state") as launch:
-            self.pick("7")
-        launch.assert_called_once_with(self.game, 7)
-        # Nothing saved: the row says so and opens nothing.
+        # Nothing saved: Android's note.
         page.load(self.rom("FC"))
         self.pump()
-        self.assertFalse(page.state_row.get_sensitive())
-        self.assertEqual(page.state_row.value_label.get_label(), self.said("details.states.empty"))
-        page._open_state_chooser()
-        self.assertEqual(len(self.choosers), 1)
+        self.assertEqual(page.state_tiles, [])
+        self.assertTrue(page.states_empty.get_visible())
 
     def test_a_tile_screenshot_that_will_not_decode_is_an_icon(self):
         path = self.state(2)
@@ -211,25 +209,43 @@ class ThePage(_DetailsCase):
         self.assertFalse(tile.caption.get_visible())
         tile.emit("clicked")  # no handler: nothing happens
 
-    def test_the_favorite_switch_the_pad_and_the_meta_line(self):
+    def test_the_star_x_and_y(self):
         page = self.open()
-        self.assertFalse(page.favorite_row.get_active())
-        page.favorite_row.emit("clicked")
+        self.assertFalse(page.is_favorite())
+        page.favorite_button.emit("clicked")
         self.assertTrue(self.win.playlist_manager.is_favorite(self.game["path"]))
-        self.assertTrue(page.favorite_row.get_active())
-        self.assertIn(self.said("big_picture.details.favorite_mark"), page.meta_label.get_label())
-        self.assertTrue(page.on_pad_action("favorite"))
+        self.assertTrue(page.is_favorite())
+        self.assertEqual(page.favorite_button.get_icon_name(), "starred-symbolic")
+        self.assertTrue(self.page.on_pad_action("context"))
         self.assertFalse(self.win.playlist_manager.is_favorite(self.game["path"]))
-        self.assertFalse(page.favorite_row.get_active())
-        self.assertFalse(page.on_pad_action("context"))
+        self.assertFalse(page.is_favorite())
+        with mock.patch.object(self.win, "share_roms") as share:
+            self.assertTrue(page.on_pad_action("favorite"))
+        share.assert_called_once_with([self.game])
+        self.assertFalse(page.on_pad_action("range"))
+
+    def test_the_expand_button(self):
+        page = self.open()
+        # Expanded, it goes back.
+        with mock.patch.object(self.shell, "pop") as pop:
+            page.expand_button.emit("clicked")
+        pop.assert_called_once()
+        # In the pane, it opens the game on a page of its own.
+        pane = self.shell.library.detail
+        pane.load(self.game)
+        self.assertFalse(pane.path_note.get_visible())
+        with mock.patch.object(self.shell, "open_details") as details:
+            pane.expand_button.emit("clicked")
+        details.assert_called_once_with(self.game)
 
 
 @needs_display
 class TheSettingsRows(_DetailsCase):
     def test_the_core_chooser_writes_the_per_game_core(self):
         page = self.open()
-        self.assertEqual(page.core_row.value_label.get_label(), self.said("details.console_default", value="Snes9x"))
-        self.assertFalse(page.core_row.subtitle_label.get_visible())
+        self.assertEqual(page.core_row.value_label.get_label(), "Snes9x")
+        self.assertTrue(page.core_row.tag_label.get_visible())
+        self.assertEqual(page.core_row.tag_label.get_label(), self.said("big_picture.pane.default"))
         page.core_row.emit("clicked")
         self.assertEqual(self.ids(), [CONSOLE_DEFAULT, "snes9x_libretro.so", "bsnes_libretro.so"])
         self.assertEqual(self.choosers[-1]["current"], CONSOLE_DEFAULT)
@@ -237,7 +253,7 @@ class TheSettingsRows(_DetailsCase):
         self.pick("bsnes_libretro.so")
         self.assertEqual(self.config.get_rom_core_override(self.game["path"]), "bsnes_libretro.so")
         self.assertEqual(page.core_row.value_label.get_label(), "bsnes")
-        self.assertEqual(page.core_row.subtitle_label.get_label(), self.said("details.scope.game"))
+        self.assertFalse(page.core_row.tag_label.get_visible())
         # The current option handed back is not a change.
         with mock.patch.object(self.win, "set_rom_core") as set_core:
             self.pick("bsnes_libretro.so")
@@ -249,20 +265,17 @@ class TheSettingsRows(_DetailsCase):
         # The console's own override is the default the row names; none installed names none.
         self.config.set_console_core_override("SFC", "bsnes_libretro.so")
         page.load(self.game)
-        self.assertEqual(page.core_row.value_label.get_label(), self.said("details.console_default", value="bsnes"))
+        self.assertEqual(page.core_row.value_label.get_label(), "bsnes")
         self.config.set_console_core_override("SFC", None)
         self.cores.clear()
         page.load(self.game)
-        self.assertEqual(
-            page.core_row.value_label.get_label(),
-            self.said("details.console_default", value=self.said("context.core.none")),
-        )
+        self.assertEqual(page.core_row.value_label.get_label(), self.said("context.core.none"))
 
     def test_the_shader_chooser_writes_the_per_game_shader(self):
         page = self.open()
         shaders = self.win.shader_catalog
         console_label = shaders.label_for_shader(self.config.get_shader_for_console("SFC"))
-        self.assertEqual(page.shader_row.value_label.get_label(), self.said("details.console_default", value=console_label))
+        self.assertEqual(page.shader_row.value_label.get_label(), console_label)
         page.shader_row.emit("clicked")
         options = shaders.get_options(show_all=False)
         self.assertEqual(self.ids(), [CONSOLE_DEFAULT] + [shader_id for shader_id, _label in options])
@@ -327,7 +340,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
 
     def test_the_artwork_chooser_fetches_chooses_and_removes(self):
         page = self.open()
-        page.artwork_row.emit("clicked")
+        page.artwork_button.emit("clicked")
         self.assertEqual(self.ids(), [ART_FETCH, ART_CHOOSE])
         # Fetch: one task with both kinds where there is a frame, one without.
         with mock.patch.object(self.win, "_start_artwork_sync") as start, mock.patch.object(
@@ -354,7 +367,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
             self.win._cover_sync_running = False
         self.assertIn(self.said("toast.sync_running"), self.toasts)
         # Choose: the window's picker, with a callback that reloads this page.
-        page.artwork_row.emit("clicked")
+        page.artwork_button.emit("clicked")
         with mock.patch.object(self.win, "_choose_cover_for_rom") as choose:
             self.pick(ART_CHOOSE)
         rom, on_done, kind = choose.call_args.args
@@ -365,7 +378,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         reload.assert_not_called()
         # Remove: offered only with a cover on disk, and asked about first.
         self.cover(self.game)
-        page.artwork_row.emit("clicked")
+        page.artwork_button.emit("clicked")
         self.assertEqual(self.ids(), [ART_FETCH, ART_CHOOSE, ART_REMOVE])
         with self.caught_dialog() as caught:
             self.pick(ART_REMOVE)
@@ -381,7 +394,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
 
     def test_rename_goes_through_the_keyboard_and_follows_the_game(self):
         page = self.open()
-        page.rename_row.emit("clicked")
+        page.rename_button.emit("clicked")
         self.assertEqual(self.entries[-1]["initial"], self.game["name"])
         self.assertEqual(self.entries[-1]["title"], self.said("dialog.rename.heading"))
         self.entries[-1]["on_done"]("Chrono Trigger DX")
@@ -389,13 +402,13 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         self.assertEqual(page.rom["name"], "Chrono Trigger DX")
         self.assertEqual(page.title_label.get_label(), "Chrono Trigger DX")
         self.assertTrue(page.rom["path"].endswith("Chrono Trigger DX.sfc"))
-        self.assertIs(self.visible_page(), page)
+        self.assertIs(self.visible_page(), self.page)
         # A refused name: the window toasts, the page keeps the game.
-        page.rename_row.emit("clicked")
+        page.rename_button.emit("clicked")
         self.entries[-1]["on_done"]("Super Metroid")
         self.assertIn(self.said("toast.rom.rename_failed", error="Super Metroid.sfc already exists"), self.toasts)
         self.assertEqual(page.rom["name"], "Chrono Trigger DX")
-        self.assertIs(self.visible_page(), page)
+        self.assertIs(self.visible_page(), self.page)
         # The game gone from the playlist altogether: nothing left to show.
         gone = page.rom
 
@@ -405,54 +418,80 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         with mock.patch.object(self.win, "_apply_rename", side_effect=_vanish):
             page._apply_rename("whatever")
         self.pump()
-        self.assertIsNot(self.visible_page(), page)
+        self.assertIsNot(self.visible_page(), self.page)
         self.assertEqual(page.rom, gone)
 
-    def test_share_delete_focus_and_the_hints(self):
+    def test_options_delete_focus_and_the_hints(self):
         page = self.open()
-        with mock.patch.object(self.win, "share_roms") as share:
-            page.share_row.emit("clicked")
-        share.assert_called_once_with([self.game])
+        page.open_options()
+        self.assertEqual(self.ids(), ["share", "rename", "artwork", "core", "playlists", "remove"])
         with mock.patch.object(self.win, "_confirm_delete_roms") as delete:
-            page.delete_row.emit("clicked")
+            self.pick("remove")
         delete.assert_called_once_with([self.game])
-        self.assertTrue(page.delete_row.has_css_class("bp-danger"))
-        self.assertTrue(page.play_row.has_css_class("bp-primary"))
+        for option, method in (("rename", "_on_rename"), ("artwork", "_open_artwork_chooser"),
+                               ("core", "_open_core_chooser"), ("playlists", "_open_playlists_chooser")):
+            with mock.patch.object(page, method) as handler:
+                page._pick_option(option)
+                self.pump()
+            handler.assert_called_once()
         glyphs = self.win.navigation.glyphs()
-        hints = page.hints(glyphs, self.win.t)
+        hints = self.page.hints(glyphs, self.win.t)
         self.assertEqual([label for _glyph, label in hints], [
-            self.said("big_picture.hints.choose"), self.said("hints.back"),
-            self.said("hints.favorite"), self.said("big_picture.details.prev_next"),
+            self.said("details.play"), self.said("hints.favorite"), self.said("big_picture.hints.share"),
+            self.said("hints.back"), self.said("big_picture.details.prev_next"),
         ])
         self.show()
-        self.assertTrue(page.focus_default())
-        self.assertIs(self.focus_widget(), page.play_row)
+        self.assertTrue(self.page.focus_default())
+        self.assertIs(self.focus_widget(), page.play_button)
 
-    def test_the_first_showing_lands_on_continue_and_a_return_does_not(self):
+    def test_the_first_showing_lands_on_play_and_a_return_does_not(self):
         self.state(0)
         page = self.open()
         self.show()
-        # A fresh load, then what the navigation view does at the end of
-        # the push: the page's first focusable widget is a tile, and the
-        # page takes the focus back to "Continue".
-        page.load(self.game)
+        self.page.load(self.game)
         page.state_tiles[0].grab_focus()
         self.assertIs(self.focus_widget(), page.state_tiles[0])
-        page.emit("shown")
-        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.play_row))
+        self.page.emit("shown")
+        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.play_button))
         # Back from a chooser: the row that was left is the row that is found.
         page.core_row.grab_focus()
-        page.emit("shown")
+        self.page.emit("shown")
         self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.core_row))
-        # The shoulders load in place; the focus stays where it is then too.
-        self.shell.open_library("SFC")
+
+
+@needs_display
+class AfterAGame(_DetailsCase):
+    """A game that just ended: the pane and the page re-read it (issue 957)."""
+
+    def test_the_library_changing_refreshes_a_detail_showing_the_game(self):
+        self.show()
+        detail = self.open()
+        pane = self.shell.library.detail
+        pane.load(self.game)
+        self.assertTrue(detail.states_empty.get_visible())
+        self.state(2)
+        self.win.play_history.record_launch(self.game["path"])
+        # Nothing yet: the tiles were built when the game was loaded.
+        self.assertEqual(detail.state_tiles, [])
+        self.shell.on_library_changed()
         self.pump()
-        self.shell.open_details(self.game)
+        for shown in (detail, pane):
+            self.assertEqual([tile.slot for tile in shown.state_tiles], [2])
+            self.assertFalse(shown.states_empty.get_visible())
+            self.assertNotIn(self.said("details.never_played"), shown.meta_label.get_label())
+
+    def test_a_focused_state_tile_hands_the_focus_to_play(self):
+        self.show()
+        self.state(1)
+        detail = self.open()
+        detail.state_tiles[0].grab_focus()
         self.pump()
-        self.assertTrue(page.step_section(1))
-        page.core_row.grab_focus()
-        page.emit("shown")
-        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.core_row))
+        self.assertTrue(detail.refresh())
+        self.pump()
+        self.assertIs(self.focus_widget(), detail.play_button)
+        # Nothing loaded: nothing to re-read.
+        detail.rom = None
+        self.assertFalse(detail.refresh())
 
 
 @needs_display
@@ -466,20 +505,20 @@ class TheShoulders(_DetailsCase):
         page = self.open(roms[0])
         self.assertTrue(self.shell.step_console(1))
         self.assertEqual(page.rom["path"], roms[1]["path"])
-        self.assertTrue(page.step_section(1))
+        self.assertTrue(self.page.step_section(1))
         self.assertEqual(page.rom["path"], roms[0]["path"])
-        self.assertTrue(page.step_section(-1))
+        self.assertTrue(self.page.step_section(-1))
         self.assertEqual(page.rom["path"], roms[1]["path"])
         # A game that is not on the page, a page of one, no page at all.
         page.load(self.rom("FC"))
-        self.assertFalse(page.step_section(1))
+        self.assertFalse(self.page.step_section(1))
         self.win.sidebar.select("FC")
         self.pump()
-        self.assertFalse(page.step_section(1))
+        self.assertFalse(self.page.step_section(1))
         with mock.patch.object(self.win, "_visible_grid", return_value=None):
-            self.assertFalse(page.step_section(1))
+            self.assertFalse(self.page.step_section(1))
         page.rom = None
-        self.assertFalse(page.step_section(1))
+        self.assertFalse(self.page.step_section(1))
 
 
 if __name__ == "__main__":

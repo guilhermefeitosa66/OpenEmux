@@ -1,15 +1,15 @@
-"""A game's details in Big Picture: a page, not a dialog (issue 914).
+"""A game's details in Big Picture: the Android detail pane (issues 914, 957).
 
 The desktop keeps everything about one game in ``ui/game_details.py``, an
-``Adw.Dialog``. A couch wants a page: the cover on the left with the save
-states under it, the title and a column of rows on the right. A on a row
-changes the setting or opens a chooser for it, "Continue" is the accent
-row and takes the focus first, B goes back to the grid, LB and RB move to
-the games beside this one. Every action calls the same window method the
+``Adw.Dialog``. Big Picture follows the Android gamepad layout instead: a
+pane beside the games with the art, the title, Play, the save states and
+the per-game settings (``GameDetail``), which its expand button opens on a
+page of its own (``GameDetailsPage``). A on a row changes the setting or
+opens a chooser for it; every action calls the same window method the
 desktop dialog does, so the two never disagree about what a change means.
 
-One instance lives for the whole session: ``load(rom)`` rebuilds it for
-another game, which is also what the shoulders do.
+``load(rom)`` rebuilds a detail for another game, which is also what the
+shoulders do on the expanded page.
 """
 
 import logging
@@ -28,10 +28,9 @@ from openemux.core.scraper import COVER_ART, LABEL_ART, resolve_local_art
 from openemux.ui.bigpicture.widgets import (
     ROW_ACTION,
     ROW_CHOICE,
-    ROW_SWITCH,
     BigPage,
     Row,
-    eyebrow,
+    icon_button,
     make_badge,
     note,
     once,
@@ -44,8 +43,6 @@ logger = logging.getLogger(__name__)
 COVER_SIZE = (400, 500)
 #: A save state's screenshot on its tile, at scale 1.0.
 STATE_THUMBNAIL = 72
-#: How many save-state tiles fit under the cover.
-MAX_STATE_TILES = 3
 #: The chooser id that stands for "the console default".
 CONSOLE_DEFAULT = ""
 #: The chooser id of the "New playlist" option.
@@ -100,7 +97,7 @@ class CoverFrame(Gtk.Overlay):
 
 
 class StateTile(Gtk.Button):
-    """A save state under the cover: its screenshot or an icon, a name, a date.
+    """A save state in the pane: its screenshot or an icon, a name, a date.
 
     A on it launches the game into that state. The automatic one plays the
     game the ordinary way, which resumes it: that is what Play does too.
@@ -111,7 +108,6 @@ class StateTile(Gtk.Button):
         super().__init__()
         self.slot = None
         self.on_activate = on_activate
-        self.add_css_class("bp-tile")
         self.add_css_class("bp-state")
         self.add_css_class("flat")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -148,67 +144,109 @@ class StateTile(Gtk.Button):
         self.connect("clicked", lambda _b: self.on_activate() if self.on_activate else None)
 
 
-class GameDetailsPage(BigPage):
-    context = "bp-page"
+class GameDetail(Gtk.Box):
+    """One game, the Android detail pane's way (issue 957).
 
-    def __init__(self, shell):
-        t = shell.win.t
-        super().__init__(shell, t("details.title"), tag="bp-details")
-        self.t = t
+    Top to bottom: the expand, favorite and share buttons; the art with
+    "Search artwork…" under it; the title with its pencil; "Console · Core ·
+    played"; Play (or Continue, when the game left an automatic state); the
+    save states; and the per-game settings rows. The same widget is the pane
+    beside the games and, expanded, a page of its own.
+    """
+
+    def __init__(self, shell, expanded=False):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self.shell = shell
+        self.win = shell.win
+        t = self.t = shell.win.t
         self.rom = None
+        self.expanded = expanded
         self._states = []
         self._cover_job = 0
-        self._focus_play_on_show = False
         self.state_tiles = []
-        # The navigation view puts the focus on the page's first focusable
-        # widget once the push transition ends -- a save-state tile, when
-        # there is one -- after the shell's own idle has already landed on
-        # the accent row. The first showing of a freshly loaded game ends
-        # on "Continue"; coming back from a chooser keeps the view's own
-        # restore, so the row that was left is the row that is found
-        # (``on_shown``, which the shell calls when the slide is over).
+        self.add_css_class("bp-detail")
 
-        self.body.set_orientation(Gtk.Orientation.HORIZONTAL)
-        self.body.set_spacing(48)
+        icons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        icons.set_halign(Gtk.Align.END)
+        self.expand_button = icon_button(
+            "view-restore-symbolic" if expanded else "view-fullscreen-symbolic",
+            t("big_picture.pane.collapse" if expanded else "big_picture.pane.expand"),
+            self._on_expand,
+        )
+        self.favorite_button = icon_button("non-starred-symbolic", t("hints.favorite"), self._toggle_favorite)
+        self.share_button = icon_button("send-to-symbolic", t("share.menu.single"), self._on_share)
+        for button in (self.expand_button, self.favorite_button, self.share_button):
+            icons.append(button)
+        self.append(icons)
 
-        # The left column: the cover, the save states under it.
-        side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        side.add_css_class("bp-details-side")
-        side.set_valign(Gtk.Align.START)
         self.cover = CoverFrame()
-        self.cover.set_halign(Gtk.Align.START)
-        side.append(self.cover)
-        self.states_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        side.append(self.states_box)
-        left = self.scrolled(side)
-        left.set_hexpand(False)
-        self.body.append(left)
+        self.cover.set_halign(Gtk.Align.CENTER)
+        self.append(self.cover)
+        self.artwork_button = Gtk.Button()
+        self.artwork_button.add_css_class("bp-pill-button")
+        self.artwork_button.set_halign(Gtk.Align.CENTER)
+        art_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        art_box.append(Gtk.Image.new_from_icon_name("system-search-symbolic"))
+        art_box.append(Gtk.Label(label=t("big_picture.pane.search_artwork")))
+        self.artwork_button.set_child(art_box)
+        self.artwork_button.connect("clicked", lambda _b: self._open_artwork_chooser())
+        self.append(self.artwork_button)
 
-        # The right column: the title, the facts, the rows.
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.title_label = Gtk.Label(xalign=0.0)
-        self.title_label.add_css_class("bp-title")
+        title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        title_row.set_halign(Gtk.Align.CENTER)
+        title_row.set_margin_top(8)
+        self.title_label = Gtk.Label()
+        self.title_label.add_css_class("bp-pane-title")
         self.title_label.set_wrap(True)
         self.title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.title_label.set_lines(2)
         self.title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        column.append(self.title_label)
-        self.meta_label = Gtk.Label(xalign=0.0)
-        self.meta_label.add_css_class("bp-body")
+        self.title_label.set_justify(Gtk.Justification.CENTER)
+        title_row.append(self.title_label)
+        self.rename_button = icon_button("document-edit-symbolic", t("context.rename"), self._on_rename)
+        self.rename_button.set_valign(Gtk.Align.CENTER)
+        title_row.append(self.rename_button)
+        self.append(title_row)
+        self.meta_label = Gtk.Label()
+        self.meta_label.add_css_class("bp-pane-meta")
         self.meta_label.set_ellipsize(Pango.EllipsizeMode.END)
-        column.append(self.meta_label)
+        self.append(self.meta_label)
 
-        rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        rows.set_margin_top(12)
-        self.play_row = Row(t("details.play"), kind=ROW_ACTION, primary=True, on_activate=self._on_play)
+        self.play_button = Gtk.Button()
+        self.play_button.add_css_class("bp-play")
+        play_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        play_box.set_halign(Gtk.Align.CENTER)
+        play_box.append(Gtk.Image.new_from_icon_name("media-playback-start-symbolic"))
+        self.play_label = Gtk.Label(label=t("details.play"))
+        play_box.append(self.play_label)
+        self.play_button.set_child(play_box)
+        self.play_button.connect("clicked", lambda _b: self._on_play())
+        self.play_button.set_margin_top(8)
+        self.append(self.play_button)
         self.fresh_row = Row(
             t("context.start_fresh"), t("big_picture.details.start_fresh.subtitle"),
             kind=ROW_ACTION, on_activate=self._on_start_fresh,
         )
-        self.state_row = Row(t("context.load_state"), kind=ROW_CHOICE, on_activate=self._open_state_chooser)
-        self.favorite_row = Row(
-            t("big_picture.details.favorite"), kind=ROW_SWITCH, on_activate=self._on_favorite_switch
-        )
+        self.append(self.fresh_row)
+
+        states_title = Gtk.Label(label=t("big_picture.pane.states"), xalign=0.0)
+        states_title.add_css_class("bp-section-title")
+        states_title.set_margin_top(14)
+        self.append(states_title)
+        self.states_empty = Gtk.Label(label=t("big_picture.pane.states.empty"), xalign=0.0)
+        self.states_empty.add_css_class("bp-pane-meta")
+        self.states_empty.set_wrap(True)
+        self.append(self.states_empty)
+        states_scroller = Gtk.ScrolledWindow()
+        states_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        states_scroller.set_propagate_natural_height(True)
+        self.states_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        states_scroller.set_child(self.states_box)
+        self.states_scroller = states_scroller
+        self.append(states_scroller)
+
+        rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        rows.set_margin_top(12)
         self.core_row = Row(t("context.core"), kind=ROW_CHOICE, on_activate=self._open_core_chooser)
         self.shader_row = Row(t("context.shader"), kind=ROW_CHOICE, on_activate=self._open_shader_chooser)
         self.color_row = Row(
@@ -217,43 +255,18 @@ class GameDetailsPage(BigPage):
         self.playlists_row = Row(
             t("details.group.collections"), kind=ROW_ACTION, on_activate=self._open_playlists_chooser
         )
-        self.artwork_row = Row(
-            t("details.group.artwork"), kind=ROW_ACTION, on_activate=self._open_artwork_chooser
-        )
-        self.rename_row = Row(t("context.rename"), kind=ROW_ACTION, on_activate=self._on_rename)
-        self.share_row = Row(t("share.menu.single"), kind=ROW_ACTION, on_activate=self._on_share)
-        self.delete_row = Row(
-            t("context.delete"), kind=ROW_ACTION, destructive=True, on_activate=self._on_delete
-        )
-        for widget in (
-            self.play_row, self.fresh_row, self.state_row, self.favorite_row,
-            self._eyebrow(t("details.group.settings")),
-            self.core_row, self.shader_row, self.color_row,
-            self._eyebrow(t("big_picture.details.file")),
-            self.playlists_row, self.artwork_row, self.rename_row, self.share_row, self.delete_row,
-        ):
-            rows.append(widget)
-        column.append(rows)
+        for row in (self.core_row, self.shader_row, self.color_row, self.playlists_row):
+            rows.append(row)
+        self.append(rows)
         self.path_note = note("")
         self.path_note.set_margin_top(8)
-        column.append(self.path_note)
-        right = self.scrolled(column)
-        right.set_hexpand(True)
-        self.body.append(right)
-
-    @staticmethod
-    def _eyebrow(text):
-        label = eyebrow(text)
-        label.set_margin_top(16)
-        return label
+        self.path_note.set_visible(expanded)
+        self.append(self.path_note)
 
     # -- loading a game -----------------------------------------------------------
     def load(self, rom):
         """Show ``rom``: every row re-read, the cover fetched in the background."""
         self.rom = rom
-        self._focus_play_on_show = True
-        win = self.win
-        self.set_crumbs([win.sidebar.label_for(rom.get("console", "")), rom.get("name", "")])
         self.title_label.set_label(rom.get("name", ""))
         self.path_note.set_label(str(rom.get("path", "")))
         self._read_states()
@@ -263,6 +276,30 @@ class GameDetailsPage(BigPage):
         self._sync_playlists()
         self._build_states()
         self._load_cover()
+        self._sync_shown()
+
+    def refresh(self):
+        """Re-read the game shown, its art kept: a game just ended (issue 957).
+
+        Playing it leaves new save states, an automatic one (Play becomes
+        Continue) and a "played" line; the pane must not keep the old ones.
+        A state tile that held the focus is rebuilt, so the focus goes to Play.
+        """
+        if self.rom is None:
+            return False
+        focus = self.win.get_focus()
+        in_states = focus is not None and focus.is_ancestor(self.states_box)
+        self._read_states()
+        self._sync_meta()
+        self._sync_play_rows()
+        self._build_states()
+        if in_states:
+            self.play_button.grab_focus()
+        return True
+
+    def _sync_shown(self):
+        """What a pane shows only when there is room: the file's path."""
+        self.path_note.set_visible(self.expanded)
 
     def _read_states(self):
         rom = self.rom
@@ -270,31 +307,35 @@ class GameDetailsPage(BigPage):
         self._states = save_states.list_states(states_dir, rom["path"])
 
     def _sync_meta(self):
-        """``Super Nintendo · 2 h ago · 1 h played · ★ Favorite``."""
+        """``Nintendo (NES) · Nestopia · never played``, Android's line."""
         win, rom, t = self.win, self.rom, self.t
         parts = [
             win.sidebar.label_for(rom.get("console", "")),
+            self._effective_core_label(),
             win.play_caption(rom) or t("details.never_played"),
         ]
+        self.meta_label.set_label(" · ".join(part for part in parts if part))
         favorite = win._is_favorite_rom(rom)
+        self.favorite_button.set_icon_name("starred-symbolic" if favorite else "non-starred-symbolic")
         if favorite:
-            parts.append(t("big_picture.details.favorite_mark"))
-        self.meta_label.set_label(" · ".join(parts))
-        self.favorite_row.set_active(favorite)
+            self.favorite_button.add_css_class("bp-on")
+        else:
+            self.favorite_button.remove_css_class("bp-on")
+
+    def is_favorite(self):
+        return self.favorite_button.has_css_class("bp-on")
+
+    def _effective_core_label(self):
+        core = self.win.config_manager.get_rom_core_override(self.rom["path"])
+        if core:
+            return self.win.core_catalog.display_name_for(core)
+        return self._auto_core_label()
 
     def _sync_play_rows(self):
         t = self.t
         resuming = self.win.has_auto_state(self.rom)
-        self.play_row.title_label.set_label(
-            t("big_picture.details.continue") if resuming else t("details.play")
-        )
-        self.play_row.set_subtitle(t("card.resume.tooltip") if resuming else None)
+        self.play_label.set_label(t("big_picture.details.continue") if resuming else t("details.play"))
         self.fresh_row.set_visible(resuming)
-        if self._states:
-            self.state_row.set_value(t("big_picture.details.states_count", count=len(self._states)))
-        else:
-            self.state_row.set_value(t("details.states.empty"))
-        self.state_row.set_sensitive(bool(self._states))
 
     def _sync_settings(self):
         """The three per-game settings, each saying where its value comes from."""
@@ -325,14 +366,13 @@ class GameDetailsPage(BigPage):
             )
 
     def _show_choice(self, row, own_label, console_label):
-        """A choice row's value and scope: this game's own, or the console's."""
-        t = self.t
+        """A choice row's value, with Android's DEFAULT tag when the console's applies."""
         if own_label is not None:
             row.set_value(own_label)
-            row.set_subtitle(t("details.scope.game"))
+            row.set_tag(None)
         else:
-            row.set_value(t("details.console_default", value=console_label))
-            row.set_subtitle(None)
+            row.set_value(console_label)
+            row.set_tag(self.t("big_picture.pane.default"))
 
     def _auto_core_label(self):
         """What the console level would run: its override, else the first core."""
@@ -390,7 +430,10 @@ class GameDetailsPage(BigPage):
 
     # -- the save states ----------------------------------------------------------------
     def _build_states(self):
-        """Up to three tiles under the cover: the automatic state, then the slots."""
+        """The save states in a row: the automatic one first, then the slots.
+
+        A on a state starts the game from it. With none, Android's note.
+        """
         t = self.t
         child = self.states_box.get_first_child()
         while child is not None:
@@ -406,7 +449,7 @@ class GameDetailsPage(BigPage):
             )
             self.states_box.append(tile)
             self.state_tiles.append(tile)
-        for state in self._states[: MAX_STATE_TILES - len(self.state_tiles)]:
+        for state in self._states:
             tile = StateTile(
                 t("details.states.slot", slot=state.slot), stamp(state.mtime),
                 thumbnail=state.thumbnail, size=size,
@@ -415,29 +458,8 @@ class GameDetailsPage(BigPage):
             tile.slot = state.slot
             self.states_box.append(tile)
             self.state_tiles.append(tile)
-        self.states_box.set_visible(bool(self.state_tiles))
-
-    def _open_state_chooser(self):
-        """Every saved slot with its date; the game starts from the one picked."""
-        t = self.t
-        if not self._states:
-            return
-        options = [
-            {
-                "id": str(state.slot),
-                "label": t("details.states.slot", slot=state.slot),
-                "subtitle": stamp(state.mtime),
-            }
-            for state in self._states
-        ]
-        self.shell.open_chooser(
-            t("context.load_state"), options, None, self._pick_state,
-            crumbs=self._crumbs(t("context.load_state")),
-            lead=t("big_picture.details.load_state.lead"),
-        )
-
-    def _pick_state(self, slot_id):
-        self.win.launch_rom_at_state(self.rom, int(slot_id))
+        self.states_scroller.set_visible(bool(self.state_tiles))
+        self.states_empty.set_visible(not self.state_tiles)
 
     # -- playing ---------------------------------------------------------------------------
     def _on_play(self):
@@ -447,24 +469,61 @@ class GameDetailsPage(BigPage):
         self.win.game.launch(self.rom, resume=False)
 
     # -- favourite ------------------------------------------------------------------------
-    def _on_favorite_switch(self, _active):
-        self._toggle_favorite()
-
     def _toggle_favorite(self):
         self.win._toggle_favorite_from_ui(self.rom)
-        # The window is the one that knows; the switch follows it, never leads.
+        # The window is the one that knows; the star follows it, never leads.
         self._sync_meta()
 
+    def _on_expand(self):
+        """The pane's expand button: the same game on a page of its own; there, back."""
+        if self.expanded:
+            self.shell.pop()
+        else:
+            self.shell.open_details(self.rom)
+
     def on_pad_action(self, action):
-        """Y toggles the favourite from anywhere on the page."""
-        if action == "favorite":
+        """X toggles the favorite, Y shares: Android's pane."""
+        if action == "context":
             self._toggle_favorite()
+            return True
+        if action == "favorite":
+            self._on_share()
             return True
         return False
 
     # -- the three settings ------------------------------------------------------------------
     def _crumbs(self, title):
         return [self.rom.get("name", ""), title]
+
+    def open_options(self):
+        """The Y sheet's entries, Android's options plus the desktop's per-game ones."""
+        t = self.t
+        options = [
+            {"id": "share", "label": t("big_picture.options.share")},
+            {"id": "rename", "label": t("context.rename")},
+            {"id": "artwork", "label": t("details.group.artwork")},
+            {"id": "core", "label": t("context.core")},
+            {"id": "playlists", "label": t("details.group.collections")},
+            {"id": "remove", "label": t("big_picture.options.remove")},
+        ]
+        self.shell.open_chooser(
+            self.rom.get("name", ""), options, None, self._pick_option,
+            crumbs=[self.win.sidebar.label_for(self.rom.get("console", "")), self.rom.get("name", "")],
+            lead=t("big_picture.options.lead"),
+        )
+
+    def _pick_option(self, option):
+        handlers = {
+            "share": self._on_share,
+            "rename": self._on_rename,
+            "artwork": self._open_artwork_chooser,
+            "core": self._open_core_chooser,
+            "playlists": self._open_playlists_chooser,
+            "remove": self._on_delete,
+        }
+        # The chooser pops itself first; the next page (or dialog) opens over
+        # what was there, not under the closing chooser.
+        GLib.idle_add(once(handlers[option]))
 
     def _open_core_chooser(self):
         t = self.t
@@ -654,7 +713,7 @@ class GameDetailsPage(BigPage):
         if fresh:
             self.load(fresh[0])
         elif not any(entry["path"] == rom["path"] for entry in after):
-            self.shell.pop()
+            self.shell.forget_games({rom["path"]})
 
     def _on_share(self):
         self.win.share_roms([self.rom])
@@ -664,8 +723,8 @@ class GameDetailsPage(BigPage):
         self.win._confirm_delete_roms([self.rom])
 
     # -- the pad -----------------------------------------------------------------------------------
-    def step_section(self, delta):
-        """LB and RB: the game before or after this one on the page the grid shows."""
+    def step_game(self, delta):
+        """The game before or after this one on the page the grid shows."""
         grid = self.win._visible_grid()
         if grid is None or self.rom is None:
             return False
@@ -675,30 +734,70 @@ class GameDetailsPage(BigPage):
         if current not in paths or len(paths) < 2:
             return False
         self.load(entries[(paths.index(current) + delta) % len(paths)].rom)
-        # The page is on screen already: the focus stays on the row it is on.
-        self._focus_play_on_show = False
         return True
+
+    def focus_default(self):
+        return self.play_button.grab_focus()
+
+    def hints(self, g, t):
+        """Android's pane: A Play, X Favorite, Y Share, B Back."""
+        play = t("big_picture.details.continue") if self.win.has_auto_state(self.rom) else t("details.play")
+        return [
+            (g["confirm"], play),
+            (g["context"], t("hints.favorite")),
+            (g["favorite"], t("big_picture.hints.share")),
+            (g["back"], t("hints.back")),
+        ]
+
+
+class GameDetailsPage(BigPage):
+    """A game's detail, expanded to the whole screen (the pane's expand button)."""
+
+    context = "bp-pane"
+
+    def __init__(self, shell):
+        t = shell.win.t
+        super().__init__(shell, t("details.title"), tag="bp-details")
+        self.detail = GameDetail(shell, expanded=True)
+        self.detail.set_halign(Gtk.Align.CENTER)
+        self.body.append(self.scrolled(self.detail))
+        self._focus_play_on_show = False
+
+    @property
+    def rom(self):
+        return self.detail.rom
+
+    def load(self, rom):
+        self.detail.load(rom)
+        self.set_crumbs([self.win.sidebar.label_for(rom.get("console", "")), rom.get("name", "")])
+        self._focus_play_on_show = True
+
+    def on_pad_action(self, action):
+        return self.detail.on_pad_action(action)
+
+    def step_section(self, delta):
+        """LB and RB: the game before or after this one."""
+        moved = self.detail.step_game(delta)
+        if moved:
+            rom = self.detail.rom
+            self.set_crumbs([self.win.sidebar.label_for(rom.get("console", "")), rom.get("name", "")])
+        return moved
 
     def on_shown(self):
         if self._focus_play_on_show:
             self._focus_play_on_show = False
-            GLib.idle_add(once(self.play_row.grab_focus))
+            GLib.idle_add(once(self.detail.play_button.grab_focus))
             return True
         return False
 
     def focus_default(self):
-        return self.play_row.grab_focus()
+        return self.detail.focus_default()
 
     def hints(self, g, t):
-        return [
-            (g["confirm"], t("big_picture.hints.choose")),
-            (g["back"], t("hints.back")),
-            (g["favorite"], t("hints.favorite")),
-            (g["consoles"], t("big_picture.details.prev_next")),
-        ]
+        return self.detail.hints(g, t) + [(g["consoles"], t("big_picture.details.prev_next"))]
 
 
 __all__ = [
-    "GameDetailsPage", "StateTile", "CoverFrame", "stamp",
+    "GameDetail", "GameDetailsPage", "StateTile", "CoverFrame", "stamp",
     "CONSOLE_DEFAULT", "NEW_PLAYLIST", "ART_FETCH", "ART_CHOOSE", "ART_REMOVE",
 ]

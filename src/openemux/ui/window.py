@@ -108,10 +108,12 @@ logger = logging.getLogger(__name__)
 #: Slots reserved in the bottom bar for input hints (see set_hints).
 MAX_INPUT_HINTS = 8
 
-#: Big Picture (issue 914) always shows the covers and the cartridges at the
-#: largest zoom: three metres away, the shelf a desktop reads at 100% is
-#: unreadable. The user's own zoom is left alone and comes back on the way out.
-BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
+#: Big Picture (issue 914) always shows the covers and the cartridges at one
+#: zoom of its own, the user's being left alone and back on the way out. Since
+#: the games share the screen with the detail pane (issue 957), it is the zoom
+#: that lays three cartridges to a row beside it, as Android does; the couch
+#: scale (``bigpicture.theme``) already makes everything else bigger.
+BIG_PICTURE_ZOOM = ZOOM_LEVELS[3]
 
 
 
@@ -206,6 +208,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         #: Guide button, the header button or the "Start in Big Picture"
         #: setting. The shell is built on first use.
         self._big_picture = False
+        #: Big Picture's in-game pause menu, built on first use, and whether
+        #: it is showing (issue 957).
+        self.pause_menu = None
+        self.pause_menu_open = False
         self.big_picture_shell = None
         # The card transitions follow the desktop's animation setting (issue
         # 915): a class on the window the CSS keys off.
@@ -271,13 +277,26 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # A running game owns the pad; so does the remapping dialog. The
             # preferences switch pauses the reader without tearing the thread
             # down.
+            # Big Picture's pause menu, open over a paused game, takes the pad
+            # back while it shows (issue 957).
             should_suspend=lambda: (
                 not self._gamepad_nav_enabled
                 or self.input_capture_active
-                or self.runtime_manager.is_running()
+                or (self.runtime_manager.is_running() and not self.pause_menu_open)
+            ),
+            # While a game runs in Big Picture, the pad is still watched for
+            # the pause gesture, and only for it (issue 957).
+            watch_game=lambda: (
+                self._big_picture
+                and self._gamepad_nav_enabled
+                and not self.pause_menu_open
+                and self.runtime_manager.is_running()
             ),
         )
         self.gamepad_navigator.swap_confirm_cancel = self.config_manager.get_swap_confirm_cancel()
+        self.gamepad_navigator.pause_trigger.set_mode(
+            self.config_manager.get_big_picture_settings()["pause_trigger"]
+        )
         self.gamepad_navigator.start()
         self.connect("close-request", self._on_close_stop_gamepad)
         self.connect("close-request", self._on_close_stop_game)
@@ -1088,6 +1107,9 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         settings = dict(self.config_manager.get_display_settings(scope))
         if getattr(self, "_big_picture", False):
             settings["zoom"] = BIG_PICTURE_ZOOM
+            # The games page's view switch (issue 957): Big Picture's own
+            # view, so the desktop's per-scope choice is never touched.
+            settings["view_mode"] = self.config_manager.get_big_picture_settings()["view_mode"]
             # Not a saved key: tells the grid its cards wear the couch
             # layout's big titles, which must not widen them (issue 954).
             settings["big_picture"] = True
@@ -1752,6 +1774,7 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
             self.big_picture_shell = BigPictureShell(self)
             self.mode_stack.add_named(self.big_picture_shell, "big-picture")
+            self.mode_stack.add_named(self.big_picture_shell.splash, "bp-splash")
             self.connect("close-request", self._on_close_release_big_picture)
         return self.big_picture_shell
 
@@ -1811,6 +1834,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         if not self._big_picture:
             self.toggle_big_picture()
         return GLib.SOURCE_REMOVE
+
+    def open_pause_menu(self):
+        """The pause gesture during a game: Big Picture's pause menu (issue 957)."""
+        runtime = self.runtime_manager
+        if not self._big_picture or not runtime.is_running() or self.pause_menu_open:
+            return False
+        active = dict(runtime.active_rom or {})
+        if not active.get("path"):
+            return False
+        active["name"] = self.game._game_name(active)
+        if self.pause_menu is None:
+            from openemux.ui.bigpicture.pause_menu import PauseMenuWindow
+
+            self.pause_menu = PauseMenuWindow(self)
+        return self.pause_menu.open(active)
 
     def open_onscreen_keyboard(self):
         """The pad's way into the search box (issue 914)."""
@@ -3000,11 +3038,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is rebuilt when it has been built at all, and the game's card on
         every other page re-reads its play state.
         """
+        if self.pause_menu is not None and self.pause_menu_open:
+            # The game is gone under its pause menu (issue 957).
+            self.pause_menu.close_menu()
         self.sidebar.sync_recent_row()
         if self.pages.grid_for(RECENT_ID) is not None or self.current_console == RECENT_ID:
             self.pages.ensure_recent_loaded()
         for grid in self.pages.grids():
             grid.refresh_rom_play_state(rom)
+        # Big Picture's chips count states and plays, and Recent lists them.
+        self._notify_big_picture_library()
 
     def launch_rom_at_state(self, rom, slot):
         """Launch ``rom`` and load the state parked on ``slot`` (issue #180)."""
@@ -3197,13 +3240,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # forget_rom drops the ROM from FAVORITES.list too, so the last
         # favorite can go this way as well as through the star.
         self.sidebar.sync_favorites_row()
-        # Big Picture: a details page open on a game that just went has
-        # nothing left to show; back to the grid.
+        # Big Picture: a detail showing a game that just went has nothing
+        # left to show (issue 957).
         if deleted and self._big_picture:
-            page = self.big_picture_shell.visible_page()
-            gone = {rom["path"] for rom in roms}
-            if (getattr(page, "rom", None) or {}).get("path") in gone:
-                self.big_picture_shell.pop()
+            self.big_picture_shell.forget_games({rom["path"] for rom in roms})
 
     def _sync_covers_for_selection(self):
         selected = list(self._selected_roms)
@@ -3752,6 +3792,31 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def on_launch_game(self, rom):
         self.game.launch(rom)
 
+    def on_grid_activate(self, rom):
+        """A card activated (Enter, a click): launch it, or in Big Picture show it.
+
+        Big Picture's A on a game opens its detail pane, as on Android; Play
+        is there (issue 957).
+        """
+        if self._big_picture and self.big_picture_shell is not None:
+            if self.selection_mode_active:
+                # Multi-select: A (Enter, a click) toggles the game, as on
+                # Android; it neither opens the pane nor leaves the mode
+                # (issue 957, QA round 1).
+                self._toggle_selected_rom(rom)
+                return
+            self.big_picture_shell.show_game(rom)
+            return
+        self.on_launch_game(rom)
+
+    def _toggle_selected_rom(self, rom):
+        item = self._focused_rom_item()
+        grid = self.pages.grid_for(self.current_console)
+        if item is None or grid is None or item.rom.get("path") != rom.get("path"):
+            return
+        grid.toggle_item(item)
+        self.navigation.refresh_hints()
+
     def apply_input_changes_to_running_game(self):
         """Carry a saved remap into the running game (issue #129).
 
@@ -3869,9 +3934,14 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         the thing virtualization takes away (#219). The window still decides
         *what* the filter is.
         """
+        extra = None
+        if self._big_picture and self.big_picture_shell is not None:
+            # The games page's filter chips (issue 957).
+            extra = self.big_picture_shell.facet_filter()
         grid.set_filter(
             self.search_entry.get_text(),
             only_missing_artwork=self._filter_missing_artwork,
+            extra=extra,
         )
         self._sync_search_empty_state()
 

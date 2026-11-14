@@ -410,7 +410,7 @@ class StaleSuspendFlagTests(unittest.TestCase):
     #: so a press emits its action immediately and nothing else can mask it.
     PRESS_CODE = BTN_GAMEPAD + 4
 
-    def _drive_one_pass(self, flip_during_select):
+    def _drive_one_pass(self, flip_during_select, before_run=None):
         actions = []
         suspended = [False]
         real_open = os.open
@@ -450,6 +450,8 @@ class StaleSuspendFlagTests(unittest.TestCase):
              patch("openemux.core.ui_gamepad._read_axis_ranges", lambda fd, codes: {}), \
              patch("openemux.core.ui_gamepad.select.select", _fake_select), \
              patch("openemux.core.ui_gamepad.os.read", _fake_read):
+            if before_run is not None:
+                before_run(nav)
             nav._run()
 
         self.assertEqual(len(delivered), 1, "the press was never read")
@@ -461,6 +463,27 @@ class StaleSuspendFlagTests(unittest.TestCase):
     def test_the_same_press_is_acted_on_while_not_suspended(self):
         self.assertEqual(self._drive_one_pass(flip_during_select=False),
                          ["prev_console"])
+
+    def test_a_suspension_starting_forgets_the_pause_gesture(self):
+        # The chord that opened the pause menu is let go while the menu shows,
+        # unseen by the trigger; back in the game, half of it must not fire
+        # again (issue 957).
+        from openemux.core.pause_trigger import START, SELECT, START_SELECT
+
+        navs = []
+
+        def _open_the_menu_with_the_chord(nav):
+            nav._watch_game = lambda: True  # a game runs in Big Picture
+            nav.pause_trigger.set_mode(START_SELECT)
+            nav.pause_trigger.feed(START, True, 0.0)
+            self.assertTrue(nav.pause_trigger.feed(SELECT, True, 0.0))
+            navs.append(nav)
+
+        self._drive_one_pass(flip_during_select=True, before_run=_open_the_menu_with_the_chord)
+        trigger = navs[0].pause_trigger
+        self.assertFalse(trigger.feed(START, True, 1.0))
+        self.assertFalse(trigger.feed(START, False, 1.1))
+        self.assertFalse(trigger.feed(START, True, 1.2))
 
 
 class TheNavigatorLifecycleTests(unittest.TestCase):
@@ -918,3 +941,53 @@ class WhatTheReaderMakesOfTheBytesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@linux_only("it maps evdev tokens to UI actions")
+class ThePauseGestureDuringAGameTests(unittest.TestCase):
+    """Suspended for a game, the navigator still watches for the pause gesture (issue 957)."""
+
+    def setUp(self):
+        self.actions = []
+        self.watching = [True]
+        self.nav = GamepadNavigator(on_action=self.actions.append, watch_game=lambda: self.watching[0])
+        self.repeat = RepeatClock()
+        self.hold = HoldClock()
+
+    def _dispatch(self, token, pressed, suspended=True):
+        self.nav._dispatch(token, pressed, self.repeat, self.hold, suspended)
+
+    def test_guide_while_suspended_opens_the_pause_menu_and_nothing_else(self):
+        self._dispatch("0", True)
+        self._dispatch("8", True)
+        self.assertEqual(self.actions, ["pause_menu"])
+
+    def test_not_watching_resets_and_drops(self):
+        self.watching[0] = False
+        self._dispatch("8", True)
+        self.assertEqual(self.actions, [])
+
+    def test_a_raising_watch_reads_as_not_watching(self):
+        def _boom():
+            raise RuntimeError("bug")
+
+        nav = GamepadNavigator(on_action=self.actions.append, watch_game=_boom)
+        with self.assertLogs("openemux.core.ui_gamepad", level="WARNING"):
+            nav._dispatch("8", True, self.repeat, self.hold, True)
+        self.assertEqual(self.actions, [])
+
+    def test_the_hold_gesture_fires_from_the_loop_tick(self):
+        from openemux.core.pause_trigger import HOLD_START
+
+        self.nav.pause_trigger.set_mode(HOLD_START)
+        with patch("openemux.core.ui_gamepad.time.monotonic", return_value=100.0):
+            self._dispatch("7", True)
+        with patch("openemux.core.ui_gamepad.time.monotonic", return_value=101.0):
+            self.nav._watch_tick(True)
+            self.nav._watch_tick(False)  # not suspended: nothing to watch
+        self.assertEqual(self.actions, ["pause_menu"])
+
+    def test_without_a_watch_callback_nothing_is_watched(self):
+        nav = GamepadNavigator(on_action=self.actions.append)
+        nav._dispatch("8", True, self.repeat, self.hold, True)
+        self.assertEqual(self.actions, [])

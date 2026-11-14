@@ -90,7 +90,8 @@ def make_held_reader(on_change, on_error=None, device=None):
     return GamepadHeldReader(on_change, on_error=on_error, device=device)
 
 
-def make_navigator(on_action, on_connected=None, on_disconnected=None, should_suspend=None):
+def make_navigator(on_action, on_connected=None, on_disconnected=None, should_suspend=None,
+                   watch_game=None):
     """The continuous reader that drives UI navigation."""
     if backend_name() == SDL2:
         return _sdl().SdlNavigator(
@@ -98,6 +99,7 @@ def make_navigator(on_action, on_connected=None, on_disconnected=None, should_su
             on_connected=on_connected,
             on_disconnected=on_disconnected,
             should_suspend=should_suspend,
+            watch_game=watch_game,
         )
     from openemux.core.ui_gamepad import GamepadNavigator
 
@@ -106,4 +108,5 @@ def make_navigator(on_action, on_connected=None, on_disconnected=None, should_su
         on_connected=on_connected,
         on_disconnected=on_disconnected,
         should_suspend=should_suspend,
+        watch_game=watch_game,
     )

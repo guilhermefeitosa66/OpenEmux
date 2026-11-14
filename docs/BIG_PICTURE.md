@@ -9,11 +9,12 @@ the desktop enlarged. It is a layout of its own, built the way the Android
 app looks when a controller is connected, so a player who uses both sees one
 product.
 
-Design canvas: the Claude Design project "Big Picture mode — OpenEmux
-desktop" (18 artboards: library, details, search, quick menu, settings in
-every section, capture, text entry, confirmations, import, covers, share,
-first start, welcome, light theme at 720p). This document records the
-decisions the canvas was drawn from and how the code carries them.
+Since issue 957 the layout follows the Android app's gamepad layout element
+by element: the analysis comment on that issue lists every Android element
+with its decision (port, adapt, drop) and the maintainer's four decisions
+(keep the clock, drop the quick menu, a pad-driven file browser for Import,
+Guide opens the pause menu). This document records how the code carries
+them.
 
 ## In and out
 
@@ -21,8 +22,8 @@ decisions the canvas was drawn from and how the code carries them.
 |---|---|
 | F11 | F11 |
 | The pad's Guide/Home/PS button | The same button |
-| The header-bar button (a screen icon, next to Search) | "Back to desktop" on the home page or in the quick menu |
-| Main menu › Big Picture | The quick menu's "Back to desktop" |
+| The header-bar button (a screen icon, next to Search) | Settings › "Back to desktop" |
+| Main menu › Big Picture | |
 | `openemux --big-picture` | |
 | Settings › System › "Start in Big Picture" | |
 
@@ -37,7 +38,7 @@ the accelerator is gone; the shortcuts window still lists F11.
 The desktop layout is never torn down. The window holds both layouts in a
 stack; entering the mode moves the window's page stack (the grids, the
 grouped pages, the empty states, the search's "no match" page) under the
-console rail and gives it back on the way out, so leaving lands on exactly
+games page's chips and gives it back on the way out, so leaving lands on exactly
 the desktop that was there, on the same page. Settings changed in either
 layout are the same config.
 
@@ -48,96 +49,88 @@ The pad means the same thing on every page:
 | Button | Everywhere | On the games |
 |---|---|---|
 | D-pad, left stick | Move the focus | Move between cards; Up/Down cross console groups on All |
-| A | Open / confirm / change | Play; hold for selection mode (issue #78) |
-| B | Back one level; never leaves the mode | Back to the rail / pop the page |
-| X | The page's secondary action | Game details |
-| Y | The page's other action | Favorite |
-| LB / RB | Previous / next console on the rail; sections in Settings; neighbouring game in details | Console groups on All |
+| A | Open / confirm / change | Show the game in the detail pane; hold for selection mode |
+| B | Back one level; on a tab's first page, back to the Library; never leaves the mode | Back to the Shelf (from the pane, back to the grid) |
+| X | The page's secondary action | Favorite |
+| Y | The page's other action (Order on the Shelf, Share in the pane) | The game's options |
+| LB / RB | The tabs, from a tab's first page; the games beside one on an expanded game | The console chips |
 | LT / RT | Shift on the text keyboard; range in selection mode | Range selection |
-| Start (Menu / Options / +) | Search: the on-screen keyboard | |
-| View (Select / Share / −) | The quick menu | |
-| Guide / Home / PS | Leave Big Picture | |
+| View (Select / Share / −) | Search: the on-screen keyboard | |
+| Menu (Start / Options / +) | Search (Done on the keyboard) | Multi-select |
+| Guide / Home / PS | Leave Big Picture; during a game, the pause menu | |
 
 With a keyboard: arrows, Enter, Escape as B, Tab and Shift+Tab as the
-shoulders, Alt+Enter as X, Ctrl+D as Y, Ctrl+F as Start, Menu as View, F11
-as Guide. Escape, like B, never leaves the mode: one Escape too many on the
-home page would otherwise drop a keyboard user back on the desktop. The hint bar always shows what the buttons do, with the letters of
-the pad in hand (Xbox, PlayStation, Nintendo or generic, or the keys when a
+shoulders, Ctrl+D as X, Alt+Enter as Y, Ctrl+F as View, Menu as Menu, F11
+as Guide. Escape, like B, never leaves the mode. The hint bar, centered as
+on Android, always shows what the buttons do, with the letters of the pad
+in hand (Xbox, PlayStation, Nintendo or generic, or the keys when a
 keyboard is driving); the confirm key is drawn filled in the accent.
 
-The contexts the navigator tells apart (`ui/navigation.py`): the home rows,
-the console rail, the games under the rail, a page of rows, the on-screen
-keyboard, plus the desktop's own dialog, popover and selection-mode
-contexts, which keep their behaviour. Dialogs that remain dialogs (share
-nearby, the incoming offer, the welcome tour, the import's "which console"
-question, every confirmation) are the desktop's, drawn bigger by the theme;
-in all of them A confirms, B closes, and a destructive answer is never the
-default.
+The contexts the navigator tells apart (`ui/navigation.py`): the Shelf,
+the games page, the detail pane, the tab rail, a page of rows, the
+on-screen keyboard, the grid and its multi-select, the file browser and the
+pause menu, plus the desktop's own dialog and popover contexts. Dialogs
+that remain dialogs (share nearby, the welcome tour, the import's "which
+console" question, every confirmation) are the desktop's, drawn bigger by
+the theme.
 
 ## The pages
 
-- **Home**: "Continue playing" (the last games launched, as wide cards),
-  "Consoles" (every scope the sidebar lists: All, Recently played,
-  Favorites, the playlists, the consoles with games) and "System" (search,
-  import, covers, share nearby, Settings, back to desktop). Up and Down move
-  between the rows, Left and Right within one.
-- **Library**: the console rail over the games. The rail is the sidebar on
-  its side, the current scope marked and centred; LB/RB step it from
-  anywhere on the page. Under it, the same page the desktop shows for that
-  scope, at a zoom floor of 150%, the focused card filled with the accent. The search keyboard slides up over the games and filters
-  them as the letters go in; Done lands on the first match.
-- **Game details**: a page, not a dialog. The cover and the save states on
-  the left; the title, the play caption and a column of rows on the right:
-  Continue/Play, Start fresh, Load a state, Favorite, Core, Shader,
-  Cartridge color, Playlists, Artwork, Rename, Share nearby, Remove.
-  LB/RB go to the neighbouring game.
-- **Settings**: two columns, the sections on the left (Library, BIOS, Input,
-  Video, Cores, System), the rows on the right. Every setting the desktop
-  dialog has, with the same effect: a switch flips in place, a choice opens
-  a full-page list and pops when picked, a text value opens the on-screen
-  keyboard, a number steps with Left/Right, and the console order and the
-  artwork providers are reordered with Left/Right on their rows. Big
-  Picture asks before the irreversible actions the desktop does not
-  (restore defaults, reset the mapping, import saves, sign out), because Y
-  and A are easy to press on a pad. The controller mapping keeps the
-  desktop's capture flow with three differences: every pad button is an
-  answer during a capture, so none can cancel it, and an 8-second
-  countdown, Escape or the Guide button do; cancelling never clears the
-  binding (A on a bound action offers Remap, Clear or Keep); and leaving
-  with unsaved bindings asks first.
-- **Import ROMs** and **Sync covers**: the options on the left, the live
-  progress on the right, so a pad user never meets the header-bar banner.
-  The quick menu offers to stop the running task.
-- **Quick menu** (View): search, import, covers, share, receive, rescan,
-  Settings, back to desktop, quit.
-- **First start** and the **welcome tour** keep their flows; in the mode the
-  first-boot window is fullscreen and scaled.
+- **The rail**: the app's logo, then Library, Recent, Import and Settings,
+  the tab on screen on an accent pill.
+- **Shelf** (the Library tab's first page): "Shelf", "N consoles · M
+  games", a "Search all consoles" field and "Import ROMs"; the task banners
+  (a running task with its progress, a newer release); then the cards three
+  to a row: All games, Favorites, the playlists, and one card per console
+  in the console's own color (`core/big_picture_shelf.py`, copied from
+  Android's `Console.kt`) with its art, short code, name and count.
+- **The games** of a scope, list-detail: on the left the back link, the
+  eyebrow, title and count, the console chips (LB/RB), the filter chips
+  with counts (`core/library_facets.py`), the view's name with the
+  Cartridges / Covers / List switch (Big Picture's own view, the desktop's
+  untouched), and the window's own page for the scope, borrowed; on the
+  right the detail pane.
+- **The detail pane** (`ui/bigpicture/details.py`): expand, favorite and
+  share; the art with "Search artwork…"; the title with its pencil; "Console
+  · Core · played"; Play (Continue with an automatic state); the save states;
+  Core, Shader (with a DEFAULT tag for the console's value), cartridge color
+  and playlists. Expanded, it is a page and LB/RB walk the games.
+- **Recent**: the last 12 games played, with their last state's screenshot.
+- **Import**: Choose files, Choose a whole folder (both open the pad file
+  browser: folders first, A enters or marks, X marks, Y imports, B goes up),
+  Receive games, and every console's accepted formats.
+- **Settings**: Android's list on the left (the BIOS card; Appearance,
+  Achievements, Artwork, one entry per console, Share nearby, General; Back
+  to desktop last), the chosen entry on the right. Every row calls what the
+  desktop dialog calls; Big Picture asks before the irreversible actions.
+- **The launch splash**: the game's art and "Starting <core>" until the
+  game's window takes the screen; a launch that fails says why there.
+- **The pause menu** (`ui/bigpicture/pause_menu.py`): the gesture is
+  watched by the pad reader during a game (`core/pause_trigger.py`; Guide by
+  default, or hold Start, Start + Select, L3 + R3, off); the game is paused
+  over the command channel and a full-screen window shows Continue, Restart,
+  Save and Load with the slot slider, See all, Fast forward, Slow motion,
+  Screenshot, Audio, RetroArch's menu and Quit (`core/pause_session.py`).
+  If the window cannot come to the front in two seconds, RetroArch's own
+  menu opens instead.
 
 ## Scale and theme
 
-Every size comes from one number: the window's height over 1080 (the canvas
-was drawn at 1080p) times the "Text size" setting (80–150%). GTK's CSS
-cannot multiply, so `ui/bigpicture/theme.py` generates the stylesheet and
-the shell reloads it when the window changes size, the setting moves or the
-theme flips. At 1080p: titles 40 px, rows 24/18 px, body and hints 22 px, a
-64 px hint bar, a title-safe inset of 96 px on the sides and 54 px above.
+Every size comes from one number: the window's height over 1080 times the
+"Text size" setting (80–150%). GTK's CSS cannot multiply, so
+`ui/bigpicture/theme.py` generates the stylesheet and the shell reloads it
+when the window changes size or the setting moves.
 
-The palette is the Android app's: its purple accent fills the focused item
-(a row, a tile, a card, a key), and only the focused item, so the primary
-row and the suggested buttons are drawn in the soft accent; the confirm key
-of the hint bar is the accent too; surfaces from libadwaita's named colours,
-so light and dark follow the app's theme setting. Focus is a filled
-background, never a ring: a ring drawn outside the item is clipped by the
-scrolled rows around it. The icons on the tiles have no fill of their own;
-the tile is their container.
+The palette is the Android app's dark one, always, whatever the desktop's
+theme (the style manager is forced dark while the mode is on and given back
+after). The controller focus is issue 951's: the focused item's background
+takes a deeper purple, nothing is drawn around it; art items (a card, a
+cartridge) sit on a plate of that tone.
 
 ## What stayed out, and why
 
-- A per-family icon set for the hints: the letters in keycaps are what the
-  Android app draws, and a font-independent glyph set is a separate piece
-  of artwork.
-- A file browser of its own for the import and the BIOS pickers: the GTK
-  file dialog is keyboard-navigable and the pad's directions are keys to
-  it; a second browser would be a second thing to maintain.
-- Remembering a Big Picture page across sessions: the mode opens on home,
-  and the library opens on the page the desktop had.
+- Skins, the skin editor and the touch controls: phone things.
+- The pause menu's Shader and Screens tiles: the command channel has no
+  verb to set a shader by path, and the desktop has no DS layout choice.
+- A live frame of the game behind the pause menu: grabbing one needs a
+  screenshot round trip through RetroArch.
