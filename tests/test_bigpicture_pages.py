@@ -115,10 +115,10 @@ class TheLibraryPageCorners(BigPictureCase):
         self.win.search_entry.set_text("")
         # No match on screen: the focus goes to the rail instead of a card.
         library.show_search()
-        with mock.patch.object(self.win, "_visible_grid", return_value=None):
+        with mock.patch.object(self.win, "_visible_grid", return_value=None), \
+                mock.patch.object(library.rail, "focus_current") as focus_current:
             library.hide_search()
-        self.assertTrue(self.pump_until(
-            lambda: (self.focus_widget() or library).is_ancestor(library.rail)))
+            self.assertTrue(self.pump_until(lambda: focus_current.called))
         # Typing with the bar closed opens it.
         self.win.search_button.set_active(False)
         library._on_search_typed("m")
