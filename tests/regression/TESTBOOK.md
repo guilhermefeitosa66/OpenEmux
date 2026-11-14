@@ -2356,12 +2356,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** A working core and ROM for at least one console.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Play for ~30 s, then close the game with the bar's power button.
+  2. Play for ~30 s, then close the game with the bar's quit button (a red door with an arrow).
 - **Expected:** The card shows a spinner over a dimmed cover from the click until RetroArch is up,
   and the window's banner reads "Starting <game>…" with a "Stop" button, then "Playing <game>"
   while the game runs (issue 904). The game opens in RetroArch's own window — **with its title bar
   and borders** — and the in-game bar sits across the bottom edge (RT-327). Sound plays, input
-  responds, and the power button ends the game and returns to the library cleanly: the banner
+  responds, and the quit button ends the game and returns to the library cleanly: the banner
   goes and a toast reads "Played <game> for N min" (the game's title, never the file name; no exit
   code when it is zero). No OpenEmux window wraps the game and no "game window" notice is shown
   (issue #469).
@@ -2394,18 +2394,74 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only. Known limit: a toggle flipped from the keyboard or RetroArch's menu does
   not change the bar's icon.
 
+### RT-1140 — The volume set in a game is where the next game starts
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session; note the modification time of the
+  RetroArch config OpenEmux launches with (`~/.config/retroarch/retroarch.cfg`, or the RetroArch
+  Flatpak's `~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg`).
+- **Steps:**
+  1. Start a game and click the bar's volume − four times. Quit the game.
+  2. Start any game (another console is fine) and click volume − once.
+  3. Quit the game, close OpenEmux entirely, reopen it and start a game; click volume − once.
+  4. Start a game, leave the volume alone, quit; start a game and click volume − once.
+- **Expected:** In 1, RetroArch's volume widget ends at −2.0 dB. In 2 the game starts at that
+  quieter level, and the widget shows −2.5 dB: it continues from where the last game stopped, not
+  from 0. In 3 it continues the same way after the restart (−3.0 dB). 4 changes nothing: the
+  widget shows −3.5 dB. The RetroArch config's modification time never changes (issue 939).
+- **Check:** human for the sound. The stored value and the launch argument:
+  `grep game_volume_db ~/.openemux/config.yaml` shows the last level, and the newest
+  `~/.openemux/runtime/runtime_*.cfg` carries `audio_volume = "<that level>"`. The read, the store
+  and the launch argument: `tests/test_retroarch_log.py`, `tests/test_runtime_manager.py`,
+  `tests/test_config_bootstrap_defaults.py`, `tests/test_retroarch_launcher.py`.
+- **Restore:** click volume + until the widget shows 0.0 dB, then quit the game.
+
+### RT-1141 — A game always starts unmuted
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Start a game, click the bar's mute button (it turns red), quit the game.
+  2. Start a game.
+- **Expected:** The game in 2 has sound, and the bar's mute button is in its normal, not red,
+  state. Mute is never carried from one game to the next, so no game starts silent without a sign
+  of why (issue 939).
+- **Check:** human for the sound. The newest `~/.openemux/runtime/runtime_*.cfg` carries
+  `audio_mute_enable = "false"`; suite: `tests/test_retroarch_launcher.py`.
+
+### RT-1144 — The in-game bar draws the same action glyphs as the Android app
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Look at the bar from left to right.
+  2. Click fast-forward, slow motion and turbo in turn, each twice.
+  3. Click mute twice.
+  4. Click save state, then load state.
+- **Expected:** Quit is a red door with an arrow pointing out (no power symbol), restart a
+  clockwise arrow, slow motion a dashed ring around a play triangle (no speedometer), fast-forward
+  two solid triangles, turbo a lightning bolt, save a floppy with a down arrow beside it and load
+  the same floppy with an up arrow (no dark disc behind the arrow), sound a speaker with a single
+  wave. Fast-forward, slow motion and turbo turn blue with the same glyph while on; muted is a red
+  tile with a crossed speaker; paused, pause becomes a blue solid play triangle. The glyphs match
+  the Android app's game screen (issue 944).
+- **Check:** human only; `tests/test_overlay_bar.py`
+  (`test_the_bar_draws_the_unified_action_glyphs`) pins the paths the PNGs are rendered from.
+
 ### RT-329 — Hiding the bar gives its space back to the game
 - **Area:** Launch
 - **Mode:** MANUAL
 - **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. Pause the game and mute it, then click the bar's down-chevron.
-  2. Click the faded up-chevron that appears in the bottom-right corner.
+  1. Pause the game and mute it, then click the bar's rightmost button, an eye with a slash.
+  2. Click the faded eye that appears in the bottom-right corner.
 - **Expected:** Hidden, the bar is gone, the game grows to the full height of the window, and only
-  a small faded button remains in the bottom-right corner (RetroArch says `Shader: "Controls
-  hidden.glslp"`). Shown again, the bar returns with its state intact — still paused (blue play),
-  still muted (red) — and the game shrinks back above it.
-- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`).
+  a small faded button with a plain eye remains in the bottom-right corner (RetroArch says
+  `Shader: "Controls hidden.glslp"`). Neither button is a chevron any more: the eye-slash hides,
+  the eye shows, as in the Android app (issue #938). Shown again, the bar returns with its state
+  intact — still paused (blue play), still muted (red) — and the game shrinks back above it.
+- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`)
+  and its `test_the_hide_and_show_buttons_draw_the_android_eye` for the two glyphs.
 
 ### RT-330 — A console's shader keeps its quality with the bar
 - **Area:** Launch
@@ -2496,7 +2552,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   repo) with RetroArch from Flathub (`org.libretro.RetroArch`); a game of any console.
 - **Steps:**
   1. Launch the game from the Flatpak OpenEmux.
-  2. Hide the bar with its down-chevron, then show it again.
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye.
 - **Expected:** The game opens with OpenEmux's bar on the bottom edge and the game above it, as
   in RT-327; hiding and showing behave as in RT-329. `~/.openemux/runtime/overlay/` holds
   `openemux-bar.cfg`, its PNGs and the margin shaders, and that is where the launch points
@@ -2512,7 +2568,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   on; a console with no shader and one with a shader (e.g. `dot` on GBA).
 - **Steps:**
   1. Launch a game on each console.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Turn the switch off again and launch one of the games.
 - **Expected:** With the switch on, the game fills the whole height of the window and the bar is
@@ -2535,7 +2591,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Open "Settings" → "Video": the "Game Window" group sits above "In-Game Bar". Launch a game, then
      quit it.
   2. Turn "Start games in fullscreen" on, close "Settings" and launch a game.
-  3. In that game, hide the bar with its down-chevron and show it again with the faded button; press
+  3. In that game, hide the bar with its eye-slash button and show it again with the faded eye; press
      the fullscreen hotkey (`F` by default) twice.
   4. Turn the switch off while the game is still running, quit the game and launch it again.
 - **Expected:** With the switch off the game opens in a decorated window. With it on, the game window
@@ -2572,7 +2628,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   "Simple"; the game window 16:9 (its default shape).
 - **Steps:**
   1. Launch the MD game.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Click every button on the bar: pause, reset, slow motion, fast-forward, turbo, save, load,
      mute, volume, fullscreen, menu, close.
@@ -2657,7 +2713,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   included) — what a stop signal reaches depends on how RetroArch was launched.
 - **Steps:**
   1. Launch a game and let it run until sound is playing.
-  2. Close it with the bar's power button; repeat with the window's "×".
+  2. Close it with the bar's quit button (a red door with an arrow); repeat with the window's "×".
   3. Each time, wait 5 s, then run `pgrep -af retroarch` in a terminal.
 - **Expected:** The window closes, the sound stops with it, and no RetroArch process is left
   behind — `pgrep` prints nothing. The library window is still there, with the "finished" toast.
@@ -16054,9 +16110,9 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
   4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
-  and does nothing on the empty slot; both carry the down and up arrow icons of the save and load
-  keys under the game (issue 881); there are no slot arrows (the slot slider and "See all" sit
-  under the row, RT-996). Step 2 says "State saved to slot N"
+  and does nothing on the empty slot; both carry the outlined floppy icons, with a down and an up
+  arrow, of the save and load keys under the game (issues 881 and 945); there are no slot arrows
+  (the slot slider and "See all" sit under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
   was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
   "Restart" are translated, "Save" and "Load" keep their icons, and no text is cut off.
@@ -16077,13 +16133,53 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
 - **Expected:** Step 1: under the header, two rows of two: "Continue" (purple) and "Restart", then
   "Save" with "Slot N · Empty" and "Load" (faded). The four buttons are the same width and height,
   with the same gap between the columns in both rows, so their left and right edges line up. "Save"
-  and "Load" show the same down and up arrow icons as the strip's save and load keys. Step 2: every
+  and "Load" show the same outlined floppy icons, with a down and an up arrow, as the strip's save
+  and load keys (issue 945). Step 2: every
   label is whole except, where it does not fit, the slot line under "Save", which ends in "…"; "Save"
   and "Load" always keep their icons ("Restart" may drop its icon in Tamil so the word fits). Step 3:
   the same layout in light. Step 4: the left column starts with the same grid.
 - **Check:** human only (`adb shell uiautomator dump`: the four buttons share two left edges and
   two right edges).
 
+
+### RT-1145 — Save and load are the desktop's outlined floppy, on the pause sheet and every skin
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone at about 360 dp wide, a game of a console with a bundled skin (Game Boy
+  Advance), its skin set to the console's own colours.
+- **Steps:**
+  1. Look at the save and load keys on the strip under the game, then open the in-game menu.
+  2. Turn the phone to landscape and look at the same keys.
+  3. In "Skin", pick the Game Boy Advance's "White", then "Clear blue", then "Dark", and look at the
+     keys each time.
+  4. Pick a drawn skin (one that is not a bundled package) and turn fast forward on.
+  5. Press the save key, play a few seconds, then press the load key.
+- **Expected:** Step 1: the save key shows a floppy disk with a down arrow at its bottom right, the
+  load key the same floppy with an up arrow; both are outlined, not solid, and the menu's "Save"
+  and "Load" buttons show the same two icons in their text colour, matching the desktop's in-game
+  bar. Steps 2 and 3: the floppies are legible at the keys' size on the console's colours, on the
+  light, the translucent and the dark shells, and each arrow stays clear of the floppy's outline. Step 4: the
+  drawn strip's save and load are the same outlined floppies; turbo, slow motion and the anchor look
+  as before and fast forward is still solid, its lit pill unchanged. Step 5: the state saves and
+  loads as before.
+- **Check:** human only.
+### RT-1146 — A skin copied before the floppy icons shows the floppy too
+- **Area:** Android — Skins
+- **Mode:** MANUAL
+- **Preconditions:** An install of 1.23.5 or earlier where a bundled skin was copied ("Create copy and
+  edit" on the Game Boy Advance's own colours) and that copy picked; one more copy whose save key
+  image was replaced with a picture of the player's own (template downloaded, `save.png` edited,
+  imported back). Then the app updated to this version.
+- **Steps:**
+  1. Start a Game Boy Advance game with the first copy and look at the save and load keys on the
+     strip under the game, in portrait and in landscape.
+  2. Open "Skin", look at the copy's thumbnail, then open it in the skin editor.
+  3. Pick the copy with the player's own save picture and start the game again.
+- **Expected:** Step 1: save and load show the outlined floppy with a down / up arrow, the same as
+  the bundled skin and the in-game menu, in the copy's icon colour; no arrow-only icon is left.
+  Step 2: the thumbnail and the editor show the same floppies. Step 3: the player's own save picture
+  is kept as it is (only the old stock arrows are replaced); load shows the floppy.
+- **Check:** human only.
 ### RT-974 — The menu opens under the game and stretches up by its handle
 - **Area:** Android — Pause sheet on a phone in portrait
 - **Mode:** MANUAL
@@ -17278,6 +17374,46 @@ has no Android device, so these are `MANUAL`.
   `test_a_launch_resumes_unless_told_to_start_fresh`), `tests/test_rom_context.py`
   (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
   `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).
+
+### RT-1142 — Recently played follows the library's view mode
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** games played on at least two consoles that have a cartridge (SNES, NES, N64,
+  GBA) and on one that has none (PlayStation); the global view mode is "Cartridge".
+- **Steps:**
+  1. Open "Recently played" and read the cards.
+  2. While on the page, switch the view mode from the header bar to "Cover", then to "List", then
+     back to "Cartridge".
+  3. Give "Recently played" a layout of its own ("List") from the page's view menu; open "All",
+     then come back.
+  4. Narrow the window to about 520 px wide.
+- **Expected:** 1: one grid in play order, newest first; every game is drawn in its own console's
+  cartridge (in the shell colour chosen for it), the cartridges of a row stand on the same line
+  right above their titles, and the PlayStation game shows its cover; the caption under each title
+  is still when and for how long (issue 942). 2: the page changes at once each time, the same way
+  "All" does, and keeps its order. 3: "Recently played" shows rows while "All" keeps the global
+  layout. 4: the grid reflows to fewer columns, nothing is clipped.
+- **Check:** suite files `tests/test_library_pages.py` (`TheRecentPageTests`),
+  `tests/test_cartridge_on_mixed_pages.py` (`OneGridInPlayOrderTests`),
+  `tests/test_rom_card_widget.py` (`ACartridgeOnAPageThatMixesConsolesTests`); human for the look
+  of the shelf.
+
+### RT-1143 — Recently played keeps only the 12 latest games
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with at least 13 games.
+- **Steps:**
+  1. Launch and quit 13 different games, one after the other. Open "Recently played" and read the
+     header count and the order.
+  2. Launch a game that is already on the page, the sixth from the top; quit it.
+  3. Open the details of the first game launched in step 1 (the one that is no longer listed).
+- **Expected:** 1: the header says "12 games"; the last game launched is first and the first
+  game launched is gone (issue 942). 2: that game moves to the first position and appears only
+  once; still 12 games. 3: its play count and play time are still shown; only the page is capped,
+  `~/.openemux/play_history.json` still has all 13 games.
+- **Check:** suite files `tests/test_play_history.py`
+  (`test_the_page_is_capped_at_twelve_but_the_history_is_not`), `tests/test_library_pages.py`
+  (`TheRecentPageTests`).
 
 ### RT-1040 — Launching answers at once, runs off the main thread, and speaks the player's language when it ends
 - **Area:** Launch

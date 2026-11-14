@@ -484,6 +484,7 @@ class RetroArchLauncher:
         overrides.update(self._shader_overrides(shader_path, shader_enabled))
         overrides.update(self._session_overrides(network_cmd_port))
         overrides.update(self._av_overrides())
+        overrides.update(self._volume_overrides())
         if video_driver:
             # The driver this core will make RetroArch switch to, started on
             # so nothing switches (see hw_driver).
@@ -768,6 +769,27 @@ class RetroArchLauncher:
             "ui_companion_start_on_boot": '"false"',
             "desktop_menu_enable": '"false"',
         }
+
+    def _volume_overrides(self):
+        """Start the game at the volume the last one ended at (issue 939).
+
+        The volume comes from the previous launch's log (see
+        RuntimeManager._remember_volume); with none remembered yet nothing is
+        named and the user's own retroarch.cfg value applies. Mute is never
+        carried over: RetroArch keeps it as runtime state without logging it,
+        a game must never start silent with no sign of why, and the bar's
+        mute button always starts on its unmuted page.
+
+        Launch-scoped like everything else in this file: ``--appendconfig``
+        with ``config_save_on_exit = false``, so a user's own RetroArch keeps
+        its own volume.
+        """
+        overrides = {"audio_mute_enable": '"false"'}
+        get_volume = getattr(self.config_manager, "get_game_volume_db", None)
+        volume = get_volume() if get_volume else None
+        if volume is not None:
+            overrides["audio_volume"] = f'"{volume:.1f}"'
+        return overrides
 
     def _av_overrides(self):
         """Which audio and video drivers RetroArch is told to use.
