@@ -417,6 +417,13 @@ class Segments(Gtk.Box):
         for button_id, button in self.buttons.items():
             _set_class(button, "bp-current", button_id == choice_id)
 
+    def focus_current(self):
+        """The pad arriving from below: the segment that is on, else the first."""
+        button = self.buttons.get(self.current)
+        if button is None:
+            button = next(iter(self.buttons.values()), None)
+        return button.grab_focus() if button is not None else False
+
 
 class Banner(Gtk.Button):
     """A task banner, Android's: an icon, the task, its progress, a chevron.

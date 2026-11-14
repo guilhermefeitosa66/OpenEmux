@@ -3799,9 +3799,23 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         is there (issue 957).
         """
         if self._big_picture and self.big_picture_shell is not None:
+            if self.selection_mode_active:
+                # Multi-select: A (Enter, a click) toggles the game, as on
+                # Android; it neither opens the pane nor leaves the mode
+                # (issue 957, QA round 1).
+                self._toggle_selected_rom(rom)
+                return
             self.big_picture_shell.show_game(rom)
             return
         self.on_launch_game(rom)
+
+    def _toggle_selected_rom(self, rom):
+        item = self._focused_rom_item()
+        grid = self.pages.grid_for(self.current_console)
+        if item is None or grid is None or item.rom.get("path") != rom.get("path"):
+            return
+        grid.toggle_item(item)
+        self.navigation.refresh_hints()
 
     def apply_input_changes_to_running_game(self):
         """Carry a saved remap into the running game (issue #129).

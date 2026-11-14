@@ -528,6 +528,16 @@ class NavigationController:
             if alt and keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter):
                 self.dispatch("favorite")
                 return True
+            # The arrows on the games go through the pad's table, so the
+            # keyboard and the pad cannot drift apart: Up from the top row
+            # leaves the grid for the controls above it (issue 957).
+            action = _ARROW_ACTIONS.get(keyval)
+            if action is not None and not state & (
+                Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.ALT_MASK
+            ):
+                if self.current_context() in (CTX_BP_GRID, CTX_BP_SELECTION):
+                    self.dispatch(action)
+                    return True
             # Tab and Shift+Tab are the keyboard's shoulders: the tabs, or
             # the console chips on the games page.
             if keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
@@ -809,6 +819,27 @@ class NavigationController:
                 return
         scope.child_focus(_GTK_DIRECTIONS[direction])
         self._cross_group_if_stuck(direction, focus)
+        self._leave_grid_up_if_stuck(direction, focus)
+
+    def _leave_grid_up_if_stuck(self, direction, previous_focus):
+        """Big Picture: Up from the games' top row reaches the controls above.
+
+        The grid view keeps the focus at its top row, so the D-pad never got
+        to the chips or the view switch (issue 957). Only when the move did
+        not land anywhere, and not in multi-select, which stays on the games.
+        """
+        if direction != "up" or not self._big_picture_on():
+            return
+        if getattr(self.window, "selection_mode_active", False):
+            return
+        if previous_focus is None or self._focus_widget() is not previous_focus:
+            return
+        node = previous_focus
+        while node is not None and not self._is_current_grid(node):
+            node = node.get_parent()
+        if node is None:
+            return
+        self.window.big_picture_shell.library.focus_above_grid()
 
     def _cross_group_if_stuck(self, direction, previous_focus):
         """Arrowing off the bottom of a group enters the next one (issue #384).

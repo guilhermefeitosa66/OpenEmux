@@ -431,7 +431,13 @@ class BigPictureShell(Gtk.Box):
 
     def _on_page_shown(self, page):
         if self._active and self.visible_page() is page:
-            page.on_shown()
+            if self.search_open:
+                # Search opened on the way here (View on the Shelf): the
+                # keyboard keeps the focus, or the page's own default takes
+                # it back from under the keyboard (issue 957, QA round 1).
+                self.osk.focus_first_key()
+            else:
+                page.on_shown()
             self.win.navigation.refresh_hints(force=True)
 
     def pop(self):
@@ -447,7 +453,9 @@ class BigPictureShell(Gtk.Box):
 
     def _focus_visible(self):
         page = self.visible_page()
-        if page is not None and self._active:
+        if self.search_open:
+            self.osk.focus_first_key()
+        elif page is not None and self._active:
             # Mid-transition a page cannot take the focus yet: the page's
             # ``shown`` (_on_page_shown) is the last word, so a miss here is
             # not retried -- a timed retry stole the focus from the user.

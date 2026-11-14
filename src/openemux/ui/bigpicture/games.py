@@ -446,6 +446,15 @@ class GamesPage(BigPage):
     def sync_banners(self):
         self.banners.sync()
 
+    def focus_above_grid(self):
+        """Up from the games' top row: the view switch, the nearest control above.
+
+        A grid view keeps the focus on its own top row, so without this the
+        chips, the switch and the search above the games were out of the
+        D-pad's reach (issue 957, QA round 1).
+        """
+        return self.segments.focus_current()
+
     def focus_default(self):
         grid = self.win.pages.grid_for(self.win.current_console)
         if grid is not None and grid.count() > 0:

@@ -638,6 +638,129 @@ class TheShellCorners(BigPictureCase):
         share.assert_called_once()
 
 
+@needs_display
+class TheFixesOfQaRoundOne(BigPictureCase):
+    """Issue 957, QA round 1: search from the Shelf, Up out of the grid, A in multi-select."""
+
+    def _games(self, console="FC"):
+        self.show()
+        self.shell.open_library(console)
+        self.pump()
+        grid = self.win.pages.grid_for(console)
+        self.pump_until(lambda: grid.card_for(grid.entries()[0]) is not None)
+        grid.focus_first_card()
+        self.pump()
+        return grid
+
+    def test_search_from_the_shelf_keeps_the_focus_on_the_keyboard(self):
+        self.show()
+        self.assertIs(self.shell.visible_page(), self.shell.shelf)
+        self.assertTrue(self.shell.open_search())
+        self.pump_until(lambda: self.shell.search_open)
+        self.pump()
+        # The page's ``shown`` comes last and must not take the focus back.
+        self.shell._on_page_shown(self.shell.library)
+        self.assertTrue(self.focus_widget().is_ancestor(self.shell.osk))
+        self.shell._focus_visible()
+        self.assertTrue(self.focus_widget().is_ancestor(self.shell.osk))
+        self.assertEqual(self.win.navigation.current_context(), navigation.CTX_BP_OSK)
+        # Closed, the page's default is back.
+        self.shell.hide_search()
+        self.pump()
+        with mock.patch.object(self.shell.library, "on_shown") as shown:
+            self.shell._on_page_shown(self.shell.library)
+        shown.assert_called_once_with()
+
+    def test_up_from_the_top_row_reaches_the_view_switch(self):
+        self._games()
+        nav = self.win.navigation
+        self.assertEqual(nav.current_context(), navigation.CTX_BP_GRID)
+        nav._cmd_move("up")
+        self.pump()
+        segments = self.shell.library.segments
+        self.assertTrue(self.focus_widget().is_ancestor(segments))
+        self.assertIs(self.focus_widget(), segments.buttons[segments.current])
+
+    def test_the_keyboard_arrows_on_the_games_go_through_the_pads_table(self):
+        self._games()
+        nav = self.win.navigation
+        with mock.patch.object(nav, "dispatch") as dispatch:
+            self.assertTrue(nav.handle_pane_key(Gdk.KEY_Up, 0))
+            # With a modifier, or off the games, they stay GTK's.
+            self.assertFalse(nav.handle_pane_key(Gdk.KEY_Up, Gdk.ModifierType.SHIFT_MASK))
+            self.shell.library.console_chips["FC"].grab_focus()
+            self.assertFalse(nav.handle_pane_key(Gdk.KEY_Down, 0))
+        dispatch.assert_called_once_with("up")
+
+    def test_leaving_the_grid_upward_only_when_stuck_on_the_games(self):
+        grid = self._games()
+        nav = self.win.navigation
+        focus = self.focus_widget()
+        with mock.patch.object(self.shell.library, "focus_above_grid") as above:
+            nav._leave_grid_up_if_stuck("down", focus)
+            nav._leave_grid_up_if_stuck("up", None)
+            # The move landed somewhere else.
+            nav._leave_grid_up_if_stuck("up", self.shell.library.back_button)
+            # Stuck, but not on the games.
+            chip = self.shell.library.console_chips["FC"]
+            chip.grab_focus()
+            nav._leave_grid_up_if_stuck("up", chip)
+            # Multi-select stays on the games.
+            grid.focus_first_card()
+            self.pump()
+            self.win.enter_selection_mode()
+            nav._leave_grid_up_if_stuck("up", self.focus_widget())
+            above.assert_not_called()
+            self.win.leave_selection_mode()
+            nav._leave_grid_up_if_stuck("up", self.focus_widget())
+            above.assert_called_once_with()
+            # Not in Big Picture: the desktop grid is left alone.
+            above.reset_mock()
+            with mock.patch.object(nav, "_big_picture_on", return_value=False):
+                nav._leave_grid_up_if_stuck("up", self.focus_widget())
+            above.assert_not_called()
+
+    def test_the_view_switch_takes_the_focus_on_its_current_segment(self):
+        from openemux.ui.bigpicture.widgets import Segments
+
+        segments = Segments([("a", "view-grid-symbolic", "A"), ("b", "view-list-symbolic", "B")],
+                            lambda _id: None)
+        with mock.patch.object(segments.buttons["a"], "grab_focus", return_value=True) as first, \
+                mock.patch.object(segments.buttons["b"], "grab_focus", return_value=True) as second:
+            self.assertTrue(segments.focus_current())  # none current yet: the first
+            segments.set_current("b")
+            self.assertTrue(segments.focus_current())
+        first.assert_called_once_with()
+        second.assert_called_once_with()
+        self.assertFalse(Segments([], lambda _id: None).focus_current())
+
+    def test_a_in_multi_select_toggles_the_game_and_stays(self):
+        grid = self._games()
+        item = self.win._focused_rom_item()
+        self.win.enter_selection_mode()
+        with mock.patch.object(self.shell, "show_game") as show:
+            self.win.on_grid_activate(item.rom)
+            self.assertEqual([r.get("path") for r in grid.selected_roms()], [item.rom.get("path")])
+            self.win.on_grid_activate(item.rom)
+            self.assertEqual(grid.selected_roms(), [])
+            # Another game than the focused one: nothing to toggle.
+            other = dict(item.rom, path="/elsewhere.nes")
+            self.win.on_grid_activate(other)
+            self.assertEqual(grid.selected_roms(), [])
+        show.assert_not_called()
+        self.assertTrue(self.win.selection_mode_active)
+        self.assertEqual(self.win.navigation.current_context(), navigation.CTX_BP_SELECTION)
+        # And from the keyboard: Enter on the card goes the same way.
+        with mock.patch.object(self.win, "_toggle_selected_rom") as toggle:
+            grid._last_activation = (None, 0)
+            grid._launch_rom(item.rom)
+        toggle.assert_called_once_with(item.rom)
+        # Nothing focused: nothing toggled.
+        with mock.patch.object(self.win, "_focused_rom_item", return_value=None):
+            self.win._toggle_selected_rom(item.rom)
+        self.assertEqual(grid.selected_roms(), [])
+
+
 class TheTheme(unittest.TestCase):
     def test_the_scale_follows_the_height_and_the_text_size(self):
         self.assertEqual(theme.scale_for(1080), 1.0)
