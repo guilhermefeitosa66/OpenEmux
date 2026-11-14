@@ -714,6 +714,24 @@ class TheFixesOfQaRoundOne(BigPictureCase):
             self.assertFalse(nav.handle_pane_key(Gdk.KEY_Down, 0))
         dispatch.assert_called_once_with("up")
 
+    def test_the_keyboard_arrows_walk_the_on_screen_keyboard_like_the_pad(self):
+        self._games()
+        nav = self.win.navigation
+        self.shell.show_search()
+        self.pump()
+        osk = self.shell.osk
+        osk.rows[0][0].grab_focus()
+        self.pump()
+        self.assertIs(self.focus_widget(), osk.rows[0][0])
+        self.assertTrue(nav.handle_pane_key(Gdk.KEY_Down, 0))
+        self.pump()
+        self.assertIs(self.focus_widget(), osk.rows[1][0])  # "1" -> "Q"
+        self.assertTrue(nav.handle_pane_key(Gdk.KEY_Left, 0))
+        self.pump()
+        self.assertIs(self.focus_widget(), osk.rows[1][-1])  # wraps to "P"
+        self.shell.hide_search()
+        self.pump()
+
     def test_leaving_the_grid_upward_only_when_stuck_on_the_games(self):
         grid = self._games()
         nav = self.win.navigation
