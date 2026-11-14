@@ -125,20 +125,20 @@ class TileAndRailTests(unittest.TestCase):
             label = tile.name_label
             self.assertFalse(label.get_wrap())
             self.assertTrue(label.get_single_line_mode())
-            self.assertEqual(label.get_ellipsize(), Pango.EllipsizeMode.END)
             self.assertEqual(tile.count_label.get_ellipsize(), Pango.EllipsizeMode.END)
-        # A wide tile asks for its whole name, so a strip cannot squeeze it...
-        self.assertEqual(wide.name_label.get_width_chars(), len("Compartilhar por perto"))
-        self.assertEqual(wide.name_label.get_max_width_chars(), widgets.TILE_NAME_CHARS)
+        # A wide tile's minimum is its whole name, so a strip cannot squeeze it...
+        self.assertEqual(wide.name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
         name_min, name_nat, _b, _bb = wide.name_label.measure(Gtk.Orientation.HORIZONTAL, -1)
         tile_min, _n, _b, _bb = wide.measure(Gtk.Orientation.HORIZONTAL, -1)
-        self.assertGreaterEqual(name_min, name_nat)
+        self.assertEqual(name_min, name_nat)
         self.assertGreater(tile_min, name_min)
         # ... up to a cap, past which it ellipsizes.
-        long_name = "x" * (widgets.TILE_NAME_CHARS + 10)
-        capped = Tile(long_name, wide=True)
+        capped = Tile("x" * (widgets.TILE_NAME_CHARS + 10), wide=True)
+        self.assertEqual(capped.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
         self.assertEqual(capped.name_label.get_width_chars(), widgets.TILE_NAME_CHARS)
-        self.assertEqual(Tile(None, wide=True).name_label.get_width_chars(), 0)
+        self.assertEqual(capped.name_label.get_max_width_chars(), widgets.TILE_NAME_CHARS)
+        self.assertEqual(Tile(None, wide=True).name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
+        self.assertEqual(tall.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
         # A tall tile's name never widens it: every console tile is one width.
         self.assertEqual(tall.name_label.get_max_width_chars(), 1)
         self.assertEqual(tall.count_label.get_max_width_chars(), 1)

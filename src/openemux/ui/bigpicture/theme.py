@@ -52,13 +52,16 @@ SIZES = {
     "key_height": 36,
     "tile_name": 20,
     "tile_count": 18,
-    "tile_width": 264,
+    "tile_width": 240,
+    # A wide tile (icon + name side by side) is as wide as its name; this is
+    # only its floor, so "Search" is not a stub next to "Share nearby".
+    "wide_tile_width": 200,
     "tile_height": 160,
     "rail_tile": 96,
     "badge": 72,
     # The icon box of a wide tile (icon + name side by side): smaller, so
     # the six System tiles fit across a screen in the longer locales.
-    "wide_badge": 52,
+    "wide_badge": 40,
     "dialog_heading": 36,
     "button": 24,
     "button_height": 68,
@@ -300,6 +303,7 @@ def stylesheet(scale=1.0, dark=True):
     font-weight: 700;
 }}
 .big-picture .bp-tile.bp-wide {{
+    min-width: {s('wide_tile_width')}px;
     min-height: {s('rail_tile')}px;
 }}
 .big-picture .bp-tile.bp-wide .bp-badge {{

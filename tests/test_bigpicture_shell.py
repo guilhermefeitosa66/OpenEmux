@@ -415,6 +415,7 @@ class TheTheme(unittest.TestCase):
         self.assertIn(".big-picture .bp-tile.bp-wide .bp-badge {", css)
         self.assertIn(f"min-width: {theme.SIZES['wide_badge']}px", css)
         self.assertLess(theme.SIZES["wide_badge"], theme.SIZES["badge"])
+        self.assertIn(f"min-width: {theme.SIZES['wide_tile_width']}px", css)
         self.assertEqual(theme.px("gap", 0.5), 8)
         self.assertEqual(theme.px("gap", 0.01), 1)
 

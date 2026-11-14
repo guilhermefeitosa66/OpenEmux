@@ -241,17 +241,20 @@ class Tile(Gtk.Button):
     @staticmethod
     def _single_line(label, wide, text):
         label.set_single_line_mode(True)
-        label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_xalign(0.0 if wide else 0.5)
-        if wide:
-            # Never narrower than the name itself (up to a cap): squeezed is
-            # what broke it. The row scrolls instead when it overflows.
-            label.set_width_chars(min(len(text or ""), TILE_NAME_CHARS))
-            label.set_max_width_chars(TILE_NAME_CHARS)
-        else:
-            # Never wider than the tile: every console tile is one width.
+        if not wide:
+            # Never wider than the tile: every console tile is one width, and
+            # a name longer than that ends in an ellipsis.
+            label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_max_width_chars(1)
             label.set_hexpand(True)
+        elif len(text or "") > TILE_NAME_CHARS:
+            # Past the cap a wide tile stops growing and ellipsizes.
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_width_chars(TILE_NAME_CHARS)
+            label.set_max_width_chars(TILE_NAME_CHARS)
+        # Otherwise not ellipsized at all, so the label's minimum is the whole
+        # name: squeezed is what broke it, and the row scrolls instead.
 
 
 def make_badge(text=None, texture=None, icon_name=None):
