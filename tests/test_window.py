@@ -2527,6 +2527,73 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.assertEqual(self.win.mode_stack.get_visible_child_name(), "desktop")
         self.assertEqual(self.win._zoom, 1.0)
 
+    def _toggle_big_picture_quietly(self):
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ):
+            return self.win.toggle_big_picture()
+
+    def test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back(self):
+        # Issue 953: the page on screen is rebuilt at 200% on the way in, in
+        # cover and cartridge view alike, and at the desktop's zoom on the
+        # way out; the saved zoom is never written.
+        for mode in ("cover", "cartridge"):
+            with self.subTest(mode=mode):
+                self.config.set_view_mode(mode)
+                self.config.set_zoom(0.75)
+                self.win.sidebar.select("SFC")
+                self.win._reload_current_page()
+                self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.75)
+                self.assertTrue(self._toggle_big_picture_quietly())
+                grid = self.win.pages.grid_for("SFC")
+                self.assertEqual(grid.zoom, window_module.BIG_PICTURE_ZOOM)
+                self.assertEqual(grid.zoom, 2.0)
+                self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.75)
+                self.assertFalse(self._toggle_big_picture_quietly())
+                self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.75)
+                self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.75)
+
+    def test_a_page_opened_in_big_picture_follows_the_mode_both_ways(self):
+        self.config.set_zoom(1.25)
+        self.win.sidebar.select("SFC")
+        self._toggle_big_picture_quietly()
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.pages.grid_for("FC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self._toggle_big_picture_quietly()
+        self.win.sidebar.select("SFC")
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.pages.grid_for("FC").zoom, 1.25)
+
+    def test_a_scope_with_its_own_zoom_still_gets_big_pictures(self):
+        self.config.set_scope_display("SFC", "zoom", 0.5)
+        self.win.sidebar.select("SFC")
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.5)
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.5)
+
+    def test_starting_in_big_picture_opens_the_games_at_its_zoom(self):
+        self.config.set_zoom(1.0)
+        self.win.sidebar.select("SFC")
+        with mock.patch.object(self.win, "fullscreen"):
+            self.assertEqual(self.win._enter_big_picture_at_start(), GLib.SOURCE_REMOVE)
+        self.assertTrue(self.win.big_picture)
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, 1.0)
+
+    def test_the_big_picture_layout_is_a_copy_of_the_saved_one(self):
+        self.config.set_zoom(1.0)
+        self.win._big_picture = True
+        try:
+            settings = self.win.display_settings_for("SFC")
+        finally:
+            self.win._big_picture = False
+        self.assertEqual(settings["zoom"], window_module.BIG_PICTURE_ZOOM)
+        self.assertEqual(self.win.display_settings_for("SFC")["zoom"], 1.0)
+        self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 1.0)
+
     def test_escape_in_big_picture_is_b_and_never_leaves_the_mode(self):
         with mock.patch.object(self.win, "fullscreen"), mock.patch.object(self.win, "unfullscreen"):
             self.win.toggle_big_picture()

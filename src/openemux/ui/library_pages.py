@@ -460,8 +460,9 @@ class LibraryPages:
         win = self.win
         page = self._pages[console]
         scroll = page.scroll
-        # Each page follows its own scope's layout, not the one on screen now.
-        display_settings = win.config_manager.get_display_settings(console)
+        # Each page follows its own scope's layout, not the one on screen now
+        # -- at Big Picture's zoom while the mode is on (issue 953).
+        display_settings = win.display_settings_for(console)
         if console == RECENT_ID:
             # The page's whole point is the order: the last game first.
             display_settings = dict(display_settings, sort_order=SORT_RECENTLY_PLAYED)

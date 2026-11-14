@@ -1078,9 +1078,21 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     # the owner; the actions are a view of it, synced in one place
     # (_refresh_scope_settings); nothing else holds a copy.
 
+    def display_settings_for(self, scope):
+        """The layout a page of ``scope`` is built with.
+
+        The scope's saved layout, except while Big Picture is on: then the
+        zoom is ``BIG_PICTURE_ZOOM`` whatever was saved (issue 953). A copy,
+        so the saved settings are never touched by the override.
+        """
+        settings = dict(self.config_manager.get_display_settings(scope))
+        if getattr(self, "_big_picture", False):
+            settings["zoom"] = BIG_PICTURE_ZOOM
+        return settings
+
     @property
     def _display_settings(self):
-        return self.config_manager.get_display_settings(self._current_scope())
+        return self.display_settings_for(self._current_scope())
 
     @property
     def _view_mode(self):
@@ -1088,8 +1100,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
 
     @property
     def _zoom(self):
-        if getattr(self, "_big_picture", False):
-            return BIG_PICTURE_ZOOM
         return self._display_settings["zoom"]
 
     @property
