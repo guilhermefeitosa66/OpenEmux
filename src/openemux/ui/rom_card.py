@@ -124,17 +124,17 @@ class RomEntry(GObject.Object):
         self.composite_pixbuf_key = None
 
 
-def entry_matches(entry, query=(), only_missing_artwork=False, extra=None):
+def entry_matches(entry, query=(), only_missing_artwork=False, facet_predicate=None):
     """Whether a ROM survives the search box and the "no artwork" filter.
 
     ``query`` is the parsed query (``library_search.parse_query``): words in
     any order, each a substring of the entry's folded name (issue 906).
-    ``extra`` is one more predicate over the ROM dict: Big Picture's filter
-    chips (issue 957).
+    ``facet_predicate`` is one more predicate over the ROM dict: Big
+    Picture's filter chips (issue 957).
     """
     if query and not matches(query, entry.search_name):
         return False
-    if extra is not None and not extra(entry.rom):
+    if facet_predicate is not None and not facet_predicate(entry.rom):
         return False
     if only_missing_artwork and entry.has_artwork is not False:
         # `None` means the fetch has not resolved yet: hide it rather than

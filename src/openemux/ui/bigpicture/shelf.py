@@ -122,7 +122,7 @@ class ShelfPage(BigPage):
     # -- the cards ----------------------------------------------------------------
     def refresh(self):
         """Rebuild the cards from the library as it is now."""
-        win, t = self.win, self.win.t
+        t = self.win.t
         child = self.grid.get_first_child()
         while child is not None:
             following = child.get_next_sibling()

@@ -1,6 +1,5 @@
 """The pieces Big Picture's pages are made of (issues 914, 957)."""
 
-import time
 import unittest
 from unittest import mock
 

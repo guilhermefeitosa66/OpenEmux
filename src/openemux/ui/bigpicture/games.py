@@ -203,7 +203,7 @@ class GamesPage(BigPage):
 
     def sync(self):
         """Rebuild the chips when the scopes changed; mark the current one; recount."""
-        win, t = self.win, self.win.t
+        win = self.win
         ids = self.chip_scopes()
         if ids != self._chip_ids:
             child = self.chips_box.get_first_child()
