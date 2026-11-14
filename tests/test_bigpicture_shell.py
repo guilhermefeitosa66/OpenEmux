@@ -196,7 +196,7 @@ class TheShelf(BigPictureCase):
         self.pump()
         slug = self.win.collection_manager.create("Couch")
         self.win.collection_manager.add(slug, [self.rom("SFC")["path"]])
-        self.win._after_collection_changed(slug)
+        self.win.refresh_library()
         self.pump()
         shelf = self.shell.shelf
         shelf.refresh()
@@ -235,6 +235,22 @@ class TheShelf(BigPictureCase):
         # With no consoles, the Import button takes the focus.
         with mock.patch.object(shelf, "cards", []):
             self.assertTrue(shelf.focus_default() is not None)
+
+    def test_recently_played_has_a_tab_not_a_card(self):
+        self.win.play_history.record_launch(self.rom("SFC")["path"])
+        self.win.refresh_library()
+        self.pump()
+        self.assertIn(RECENT_ID, self.shell.library_scopes())
+        self.shell.shelf.refresh()
+        self.assertNotIn(RECENT_ID, [card.scope_id for card in self.shell.shelf.cards])
+        self.assertEqual(self.shell.game_count(RECENT_ID), 1)
+
+    def test_a_pad_connecting_reaches_the_shell(self):
+        with mock.patch.object(self.shell, "sync_status") as sync:
+            self.win.navigation.on_gamepad_connected("Pad")
+        sync.assert_called()
+        self.leave()
+        self.shell.on_library_changed()  # inert while the mode is off
 
     def test_counts_and_hints(self):
         shell = self.shell

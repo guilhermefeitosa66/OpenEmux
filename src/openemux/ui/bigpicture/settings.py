@@ -361,12 +361,6 @@ class UnavailableSection(Section):
 class LibrarySection(Section):
     name = "library"
 
-    def _build(self):
-        self._build_folder()
-        self._build_maintenance()
-        self._build_order()
-        self._build_artwork()
-
     def _build_folder(self):
         t, config, win = self.t, self.config, self.win
         folder = self.group(t("prefs.group.roms_folder"))
@@ -1571,7 +1565,6 @@ class SettingsPage(BigPage):
             self.stack.add_named(section.widget, section.name)
         self._build_entries()
         self.connect("showing", self._on_showing)
-        shell.nav.connect("popped", self._on_nav_popped)
 
     # -- the left column --------------------------------------------------------------------
     def _build_entries(self):
@@ -1751,11 +1744,6 @@ class SettingsPage(BigPage):
             self._mark_current()
         else:
             self.stack.set_visible_child_name("empty")
-
-    def _on_nav_popped(self, _nav, page):
-        # Popped itself with a child's return still pending: the next open is a fresh one.
-        if page is self:
-            self._returning = False
 
     def retranslate(self):
         """The language changed: every label on the page is built again."""

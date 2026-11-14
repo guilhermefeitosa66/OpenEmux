@@ -294,6 +294,8 @@ class ThePauseMenu(BigPictureCase):
         (states / f"{Path(self.rom_['path']).stem}.state5").write_text("x")
         menu.see_all_button.emit("clicked")
         self.assertEqual(len(menu.state_rows), 1)
+        menu.show_states()  # rebuilt over its rows
+        self.assertEqual(len(menu.state_rows), 1)
         menu.state_rows[0].emit("clicked")
         self.assertIn("LOAD_STATE_SLOT 5", self.sent)
         self.assertFalse(self.win.pause_menu_open)

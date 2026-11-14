@@ -275,6 +275,10 @@ class ThePage(SettingsCase):
         self.shell.open_settings()
         self.pump()
         self.assertFalse(page._returning)
+        # Coming back from a chooser lands on the row it left.
+        page._focus_row = row
+        self.assertTrue(page.focus_default())
+        self.assertIs(self.focus_widget(), row)
         # A row that is gone is no place to land: the entry on the list is.
         page._focus_row = Row("gone")
         self.assertTrue(page.focus_default())

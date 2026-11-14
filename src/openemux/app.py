@@ -312,7 +312,6 @@ class OpenEmuxApplication(Adw.Application):
         """
         from gi.repository import Gdk
 
-        from openemux.ui import theming
         from openemux.ui.bigpicture import theme
 
         window.add_css_class("big-picture")
@@ -324,7 +323,8 @@ class OpenEmuxApplication(Adw.Application):
             height = monitors.get_item(0).get_geometry().height
         text_size = self.config_manager.get_big_picture_settings()["text_size"]
         provider = Gtk.CssProvider()
-        provider.load_from_string(theme.stylesheet(theme.scale_for(height, text_size), theming.is_dark()))
+        # Always dark, as Big Picture is (issue 957).
+        provider.load_from_string(theme.stylesheet(theme.scale_for(height, text_size)))
         Gtk.StyleContext.add_provider_for_display(
             display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
         )
