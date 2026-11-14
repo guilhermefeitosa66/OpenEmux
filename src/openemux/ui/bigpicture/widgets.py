@@ -213,7 +213,6 @@ class Tile(Gtk.Button):
         box.append(self.badge)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         text.set_valign(Gtk.Align.CENTER)
-        text.set_hexpand(not wide)
         # One line, never wrapped: a wrapping label's minimum is a few
         # characters, a strip wider than the screen hands every tile its
         # minimum, and Pango then broke the words ("Bu-scar", issue 955).
@@ -246,8 +245,10 @@ class Tile(Gtk.Button):
             # Never wider than the tile: every console tile is one width, and
             # a name longer than that ends in an ellipsis.
             label.set_ellipsize(Pango.EllipsizeMode.END)
+            # No hexpand: the vertical box already gives the label the tile's
+            # width, and an expanding child makes the tile expand too, so a
+            # short Consoles row would stretch its tiles across the screen.
             label.set_max_width_chars(1)
-            label.set_hexpand(True)
         elif len(text or "") > TILE_NAME_CHARS:
             # Past the cap a wide tile stops growing and ellipsizes.
             label.set_ellipsize(Pango.EllipsizeMode.END)

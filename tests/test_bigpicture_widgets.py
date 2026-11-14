@@ -142,7 +142,9 @@ class TileAndRailTests(unittest.TestCase):
         # A tall tile's name never widens it: every console tile is one width.
         self.assertEqual(tall.name_label.get_max_width_chars(), 1)
         self.assertEqual(tall.count_label.get_max_width_chars(), 1)
-        self.assertTrue(tall.name_label.get_hexpand())
+        # ... and never stretches it: a short Consoles row keeps 240 px tiles.
+        self.assertFalse(tall.compute_expand(Gtk.Orientation.HORIZONTAL))
+        self.assertFalse(wide.compute_expand(Gtk.Orientation.HORIZONTAL))
         self.assertEqual(tall.badge.get_halign(), Gtk.Align.CENTER)
         self.assertEqual(wide.badge.get_halign(), Gtk.Align.START)
         short_min, _n, _b, _bb = Tile("Todos", badge="REC").measure(Gtk.Orientation.HORIZONTAL, -1)
