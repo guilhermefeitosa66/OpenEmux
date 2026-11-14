@@ -69,7 +69,10 @@ class QuickMenuDialog(Adw.Dialog):
         for index, (entry_id, name, subtitle, style) in enumerate(
             quick_menu_entries(self.t, stop_label)
         ):
-            tile = Tile(name, subtitle, style=style, wide=True, icon_name=ICONS.get(entry_id))
+            # The dialog is one width, so the names ellipsize inside the grid
+            # rather than widen it (issue 955).
+            tile = Tile(name, subtitle, style=style, wide=True, icon_name=ICONS.get(entry_id),
+                        fit_name=False)
             tile.entry_id = entry_id
             tile.on_activate = lambda entry_id=entry_id: self._choose(entry_id)
             grid.attach(tile, index % COLUMNS, index // COLUMNS, 1, 1)

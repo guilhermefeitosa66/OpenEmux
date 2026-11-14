@@ -18756,3 +18756,25 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Expected:** 1–2: the app opens in Big Picture and the game grid is at 200% from the first page,
   with no zoom change needed. 3: the desktop is at 100%, the zoom it had before.
 - **Check:** suite file `tests/test_window.py` (`test_starting_in_big_picture_opens_the_games_at_its_zoom`).
+
+### RT-1179 — Big Picture home tile names stay on one line
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least five consoles; locale pt_BR
+  (Settings › System › "Idioma").
+- **Steps:**
+  1. `make devbox-res RES=2560x1440`, open the home page; `make devbox-shot OUT=$SCRATCH/bp-home-1440.png`.
+  2. `make devbox-res RES=1920x1080`; `make devbox-shot OUT=$SCRATCH/bp-home-1080.png`.
+  3. Switch the locale to Français and to Español; capture the home page each time.
+  4. Big Picture Settings › "Text size" at the maximum; walk the "Sistema" row to its last tile.
+  5. Press Menu to open the quick menu.
+- **Expected:** 1 and 2: the "Sistema" row reads "Buscar", "Importar ROMs", "Sincronizar capas",
+  "Compartilhar por perto", "Configurações", "Voltar ao desktop", each an icon and one line of
+  text, all six side by side; in "Consoles", "Jogados recentemente", "Game Boy Advance" and
+  "Super Nintendo" are on one line, and every console tile has the same width. No word anywhere is
+  split with a hyphen and no name is cut mid-letter. 3: the same; a name too long for its tile ends
+  in "…". 4: the names stay whole; the row scrolls with the focus instead of squeezing the tiles.
+  5: the quick menu tile names are on one line, none hyphenated.
+- **Check:** suite files `tests/test_bigpicture_widgets.py`
+  (`test_a_tile_name_stays_on_one_line_and_never_breaks_a_word`), `tests/test_bigpicture_shell.py`
+  (`test_the_stylesheet_is_scoped_and_scaled`); the screenshots show no hyphenated word.

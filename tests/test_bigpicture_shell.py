@@ -411,6 +411,11 @@ class TheTheme(unittest.TestCase):
         self.assertIn(f"font-size: {theme.SIZES['title'] * 2}px", light)
         self.assertIn(theme.ACCENT_TEXT_LIGHT, light)
         self.assertNotIn(theme.ACCENT_TEXT_DARK, light)
+        # Issue 955: a wide tile's icon box is its own, smaller size.
+        self.assertIn(".big-picture .bp-tile.bp-wide .bp-badge {", css)
+        self.assertIn(f"min-width: {theme.SIZES['wide_badge']}px", css)
+        self.assertLess(theme.SIZES["wide_badge"], theme.SIZES["badge"])
+        self.assertIn(f"min-width: {theme.SIZES['wide_tile_width']}px", css)
         self.assertEqual(theme.px("gap", 0.5), 8)
         self.assertEqual(theme.px("gap", 0.01), 1)
 

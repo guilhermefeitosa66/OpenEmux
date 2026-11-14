@@ -11,7 +11,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, GLib, Gtk
+    from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
     Adw.init()
 
@@ -115,6 +115,50 @@ class TileAndRailTests(unittest.TestCase):
         self.assertIsInstance(picture, Gtk.Picture)
         self.assertEqual(widgets.console_badge_text("vectrex"), "VECT")
         self.assertEqual(widgets.console_badge_text(None), "")
+
+    def test_a_tile_name_stays_on_one_line_and_never_breaks_a_word(self):
+        # Issue 955: wrapped names were squeezed to a few characters and
+        # Pango hyphenated them ("Bu-scar", "Compartilh-ar por perto").
+        wide = Tile("Compartilhar por perto", icon_name="send-to-symbolic", wide=True)
+        tall = Tile("Jogados recentemente", "3 jogos", badge="REC")
+        for tile in (wide, tall):
+            label = tile.name_label
+            self.assertFalse(label.get_wrap())
+            self.assertTrue(label.get_single_line_mode())
+            self.assertEqual(tile.count_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        # A wide tile's minimum is its whole name, so a strip cannot squeeze it...
+        self.assertEqual(wide.name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
+        name_min, name_nat, _b, _bb = wide.name_label.measure(Gtk.Orientation.HORIZONTAL, -1)
+        tile_min, _n, _b, _bb = wide.measure(Gtk.Orientation.HORIZONTAL, -1)
+        self.assertEqual(name_min, name_nat)
+        self.assertGreater(tile_min, name_min)
+        # ... up to a cap, past which it ellipsizes.
+        capped = Tile("x" * (widgets.TILE_NAME_CHARS + 10), wide=True)
+        self.assertEqual(capped.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        self.assertEqual(capped.name_label.get_width_chars(), widgets.TILE_NAME_CHARS)
+        self.assertEqual(capped.name_label.get_max_width_chars(), widgets.TILE_NAME_CHARS)
+        self.assertEqual(Tile(None, wide=True).name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
+        self.assertEqual(tall.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        # In a fixed grid (the quick menu) the grid sets the width instead.
+        gridded = Tile("Synchroniser les jaquettes", "x", wide=True, fit_name=False)
+        self.assertEqual(gridded.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        self.assertEqual(gridded.name_label.get_max_width_chars(), 1)
+        # A gridded tile with no count fills its cell instead of shrinking
+        # its name to the ellipsis ("Quit OpenEmux" in the quick menu).
+        alone = Tile("Quitter OpenEmux", wide=True, fit_name=False)
+        self.assertEqual(alone.get_child().get_halign(), Gtk.Align.FILL)
+        self.assertEqual(wide.get_child().get_halign(), Gtk.Align.START)
+        # A tall tile's name never widens it: every console tile is one width.
+        self.assertEqual(tall.name_label.get_max_width_chars(), 1)
+        self.assertEqual(tall.count_label.get_max_width_chars(), 1)
+        # ... and never stretches it: a short Consoles row keeps 240 px tiles.
+        self.assertFalse(tall.compute_expand(Gtk.Orientation.HORIZONTAL))
+        self.assertFalse(wide.compute_expand(Gtk.Orientation.HORIZONTAL))
+        self.assertEqual(tall.badge.get_halign(), Gtk.Align.CENTER)
+        self.assertEqual(wide.badge.get_halign(), Gtk.Align.START)
+        short_min, _n, _b, _bb = Tile("Todos", badge="REC").measure(Gtk.Orientation.HORIZONTAL, -1)
+        long_min, _n, _b, _bb = tall.measure(Gtk.Orientation.HORIZONTAL, -1)
+        self.assertEqual(short_min, long_min)
 
     def test_rail_entries_by_scope_kind(self):
         self.assertEqual(widgets.rail_entry_for_scope(ALL_CONSOLES_ID, "All", "all")[5], "bp-all")
