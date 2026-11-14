@@ -18209,7 +18209,7 @@ games, and every setting of the desktop dialog as rows a D-pad walks. `docs/BIG_
 records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, send F11 by keycode
 (`make devbox-xdo CMD='key 95'`): `xdotool key F11` arrives as Alt+F11 on its Xvnc.
 
-### RT-1140 — F11 is taken in the capture phase, and three other ways in exist
+### RT-1147 — F11 is taken in the capture phase, and three other ways in exist
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** the devbox running the app from this checkout.
@@ -18228,7 +18228,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_the_capture_handler_takes_escape_only_in_big_picture`); the app log says `big picture: on`
   once per press (`make devbox-app ACTION=log`).
 
-### RT-1141 — The home page: continue playing, the consoles, the system row
+### RT-1148 — The home page: continue playing, the consoles, the system row
 - **Area:** Navigation
 - **Mode:** AUTO-UI
 - **Preconditions:** the devbox with the synthetic library and a game played at least once.
@@ -18241,12 +18241,13 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   holds All, Recently played, Favorites (when they exist), each playlist and each console with
   games, with its icon and count; "System" holds Search, Import ROMs, Sync covers, Share nearby,
   Settings and Back to desktop. The focus starts on the first continue card (or the first console
-  tile). 2: the ring is on a system tile, with its halo and lift. 3: the tile's action runs
+  tile). 2: the focused system tile is filled with the purple accent, its icon and name in white,
+  with no ring around it. 3: the tile's action runs
   (Search opens the library with the keyboard; Settings the settings page).
 - **Check:** suite file `tests/test_bigpicture_shell.py` (`TheHomePage`), `tests/test_bigpicture_pages.py`
-  (`ContinueCards`); the screenshots show the three rows and the ring.
+  (`ContinueCards`); the screenshots show the three rows and the filled tile.
 
-### RT-1142 — The console rail replaces the sidebar
+### RT-1149 — The console rail replaces the sidebar
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a library with three or more consoles.
@@ -18266,7 +18267,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_bigpicture_pages.py` (`TheLibraryPageCorners`), `tests/test_bigpicture_widgets.py`
   (`TileAndRailTests`).
 
-### RT-1143 — The search keyboard slides over the games
+### RT-1150 — The search keyboard slides over the games
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a console with several games.
@@ -18285,7 +18286,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_the_search_sheet_types_into_the_search_box`), `tests/test_bigpicture_pages.py`
   (`test_the_search_sheet_toggles_and_respects_a_disabled_search`).
 
-### RT-1144 — The quick menu is the View button's page of everything else
+### RT-1151 — The quick menu is the View button's page of everything else
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; a cover sync running for step 3.
@@ -18301,7 +18302,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   mode; the second quits the app.
 - **Check:** suite file `tests/test_bigpicture_shell.py` (`TheQuickMenu`).
 
-### RT-1145 — The hint bar always says what the buttons do
+### RT-1152 — The hint bar always says what the buttons do
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on, no pad connected; then a pad.
@@ -18315,7 +18316,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   hints. The desktop's own hint slots stay empty while the mode is on and come back after it.
 - **Check:** suite file `tests/test_bigpicture_shell.py` (`TheNavigatorInBigPicture`).
 
-### RT-1146 — Everything scales with the window and the text size
+### RT-1153 — Everything scales with the window and the text size
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on.
@@ -18332,7 +18333,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `test_the_stylesheet_is_released_when_the_window_closes`), `tests/test_bigpicture_pages.py`
   (`test_the_scale_falls_back_to_the_monitor_and_then_the_design`).
 
-### RT-1147 — Leaving the mode lands on the desktop exactly as it was
+### RT-1154 — Leaving the mode lands on the desktop exactly as it was
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** the desktop on a console page at 100% zoom with the sidebar shown.
@@ -18347,7 +18348,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite files `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
   `tests/test_window.py` (`test_escape_in_big_picture_is_b_and_never_leaves_the_mode`).
 
-### RT-1148 — Big Picture Settings › Input: the desktop's Input page as rows
+### RT-1155 — Big Picture Settings › Input: the desktop's Input page as rows
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; Settings open on "Input".
@@ -18361,7 +18362,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   with "Core default", "SNES Joypad", "SNES Mouse", "Multitap".
 - **Check:** suite file `tests/test_bigpicture_input.py` (`TheRows`).
 
-### RT-1149 — Capturing a binding takes the screen and the pad, and ends on its own
+### RT-1156 — Capturing a binding takes the screen and the pad, and ends on its own
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Settings › Input on "SFC", keyboard device.
@@ -18375,7 +18376,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   still says "z".
 - **Check:** suite file `tests/test_bigpicture_input.py` (`KeyboardCapture`).
 
-### RT-1150 — Escape, the Guide button and "Clear binding" are different things
+### RT-1157 — Escape, the Guide button and "Clear binding" are different things
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Settings › Input on "SFC"; a pad for step 2.
@@ -18391,7 +18392,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_window.py` (`test_the_capture_handler_takes_escape_only_in_big_picture`: the window's
   own Escape handler stands aside during a capture).
 
-### RT-1151 — X maps every control in turn, Y asks before resetting
+### RT-1158 — X maps every control in turn, Y asks before resetting
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Settings › Input on "SFC".
@@ -18407,7 +18408,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite file `tests/test_bigpicture_input.py` (`MapAll`,
   `test_reset_asks_first_and_then_restores_the_defaults`).
 
-### RT-1152 — Save reaches the running game of this console, and leaving asks about unsaved changes
+### RT-1159 — Save reaches the running game of this console, and leaving asks about unsaved changes
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a game running (SNES) for step 1.
@@ -18420,7 +18421,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   as the destructive answer; Cancel stays, Discard leaves and drops the change.
 - **Check:** suite file `tests/test_bigpicture_input.py` (`SavingAndResetting`).
 
-### RT-1153 — A game's details is a page: the cover, the save states, the rows
+### RT-1160 — A game's details is a page: the cover, the save states, the rows
 - **Area:** Navigation
 - **Mode:** AUTO-UI
 - **Preconditions:** Big Picture on in the devbox; a game with a cover and two save states, one
@@ -18433,16 +18434,16 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Expected:** 1: the page reads "<console> › <game>"; the cover on the left with up to three
   tiles under it ("Continue / Automatic save" when the game resumes, then "Slot N" with its date
   and screenshot); on the right the title, "<console> · Never played" (or when and for how long),
-  then the rows "Continue" (or "Play") as the accent row with the focus, "Start fresh" (only when
+  then the rows "Continue" (or "Play") in the soft accent, with the focus (filled solid purple), "Start fresh" (only when
   resuming), "Load state" ("N saved", or greyed "No save states yet"), "Favorite", "Settings for
   this game" (Core, Shader, "Cartridge color" only where the console has two or more shells),
   "Library and file" (Playlists, Artwork, "Rename…", "Share Nearby…", "Delete ROM…" in red) and the
   file path; the hints read A Choose · B Back · Y Favorite · LB/RB Previous / next game. 2: the
   page reloads in place for the next game of the grid, wrapping at the end. 3: back on the grid.
 - **Check:** suite file `tests/test_bigpicture_details.py` (`ThePage`, `TheShoulders`); the
-  screenshots show the two columns and the ring on the accent row.
+  screenshots show the two columns and the focused row filled with the accent.
 
-### RT-1154 — Continue, Start fresh and the save states launch the game
+### RT-1161 — Continue, Start fresh and the save states launch the game
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a game with an automatic state and the slots 0 and 3 saved; "Resume where I
@@ -18460,7 +18461,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_play_continue_and_start_fresh_follow_the_automatic_state`,
   `test_save_states_become_tiles_and_a_chooser`).
 
-### RT-1155 — The per-game settings are choosers that say where the value comes from
+### RT-1162 — The per-game settings are choosers that say where the value comes from
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; a console with two cores installed.
@@ -18475,7 +18476,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   3: likewise; "Cartridge color" is absent for a console with a single shell.
 - **Check:** suite file `tests/test_bigpicture_details.py` (`TheSettingsRows`).
 
-### RT-1156 — Favorite from the row, from Y, and on the meta line
+### RT-1163 — Favorite from the row, from Y, and on the meta line
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; a game that is not a favorite.
@@ -18487,7 +18488,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite file `tests/test_bigpicture_details.py`
   (`test_the_favorite_switch_the_pad_and_the_meta_line`).
 
-### RT-1157 — Playlists and artwork from the details page
+### RT-1164 — Playlists and artwork from the details page
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; one playlist; a game with a cover on disk.
@@ -18503,7 +18504,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   goes, the toast says so and the placeholder shows.
 - **Check:** suite file `tests/test_bigpicture_details.py` (`ThePlaylistsArtworkAndFileRows`).
 
-### RT-1158 — Rename, Share nearby and Delete from the details page
+### RT-1165 — Rename, Share nearby and Delete from the details page
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; two games on the same console.
@@ -18520,7 +18521,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `test_share_delete_focus_and_the_hints`), `tests/test_bigpicture_pages.py`
   (`test_deleting_the_game_a_details_page_shows_pops_it`).
 
-### RT-1159 — Import and Sync covers are pages with the progress beside the options
+### RT-1166 — Import and Sync covers are pages with the progress beside the options
 - **Area:** Navigation
 - **Mode:** AUTO-UI
 - **Preconditions:** Big Picture on in the devbox with the synthetic library.
@@ -18543,7 +18544,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite file `tests/test_bigpicture_tasks.py` (`TheImportPage`, `TheProgressPanel`,
   `TheCoversPage`); the screenshots show the panel with the bar and "Stop".
 
-### RT-1160 — The desktop's dialogs and the first-boot screen are drawn for the couch
+### RT-1167 — The desktop's dialogs and the first-boot screen are drawn for the couch
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; a fresh home for step 2.
@@ -18561,7 +18562,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_app_bootstrap.py` (`test_opening_into_big_picture_dresses_the_progress_screen`,
   `test_its_labels_carry_the_big_picture_classes`).
 
-### RT-1161 — Settings is a two-column page the shoulders walk
+### RT-1168 — Settings is a two-column page the shoulders walk
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on.
@@ -18576,7 +18577,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   button does the same. 3: B returns to the home page and never leaves the mode.
 - **Check:** suite file `tests/test_bigpicture_settings.py` (`ThePage`).
 
-### RT-1162 — A choice opens a full-page list that pops when picked
+### RT-1169 — A choice opens a full-page list that pops when picked
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on, Settings › Video.
@@ -18591,7 +18592,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite files `tests/test_bigpicture_chooser.py` (`TheChooserPage`),
   `tests/test_bigpicture_settings.py` (`test_coming_back_from_a_chooser_keeps_the_rows_and_the_focus`).
 
-### RT-1163 — A text value is typed on the on-screen keyboard
+### RT-1170 — A text value is typed on the on-screen keyboard
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on, Settings › System › "Share nearby".
@@ -18609,7 +18610,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `test_the_screenscraper_account_is_typed_on_the_keyboard`), `tests/test_navigation.py`
   (`test_big_picture_contexts`: the text page's own context).
 
-### RT-1164 — Left and Right reorder consoles and artwork providers
+### RT-1171 — Left and Right reorder consoles and artwork providers
 - **Area:** Library
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on, a library with two or more consoles; Settings › Library.
@@ -18625,7 +18626,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   focused; Cancel changes nothing; confirming clears the stored order.
 - **Check:** suite file `tests/test_bigpicture_settings.py` (`TheLibrarySection`).
 
-### RT-1165 — Destructive settings actions ask first on the couch
+### RT-1172 — Destructive settings actions ask first on the couch
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on; signed in to RetroAchievements for step 3.
@@ -18640,7 +18641,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `test_saves_are_exported_and_imported_through_the_picker`,
   `test_retroachievements_sign_in_and_out`).
 
-### RT-1166 — The BIOS section lists each console and its files
+### RT-1173 — The BIOS section lists each console and its files
 - **Area:** BIOS
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Big Picture on, Settings › BIOS.
@@ -18654,7 +18655,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   rises; B lands back on that console's row. 3: the counts re-read the disk and a toast confirms.
 - **Check:** suite file `tests/test_bigpicture_settings.py` (`TheBiosSection`).
 
-### RT-1167 — The desktop Settings gain a "Big Picture" group
+### RT-1174 — The desktop Settings gain a "Big Picture" group
 - **Area:** Settings
 - **Mode:** AUTO-SUITE
 - **Preconditions:** the desktop layout.
@@ -18668,3 +18669,45 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_bigpicture_config.py`, `tests/test_bigpicture_shell.py`
   (`test_the_setting_and_the_flag_open_the_mode_at_start`).
 
+### RT-1175 — The focus fills the item with the accent, and the console icons have no box
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least two consoles that have icons.
+- **Steps:**
+  1. On the home page, walk the "Consoles" row with Right; `make devbox-shot OUT=$SCRATCH/bp-focus-home.png`.
+  2. Open a console, walk the rail and then the games; `make devbox-shot OUT=$SCRATCH/bp-focus-grid.png`.
+  3. Open Settings and walk a section with a switch and a number row; then open a game's details.
+- **Expected:** 1: the focused tile turns solid purple (#7C3AED) with white name, count and icon;
+  no ring, halo or enlargement is drawn, so nothing is clipped at the edges of the row. The
+  console icons sit straight on the tile, with no square of another colour behind them. 2: the
+  focused rail tile and the focused game card fill with the purple the same way; the current console
+  on the rail stays in the soft purple. 3: the focused row is purple with white text; a switch on it
+  reads white when on, and the number pill stays legible; "Continue"/"Play" and the suggested
+  buttons are drawn in the soft purple until focused, so only one item on screen is solid purple.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheTheme`); the screenshots show the
+  filled focus and no badge background.
+
+### RT-1176 — Big Picture shows the covers and cartridges at the largest zoom
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 100% zoom (or any zoom).
+- **Steps:**
+  1. Enter Big Picture and open a console.
+  2. Press Ctrl+minus.
+  3. Leave Big Picture.
+- **Expected:** 1: the covers (and the cartridges, on a cartridge page) are at 200%, the largest
+  zoom, whatever the desktop had. 2: nothing changes; the zoom is fixed in the mode and the
+  desktop's setting is not written. 3: the desktop is back at the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`).
+
+### RT-1177 — A game opened from Big Picture starts fullscreen
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Settings › System › "Start games in fullscreen" off.
+- **Steps:**
+  1. Enter Big Picture and launch a game.
+  2. Quit the game, leave Big Picture and launch a game from the desktop.
+- **Expected:** 1: the game fills the screen (the runtime override says `video_fullscreen = "true"`).
+  2: the game opens windowed again, as the desktop setting says; the setting itself never changed.
+- **Check:** suite files `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`),
+  `tests/test_retroarch_launcher.py` (`test_the_launch_mode_setting_reaches_the_launch_both_ways`).
