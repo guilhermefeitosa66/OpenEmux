@@ -433,6 +433,9 @@ DEFAULT_CONFIG = {
         "translucent_game_bar": False,
         # Games open filling the screen instead of in a window (issue #505).
         "start_games_fullscreen": False,
+        # The couch layout: whether OpenEmux opens in it, and how big its
+        # text is drawn, as a percentage of the design's.
+        "big_picture": {"start": False, "text_size": 100},
     },
     # A picture beside 4:3 games on a wide window, per console (issue #507).
     # A console absent from console_overrides has none; custom_names keeps
@@ -486,6 +489,23 @@ DEFAULT_CONFIG = {
         }
     },
 }
+
+
+#: Big Picture's "Text size": a percentage of the design's, in whole steps.
+DEFAULT_BIG_PICTURE_TEXT_SIZE = 100
+MIN_BIG_PICTURE_TEXT_SIZE = 80
+MAX_BIG_PICTURE_TEXT_SIZE = 150
+BIG_PICTURE_TEXT_SIZE_STEP = 10
+
+
+def normalize_big_picture_text_size(value):
+    """A stored text size back into its range, rounded to a step."""
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_BIG_PICTURE_TEXT_SIZE
+    size = max(MIN_BIG_PICTURE_TEXT_SIZE, min(MAX_BIG_PICTURE_TEXT_SIZE, size))
+    return int(round(size / BIG_PICTURE_TEXT_SIZE_STEP) * BIG_PICTURE_TEXT_SIZE_STEP)
 
 
 def _merge_defaults(defaults, data):
@@ -1212,6 +1232,27 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["show_welcome_on_startup"] = bool(enabled)
         self.save_config()
+
+    def get_big_picture_settings(self):
+        """The couch layout's own settings: opening in it, and its text size."""
+        big_picture = _mapping(self.config.get("ui", {}).get("big_picture"))
+        return {
+            "start": bool(big_picture.get("start", False)),
+            "text_size": normalize_big_picture_text_size(
+                big_picture.get("text_size", DEFAULT_BIG_PICTURE_TEXT_SIZE)
+            ),
+        }
+
+    def set_big_picture_start(self, enabled):
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["start"] = bool(enabled)
+        self.save_config_soon()
+
+    def set_big_picture_text_size(self, size):
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["text_size"] = normalize_big_picture_text_size(size)
+        self.save_config_soon()
+        return big_picture["text_size"]
 
     def get_share_device_name(self):
         """The name Share nearby shows to other devices (issue #587).

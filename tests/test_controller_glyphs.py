@@ -37,6 +37,10 @@ class GlyphTableTests(unittest.TestCase):
         self.assertEqual(g["consoles"], "L1/R1")
         self.assertEqual(g["start"], "Options")
         self.assertEqual(g["menu"], "Share")
+        # The Guide button, which Big Picture hangs on (issue 914).
+        self.assertEqual(g["guide"], "PS")
+        self.assertEqual(cg.glyphs(cg.NINTENDO)["guide"], "Home")
+        self.assertEqual(cg.glyphs(cg.XBOX)["guide"], "Guide")
         self.assertNotIn("Ⓐ", "".join(g.values()))
 
 
