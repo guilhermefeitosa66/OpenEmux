@@ -196,7 +196,7 @@ class TheShelf(BigPictureCase):
         self.pump()
         slug = self.win.collection_manager.create("Couch")
         self.win.collection_manager.add(slug, [self.rom("SFC")["path"]])
-        self.win.refresh_library()
+        self.win.refresh_library(force=True)
         self.pump()
         shelf = self.shell.shelf
         shelf.refresh()

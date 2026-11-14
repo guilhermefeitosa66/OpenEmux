@@ -53,7 +53,7 @@ class TheGamesPage(BigPictureCase):
         self.pump()
         slug = self.win.collection_manager.create("Couch")
         self.win.collection_manager.add(slug, [self.rom("SFC")["path"]])
-        self.win.refresh_library()
+        self.win.refresh_library(force=True)
         self.pump()
         games = self.open(FAVORITES_ID)
         self.assertEqual(games.eyebrow_label.get_label(), self.said("big_picture.games.eyebrow.favorites").upper())
@@ -177,7 +177,8 @@ class TheGamesPage(BigPictureCase):
         self.pump()
         games.forget_games({"/somewhere/else"})
         self.assertEqual(games.pane_stack.get_visible_child_name(), "game")
-        self.shell.forget_games({games.detail.rom["path"]})
+        with mock.patch("openemux.ui.window.delete_rom"):
+            self.win._delete_roms([games.detail.rom])
         self.pump()
         self.assertEqual(games.pane_stack.get_visible_child_name(), "empty")
         # Elsewhere than the games page, a game opens expanded.

@@ -51,11 +51,6 @@ class TaskBanner:
             return None
         return next(iter(self._tasks.values()))
 
-    def current_label(self):
-        """The label of the task on the banner, for the places that mirror it."""
-        task = self.current_task()
-        return task["label"] if task else None
-
     def begin(self, kind, label, total=0, on_cancel=None, cancel_label=None):
         """Register a background task. ``on_cancel`` makes it interruptible.
 
