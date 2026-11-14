@@ -48,6 +48,30 @@ class TheGamesPage(BigPictureCase):
         self.assertEqual(games.count_label.get_label(), self.said("header.subtitle.one_game"))
         self.assertTrue(games.select_scope("FC"))  # already there
 
+    def test_every_chip_shows_an_icon_beside_its_name(self):
+        from openemux.ui.bigpicture.widgets import PixelIcon
+
+        games = self.open("SFC")
+        chip = games.console_chips["SFC"]
+        self.assertIsInstance(chip.icon, PixelIcon)
+        self.assertEqual(chip.get_label(), "SNES")
+        glyph = games.console_chips[ALL_CONSOLES_ID].icon
+        self.assertIsInstance(glyph, Gtk.Image)
+        self.assertEqual(glyph.get_icon_name(), "view-grid-symbolic")
+        self.assertTrue(glyph.has_css_class("bp-chip-glyph"))
+
+    def test_a_console_with_no_art_takes_its_symbolic_icon(self):
+        from openemux.core.systems import get_icon_name
+        from openemux.ui.bigpicture import games as games_module
+
+        games = self.open("SFC")
+        games._chip_ids = None  # the chips are rebuilt, this time with no art
+        with mock.patch.object(games_module, "console_texture", return_value=None):
+            games.sync()
+        icon = games.console_chips["SFC"].icon
+        self.assertIsInstance(icon, Gtk.Image)
+        self.assertEqual(icon.get_icon_name(), get_icon_name("SFC"))
+
     def test_favorites_and_playlists_have_their_own_heading(self):
         self.win._toggle_favorite_from_ui(self.rom("SFC"))
         self.pump()
@@ -56,12 +80,14 @@ class TheGamesPage(BigPictureCase):
         self.win.refresh_library(force=True)
         self.pump()
         games = self.open(FAVORITES_ID)
+        self.assertEqual(games.console_chips[FAVORITES_ID].icon.get_icon_name(), "starred-symbolic")
         self.assertEqual(games.eyebrow_label.get_label(), self.said("big_picture.games.eyebrow.favorites").upper())
         playlist = next(scope for scope in games.chip_scopes() if scope.startswith("col:"))
         games.select_scope(playlist)
         self.pump()
         self.assertEqual(games.eyebrow_label.get_label(), self.said("big_picture.shelf.playlist").upper())
         self.assertEqual(games.console_chips[playlist].get_label(), "Couch")
+        self.assertEqual(games.console_chips[playlist].icon.get_icon_name(), "user-bookmarks-symbolic")
 
     def test_the_shoulders_walk_the_chips_and_the_focus_stays_in_the_grid(self):
         games = self.open("SFC")
