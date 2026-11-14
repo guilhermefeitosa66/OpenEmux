@@ -139,6 +139,15 @@ class TileAndRailTests(unittest.TestCase):
         self.assertEqual(capped.name_label.get_max_width_chars(), widgets.TILE_NAME_CHARS)
         self.assertEqual(Tile(None, wide=True).name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
         self.assertEqual(tall.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        # In a fixed grid (the quick menu) the grid sets the width instead.
+        gridded = Tile("Synchroniser les jaquettes", "x", wide=True, fit_name=False)
+        self.assertEqual(gridded.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        self.assertEqual(gridded.name_label.get_max_width_chars(), 1)
+        # A gridded tile with no count fills its cell instead of shrinking
+        # its name to the ellipsis ("Quit OpenEmux" in the quick menu).
+        alone = Tile("Quitter OpenEmux", wide=True, fit_name=False)
+        self.assertEqual(alone.get_child().get_halign(), Gtk.Align.FILL)
+        self.assertEqual(wide.get_child().get_halign(), Gtk.Align.START)
         # A tall tile's name never widens it: every console tile is one width.
         self.assertEqual(tall.name_label.get_max_width_chars(), 1)
         self.assertEqual(tall.count_label.get_max_width_chars(), 1)

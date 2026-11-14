@@ -180,8 +180,9 @@ class Row(Gtk.Button):
         return False
 
 
-#: The longest name a wide tile grows to hold before it ellipsizes. The
-#: longest shipped one is 26 ("Synchroniser les jaquettes").
+#: The longest name, in characters, a wide tile grows to hold before it
+#: ellipsizes. The longest shipped ones are 27 (Tamil, where combining marks
+#: count as characters) and 26 ("Synchroniser les jaquettes").
 TILE_NAME_CHARS = 28
 
 
@@ -189,7 +190,7 @@ class Tile(Gtk.Button):
     """A big square-ish button: a badge or icon, a name, a count under it."""
 
     def __init__(self, name, count=None, badge=None, texture=None, icon_name=None,
-                 on_activate=None, style=None, wide=False):
+                 on_activate=None, style=None, wide=False, fit_name=True):
         super().__init__()
         self.on_activate = on_activate
         self.add_css_class("bp-tile")
@@ -204,7 +205,9 @@ class Tile(Gtk.Button):
         )
         # A wide tile is as wide as what it holds; a tall one is the width
         # the stylesheet gives every console tile, and its text fills it.
-        box.set_halign(Gtk.Align.START if wide else Gtk.Align.FILL)
+        # In a fixed grid (fit_name off) it fills its cell instead, or a name
+        # with no count under it would shrink to its ellipsis.
+        box.set_halign(Gtk.Align.START if wide and fit_name else Gtk.Align.FILL)
         box.set_valign(Gtk.Align.CENTER)
         self.badge = make_badge(badge, texture, icon_name)
         # Centred, not filled: a console picture given the tile's whole width
@@ -219,7 +222,7 @@ class Tile(Gtk.Button):
         # A name that still does not fit ends in an ellipsis.
         self.name_label = Gtk.Label(label=name)
         self.name_label.add_css_class("bp-tile-name")
-        self._single_line(self.name_label, wide, name)
+        self._single_line(self.name_label, wide, name, fit_name)
         text.append(self.name_label)
         self.count_label = Gtk.Label(label=count or "")
         self.count_label.add_css_class("bp-tile-count")
@@ -238,7 +241,7 @@ class Tile(Gtk.Button):
         self.count_label.set_visible(bool(count))
 
     @staticmethod
-    def _single_line(label, wide, text):
+    def _single_line(label, wide, text, fit_name=True):
         label.set_single_line_mode(True)
         label.set_xalign(0.0 if wide else 0.5)
         if not wide:
@@ -249,6 +252,12 @@ class Tile(Gtk.Button):
             # width, and an expanding child makes the tile expand too, so a
             # short Consoles row would stretch its tiles across the screen.
             label.set_max_width_chars(1)
+        elif not fit_name:
+            # A tile in a fixed grid (the quick menu, a dialog of one width):
+            # the grid decides the width, and a longer name ends in "…".
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_max_width_chars(1)
+            label.set_hexpand(True)
         elif len(text or "") > TILE_NAME_CHARS:
             # Past the cap a wide tile stops growing and ellipsizes.
             label.set_ellipsize(Pango.EllipsizeMode.END)
