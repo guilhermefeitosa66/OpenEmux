@@ -6175,13 +6175,13 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Press DPAD_DOWN until "All games" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  1. Press DPAD_DOWN until "All games" has the focus highlight; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
   2. Keep pressing DPAD_DOWN to the last row.
   3. Press L1 and R1.
   4. Focus a card in the right column, press A, then go back.
 - **Expected:** Focus moves to the card on the right, the one below, then the one on the left; the
-  list scrolls to keep the focused card on screen and the ring is never lost. L1/R1 switch tabs.
-  After going back, the focus ring is on the card that was opened.
+  list scrolls to keep the focused card on screen and the focus highlight is never lost. L1/R1 switch tabs.
+  After going back, the focus highlight is on the card that was opened.
 - **Check:** human only.
 
 ### RT-474 — Reorder by drag and by the menu across columns
@@ -6289,12 +6289,12 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-849's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Open the shelf: press DPAD_DOWN until a focus ring shows on "All".
+  1. Open the shelf: press DPAD_DOWN until a focus highlight shows on "All".
   2. Press DPAD_RIGHT, then DPAD_LEFT, then DPAD_DOWN.
   3. Go back up to "Favorites", press A, then go back.
   4. With "All" focused, press Y.
-- **Expected:** Step 2: the ring moves to "Favorites", back to "All", then to the first console.
-  Step 3: the Favorites view opens, and after going back the ring is on "Favorites". Step 4: no
+- **Expected:** Step 2: the focus highlight moves to "Favorites", back to "All", then to the first console.
+  Step 3: the Favorites view opens, and after going back the focus highlight is on "Favorites". Step 4: no
   reorder menu opens.
 - **Check:** human only.
   in `pkg/android/openemux` of `openemux-android`.
@@ -6714,7 +6714,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Expected:** While the first console's games are at the row's start its label stays at the start,
   over the first game in view. The second console's label rides over its own first game; when it
   reaches the first label it pushes it out to the left and takes its place at the start. Dragging
-  back does the reverse. The labels never cover a game or the focus ring, and they do not jitter.
+  back does the reverse. The labels never cover a game or the focus highlight, and they do not jitter.
 - **Check:** human only (a screenshot at the start, mid-push and after the push).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -6785,7 +6785,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Expected:** "Previous"/"next" show LB/RB, then L/R, then L1/R1 instead of chevrons; the caret is
   hidden. Each shoulder press switches the filter and the label follows. The hint bar has no
   "Console" hint. UP reaches the header row; LEFT/RIGHT walk back, previous, the filter name, next,
-  search, sort and the view buttons with a whole focus ring (also on a dimmed step). A opens the
+  search, sort and the view buttons with a whole focus highlight (also on a dimmed step). A opens the
   menu, the D-pad moves in it, A picks, B closes it.
 - **Check:** human only (a screenshot per family).
 - **Restore:** "Button labels" back to "Automatic"; `adb shell wm size reset`,
@@ -6978,7 +6978,7 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 
 ## Android — Gamepad navigation
 
-The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
+The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus highlight
 never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
 gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
 `adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
@@ -6988,7 +6988,7 @@ nothing focused (after a tap, or with the focused item scrolled away by finger) 
 on the sensible item and does nothing else. A library of a few games over two consoles, one of them
 with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
-Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
+Since issue 642 the gamepad layout (the focus highlight always on one item, the hint bar always shown, larger
 focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
 "Settings → General → Controllers → Interface mode" ("Automatic", "Touch screen", "Controller"; issue 873
 renamed it from "Controller layout" with "Automatic", "Never" and "Always", and stores the same `auto`,
@@ -7014,11 +7014,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
   the last game rests at the right padding. The focused game's title is bold and the others are
   dimmed. Headers never take focus, and neither does the back link (B goes back). RIGHT past the last
-  game leaves focus on it, it never jumps up to the header. In the header the ring and its halo are
+  game leaves focus on it, it never jumps up to the header. In the header the focus highlight is
   whole, not cut by the top of the screen.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
-### RT-435 — No focus ring is cut or covered, on any screen
+### RT-435 — No focus highlight is cut or covered, on any screen
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** First-run setup done; a library as in the section's header.
@@ -7031,11 +7031,38 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   4. Press START for "Settings" and walk every page, BIOS included, with the swatches of a console's
      page; then the in-game pause sheet (START during a game) and its "Load state" grid.
   5. Repeat 1 to 4 in landscape, and in the light theme.
-- **Expected:** The ring and its halo are whole around every focused item: not cut by the screen's
-  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items.
-  The view toggle's buttons keep their whole ring. Rows inside a card show the inside highlight,
-  never scaled and never past the card.
+- **Expected:** The focus highlight is whole on every focused item: a row or button filled edge to
+  edge, and the plate behind a cover, cartridge, console card or swatch not cut by the screen's
+  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items. The
+  view toggle's buttons keep their whole fill. Rows inside a card fill inside the card, never scaled
+  and never past it. No ring and no glow anywhere (issue 951).
 - **Check:** human only (a screenshot per screen).
+
+### RT-1138 — The controller focus is the item's background, readable in both themes
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a library as in the section's header; a controller
+  connected (or faked with the `DEBUG_GAMEPAD` broadcast above).
+- **Steps:**
+  1. On a console's shelf, walk the grid in "Cartridges", then covers, then the list view.
+  2. Press UP to the console chips and the view toggle, then open "Shelf" and walk the console cards.
+  3. Open a game's detail: focus "Play", the other buttons, the colour swatches and "See all".
+  4. Press START for "Settings"; walk a page of rows; open "Theme" and walk its choices, ending on
+     the one already chosen.
+  5. Start a game, press START for the pause sheet and walk its tiles, the slot slider and
+     "Load state".
+  6. Open the skin editor on a skin of your own (its card's "⋮" › "Edit") and walk its bar, the
+     paint panel and the "Leave" dialog.
+  7. Switch the app to the light theme ("Settings" › "Theme" › "Light") and repeat 1 to 6.
+  8. Touch the screen (or disconnect the controller) and look at the item that had the focus.
+- **Expected:** The focused item shows no ring and no glow around it. A row, a chip, a quiet button
+  or a text link takes the violet tone of a toggle that is on as its background; "Play" and the other
+  violet buttons turn a deeper violet with their white label; a cover, a cartridge, a console card or
+  a swatch sits on a violet plate a little larger than itself and grows slightly. In "Theme" the
+  chosen row keeps its check mark, and focusing it turns it a deeper violet than the other focused
+  rows. Every focused label and icon stays readable in both themes; the skin editor's bar and paint
+  panel stay dark, with a dark violet focus, in the light theme too. Step 8: no highlight remains.
+- **Check:** human only (a screenshot per screen and theme: `adb exec-out screencap -p > shot.png`).
 
 ### RT-436 — Vertical lists keep the focused item clear of the edges and the hint bar
 - **Area:** Android — Gamepad navigation
@@ -7115,7 +7142,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
      share.
   5. In each one: D-pad down to its last item, A on an item, then reopen it and press B.
 - **Expected:** Focus enters each sheet, dialog or menu on its first item (in the remove dialogs, on
-  "Cancel") with the ring visible; the D-pad moves inside it and reaches its last item, the sheet
+  "Cancel") with the focus highlight visible; the D-pad moves inside it and reaches its last item, the sheet
   scrolling when it is taller than the screen; A picks the focused item; B closes it, and focus is
   back on the button or row that opened it. A sheet's own buttons (X, Y, L1/R1, START) work while
   it is open, and none of them reaches the screen behind it.
@@ -7167,9 +7194,9 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   2. Disconnect it (the same broadcast with `false`).
   3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
 - **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
-  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), a ring on one game, and "L1" and
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and "L1" and
   "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
-  Disconnecting removes the hint bar, the ring and the pills and gives the chips and the toggle
+  Disconnecting removes the hint bar, the highlight and the pills and gives the chips and the toggle
   their old size, again without a restart. With the controller connected every main tab keeps its
   hint bar. No toast or message announces either change.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
@@ -7185,11 +7212,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   3. Back on the shelf, scroll and fling the grid with a finger, open the search and type, and on
      the "Shelf" page long-press a shelf and drag it.
   4. Tap a game's cover and come back with B.
-- **Expected:** Each tap moves the ring to the tapped item and the hint bar never hides. RIGHT moves
+- **Expected:** Each tap moves the focus highlight to the tapped item and the hint bar never hides. RIGHT moves
   one chip right on that same press; DOWN goes from the toggle into the grid on the first press,
-  and A opens the focused game. A scroll, a fling or a drag never moves the ring to the item under
+  and A opens the focused game. A scroll, a fling or a drag never moves the focus highlight to the item under
   the finger, and clicking, long-pressing, dragging and typing behave as in the touch layout.
-  Back on the shelf the ring is on the game that was tapped.
+  Back on the shelf the focus highlight is on the game that was tapped.
 - **Check:** human only.
 
 ### RT-580 — The "Interface mode" setting
@@ -7205,8 +7232,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
      connect the controller.
 - **Expected:** "Interface mode" is the first section of the Controllers screen, with the lead
-  "Whether the app is used with a controller or by touch. Controller mode shows the focus ring and the
-  button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
+  "Whether the app is used with a controller or by touch. Controller mode highlights the focused item and
+  shows the button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
   mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Touch navigation,
   as if no controller were connected. Pressing a controller button switches to controller navigation
   until you touch the screen again. Games open with the on-screen controls. Pick this if the app thinks
@@ -7214,8 +7241,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   "Controller" ("Always controller mode, even before a controller is detected. For handhelds with
   built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
   controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
-  controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
-  with the ring and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
+  controller detected opens the library with no focus highlight or hint bar; DOWN still moves the focus
+  with the highlight and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
   touch size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
   `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
   (Controller), `never` (Touch screen) or `auto`.
@@ -7236,7 +7263,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
      language and look at the setting and the hint bar.
   6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
 - **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
-  swatches are larger and every text link is a full-height target with its ring whole; without it
+  swatches are larger and every text link is a full-height target with its highlight whole; without it
   everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
   the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
   Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
@@ -7273,7 +7300,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Press START, focus "BIOS" (then "Backup", then "About") and press A; press B.
   6. In a console's list, press R1, then L1.
   7. Open a game's detail by touch, then press a D-pad key.
-- **Expected:** 1: the console's first game holds the focus ring (or, coming back, the game that was
+- **Expected:** 1: the console's first game holds the focus highlight (or, coming back, the game that was
   opened), and the hint bar's "A: Details" is true. 2: the game's detail opens with "Play" (or
   "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
   the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
@@ -7649,7 +7676,7 @@ files are in `files/launch/current/`.
   titled "Controller skins" with the same groups and cards as the console's settings, and the row then reads
   titled "Default skin" with the same cards as the console's settings, and the row then reads
   "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
-  focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
+  focus highlight lands on each card in turn and A selects "Console colors"; the section title follows.
   Step 5 opens the usual light grey SNES skin.
 - **Check:**
   ```bash
@@ -7778,7 +7805,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   2. With the gamepad only, move down through the sheet to the last card, "Clear", and press A.
   3. Close the sheet and launch the game.
 - **Expected:** The sheet lists "Console colors", "Dark", "Red", "Yellow", "Green", "Blue", "Black",
-  "White" and "Clear", each with its swatch; the focus ring reaches every card and the sheet scrolls to
+  "White" and "Clear", each with its swatch; the focus highlight reaches every card and the sheet scrolls to
   keep it in view. The row then reads "Clear" and the game opens on a pale, translucent-looking grey
   shell with the Game Boy's layout.
 - **Check:**
@@ -7870,7 +7897,7 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
   1. Cold-start the app and press D-pad Down until the first shelf card is focused.
   2. Press D-pad Up once.
   3. Press D-pad Left, then "A".
-- **Expected:** At step 2 the focus ring is on "Download"; at step 3 it moves to "Not now", and "A"
+- **Expected:** At step 2 the focus highlight is on "Download"; at step 3 it moves to "Not now", and "A"
   hides the banner and puts the focus on the first shelf card. At no point does the banner take the
   focus by itself.
 - **Check:** human only (a screenshot after each step).
@@ -8477,7 +8504,7 @@ at least once and a few games imported recently. Every scenario ends with
 - **Expected:** The first press focuses an item of the shelf (the search field), never the rail.
   Left from a first-column card focuses the current tab ("Library") on the rail; Up/Down move
   between the tabs; Right returns to the same card. Every card, the continue cards, the search
-  field, "Import ROMs" and "Import more games" show the focus ring whole. L1/R1 switch tabs. In
+  field, "Import ROMs" and "Import more games" show the focus highlight whole. L1/R1 switch tabs. In
   gamepad mode "Long press to reorder" is hidden.
 - **Check:** human only (a screenshot at each step).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
@@ -8620,7 +8647,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   tile last, RT-1008); there is no "Restart game" row (issue 881) and nothing is pinned at the foot.
   The focus starts on "Continue". On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
-  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
+  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus highlight shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
   440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
   both themes. Tapping a saved state on the left loads it and resumes.
@@ -9673,7 +9700,7 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
      `adb emu fold`, then `adb emu unfold`.
   2. Repeat on a game's detail.
 - **Expected:** After every change the same screen is open, the grid is still scrolled to the
-  same games and the focus ring is on the same game (or on "Continue" on the detail). An open
+  same games and the focus highlight is on the same game (or on "Continue" on the detail). An open
   sheet stays open.
 - **Check:** human only.
 
@@ -9686,8 +9713,8 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
   2. Walk the chips and the tabs; press B.
   3. Use L1/R1; open a game with A and walk its bottom half.
   4. On "Shelf" and on "Settings", press down until the focus leaves the top half.
-- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the ring
-  is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
+- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the focus
+  highlight is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
   top. L1/R1 change console as before. From the shelf, down reaches "Import ROMs" and the tabs;
   from Settings, down reaches the tabs.
 - **Check:** human only.
@@ -10399,7 +10426,7 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
 - **Expected:** 1: "Receive games", with the share icon, is the third button, under "Choose files"
   and "Choose a whole folder". 2: it opens "Receive Games" with "Ready to receive…" and "Visible as
   “<name>”"; the back link reads "Import" and returns to the Import tab. 3: the button gets the
-  focus ring, A opens the receive screen, B returns to Import. 4: the button is shown and works in
+  focus highlight, A opens the receive screen, B returns to Import. 4: the button is shown and works in
   every layout. 5: none of the three buttons is shown while copying; they come back afterwards.
   6: "SHARE NEARBY" holds only "Device name", with no "Receive Games" row and no stray divider;
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
@@ -11597,7 +11624,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
   and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
   Tablet: the cover and label cards sit side by side, the tabs in the header. Each card's
-  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus ring and "A"
+  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus highlight and "A"
   presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
   pill text and each button. Both themes are legible.
 - **Check:** human only.
@@ -11772,7 +11799,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
   3. TalkBack through a search's results, the editor's tools and the crop area; Settings ›
      "Artwork providers".
   4. Tablet landscape and phone landscape, both themes.
-- **Expected:** Every control takes the focus ring; "A" on the image cycles "Moving the crop box",
+- **Expected:** Every control takes the focus highlight; "A" on the image cycles "Moving the crop box",
   then each corner, then back to moving focus, and the D-pad moves what it says. TalkBack reads
   "Result 2 from ScreenScraper" with its selected state, each tool by name, the crop area's
   actions ("Move crop left", "Grow crop"…), "Move OpenEmux mirror up" and the switches. On the
@@ -12346,7 +12373,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
      buttons.
   2. On a card you can use: D-pad right, then left.
   3. A on a card; A on a "⋮"; D-pad in the sheet; B.
-- **Expected:** The focus ring lands on each card and each "⋮" in turn. In step 2, right moves the
+- **Expected:** The focus highlight lands on each card and each "⋮" in turn. In step 2, right moves the
   focus from the card to its own "⋮" (right again goes on to the next card) and left brings it back
   to the card. A on a card picks it, A on "⋮" opens its sheet, whose rows take the focus; B closes it
   with the focus back on the "⋮".
@@ -12605,7 +12632,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
   a phone (or emulator) with an on-screen keyboard that the D-pad can drive, or a hardware keyboard.
 - **Steps:**
   1. With the gamepad, open the game's detail screen and press UP from "Play" until the pencil
-     after the game's name has the focus ring; press A.
+     after the game's name has the focus highlight; press A.
   2. Type a new name and move down to "Rename" with the D-pad; press A.
   3. Focus the pencil again, press A, then press B.
 - **Expected:** In step 1 the pencil takes the focus right above "Play" and A opens the sheet; the
@@ -12645,7 +12672,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
   bin icon and "Remove from library" in red. 2: "Share Nearby" opens with that game. 3: "Remove
   <title>?" asks first; Cancel keeps the game. 4: the screen goes back to the library without the
   game. 5: the bar says "Y: Share Nearby" and Y opens "Share Nearby"; DOWN ends on "Remove from
-  library" with a focus ring.
+  library" with a focus highlight.
 - **Check:** human only.
 ## Android — Skin template zip
 
@@ -12746,7 +12773,7 @@ zip edits happen on a computer. A bundled skin's sheet has "Download as template
   2. With the pad only: "Import .zip" → pick the zip → move between "A new skin", the name field,
      "Replace one of your skins", the chips, "Cancel" and "Import"; import over `mine`.
   3. Switch the app to Português (Brasil) and open both sheets again.
-- **Expected:** The focus ring reaches every control of both sheets, A activates it, B closes the sheet
+- **Expected:** The focus highlight reaches every control of both sheets, A activates it, B closes the sheet
   with the focus back where it was. In Portuguese every text of both sheets and the "Importar .zip"
   button is translated.
 
@@ -12864,7 +12891,7 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   1. With the gamepad only: open the game's detail screen → the "Controller skin" row (A) → D-pad to
      the "⋮" of "Console colors" (A) → D-pad to "Duplicate" (A).
   2. "⋮" of "Console colors" again (A) → D-pad to "Edit" (A); in the editor that opens, B.
-- **Expected:** The focus ring lands on each row of the sheet in turn ("Use it", "Edit", "Duplicate",
+- **Expected:** The focus highlight lands on each row of the sheet in turn ("Use it", "Edit", "Duplicate",
   "Download as template"). Step 1 lists "Console colors (copy)" under "Your skins", not in use.
   Step 2 makes "Console colors - edited", opens it in the editor, and B closes the editor: the
   sheet's list shows it under "Your skins" with "In use", and the detail screen's skin row then
@@ -13279,7 +13306,7 @@ on the side away from the selection sideways.
      Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
   3. B closes the panel, B again clears the selection.
   4. Switch the app to Português (Brasil) and open the panel.
-- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+- **Expected:** Every control of the panel takes the focus highlight and works with A; the D-pad does not
   nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
   "Pintar", "Paletas", "Remover textura, voltar para a cor".
 - **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
@@ -13536,7 +13563,7 @@ on the side away from the selection sideways.
      Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
   3. B closes the panel, B again clears the selection.
   4. Switch the app to Português (Brasil) and open the panel.
-- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+- **Expected:** Every control of the panel takes the focus highlight and works with A; the D-pad does not
   nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
   "Pintar", "Paletas", "Remover textura, voltar para a cor".
 - **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
@@ -13907,7 +13934,7 @@ packages of the twelve consoles that moved (`NDS.deltaskin` included).
 - **Mode:** MANUAL
 - **Preconditions:** RT-796's imported package; a gamepad connected.
 - **Steps:**
-  1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
+  1. With the gamepad only: on the Imported row press Right (the focus highlight moves to its "⋮"), A,
      D-pad to "Duplicate", A.
   2. With the gamepad only: "⋮" of an NDS bundled card → "Edit" (since issue 808 a copy of the zip
      as it is, RT-828); B closes the editor that opens.
@@ -14508,9 +14535,9 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   2. Move down with the D-pad to the "Sega CD" card's "Import" button and press A; pick the file.
   3. Press A on the sheet.
 - **Expected:** The hint bar shows "A Import" and "B Back". D-pad down moves from one "Import" button
-  to the next, with the focus ring on the button. A opens the picker. The sheet opens with the focus
+  to the next, with the focus highlight on the button. A opens the picker. The sheet opens with the focus
   on "Done"; A closes it and the focus is back on the Sega CD "Import" button.
-- **Check:** human only (a screenshot with the focus ring on the button and on "Done").
+- **Check:** human only (a screenshot with the focus highlight on the button and on "Done").
 
 ### RT-855 — Importing in the tablet list and detail layout
 - **Area:** Android — BIOS import
@@ -15293,7 +15320,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
      the menu each time.
   4. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
 - **Expected:** Steps 1 and 2: the first press lands on "Continue"; then "Save", then the slider
-  (focus ring around the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
+  (focus highlight behind the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
   press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. At an end
   (0 with left, 9 with right) the press moves the focus on instead, as a seek bar does. Step 3: the
   same block ("Save" + "Load", "See all", the slider) sits in the left column in landscape, at the
@@ -15325,7 +15352,7 @@ engine's mute state, whatever muted the game.
   "Unmute" and a red background with a red border and a red icon. Step 3: the game is still silent
   and the tile still shows "Unmute" in red. Step 4: sound comes back with the toast "Sound on"; the
   reopened sheet shows the speaker, "Mute" and the neutral tile. Step 5: each press flips the tile
-  and the sound as a tap does, the focus ring staying on the tile. Step 6: the same in every layout;
+  and the sound as a tap does, the focus highlight staying on the tile. Step 6: the same in every layout;
   the red tile and its label are legible in both themes; in Português the labels read "Silenciar" and
   "Ativar som", not clipped.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
@@ -16794,11 +16821,11 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
      itself only as a joystick (`adb shell input joystick keyevent KEYCODE_BUTTON_A`).
   5. Tap the screen.
   6. Open "Settings" → "Controllers".
-- **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
+- **Expected:** 1: no focus highlight and no hint bar, although a controller is detected, and the volume
   key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
-  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
-  layout keeps its touch sizes. 3: the tap hides the ring and the hint bar again; the app is back to
-  touch navigation. 4: the press lands the ring on a card and the hint bar comes back, with no
+  focus highlight lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
+  layout keeps its touch sizes. 3: the tap hides the highlight and the hint bar again; the app is back to
+  touch navigation. 4: the press lands the focus highlight on a card and the hint bar comes back, with no
   controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
   press never changes the setting.
 - **Check:** human only (`adb exec-out screencap -p`).
@@ -16828,7 +16855,7 @@ and title to the favourite star at the far right. The look is judged by eye on a
   console header is plain. Following a tinted row from its title to its star is easy. Step 2: the same,
   with a barely darker tint. Step 3: the stripes are there at every size. Step 4: both ticked rows show
   the accent background, clearly stronger than any stripe; the other rows keep their stripes. Step 5:
-  the focus ring is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
+  the focus highlight is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
   way, and the column names stay over their columns. Step 7: no stripes; the tiles are where they were.
 - **Check:** human only.
 
@@ -16891,7 +16918,7 @@ whole cover. Judged by eye on a device, so these are `MANUAL`.
   2. Turn the phone to landscape.
 - **Expected:** Step 1: at every step the covers keep the wide SNES shape and the rows stay level; only
   their size changes, with the usual glide and step pill. Step 2: the row of games shows every cover in
-  the same wide shape at the row's height, and the focus ring is not cut.
+  the same wide shape at the row's height, and the focus highlight is not cut.
 - **Check:** human only.
 
 ### RT-1013 — The detail screen and the list view still show the whole cover
@@ -17687,7 +17714,7 @@ emulator.
   3. Go back; connect a controller (or "Controller" interface mode) and press a D-pad key on the shelf.
   4. Press Right, then A.
 - **Expected:** Step 1: the game opens and continues from the state, as the play button on "Recent"
-  does. Step 2: the game's page opens (no launch). Step 3: the focus ring is on the first continue card,
+  does. Step 2: the game's page opens (no launch). Step 3: the focus highlight is on the first continue card,
   before "All games". Step 4: Right moves along the row (the row scrolls to show the card), A resumes
   that game.
 - **Check:** human only; TalkBack announces the row as a list ("in list, 3 items").
@@ -17734,7 +17761,7 @@ declares `android.software.leanback` as not required, so one APK serves phones, 
   1. Open the app; press A on "Start"; wait for the setup.
   2. Go to "Import" with the D-pad and import the ROM from the folder picker.
   3. Open the game from its console; hold Start for two seconds; pick "Quit".
-- **Expected:** Every step completes with the D-pad and the face buttons; the focus ring is visible
+- **Expected:** Every step completes with the D-pad and the face buttons; the focus highlight is visible
   from the sofa; the setup, the import and the game never ask for a touch. Phones and tablets behave as
   before.
 - **Check:** human only.
@@ -18147,7 +18174,7 @@ state and a favourite.
 - **Steps:**
   1. Walk the header with the D-pad: the sort button, then down to the facet chips.
   2. Press A on "Never played", then on the sort button; Down and A on "Most played".
-- **Expected:** The focus ring lands on each facet chip (the console chips are stepped with L1/R1, not
+- **Expected:** The focus highlight lands on each facet chip (the console chips are stepped with L1/R1, not
   focused) and on the sort button; A toggles the chip; the menu opens with the focus inside, A picks
   the order, the focus returns to the button.
 - **Check:** human only.
