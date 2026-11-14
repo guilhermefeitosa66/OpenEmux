@@ -180,6 +180,8 @@ class RomGrid(Gtk.GridView):
         # Where the page was scrolled to when the grid went to sleep.
         self._sleep_scroll = None
         self._restore_source = None
+        # A grouped grid's sleep after an unmap, run once the unmap is over.
+        self._unmap_sleep_source = None
         # Coalesces the per-allocation promotion of the visible cards' fetches.
         self._promotion_pending = False
         # Focus memory: coming back from the sidebar restores this game. The
@@ -386,7 +388,21 @@ class RomGrid(Gtk.GridView):
         # A page the user left keeps its entries and its scroll position, but
         # not its cards and their textures: ten console visits used to add
         # about 9 MB each and keep it for the life of the window (issue 900).
+        if self._in_grouped_page():
+            # A group is also unmapped when a search empties it, from inside
+            # the filter's own change: dropping the model there aborts GTK
+            # 4.22 (gtk_list_item_manager_clear_model). Once it is over, then
+            # (issue 957, QA round 1).
+            if self._unmap_sleep_source is None:
+                self._unmap_sleep_source = GLib.idle_add(self._sleep_if_unmapped)
+            return
         self.set_dormant(True)
+
+    def _sleep_if_unmapped(self):
+        self._unmap_sleep_source = None
+        if not self.get_mapped():
+            self.set_dormant(True)
+        return GLib.SOURCE_REMOVE
 
     def _in_grouped_page(self):
         return isinstance(self.get_parent(), GroupedScroll)

@@ -18902,11 +18902,15 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a console where one game is a favorite.
 - **Steps:**
-  1. Press A on "Favorites · 1"; press it again.
+  1. With the focus on the first game, press Up until the filter chips; press A on
+     "Favorites · 1"; press it again.
   2. Press the filter button (the "⋯" at the top) twice.
-- **Expected:** 1: the chip turns purple and only the favorite is listed; again, every game comes
-  back. 2: the chips row hides and comes back; a chip that was on stays on.
-- **Check:** `tests/test_bigpicture_games.py` (`test_the_filter_chips_count_and_filter`).
+- **Expected:** 1: the first Up from the top row of games lands on the view switch, the next ones
+  on the filter chips, the console chips and the top row; the chip turns purple and only the
+  favorite is listed; again, every game comes back. 2: the chips row hides and comes back; a chip
+  that was on stays on.
+- **Check:** `tests/test_bigpicture_games.py` (`test_the_filter_chips_count_and_filter`),
+  `tests/test_bigpicture_shell.py` (`test_up_from_the_top_row_reaches_the_view_switch`).
 
 ### RT-1186 — The view switch is Big Picture's own
 - **Area:** Library
@@ -18956,7 +18960,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   "Remove from library"; B closes it. 2: multi-select: A toggles a game, X selects all, Y would
   remove the selection (asking first), View shares it, B leaves.
 - **Check:** `tests/test_bigpicture_games.py` (`test_y_opens_the_options_sheet`),
-  `tests/test_bigpicture_shell.py` (`test_the_resolution_of_every_context`).
+  `tests/test_bigpicture_shell.py` (`test_the_resolution_of_every_context`,
+  `test_a_in_multi_select_toggles_the_game_and_stays`).
 
 ### RT-1190 — Search works with the pad: the keyboard over the games
 - **Area:** Navigation
@@ -18965,10 +18970,14 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Steps:**
   1. Press View (Ctrl+F); type "C" with A on the keys; type "h" on a real keyboard.
   2. Press Start (Done).
-- **Expected:** 1: "All games" opens and the keyboard slides up over it; each letter (pad or
-  keyboard) filters the games live and the page says "Searching “ch”". 2: the keyboard goes, the
-  filter stays.
-- **Check:** `tests/test_bigpicture_games.py` (`TheSearch`).
+  3. Press View again and type "zzz", a query no game matches.
+- **Expected:** 1: "All games" opens and the keyboard slides up over it with its first key
+  focused and the keyboard's hints; each letter (pad or keyboard) filters the games live and the
+  page says "Searching “ch”". 2: the keyboard goes, the filter stays. 3: every console's group
+  empties and "No games match" shows; the app keeps running.
+- **Check:** `tests/test_bigpicture_games.py` (`TheSearch`), `tests/test_bigpicture_shell.py`
+  (`test_search_from_the_shelf_keeps_the_focus_on_the_keyboard`), `tests/test_grouped_scroll.py`
+  (`test_a_group_unmapped_by_a_search_sleeps_after_the_change`).
 
 ### RT-1191 — Recent lists the games played last
 - **Area:** Navigation
