@@ -10,7 +10,7 @@ from tests.bigpicture_harness import BigPictureCase
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
 if HAVE_DISPLAY:
-    from gi.repository import GdkPixbuf, GLib, Gtk
+    from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
     from openemux.ui import navigation
     from openemux.ui.bigpicture import home as home_module
@@ -60,6 +60,52 @@ class ContinueCards(BigPictureCase):
         self.assertTrue(home.focus_default())
         self.assertIs(self.focus_widget(), home.system_tiles[0])
         home.refresh()
+
+
+@needs_display
+class TheGameGridOnlyScrollsDown(BigPictureCase):
+    """Sideways is the rail's, never the games' (issue 954)."""
+
+    LONG = "Zelda no Densetsu - Kamigami no Triforce, a very long title (Japan) (Rev 1)"
+    # Short titles first, so the grid measures its columns off a short card
+    # and only meets the long one further down -- the order that overflowed.
+    library = {
+        "SFC": [f"A{i:02d}.sfc" for i in range(30)] + [f"{LONG}.sfc"],
+        "GBA": ["Short.gba"],
+    }
+
+    def test_a_long_title_never_widens_the_columns_past_the_screen(self):
+        self.show()
+        self.shell.open_library("SFC")
+        grid = self.win.pages.grid_for("SFC")
+
+        def long_card():
+            for card in grid._bound.values():
+                if card.name_label.get_label().startswith("Zelda"):
+                    return card
+            return None
+
+        self.assertTrue(self.pump_until(lambda: long_card() is not None and grid.get_width() > 0))
+        self.pump()
+        card = long_card()
+        # The card is no wider than the column the grid planned for it...
+        self.assertLessEqual(
+            card.measure(Gtk.Orientation.HORIZONTAL, -1)[0], grid._card_allocation_width()
+        )
+        # ...so the games span exactly the width on screen: nothing to scroll to.
+        adjustment = grid.get_hadjustment()
+        self.assertLessEqual(adjustment.get_upper(), adjustment.get_page_size() + 0.5)
+        self.assertEqual(adjustment.get_value(), 0)
+        self.assertEqual(card.name_label.get_ellipsize(), Pango.EllipsizeMode.END)
+
+    def test_the_desktop_keeps_its_titles_whole(self):
+        # Only Big Picture's big titles are cut to the card; leaving the
+        # mode rebuilds the grid with the desktop's titles as they were.
+        self.leave()
+        self.assertNotIn("big_picture", self.win.display_settings_for("SFC"))
+        grid = self.show_with_cards("SFC")
+        card = next(iter(grid._bound.values()))
+        self.assertEqual(card.name_label.get_ellipsize(), Pango.EllipsizeMode.NONE)
 
 
 @needs_display

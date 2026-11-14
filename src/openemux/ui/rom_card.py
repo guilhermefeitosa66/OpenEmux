@@ -188,6 +188,7 @@ class CardContext:
         shadow_pad=0,
         play_caption=None,
         has_auto_state=None,
+        fit_titles=False,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -221,6 +222,9 @@ class CardContext:
         # resume badge (issue 910). Both optional.
         self.play_caption = play_caption
         self.has_auto_state = has_auto_state
+        # Big Picture's titles are drawn in a much larger font: there a title
+        # is ellipsized to the card instead of widening it (issue 954).
+        self.fit_titles = bool(fit_titles)
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -518,11 +522,16 @@ class RomItem(Gtk.Box):
         self.name_label = Gtk.Label()
         self.name_label.set_halign(label_align)
         self.name_label.set_xalign(0.0 if compact else 0.5)
-        if compact:
+        if compact or ctx.fit_titles:
+            # In Big Picture too: GtkGridView sizes every column to the widest
+            # card it has built, so one long title in the couch layout's big
+            # font made the columns overflow the screen and the games scroll
+            # sideways (issue 954). Ellipsized, a title never widens its card.
             self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
         else:
-            self.name_label.set_max_width_chars(self._preview_limit + 3)
             self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
+        if not compact:
+            self.name_label.set_max_width_chars(self._preview_limit + 3)
         self.name_label.add_css_class("rom-title")
         text_box.append(self.name_label)
 
