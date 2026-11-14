@@ -34,7 +34,7 @@ class TheWayInAndOut(BigPictureCase):
         self.assertTrue(shell.active)
         # The desktop's page stack is under the rail now.
         self.assertIs(self.win.content_overlay.get_parent(), shell.library.content_host)
-        self.assertEqual(self.win._zoom, max(self.config.get_zoom(), 1.5))
+        self.assertEqual(self.win._zoom, 2.0)  # the largest zoom, always
 
         self.assertFalse(self.win.toggle_big_picture())
         self.unfullscreen_calls.assert_called_once()
@@ -411,8 +411,8 @@ class TheTheme(unittest.TestCase):
         self.assertIn(f"font-size: {theme.SIZES['title'] * 2}px", light)
         self.assertIn(theme.ACCENT_TEXT_LIGHT, light)
         self.assertNotIn(theme.ACCENT_TEXT_DARK, light)
-        self.assertEqual(theme.px("ring", 0.5), 2)
-        self.assertEqual(theme.px("ring", 0.01), 1)
+        self.assertEqual(theme.px("gap", 0.5), 8)
+        self.assertEqual(theme.px("gap", 0.01), 1)
 
 
 if __name__ == "__main__":

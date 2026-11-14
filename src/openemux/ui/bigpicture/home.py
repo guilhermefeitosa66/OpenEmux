@@ -106,6 +106,10 @@ class HomePage(BigPage):
         section.append(eyebrow(title))
         scroller = Gtk.ScrolledWindow()
         scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        # The strip's natural height, not its minimum: a console icon is a
+        # picture whose minimum is smaller than what it draws at, and the
+        # tiles were cut at the bottom.
+        scroller.set_propagate_natural_height(True)
         strip = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
         scroller.set_child(strip)
         section.append(scroller)

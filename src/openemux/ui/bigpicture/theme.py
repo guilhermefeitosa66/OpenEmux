@@ -7,8 +7,8 @@ multiply, so the stylesheet is generated -- ``stylesheet(scale, dark)`` --
 and reloaded when the window changes size or the preference moves.
 
 The palette is the Android app's, so a player who uses both sees one
-product: the same purple accent, the same focus ring (a 4 px ring with a
-soft halo and a slight lift), the same hint keycaps. Surfaces come from
+product: the same purple accent, which fills whatever the focus is on, and
+the same hint keycaps. Surfaces come from
 libadwaita's named colours, which already follow the light and dark themes.
 """
 
@@ -65,8 +65,6 @@ SIZES = {
     "gap": 16,
     "radius": 18,
     "radius_small": 12,
-    "ring": 4,
-    "halo": 14,
     "card_title": 22,
     # A game's details: the cover column and the save-state tiles under it.
     "details_side": 520,
@@ -121,7 +119,6 @@ def palette(dark):
             "accent_text": ACCENT_TEXT_DARK,
             "accent_soft": ACCENT_SOFT_DARK,
             "danger": DANGER_DARK,
-            "halo": "rgba(139, 92, 246, 0.28)",
             "scrim": "rgba(11, 11, 14, 0.6)",
             "surface": "#1C1C23",
             "surface2": "#24242C",
@@ -136,7 +133,6 @@ def palette(dark):
         "accent_text": ACCENT_TEXT_LIGHT,
         "accent_soft": ACCENT_SOFT_LIGHT,
         "danger": DANGER_LIGHT,
-        "halo": "rgba(124, 58, 237, 0.22)",
         "scrim": "rgba(23, 23, 28, 0.45)",
         "surface": "#FFFFFF",
         "surface2": "#EFEEF4",
@@ -157,8 +153,6 @@ def stylesheet(scale=1.0, dark=True):
     """
     p = palette(dark)
     s = lambda name: px(name, scale)  # noqa: E731 - a local shorthand
-    ring = s("ring")
-    halo = s("halo")
     return f"""
 /* Big Picture, generated at scale {scale} ({'dark' if dark else 'light'}). */
 .big-picture .bp-shell {{
@@ -234,17 +228,11 @@ def stylesheet(scale=1.0, dark=True):
     color: {p['faint']};
 }}
 .big-picture .bp-row.bp-primary {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent_soft']};
+    border-color: {ACCENT_BRIGHT};
 }}
-.big-picture .bp-row.bp-primary .bp-row-title,
-.big-picture .bp-row.bp-primary .bp-row-value {{
-    color: #ffffff;
-}}
-.big-picture .bp-row.bp-primary .bp-row-subtitle,
-.big-picture .bp-row.bp-primary .bp-row-chevron {{
-    color: rgba(255, 255, 255, 0.82);
+.big-picture .bp-row.bp-primary .bp-row-title {{
+    color: {p['accent_text']};
 }}
 .big-picture .bp-row.bp-danger .bp-row-title {{
     color: {p['danger']};
@@ -303,26 +291,10 @@ def stylesheet(scale=1.0, dark=True):
     min-width: {s('badge')}px;
     min-height: {s('badge')}px;
     border-radius: {s('radius_small') + 4}px;
-    background-color: {p['surface2']};
+    background-color: transparent;
     color: {p['text']};
     font-size: {s('row_title') + 2}px;
     font-weight: 700;
-}}
-.big-picture .bp-tile.bp-all {{
-    background-color: #2F5D8A;
-    border-color: #2F5D8A;
-    color: #ffffff;
-}}
-.big-picture .bp-tile.bp-favorites {{
-    background-color: #5B3FA8;
-    border-color: #5B3FA8;
-    color: #ffffff;
-}}
-.big-picture .bp-tile.bp-all .bp-tile-count,
-.big-picture .bp-tile.bp-favorites .bp-tile-count,
-.big-picture .bp-tile.bp-all .bp-tile-name,
-.big-picture .bp-tile.bp-favorites .bp-tile-name {{
-    color: #ffffff;
 }}
 .big-picture .bp-tile.bp-wide {{
     min-height: {s('rail_tile')}px;
@@ -352,8 +324,7 @@ def stylesheet(scale=1.0, dark=True):
     min-height: {s('badge') - 8}px;
 }}
 .big-picture .bp-rail-tile.bp-current .bp-badge {{
-    background-color: {ACCENT};
-    color: #ffffff;
+    color: {p['accent_text']};
 }}
 .big-picture .bp-shoulder {{
     min-width: {s('key_height') + 16}px;
@@ -403,9 +374,9 @@ def stylesheet(scale=1.0, dark=True):
     font-weight: 600;
 }}
 .big-picture .bp-button.suggested-action {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent_soft']};
+    border-color: {ACCENT_BRIGHT};
+    color: {p['accent_text']};
 }}
 .big-picture .bp-button.destructive-action {{
     color: {p['danger']};
@@ -448,9 +419,9 @@ def stylesheet(scale=1.0, dark=True):
     padding: 0 {s('gap') // 2}px;
 }}
 .big-picture .bp-osk-key.suggested-action {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent_soft']};
+    border-color: {ACCENT_BRIGHT};
+    color: {p['accent_text']};
 }}
 .big-picture .bp-osk-field {{
     min-height: {s('button_height') + 16}px;
@@ -468,29 +439,6 @@ def stylesheet(scale=1.0, dark=True):
     margin-bottom: {s('hint_bar') + s('gap')}px;
 }}
 
-/* The focus ring: a ring, a halo and a lift, on whatever the pad lands on. */
-.big-picture .bp-row:focus,
-.big-picture .bp-tile:focus,
-.big-picture .bp-rail-tile:focus,
-.big-picture .bp-button:focus,
-.big-picture .bp-osk-key:focus,
-.big-picture .bp-step:focus,
-.big-picture .bp-section:focus {{
-    outline: {ring}px solid {p['accent_text']};
-    outline-offset: {ring}px;
-    box-shadow: 0 0 0 {halo}px {p['halo']};
-}}
-.big-picture .bp-tile:focus,
-.big-picture .bp-rail-tile:focus {{
-    transform: scale(1.04);
-}}
-.big-picture.keynav-active gridview > child:focus-within .rom-card {{
-    outline-width: {ring}px;
-    outline-offset: -{ring}px;
-    outline-color: {p['accent_text']};
-    box-shadow: 0 0 0 {halo}px {p['halo']};
-    transform: scale(1.04);
-}}
 .big-picture .rom-title {{
     font-size: {s('card_title')}px;
 }}
@@ -604,5 +552,57 @@ def stylesheet(scale=1.0, dark=True):
 }}
 .big-picture .bp-first-boot {{
     min-width: {s('side') + s('safe_x')}px;
+}}
+/* Focus: the whole item fills with the accent, like a button under the
+   pointer on the web, and everything on it turns white. No ring: a ring
+   drawn outside the item was clipped by the scrolled rows around it. Last
+   in the sheet, so it wins over the per-kind colours above at equal
+   specificity. */
+.big-picture .bp-row:focus,
+.big-picture .bp-tile:focus,
+.big-picture .bp-rail-tile:focus,
+.big-picture .bp-button:focus,
+.big-picture .bp-osk-key:focus,
+.big-picture .bp-step:focus,
+.big-picture .bp-section:focus,
+.big-picture gridview > child:focus-within .rom-card {{
+    background-color: {ACCENT};
+    border-color: {ACCENT};
+    color: #ffffff;
+    outline: none;
+    box-shadow: none;
+}}
+.big-picture .bp-row:focus label,
+.big-picture .bp-row:focus .bp-row-title,
+.big-picture .bp-row:focus .bp-row-subtitle,
+.big-picture .bp-row:focus .bp-row-value,
+.big-picture .bp-row:focus .bp-row-chevron,
+.big-picture .bp-tile:focus label,
+.big-picture .bp-tile:focus .bp-tile-name,
+.big-picture .bp-tile:focus .bp-tile-count,
+.big-picture .bp-tile:focus .bp-badge,
+.big-picture .bp-rail-tile:focus label,
+.big-picture .bp-rail-tile:focus .bp-badge,
+.big-picture .bp-button:focus label,
+.big-picture .bp-osk-key:focus label,
+.big-picture .bp-section:focus label,
+.big-picture gridview > child:focus-within .rom-card label {{
+    color: #ffffff;
+}}
+.big-picture .bp-row:focus .bp-number {{
+    background-color: rgba(255, 255, 255, 0.22);
+}}
+/* Switches in the accent too, not the desktop's accent colour. */
+.big-picture switch:checked {{
+    background-color: {ACCENT};
+}}
+.big-picture .bp-row:focus switch {{
+    background-color: rgba(255, 255, 255, 0.28);
+}}
+.big-picture .bp-row:focus switch:checked {{
+    background-color: #ffffff;
+}}
+.big-picture .bp-row:focus switch:checked slider {{
+    background-color: {ACCENT};
 }}
 """

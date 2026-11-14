@@ -84,8 +84,7 @@ default.
 - **Library**: the console rail over the games. The rail is the sidebar on
   its side, the current scope marked and centred; LB/RB step it from
   anywhere on the page. Under it, the same page the desktop shows for that
-  scope, at a zoom floor of 150% with a 4 px focus ring and a slight lift on
-  the focused card. The search keyboard slides up over the games and filters
+  scope, at a zoom floor of 150%, the focused card filled with the accent. The search keyboard slides up over the games and filters
   them as the letters go in; Done lands on the first match.
 - **Game details**: a page, not a dialog. The cover and the save states on
   the left; the title, the play caption and a column of rows on the right:
@@ -123,10 +122,14 @@ the shell reloads it when the window changes size, the setting moves or the
 theme flips. At 1080p: titles 40 px, rows 24/18 px, body and hints 22 px, a
 64 px hint bar, a title-safe inset of 96 px on the sides and 54 px above.
 
-The palette is the Android app's: its purple accent for the focus ring, the
-primary row and the confirm key; surfaces from libadwaita's named colours,
-so light and dark follow the app's theme setting. The focus ring is a 4 px
-ring with a soft halo and a 4% lift, the same as on the phone.
+The palette is the Android app's: its purple accent fills the focused item
+(a row, a tile, a card, a key), and only the focused item, so the primary
+row and the suggested buttons are drawn in the soft accent; the confirm key
+of the hint bar is the accent too; surfaces from libadwaita's named colours,
+so light and dark follow the app's theme setting. Focus is a filled
+background, never a ring: a ring drawn outside the item is clipped by the
+scrolled rows around it. The icons on the tiles have no fill of their own;
+the tile is their container.
 
 ## What stayed out, and why
 

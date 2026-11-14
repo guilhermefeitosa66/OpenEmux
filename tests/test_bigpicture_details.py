@@ -439,13 +439,11 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         page.state_tiles[0].grab_focus()
         self.assertIs(self.focus_widget(), page.state_tiles[0])
         page.emit("shown")
-        self.pump()
-        self.assertIs(self.focus_widget(), page.play_row)
+        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.play_row))
         # Back from a chooser: the row that was left is the row that is found.
         page.core_row.grab_focus()
         page.emit("shown")
-        self.pump()
-        self.assertIs(self.focus_widget(), page.core_row)
+        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.core_row))
         # The shoulders load in place; the focus stays where it is then too.
         self.shell.open_library("SFC")
         self.pump()
@@ -454,8 +452,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         self.assertTrue(page.step_section(1))
         page.core_row.grab_focus()
         page.emit("shown")
-        self.pump()
-        self.assertIs(self.focus_widget(), page.core_row)
+        self.assertTrue(self.pump_until(lambda: self.focus_widget() is page.core_row))
 
 
 @needs_display

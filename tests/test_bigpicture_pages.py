@@ -81,8 +81,8 @@ class TheLibraryPageCorners(BigPictureCase):
         library.rail.focus_current()
         self.pump()
         self.assertTrue(library.step_console(1))
-        self.pump()
-        self.assertTrue(self.focus_widget().is_ancestor(library.rail))
+        self.assertTrue(self.pump_until(
+            lambda: (self.focus_widget() or self.win).is_ancestor(library.rail)))
         with mock.patch.object(library.rail, "move", return_value=False):
             self.assertFalse(library.step_console(1))
 
