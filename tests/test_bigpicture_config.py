@@ -23,7 +23,8 @@ class BigPictureSettingsTests(unittest.TestCase):
     def test_the_defaults_are_off_and_one_hundred_percent(self):
         self.assertEqual(
             self.config.get_big_picture_settings(),
-            {"start": False, "text_size": DEFAULT_BIG_PICTURE_TEXT_SIZE},
+            {"start": False, "text_size": DEFAULT_BIG_PICTURE_TEXT_SIZE,
+             "view_mode": "cartridge", "pause_trigger": "guide"},
         )
 
     def test_start_and_text_size_are_stored_and_normalized(self):
@@ -37,7 +38,25 @@ class BigPictureSettingsTests(unittest.TestCase):
         # Written out and read back: the debounced save lands on disk.
         self.config.save_config()
         again = ConfigManager(self.tmp / "config.yaml")
-        self.assertEqual(again.get_big_picture_settings(), {"start": True, "text_size": 100})
+        self.assertEqual(
+            again.get_big_picture_settings(),
+            {"start": True, "text_size": 100, "view_mode": "cartridge", "pause_trigger": "guide"},
+        )
+
+    def test_view_mode_and_pause_trigger_are_stored_and_normalized(self):
+        # Big Picture's own view and the pause menu's gesture (issue 957).
+        self.assertEqual(self.config.set_big_picture_view_mode("list"), "list")
+        self.assertEqual(self.config.set_big_picture_view_mode("nope"), "cartridge")
+        self.assertEqual(self.config.set_big_picture_pause_trigger("l3_r3"), "l3_r3")
+        self.assertEqual(self.config.set_big_picture_pause_trigger("nope"), "guide")
+        self.config.set_big_picture_view_mode("cover")
+        self.config.set_big_picture_pause_trigger("hold_start")
+        self.config.save_config()
+        again = ConfigManager(self.tmp / "config.yaml")
+        settings = again.get_big_picture_settings()
+        self.assertEqual((settings["view_mode"], settings["pause_trigger"]), ("cover", "hold_start"))
+        # The desktop's own view is not touched by Big Picture's.
+        self.assertEqual(again.get_ui_settings()["view_mode"], self.config.get_ui_settings()["view_mode"])
 
     def test_a_config_with_junk_under_the_key_falls_back(self):
         self.config.config["ui"]["big_picture"] = "nonsense"
