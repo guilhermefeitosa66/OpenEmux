@@ -117,8 +117,8 @@ class TheLibraryPageCorners(BigPictureCase):
         library.show_search()
         with mock.patch.object(self.win, "_visible_grid", return_value=None):
             library.hide_search()
-        self.pump()
-        self.assertTrue(self.focus_widget().is_ancestor(library.rail))
+        self.assertTrue(self.pump_until(
+            lambda: (self.focus_widget() or library).is_ancestor(library.rail)))
         # Typing with the bar closed opens it.
         self.win.search_button.set_active(False)
         library._on_search_typed("m")

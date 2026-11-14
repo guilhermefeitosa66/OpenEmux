@@ -874,8 +874,9 @@ class TheSystemSection(SettingsCase):
         self.assertEqual(self.config.get_big_picture_settings()["text_size"], 80)
         self.assertEqual(rows["bp_text_size"].number_label.get_label(), "80%")
         # Left and Right on the focused row, through the navigator.
-        rows["bp_text_size"].grab_focus()
-        self.pump()
+        row = rows["bp_text_size"]
+        self.assertTrue(self.pump_until(
+            lambda: row.grab_focus() and self.focus_widget() is row))
         self.win.navigation._cmd_move("right")
         self.assertEqual(self.config.get_big_picture_settings()["text_size"], 90)
 
