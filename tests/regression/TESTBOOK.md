@@ -16163,6 +16163,23 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
   as before and fast forward is still solid, its lit pill unchanged. Step 5: the state saves and
   loads as before.
 - **Check:** human only.
+### RT-1146 — A skin copied before the floppy icons shows the floppy too
+- **Area:** Android — Skins
+- **Mode:** MANUAL
+- **Preconditions:** An install of 1.23.5 or earlier where a bundled skin was copied ("Create copy and
+  edit" on the Game Boy Advance's own colours) and that copy picked; one more copy whose save key
+  image was replaced with a picture of the player's own (template downloaded, `save.png` edited,
+  imported back). Then the app updated to this version.
+- **Steps:**
+  1. Start a Game Boy Advance game with the first copy and look at the save and load keys on the
+     strip under the game, in portrait and in landscape.
+  2. Open "Skin", look at the copy's thumbnail, then open it in the skin editor.
+  3. Pick the copy with the player's own save picture and start the game again.
+- **Expected:** Step 1: save and load show the outlined floppy with a down / up arrow, the same as
+  the bundled skin and the in-game menu, in the copy's icon colour; no arrow-only icon is left.
+  Step 2: the thumbnail and the editor show the same floppies. Step 3: the player's own save picture
+  is kept as it is (only the old stock arrows are replaced); load shows the floppy.
+- **Check:** human only.
 ### RT-974 — The menu opens under the game and stretches up by its handle
 - **Area:** Android — Pause sheet on a phone in portrait
 - **Mode:** MANUAL
