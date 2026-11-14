@@ -180,6 +180,11 @@ class Row(Gtk.Button):
         return False
 
 
+#: The longest name a wide tile grows to hold before it ellipsizes. The
+#: longest shipped one is 26 ("Synchroniser les jaquettes").
+TILE_NAME_CHARS = 28
+
+
 class Tile(Gtk.Button):
     """A big square-ish button: a badge or icon, a name, a count under it."""
 
@@ -197,28 +202,32 @@ class Tile(Gtk.Button):
             orientation=Gtk.Orientation.HORIZONTAL if wide else Gtk.Orientation.VERTICAL,
             spacing=14,
         )
-        box.set_halign(Gtk.Align.START if wide else Gtk.Align.CENTER)
+        # A wide tile is as wide as what it holds; a tall one is the width
+        # the stylesheet gives every console tile, and its text fills it.
+        box.set_halign(Gtk.Align.START if wide else Gtk.Align.FILL)
         box.set_valign(Gtk.Align.CENTER)
         self.badge = make_badge(badge, texture, icon_name)
+        # Centred, not filled: a console picture given the tile's whole width
+        # would draw as tall as it is wide.
+        self.badge.set_halign(Gtk.Align.START if wide else Gtk.Align.CENTER)
         box.append(self.badge)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         text.set_valign(Gtk.Align.CENTER)
+        text.set_hexpand(not wide)
+        # One line, never wrapped: a wrapping label's minimum is a few
+        # characters, a strip wider than the screen hands every tile its
+        # minimum, and Pango then broke the words ("Bu-scar", issue 955).
+        # A name that still does not fit ends in an ellipsis.
         self.name_label = Gtk.Label(label=name)
         self.name_label.add_css_class("bp-tile-name")
-        # Two lines before an ellipsis: "Jogados recentemente" and "Back to
-        # desktop" are longer than a tile is wide, and a cut name is worse
-        # than a taller tile.
-        self.name_label.set_wrap(True)
-        self.name_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-        self.name_label.set_lines(2)
-        self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.name_label.set_max_width_chars(16)
-        self.name_label.set_justify(Gtk.Justification.LEFT if wide else Gtk.Justification.CENTER)
-        self.name_label.set_xalign(0.0 if wide else 0.5)
+        self._single_line(self.name_label, wide, name)
         text.append(self.name_label)
         self.count_label = Gtk.Label(label=count or "")
         self.count_label.add_css_class("bp-tile-count")
         self.count_label.set_visible(bool(count))
+        self.count_label.set_ellipsize(Pango.EllipsizeMode.END)
+        if not wide:
+            self.count_label.set_max_width_chars(1)
         self.count_label.set_xalign(0.0 if wide else 0.5)
         text.append(self.count_label)
         box.append(text)
@@ -228,6 +237,21 @@ class Tile(Gtk.Button):
     def set_count(self, count):
         self.count_label.set_label(count or "")
         self.count_label.set_visible(bool(count))
+
+    @staticmethod
+    def _single_line(label, wide, text):
+        label.set_single_line_mode(True)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        label.set_xalign(0.0 if wide else 0.5)
+        if wide:
+            # Never narrower than the name itself (up to a cap): squeezed is
+            # what broke it. The row scrolls instead when it overflows.
+            label.set_width_chars(min(len(text or ""), TILE_NAME_CHARS))
+            label.set_max_width_chars(TILE_NAME_CHARS)
+        else:
+            # Never wider than the tile: every console tile is one width.
+            label.set_max_width_chars(1)
+            label.set_hexpand(True)
 
 
 def make_badge(text=None, texture=None, icon_name=None):

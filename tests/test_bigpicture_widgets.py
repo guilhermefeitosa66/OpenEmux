@@ -11,7 +11,7 @@ if HAVE_DISPLAY:
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gdk, GLib, Gtk
+    from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
     Adw.init()
 
@@ -115,6 +115,39 @@ class TileAndRailTests(unittest.TestCase):
         self.assertIsInstance(picture, Gtk.Picture)
         self.assertEqual(widgets.console_badge_text("vectrex"), "VECT")
         self.assertEqual(widgets.console_badge_text(None), "")
+
+    def test_a_tile_name_stays_on_one_line_and_never_breaks_a_word(self):
+        # Issue 955: wrapped names were squeezed to a few characters and
+        # Pango hyphenated them ("Bu-scar", "Compartilh-ar por perto").
+        wide = Tile("Compartilhar por perto", icon_name="send-to-symbolic", wide=True)
+        tall = Tile("Jogados recentemente", "3 jogos", badge="REC")
+        for tile in (wide, tall):
+            label = tile.name_label
+            self.assertFalse(label.get_wrap())
+            self.assertTrue(label.get_single_line_mode())
+            self.assertEqual(label.get_ellipsize(), Pango.EllipsizeMode.END)
+            self.assertEqual(tile.count_label.get_ellipsize(), Pango.EllipsizeMode.END)
+        # A wide tile asks for its whole name, so a strip cannot squeeze it...
+        self.assertEqual(wide.name_label.get_width_chars(), len("Compartilhar por perto"))
+        self.assertEqual(wide.name_label.get_max_width_chars(), widgets.TILE_NAME_CHARS)
+        name_min, name_nat, _b, _bb = wide.name_label.measure(Gtk.Orientation.HORIZONTAL, -1)
+        tile_min, _n, _b, _bb = wide.measure(Gtk.Orientation.HORIZONTAL, -1)
+        self.assertGreaterEqual(name_min, name_nat)
+        self.assertGreater(tile_min, name_min)
+        # ... up to a cap, past which it ellipsizes.
+        long_name = "x" * (widgets.TILE_NAME_CHARS + 10)
+        capped = Tile(long_name, wide=True)
+        self.assertEqual(capped.name_label.get_width_chars(), widgets.TILE_NAME_CHARS)
+        self.assertEqual(Tile(None, wide=True).name_label.get_width_chars(), 0)
+        # A tall tile's name never widens it: every console tile is one width.
+        self.assertEqual(tall.name_label.get_max_width_chars(), 1)
+        self.assertEqual(tall.count_label.get_max_width_chars(), 1)
+        self.assertTrue(tall.name_label.get_hexpand())
+        self.assertEqual(tall.badge.get_halign(), Gtk.Align.CENTER)
+        self.assertEqual(wide.badge.get_halign(), Gtk.Align.START)
+        short_min, _n, _b, _bb = Tile("Todos", badge="REC").measure(Gtk.Orientation.HORIZONTAL, -1)
+        long_min, _n, _b, _bb = tall.measure(Gtk.Orientation.HORIZONTAL, -1)
+        self.assertEqual(short_min, long_min)
 
     def test_rail_entries_by_scope_kind(self):
         self.assertEqual(widgets.rail_entry_for_scope(ALL_CONSOLES_ID, "All", "all")[5], "bp-all")

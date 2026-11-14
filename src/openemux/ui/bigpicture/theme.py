@@ -50,12 +50,15 @@ SIZES = {
     "hint_key": 18,
     "hint_bar": 64,
     "key_height": 36,
-    "tile_name": 22,
+    "tile_name": 20,
     "tile_count": 18,
-    "tile_width": 232,
+    "tile_width": 264,
     "tile_height": 160,
     "rail_tile": 96,
     "badge": 72,
+    # The icon box of a wide tile (icon + name side by side): smaller, so
+    # the six System tiles fit across a screen in the longer locales.
+    "wide_badge": 52,
     "dialog_heading": 36,
     "button": 24,
     "button_height": 68,
@@ -298,6 +301,10 @@ def stylesheet(scale=1.0, dark=True):
 }}
 .big-picture .bp-tile.bp-wide {{
     min-height: {s('rail_tile')}px;
+}}
+.big-picture .bp-tile.bp-wide .bp-badge {{
+    min-width: {s('wide_badge')}px;
+    min-height: {s('wide_badge')}px;
 }}
 .big-picture .bp-tile.bp-danger .bp-tile-name {{
     color: {p['danger']};
