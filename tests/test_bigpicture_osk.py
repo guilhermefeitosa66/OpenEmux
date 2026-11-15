@@ -13,7 +13,8 @@ if HAVE_DISPLAY:
 
     Adw.init()
 
-    from gi.repository import Gtk
+    gi.require_version("Graphene", "1.0")
+    from gi.repository import Graphene, Gtk
 
     from openemux.ui.bigpicture.osk import (
         MODE_SEARCH,
@@ -234,6 +235,50 @@ class WalkingTheBoard(unittest.TestCase):
         self.assertTrue(osk.pad_move("down", self.key("M")))
         self.assertTrue(osk.pad_move("right", osk.space_button))
         self.assertIsNone(self.focused)
+
+    def lay_out(self, row, spans):
+        """Pretend the row is on screen: ``spans`` is each key's (left, right) in pixels."""
+        for key, (left, right) in zip(self.osk.rows[row], spans):
+            rect = Graphene.Rect().init(left, 0, right - left, 40)
+            key.compute_bounds = lambda _other, rect=rect: (True, rect)
+            key.get_width = lambda width=right - left: width
+
+    def test_on_screen_the_function_row_is_walked_by_what_shows(self):
+        # The search sheet at 1280x720: Space and Done stretch, the two
+        # in the middle are narrow, so Done is what sits under "M".
+        osk = self.osk
+        osk.set_text("mario")
+        self.lay_out(3, [(330 + 92 * i, 416 + 92 * i) for i in range(10)])
+        self.assertIs(self.walk(self.key("M"), "down"), osk.clear_button)  # not laid out yet
+        self.lay_out(4, [(189, 651), (661, 712), (722, 778), (788, 1243)])
+        self.assertIs(self.walk(self.key("M"), "down"), osk.done_button)
+        self.assertIs(self.walk(osk.done_button, "up"), self.key("-"))
+        self.assertIs(self.walk(self.key("X"), "down"), osk.space_button)
+        self.assertIs(self.walk(osk.backspace_button, "up"), self.key("V"))
+        # Letter rows keep the grid's exact half keys, whatever is measured.
+        self.assertIs(self.walk(self.key("S"), "down"), self.key("X"))
+        # A key that cannot be measured against the board, or has no width
+        # yet, is not laid out.
+        osk.done_button.compute_bounds = lambda _other: (False, None)
+        self.assertIs(self.walk(self.key("M"), "down"), osk.clear_button)
+        osk.done_button.get_width = lambda: 0
+        self.assertIs(self.walk(self.key("M"), "down"), osk.clear_button)
+
+    def test_emptying_the_field_from_a_grey_key_keeps_the_focus_on_the_board(self):
+        osk = self.osk
+        osk.set_text("a")
+        osk.clear_button.has_focus = lambda: True
+        osk.clear()
+        self.assertIs(self.focused, osk.space_button)
+        self.assertFalse(osk.clear_button.get_sensitive())
+        self.focused = None
+        osk.set_text("ab")
+        osk.backspace()  # text left: Backspace stays live and keeps the focus
+        self.assertIsNone(self.focused)
+        osk.clear_button.has_focus = lambda: False
+        osk.backspace_button.has_focus = lambda: True
+        osk.backspace()
+        self.assertIs(self.focused, osk.space_button)
 
     def test_a_widget_it_does_not_own_is_left_alone(self):
         self.assertFalse(self.osk.pad_move("down", Gtk.Button()))

@@ -188,6 +188,10 @@ class OnScreenKeyboard(Gtk.Box):
         else:
             self.field_hint.set_label("")
         has_text = bool(self._text)
+        if not has_text and (self.backspace_button.has_focus() or self.clear_button.has_focus()):
+            # A grey key drops the focus, and the pad's next move would land
+            # on the games behind the keyboard: Space is harmless under A.
+            self.space_button.grab_focus()
         self.backspace_button.set_sensitive(has_text)
         self.clear_button.set_sensitive(has_text)
 
@@ -265,9 +269,35 @@ class OnScreenKeyboard(Gtk.Box):
     def _centre(self, row, index):
         """Where a key's middle sits, in half keys from the board's left edge."""
         if row == len(self.rows) - 1:
-            # The function row spans the board; its keys share it evenly.
+            # Before the layout: the function row's keys share the board evenly.
             return (index + 0.5) * self.width / len(self.rows[row])
         return self.key_column(row, index) + 1
+
+    def _measured_centres(self, row):
+        """A row's key middles in pixels, once laid out; None before that."""
+        centres = []
+        for key in self.rows[row]:
+            # Unallocated, a key still reports its CSS box around the origin.
+            if key.get_width() <= 0:
+                return None
+            ok, bounds = key.compute_bounds(self)
+            if not ok:
+                return None
+            centres.append(bounds.get_x() + bounds.get_width() / 2)
+        return centres
+
+    def _centres(self, rows):
+        """The key middles of ``rows``, each row a list, in one unit for all.
+
+        Between letter rows it is the grid's half keys, exact, so a tie is a
+        real tie. To and from the function row, whose keys are of uneven
+        widths (Space and Done stretch), what the screen shows once laid out.
+        """
+        if len(self.rows) - 1 in rows:
+            measured = [self._measured_centres(row) for row in rows]
+            if None not in measured:
+                return measured
+        return [[self._centre(row, i) for i in range(len(self.rows[row]))] for row in rows]
 
     def _locate(self, widget):
         for row, keys in enumerate(self.rows):
@@ -281,10 +311,10 @@ class OnScreenKeyboard(Gtk.Box):
 
         Up and Down take the key of the next row nearest under the one
         left, the same index on a tie, so Down then Up between two letter
-        rows comes back to it (the function row is mapped by each key's
-        share of the row, so a trip through it lands near, not always on,
-        the key it left); Left and Right wrap inside the row. At the top and at the function
-        row the focus holds still rather than escaping to the page behind.
+        rows comes back to it (a trip through the function row, whose keys
+        are wider, lands near the key it left, not always on it). Left and
+        Right wrap inside the row. At the top and at the function row the
+        focus holds still rather than escaping to the page behind.
         """
         step = _STEPS.get(direction)
         where = self._locate(focus) if step is not None else None
@@ -303,11 +333,12 @@ class OnScreenKeyboard(Gtk.Box):
         target = row + step
         if not 0 <= target < len(self.rows):
             return True
-        centre = self._centre(row, index)
+        here, there = self._centres((row, target))
+        centre = here[index]
         live = [i for i, key in enumerate(self.rows[target]) if key.get_sensitive()]
         if not live:
             return True
-        best = min(live, key=lambda i: (abs(self._centre(target, i) - centre), i != index))
+        best = min(live, key=lambda i: (abs(there[i] - centre), i != index))
         self.rows[target][best].grab_focus()
         return True
 
