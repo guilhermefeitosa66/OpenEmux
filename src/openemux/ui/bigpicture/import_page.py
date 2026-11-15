@@ -16,7 +16,7 @@ from gi.repository import Gtk
 from openemux.core.big_picture_shelf import full_name
 from openemux.core.systems import SYSTEMS
 from openemux.ui.bigpicture.widgets import BigPage, body, caps, page_heading
-from openemux.ui.console_icons import console_texture
+from openemux.ui.console_icons import ConsolePixelArt, console_texture, console_texture_1x
 
 MODE_FILES = "files"
 MODE_FOLDER = "folder"
@@ -42,8 +42,8 @@ class FormatRow(Gtk.Box):
         self.add_css_class("bp-list-row")
         texture = console_texture(system["id"])
         if texture is not None:
-            icon = Gtk.Picture.new_for_paintable(texture)
-            icon.set_content_fit(Gtk.ContentFit.CONTAIN)
+            # Crisp at a whole multiple, soft grid from 4x (issue 966).
+            icon = ConsolePixelArt([texture, console_texture_1x(system["id"])])
             icon.set_size_request(40, 40)
         else:
             icon = Gtk.Image.new_from_icon_name("input-gaming-symbolic")
