@@ -19356,8 +19356,10 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
      Esc, then Enter on "All games", `make devbox-shot OUT=$SCRATCH/bp-clock-games.png`; Enter again
      for a game's details, `make devbox-shot OUT=$SCRATCH/bp-clock-details.png`.
   3. `make devbox-res RES=1280x720` and repeat steps 1 and 2.
-  4. Inside the devbox: `gsettings set org.gnome.desktop.interface clock-format 12h`, wait 30 s,
-     `make devbox-shot`; then `gsettings set org.gnome.desktop.interface clock-format 24h`.
+  4. On the devbox's own session bus (a plain `make devbox` shell carries the host's, and would
+     change the maintainer's desktop instead):
+     `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 12h'`,
+     wait 30 s, `make devbox-shot`; then the same command with `24h`.
 - **Expected:** 1–3: no page has an empty strip at the top holding only the time: each page's
   title, chips or grid start right under the top margin; a game's details keep their
   "Console › Game" breadcrumb, with nothing beside it. On every page the time ("14:05") sits at
@@ -19367,4 +19369,4 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** the screenshots show the above; `tests/test_bigpicture_widgets.py`
   (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
   `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
-- **Restore:** `gsettings set org.gnome.desktop.interface clock-format 24h` inside the devbox.
+- **Restore:** `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 24h'`.

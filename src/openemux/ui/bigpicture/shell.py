@@ -63,17 +63,22 @@ def scope_kind(scope_id):
 CLOCK_SCHEMA = "org.gnome.desktop.interface"
 
 
-def twelve_hour_clock():
-    """Whether the desktop shows a 12-hour clock (GNOME's ``clock-format``).
+def clock_settings():
+    """GNOME's interface settings, when the desktop has ``clock-format``; else None.
 
-    Read at every tick, so a change on the desktop shows within the next
-    one. A desktop without that schema (or a sandbox without it) gets 24 h.
+    Built once per shell: a ``Gio.Settings`` follows the desktop on its own,
+    so reading it at every tick sees a change within the next one.
     """
     source = Gio.SettingsSchemaSource.get_default()
     schema = source.lookup(CLOCK_SCHEMA, True) if source is not None else None
     if schema is None or not schema.has_key("clock-format"):
-        return False
-    return Gio.Settings.new(CLOCK_SCHEMA).get_string("clock-format") == "12h"
+        return None
+    return Gio.Settings.new(CLOCK_SCHEMA)
+
+
+def twelve_hour_clock(settings):
+    """Whether the desktop shows a 12-hour clock. No settings (no schema): 24 h."""
+    return settings is not None and settings.get_string("clock-format") == "12h"
 
 
 def clock_text(now, twelve_hour):
@@ -141,6 +146,7 @@ class BigPictureShell(Gtk.Box):
         self.overlay.add_overlay(self.osk_revealer)
         content.append(self.overlay)
         self.hint_bar = HintBar()
+        self._clock_settings = clock_settings()
         self.sync_clock()
         content.append(self.hint_bar)
         self.append(content)
@@ -275,7 +281,7 @@ class BigPictureShell(Gtk.Box):
     # -- the clock -------------------------------------------------------------------
     def sync_clock(self):
         """The time at the right of the hint bar (issue 977), as the desktop shows it."""
-        self.hint_bar.clock.set_label(clock_text(GLib.DateTime.new_now_local(), twelve_hour_clock()))
+        self.hint_bar.clock.set_label(clock_text(GLib.DateTime.new_now_local(), twelve_hour_clock(self._clock_settings)))
 
     def sync_status(self):
         """The clock, and the task banners the library pages show (issue 957)."""

@@ -939,10 +939,6 @@ class TheTheme(unittest.TestCase):
         self.assertEqual(theme.px("gap", 0.01), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 @needs_display
 class TheClockFormat(unittest.TestCase):
     """The clock follows the desktop's 12/24-hour setting (issue 977)."""
@@ -963,28 +959,34 @@ class TheClockFormat(unittest.TestCase):
     def test_no_schema_source_or_no_schema_is_24_hours(self):
         gio = shell_module.Gio
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=None):
-            self.assertFalse(shell_module.twelve_hour_clock())
+            self.assertIsNone(shell_module.clock_settings())
         source = mock.Mock()
         source.lookup.return_value = None
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
-            self.assertFalse(shell_module.twelve_hour_clock())
+            self.assertIsNone(shell_module.clock_settings())
         source.lookup.assert_called_with(shell_module.CLOCK_SCHEMA, True)
         schema = mock.Mock()
         schema.has_key.return_value = False
         source.lookup.return_value = schema
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
-            self.assertFalse(shell_module.twelve_hour_clock())
+            self.assertIsNone(shell_module.clock_settings())
+        self.assertFalse(shell_module.twelve_hour_clock(None))
 
     def test_the_desktop_setting_decides(self):
         gio = shell_module.Gio
         source = mock.Mock()
         source.lookup.return_value.has_key.return_value = True
+        settings = mock.Mock()
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            self.assertIs(shell_module.clock_settings(), settings)
+        new.assert_called_with(shell_module.CLOCK_SCHEMA)
         for value, expected in (("12h", True), ("24h", False)):
-            settings = mock.Mock()
             settings.get_string.return_value = value
-            with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
-                gio.Settings, "new", return_value=settings
-            ) as new:
-                self.assertIs(shell_module.twelve_hour_clock(), expected)
-            new.assert_called_with(shell_module.CLOCK_SCHEMA)
+            self.assertIs(shell_module.twelve_hour_clock(settings), expected)
             settings.get_string.assert_called_with("clock-format")
+
+
+if __name__ == "__main__":
+    unittest.main()
