@@ -18969,7 +18969,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   1. Start the app (`make devbox-app ACTION=restart`), press F11;
      `make devbox-shot OUT=$SCRATCH/bp-shelf.png`.
 - **Expected:** On the left, the rail: the app's logo, then "Library" (on a purple pill),
-  "Recent", "Import", "Settings", each icon over its label, the whole rail about 115 px wide (well
+  "Recent", "Import", "Settings" and, last, "Back to desktop" (a screen icon, its label on two
+  lines, never on a pill; RT-1219), each icon over its label, the whole rail about 115 px wide (well
   under half the 232 px it had before issue 975), every label whole. On the right, "Shelf" in big letters with "N consoles · M games"
   under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
   cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
@@ -19143,8 +19144,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Expected:** 1: "Settings"; the BIOS card ("N consoles need files"); APPEARANCE (Theme,
   Language); ACHIEVEMENTS (RetroAchievements); ARTWORK (Artwork providers); CONSOLES (one entry per
   console with games, "core · shader" under it); SHARE NEARBY (Device name); GENERAL (ROM folder,
-  Controllers, Check for updates — not in a Flatpak —, System, About and licenses); "Back to
-  desktop" last. The right side reads "Choose a setting on the left". 2: the entry opens on the
+  Controllers, Check for updates — not in a Flatpak —, System, About and licenses), "About and
+  licenses" last: no "Back to desktop" entry (it is on the rail, RT-1219). The right side reads
+  "Choose a setting on the left". 2: the entry opens on the
   right with the focus in it; B goes back to the list; a console shows its core, shader, bezel
   (4:3 consoles) and core options.
 - **Check:** the screenshot; `tests/test_bigpicture_settings.py` (`ThePage`, `TheConsoleSection`).
@@ -19322,3 +19324,23 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   above the hint bar with room to spare. 3: the game grid opens at 200% and its zoom still works.
 - **Check:** both screenshots show the above; `tests/test_bigpicture_shell.py`
   (`test_every_console_name_fits_on_one_line`, `test_console_art_is_drawn_at_a_whole_multiple`).
+
+### RT-1219 — "Back to desktop" ends the Big Picture rail and leaves the mode
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, Big Picture on
+  (F11 by keycode: `make devbox-xdo CMD='key 95'`).
+- **Steps:**
+  1. `make devbox-shot OUT=$SCRATCH/bp-rail-desktop.png`.
+  2. Press Left until the focus is on the rail ("Library"), then Down four times;
+     `make devbox-shot OUT=$SCRATCH/bp-rail-desktop-focus.png`. Press Enter.
+  3. Press F11 again; press Tab (RB) four times.
+- **Expected:** 1: the rail ends with "Back to desktop" right after "Settings": a screen icon over
+  its label, the label whole on one or two lines, drawn like the tabs and never on the purple
+  pill. 2: Down from "Settings" focuses it with the same fill as a focused tab; Enter (A, or a
+  click) leaves Big Picture: the normal window comes back and the toast reads "Back to the
+  desktop". 3: RB walks Library → Recent → Import → Settings → Library; it never lands on "Back to
+  desktop".
+- **Check:** both screenshots; `tests/test_bigpicture_shell.py`
+  (`test_back_to_desktop_on_the_rail_leaves_the_mode`, `test_the_rail_is_slim`),
+  `tests/test_bigpicture_widgets.py` (`test_the_rail_ends_with_back_to_desktop`).
