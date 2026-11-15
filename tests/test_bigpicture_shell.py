@@ -258,6 +258,68 @@ class TheShelf(BigPictureCase):
         shelf.refresh()
         self.assertIs(self.focus_widget(), shelf.import_button)
 
+    def test_console_art_is_drawn_at_a_whole_multiple(self):
+        # Issue 964: 32 px pixel art, nearest-neighbour, never stretched.
+        from gi.repository import Gsk
+
+        from openemux.ui.bigpicture.shelf import PixelArt
+
+        sfc = next(card for card in self.shell.shelf.cards if card.scope_id == "SFC")
+        self.assertIsInstance(sfc.art, PixelArt)
+        self.assertTrue(sfc.art.has_css_class("bp-shelf-art"))
+        size = sfc.art.texture.get_width()
+        self.assertGreaterEqual(sfc.art.measure(Gtk.Orientation.HORIZONTAL, -1)[0], size)
+        self.assertEqual(sfc.art.do_measure(Gtk.Orientation.VERTICAL, -1)[0], sfc.art.texture.get_height())
+        snapshot = Gtk.Snapshot()
+        with mock.patch.object(sfc.art, "get_width", return_value=size * 2 + 8), \
+                mock.patch.object(sfc.art, "get_height", return_value=size * 3):
+            sfc.art.do_snapshot(snapshot)
+        node = snapshot.to_node()
+        self.assertIsInstance(node, Gsk.TextureScaleNode)
+        self.assertEqual(node.get_filter(), Gsk.ScalingFilter.NEAREST)
+        bounds = node.get_bounds()
+        self.assertEqual((bounds.get_x(), bounds.get_width(), bounds.get_height()), (4, size * 2, size * 2))
+        # The library cards keep a symbolic icon, centred in the art box.
+        first = self.shell.shelf.cards[0]
+        self.assertIsInstance(first.art, Gtk.Image)
+        self.assertIsInstance(first.art.get_parent(), Gtk.CenterBox)
+        self.assertTrue(first.art.get_parent().has_css_class("bp-shelf-art"))
+
+    def test_the_pixel_multiple(self):
+        from openemux.ui.bigpicture.shelf import pixel_rect, pixel_scale
+
+        self.assertEqual(pixel_scale(72, 32), 2)
+        self.assertEqual(pixel_scale(96, 32), 3)
+        self.assertEqual(pixel_scale(20, 32), 1)  # smaller than the art: 1x
+        self.assertEqual(pixel_scale(0, 32), 1)
+        self.assertEqual(pixel_scale(72, 0), 1)
+        self.assertEqual(pixel_rect(72, 72, 32, 32), (4, 4, 64, 64))
+        self.assertEqual(pixel_rect(100, 40, 32, 16), (18, 4, 64, 32))  # one multiple for both sides
+
+    def test_every_console_name_fits_on_one_line(self):
+        # Issue 964: at 1920x1080 and 2560x1440 the text column of a card is
+        # wider than every shipped console name, set in the card's name font.
+        from gi.repository import Pango
+
+        from openemux.core.systems import SYSTEMS, get_system_display_name
+        from openemux.ui.bigpicture.shelf import COLUMNS
+
+        label = self.shell.shelf.cards[0].name_label
+        font = label.get_pango_context().get_font_description().copy()
+        font.set_weight(Pango.Weight.BOLD)
+        names = [get_system_display_name(system["id"]) for system in SYSTEMS]
+        self.assertIn("Famicom Disk System", names)
+        for width, height in ((1920, 1080), (2560, 1440)):
+            scale = theme.scale_for(height)
+            s = lambda name, scale=scale: theme.px(name, scale)  # noqa: E731
+            content = width - s("rail_width") - s("safe_x") - 24 * (COLUMNS - 1)
+            column = content // COLUMNS - 2 * (s("gap") * 3 // 2) - s("shelf_art") - s("shelf_gap")
+            font.set_absolute_size(s("shelf_name") * Pango.SCALE)
+            for name in names:
+                layout = label.create_pango_layout(name)
+                layout.set_font_description(font)
+                self.assertLess(layout.get_pixel_size()[0], column, f"{name} at {width}x{height}")
+
     def test_recently_played_has_a_tab_not_a_card(self):
         self.win.play_history.record_launch(self.rom("SFC")["path"])
         self.win.refresh_library()
@@ -825,6 +887,8 @@ class TheTheme(unittest.TestCase):
         self.assertIn(theme.FOCUS_FILL, css)
         self.assertIn(theme.FOCUS_ACCENT, css)
         self.assertIn(".big-picture .bp-shelf-card.bp-shelf-fc { background-color: #7A2E2E; }", css)
+        # Issue 964: the art/text gap is the stylesheet's, so it scales.
+        self.assertIn(f"border-spacing: {theme.SIZES['shelf_gap']}px", css)
         # Issue 955: a wide tile's icon box is its own, smaller size.
         self.assertIn(".big-picture .bp-tile.bp-wide .bp-badge {", css)
         self.assertIn(f"min-width: {theme.SIZES['wide_badge']}px", css)

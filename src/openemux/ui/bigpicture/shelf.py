@@ -13,7 +13,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Gtk, Pango
+gi.require_version("Gsk", "4.0")
+gi.require_version("Graphene", "1.0")
+from gi.repository import Graphene, Gsk, Gtk, Pango
 
 from openemux.core.big_picture_shelf import css_class, short_name
 from openemux.ui.bigpicture.banners import TaskBanners
@@ -23,6 +25,55 @@ from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: Cards in a row, as on Android's landscape shelf.
 COLUMNS = 3
+
+
+def pixel_scale(space, size):
+    """The largest whole multiple of ``size`` px that fits in ``space`` px.
+
+    Never below 1: a box smaller than the art still shows it, at 1x.
+    """
+    if size <= 0 or space <= 0:
+        return 1
+    return max(1, int(space) // int(size))
+
+
+def pixel_rect(width, height, tex_width, tex_height):
+    """Where the art goes in a ``width`` x ``height`` box: ``(x, y, w, h)``.
+
+    One whole multiple for both sides, so the pixels stay square, centred.
+    """
+    factor = min(pixel_scale(width, tex_width), pixel_scale(height, tex_height))
+    w, h = tex_width * factor, tex_height * factor
+    return (width - w) // 2, (height - h) // 2, w, h
+
+
+class PixelArt(Gtk.Widget):
+    """A console's pixel art at a whole multiple, nearest-neighbour (issue 964).
+
+    ``Gtk.Picture`` scales with linear filtering, which turns 32 px pixel art
+    blown up four times into a blur. This draws it at the largest whole
+    multiple that fits the box the stylesheet gives it, each pixel a sharp
+    square.
+    """
+
+    def __init__(self, texture):
+        super().__init__()
+        self.texture = texture
+
+    def do_measure(self, orientation, _for_size):
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            size = self.texture.get_width()
+        else:
+            size = self.texture.get_height()
+        return size, size, -1, -1
+
+    def do_snapshot(self, snapshot):
+        x, y, w, h = pixel_rect(
+            self.get_width(), self.get_height(),
+            self.texture.get_width(), self.texture.get_height(),
+        )
+        bounds = Graphene.Rect().init(x, y, w, h)
+        snapshot.append_scaled_texture(self.texture, Gsk.ScalingFilter.NEAREST, bounds)
 
 
 class ShelfCard(Gtk.Button):
@@ -35,22 +86,22 @@ class ShelfCard(Gtk.Button):
         if style:
             self.add_css_class(style)
         self.set_hexpand(True)
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
+        # The gap between the art and the text is the stylesheet's
+        # (``border-spacing``), so it scales with everything else.
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         box.set_valign(Gtk.Align.CENTER)
-        art = Gtk.Box()
+        if texture is not None:
+            # The art box is the stylesheet's size, not expanding, so the
+            # text column gets the rest of the card, for the name.
+            art = self.art = PixelArt(texture)
+        else:
+            # Centred in the box without expanding it (an expanding child
+            # would take width from the name).
+            art = Gtk.CenterBox()
+            self.art = Gtk.Image.new_from_icon_name(icon_name or "input-gaming-symbolic")
+            art.set_center_widget(self.art)
         art.add_css_class("bp-shelf-art")
         art.set_valign(Gtk.Align.CENTER)
-        if texture is not None:
-            picture = Gtk.Picture.new_for_paintable(texture)
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.set_can_shrink(True)
-            picture.set_hexpand(True)
-            art.append(picture)
-        else:
-            image = Gtk.Image.new_from_icon_name(icon_name or "input-gaming-symbolic")
-            image.set_hexpand(True)
-            image.set_halign(Gtk.Align.CENTER)
-            art.append(image)
         box.append(art)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         text.set_valign(Gtk.Align.CENTER)
@@ -218,4 +269,4 @@ class ShelfPage(BigPage):
         ]
 
 
-__all__ = ["ShelfCard", "ShelfPage", "COLUMNS"]
+__all__ = ["ShelfCard", "ShelfPage", "PixelArt", "COLUMNS", "pixel_rect", "pixel_scale"]
