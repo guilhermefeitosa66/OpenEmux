@@ -68,5 +68,47 @@ class AnIconThatWillNotDecodeTests(unittest.TestCase):
                 self.assertIsNone(console_icons.console_texture(FAKE))
 
 
+@needs_display
+class TheSmallArtTests(unittest.TestCase):
+    """The 1x (16-px) art Big Picture's chips draw below 1080p (issue 962)."""
+
+    def setUp(self):
+        self.addCleanup(console_icons._SMALL_TEXTURES.pop, FAKE, None)
+        self.addCleanup(console_icons._SMALL_TEXTURES.pop, "SFC", None)
+
+    def test_a_shipped_console_has_it_at_half_the_size(self):
+        console_icons._SMALL_TEXTURES.pop("SFC", None)
+        texture = console_icons.console_texture_1x("SFC")
+        self.assertEqual(texture.get_width(), 16)
+        self.assertIs(console_icons.console_texture_1x("SFC"), texture)  # cached
+
+    def test_no_file_or_a_missing_one_is_none(self):
+        self.assertIsNone(console_icons.console_texture_1x(FAKE))
+        console_icons._SMALL_TEXTURES.pop(FAKE)
+        with mock.patch.dict(console_icons.CONSOLE_ICON_FILES, {FAKE: "not-shipped@2x.png"}, clear=False):
+            self.assertIsNone(console_icons.console_texture_1x(FAKE))
+
+    def test_one_that_will_not_decode_is_none(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        broken = tmp / "broken.png"
+        broken.write_bytes(b"not a png at all")
+        with mock.patch.dict(console_icons.CONSOLE_ICON_FILES, {FAKE: "broken@2x.png"}, clear=False), \
+                mock.patch.object(console_icons, "asset_path", lambda _category, _name: broken):
+            with self.assertLogs("openemux.ui.console_icons", level="INFO"):
+                self.assertIsNone(console_icons.console_texture_1x(FAKE))
+
+    def test_the_views_have_a_glyph_and_consoles_none(self):
+        from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
+
+        self.assertEqual(console_icons.scope_icon_name(ALL_CONSOLES_ID), "view-grid-symbolic")
+        self.assertEqual(console_icons.scope_icon_name(FAVORITES_ID), "starred-symbolic")
+        self.assertEqual(console_icons.scope_icon_name(RECENT_ID), "document-open-recent-symbolic")
+        self.assertIsNone(console_icons.scope_icon_name("SFC"))
+        favorites = console_icons.console_icon(FAVORITES_ID)
+        self.assertTrue(favorites.has_css_class("favorites-sidebar-icon"))
+        self.assertFalse(console_icons.console_icon(ALL_CONSOLES_ID).has_css_class("favorites-sidebar-icon"))
+
+
 if __name__ == "__main__":
     unittest.main()

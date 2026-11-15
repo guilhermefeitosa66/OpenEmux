@@ -40,7 +40,7 @@ from openemux.ui.bigpicture.widgets import (
     icon_button,
     once,
 )
-from openemux.ui.console_icons import console_texture
+from openemux.ui.console_icons import console_texture, console_texture_1x, scope_icon_name
 from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: The view switch: id, icon, the key of its tooltip and heading.
@@ -50,13 +50,6 @@ VIEWS = (
     (LIST, "view-list-symbolic", "big_picture.view.list"),
 )
 VIEW_KEYS = {view_id: key for view_id, _icon, key in VIEWS}
-
-#: The console chips' glyphs for what is not a console: the shelf cards' icons.
-CHIP_GLYPHS = {
-    "all": "view-grid-symbolic",
-    "favorites": "starred-symbolic",
-    "collection": "user-bookmarks-symbolic",
-}
 
 #: The filter chips' labels.
 FACET_KEYS = {
@@ -257,19 +250,15 @@ class GamesPage(BigPage):
     def _chip_icon(self, scope_id):
         """The chip's icon (issue 962): the console's pixel art, as on the shelf.
 
-        All, Favorites and the playlists take the shelf cards' glyphs; a
+        All, Favorites and the playlists take their glyphs (the sidebar's); a
         console with no art, its symbolic icon (the sidebar's fallback).
         """
-        from openemux.ui.bigpicture.shell import scope_kind
-
-        kind = scope_kind(scope_id)
-        if kind == "console":
-            texture = console_texture(scope_id)
-            if texture is not None:
-                return PixelIcon(texture)
+        icon_name = scope_icon_name(scope_id)
+        if icon_name is None:
+            textures = [t for t in (console_texture(scope_id), console_texture_1x(scope_id)) if t is not None]
+            if textures:
+                return PixelIcon(textures)
             icon_name = get_icon_name(scope_id)
-        else:
-            icon_name = CHIP_GLYPHS[kind]
         image = Gtk.Image.new_from_icon_name(icon_name)
         image.add_css_class("bp-chip-glyph")
         return image

@@ -372,34 +372,56 @@ def pixel_icon_geometry(width, height, native):
     unevenly. Centred on whole pixels.
     """
     side = max(0, min(width, height))
-    multiple = side // native
+    multiple = side // max(1, native)
     nearest = multiple >= 1
     size = multiple * native if nearest else side
     return (width - size) // 2, (height - size) // 2, size, nearest
+
+
+def pick_pixel_art(width, height, natives):
+    """Which of the art's sizes fills the slot crisply: ``(index, x, y, size, nearest)``.
+
+    The one drawn biggest at a whole multiple wins, the more detailed one on a
+    tie: at 1080p the 32-px art at 1x, at 720p the 16-px art at 1x (the 32-px
+    one would have to shrink, and blur), at a 48-px slot the 16-px art at 3x.
+    Only a slot smaller than every size falls back to the smooth filter, with
+    the biggest art.
+    """
+    best = None
+    for index, native in enumerate(natives):
+        x, y, size, nearest = pixel_icon_geometry(width, height, native)
+        if not nearest:
+            continue
+        if best is None or (size, native) > (best[3], natives[best[0]]):
+            best = (index, x, y, size, nearest)
+    if best is None:
+        index = max(range(len(natives)), key=natives.__getitem__)
+        best = (index,) + pixel_icon_geometry(width, height, natives[index])
+    return best
 
 
 class PixelIcon(Gtk.Widget):
     """A console's pixel art, scaled crisp: the console chips' icon (issue 962).
 
     ``Gtk.Picture`` scales with a linear filter, which blurs 32-px art; this
-    draws the texture itself with ``pixel_icon_geometry``. The slot's size
-    comes from the stylesheet (``min-width``/``min-height``).
+    draws the texture itself, picking among ``textures`` (the same art at
+    several sizes) with ``pick_pixel_art``. The slot's size comes from the
+    stylesheet (``min-width``/``min-height``).
     """
 
-    def __init__(self, texture):
+    def __init__(self, textures):
         super().__init__()
-        self.texture = texture
+        self.textures = list(textures)
         self.add_css_class("bp-chip-art")
         self.set_valign(Gtk.Align.CENTER)
 
     def do_snapshot(self, snapshot):
-        texture = self.texture
-        x, y, size, nearest = pixel_icon_geometry(
-            self.get_width(), self.get_height(), max(texture.get_width(), texture.get_height()))
+        natives = [max(texture.get_width(), texture.get_height()) for texture in self.textures]
+        index, x, y, size, nearest = pick_pixel_art(self.get_width(), self.get_height(), natives)
         if size <= 0:
             return
         scaling = Gsk.ScalingFilter.NEAREST if nearest else Gsk.ScalingFilter.TRILINEAR
-        snapshot.append_scaled_texture(texture, scaling, Graphene.Rect().init(x, y, size, size))
+        snapshot.append_scaled_texture(self.textures[index], scaling, Graphene.Rect().init(x, y, size, size))
 
 
 class Chip(Gtk.Button):

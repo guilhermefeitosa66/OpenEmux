@@ -19113,8 +19113,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   the left of its short name, sharp, every source pixel a square, no blur; "All" shows a grid
   glyph, "Favorites" a star, "Couch" a bookmark. The chips are as tall as the filter chips below.
   2: the white current chip and the purple focused chip both read clearly with their icon. 3: the
-  icons shrink with the chips and stay inside them. A console with no icon file shows its
+  icons shrink with the chips (the console's 16 px art at 1x) and stay sharp and inside them. A console with no icon file shows its
   symbolic icon instead (suite only).
 - **Check:** the screenshots show the above; `tests/test_bigpicture_games.py`
   (`test_every_chip_shows_an_icon_beside_its_name`, `test_a_console_with_no_art_takes_its_symbolic_icon`),
-  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`).
+  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`,
+  `test_the_art_size_that_fills_the_slot_crisply_wins`).

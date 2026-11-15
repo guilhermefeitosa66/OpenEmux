@@ -576,6 +576,7 @@ def stylesheet(scale=1.0):
 .big-picture .bp-chip-glyph {{
     -gtk-icon-size: {s('chip_glyph')}px;
     min-width: {s('chip_icon')}px;
+    min-height: {s('chip_icon')}px;
 }}
 .big-picture .bp-chip.bp-current {{
     background-color: #F3F3F6;
