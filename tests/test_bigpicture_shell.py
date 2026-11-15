@@ -13,6 +13,7 @@ if HAVE_DISPLAY:
     from gi.repository import Adw, Gdk, GLib, Gtk
 
     from openemux.ui import navigation
+    from openemux.ui.bigpicture import shell as shell_module
     from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 # Pure Python: the theme's tests run with no display at all.
@@ -598,7 +599,10 @@ class TheShellCorners(BigPictureCase):
 
     def test_the_clock_and_the_dark_theme(self):
         shell = self.shell
-        clock = shell._clocks[0]
+        clock = shell.hint_bar.clock
+        clock.set_label("")
+        with mock.patch.object(shell_module, "twelve_hour_clock", return_value=False):
+            self.assertEqual(shell._on_clock(), GLib.SOURCE_CONTINUE)
         self.assertEqual(len(clock.get_label()), 5)
         self.assertEqual(shell._on_clock(), GLib.SOURCE_CONTINUE)
         shell._start_clock()
@@ -934,6 +938,85 @@ class TheTheme(unittest.TestCase):
         self.assertEqual(theme.px("gap", 0.5), 8)
         self.assertEqual(theme.px("gap", 0.01), 1)
 
+
+@needs_display
+class TheClockFormat(unittest.TestCase):
+    """The clock follows the desktop's 12/24-hour setting (issue 977)."""
+
+    def setUp(self):
+        from gi.repository import GLib as _GLib
+
+        self.GLib = _GLib
+        self.now = _GLib.DateTime.new_local(2026, 11, 15, 14, 5, 0)
+
+    def test_24_and_12_hours(self):
+        self.assertEqual(shell_module.clock_text(self.now, False), "14:05")
+        text = shell_module.clock_text(self.now, True)
+        self.assertTrue(text.startswith("2:05"), text)
+        morning = self.GLib.DateTime.new_local(2026, 11, 15, 9, 30, 0)
+        self.assertTrue(shell_module.clock_text(morning, True).startswith("9:30"))
+
+    def test_no_schema_source_or_no_schema_is_24_hours(self):
+        gio = shell_module.Gio
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=None):
+            self.assertIsNone(shell_module.clock_settings("GNOME"))
+        source = mock.Mock()
+        source.lookup.return_value = None
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
+            self.assertIsNone(shell_module.clock_settings("GNOME"))
+        source.lookup.assert_called_with(shell_module.CLOCK_SCHEMA, True)
+        schema = mock.Mock()
+        schema.has_key.return_value = False
+        source.lookup.return_value = schema
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
+            self.assertIsNone(shell_module.clock_settings("X-Cinnamon"))
+        self.assertFalse(shell_module.twelve_hour_clock(None))
+
+    def test_the_session_desktop_is_read_from_the_environment(self):
+        with mock.patch.dict(shell_module.os.environ, {"XDG_CURRENT_DESKTOP": "X-Cinnamon"}), mock.patch.object(
+            shell_module.Gio.SettingsSchemaSource, "get_default", return_value=None
+        ):
+            self.assertIsNone(shell_module.clock_settings())
+
+    def test_gnome_reads_clock_format(self):
+        gio = shell_module.Gio
+        source = mock.Mock()
+        source.lookup.return_value.has_key.return_value = True
+        settings = mock.Mock()
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            found = shell_module.clock_settings("ubuntu:GNOME")
+        self.assertEqual(found, (settings, shell_module.CLOCK_KEY))
+        new.assert_called_with(shell_module.CLOCK_SCHEMA)
+        for value, expected in (("12h", True), ("24h", False)):
+            settings.get_string.return_value = value
+            self.assertIs(shell_module.twelve_hour_clock(found), expected)
+            settings.get_string.assert_called_with("clock-format")
+
+    def test_cinnamon_reads_its_own_switch_first(self):
+        gio = shell_module.Gio
+        source = mock.Mock()
+        source.lookup.return_value.has_key.return_value = True
+        settings = mock.Mock()
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            found = shell_module.clock_settings("X-Cinnamon")
+        self.assertEqual(found, (settings, shell_module.CINNAMON_CLOCK_KEY))
+        new.assert_called_with(shell_module.CINNAMON_CLOCK_SCHEMA)
+        for use_24h, expected in ((False, True), (True, False)):
+            settings.get_boolean.return_value = use_24h
+            self.assertIs(shell_module.twelve_hour_clock(found), expected)
+        # A Cinnamon session without Cinnamon's schema falls back to GNOME's.
+        source.lookup.side_effect = lambda schema_id, _recursive: (
+            None if schema_id == shell_module.CINNAMON_CLOCK_SCHEMA else mock.Mock()
+        )
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            self.assertEqual(shell_module.clock_settings("X-Cinnamon"), (settings, shell_module.CLOCK_KEY))
+        new.assert_called_with(shell_module.CLOCK_SCHEMA)
 
 if __name__ == "__main__":
     unittest.main()

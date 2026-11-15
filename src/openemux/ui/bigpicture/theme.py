@@ -260,11 +260,6 @@ def stylesheet(scale=1.0):
     font-size: {s('status')}px;
     color: {p['muted']};
 }}
-.big-picture .bp-clock {{
-    font-size: {s('row_title')}px;
-    font-weight: 600;
-    color: {p['muted']};
-}}
 .big-picture .bp-back-link {{
     font-size: {s('row_subtitle')}px;
     color: {p['muted']};
@@ -689,6 +684,11 @@ def stylesheet(scale=1.0):
 .big-picture .bp-hint {{
     font-size: {s('hint')}px;
     color: {p['muted']};
+}}
+/* The time at the right end of the hint bar (issue 977). */
+.big-picture .bp-hints .bp-clock {{
+    font-weight: 600;
+    font-feature-settings: "tnum";
 }}
 .big-picture .bp-key {{
     min-width: {s('key_height')}px;

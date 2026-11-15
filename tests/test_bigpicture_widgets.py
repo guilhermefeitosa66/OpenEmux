@@ -351,6 +351,16 @@ class HintBarAndHelpersTests(unittest.TestCase):
         self.assertEqual(sum(1 for slot in bar.slots if slot[0].get_visible()), widgets.MAX_HINTS)
         # Centered, as on Android.
         self.assertEqual(bar.row.get_halign(), Gtk.Align.CENTER)
+        # The clock at the right end, balanced by a spacer as wide on the left
+        # so the hints stay centred on the bar (issue 977).
+        center = bar.get_first_child()
+        self.assertIsInstance(center, Gtk.CenterBox)
+        self.assertIs(center.get_center_widget(), bar.row)
+        self.assertIs(center.get_end_widget(), bar.clock)
+        self.assertTrue(bar.clock.has_css_class("bp-clock"))
+        self.assertTrue(bar.clock.has_css_class("bp-hint"))
+        self.assertIn(center.get_start_widget(), bar._balance.get_widgets())
+        self.assertIn(bar.clock, bar._balance.get_widgets())
 
     def test_the_crumb_and_the_text_helpers(self):
         crumb = widgets.crumb(["Library", "", "Super Nintendo"])
@@ -379,12 +389,22 @@ class HintBarAndHelpersTests(unittest.TestCase):
     def test_a_big_page_frames_its_body(self):
         shell = mock.Mock()
         shell.win.t = lambda key, **kw: key
-        shell.make_status_box = lambda: Gtk.Box()
         page = widgets.BigPage(shell, "Title", crumbs=["A", "B"], tag="bp-x")
         self.assertEqual(page.get_tag(), "bp-x")
-        # No crumbs at all: a tab's first page has its own big title.
+        self.assertTrue(page.top_bar.get_visible())
+        # The top bar holds the crumb and nothing else: the clock is in the
+        # hint bar now (issue 977).
+        self.assertIs(page.top_bar.get_first_child(), page.crumb_host)
+        self.assertIsNone(page.crumb_host.get_next_sibling())
+        # No crumbs at all: a tab's first page has its own big title, and no
+        # strip above it.
         bare = widgets.BigPage(shell, "Shelf", crumbs=[])
         self.assertIsNone(bare.crumb_host.get_first_child().get_first_child())
+        self.assertFalse(bare.top_bar.get_visible())
+        bare.set_crumbs(["", None])
+        self.assertFalse(bare.top_bar.get_visible())
+        bare.set_crumbs(["Later"])
+        self.assertTrue(bare.top_bar.get_visible())
         page.set_crumbs(["C"])
         self.assertIsInstance(page.scrolled(Gtk.Box()), Gtk.ScrolledWindow)
         self.assertEqual(page.hints({"confirm": "A", "back": "B"}, shell.win.t), [("A", "hints.confirm"), ("B", "hints.back")])

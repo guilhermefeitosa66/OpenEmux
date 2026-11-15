@@ -14,12 +14,13 @@ leaving the mode lands on exactly the desktop that was there.
 """
 
 import logging
+import os
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from openemux.ui.bigpicture import theme
 from openemux.ui.bigpicture.osk import MODE_SEARCH, OnScreenKeyboard
@@ -60,6 +61,53 @@ def scope_kind(scope_id):
     return "console"
 
 
+CLOCK_SCHEMA = "org.gnome.desktop.interface"
+CLOCK_KEY = "clock-format"
+#: Cinnamon keeps its own switch (Linux Mint): a boolean, true for 24 hours.
+CINNAMON_CLOCK_SCHEMA = "org.cinnamon.desktop.interface"
+CINNAMON_CLOCK_KEY = "clock-use-24h"
+
+
+def clock_settings(desktop=None):
+    """The desktop's clock setting as ``(Gio.Settings, key)``, or None for 24 h.
+
+    Cinnamon's own key comes first on a Cinnamon session (GNOME's stays at
+    its default there); everywhere else, GNOME's ``clock-format``. Built
+    once per shell: a ``Gio.Settings`` follows the desktop on its own, so
+    reading it at every tick sees a change within the next one.
+    """
+    if desktop is None:
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    candidates = [(CLOCK_SCHEMA, CLOCK_KEY)]
+    if "cinnamon" in desktop.lower():
+        candidates.insert(0, (CINNAMON_CLOCK_SCHEMA, CINNAMON_CLOCK_KEY))
+    source = Gio.SettingsSchemaSource.get_default()
+    if source is None:
+        return None
+    for schema_id, key in candidates:
+        schema = source.lookup(schema_id, True)
+        if schema is not None and schema.has_key(key):
+            return Gio.Settings.new(schema_id), key
+    return None
+
+
+def twelve_hour_clock(found):
+    """Whether the desktop shows a 12-hour clock. Nothing found: 24 h."""
+    if found is None:
+        return False
+    settings, key = found
+    if key == CINNAMON_CLOCK_KEY:
+        return not settings.get_boolean(key)
+    return settings.get_string(key) == "12h"
+
+
+def clock_text(now, twelve_hour):
+    """``14:05``, or ``2:05 PM`` on a 12-hour desktop."""
+    if twelve_hour:
+        return now.format("%l:%M %p").strip()
+    return now.format("%H:%M")
+
+
 class BigPictureShell(Gtk.Box):
     def __init__(self, win):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
@@ -67,7 +115,6 @@ class BigPictureShell(Gtk.Box):
         self.t = win.t
         self.add_css_class("bp-shell")
         self.set_vexpand(True)
-        self._clocks = []
         self._provider = None
         self._clock_source = 0
         self._scale = None
@@ -119,6 +166,8 @@ class BigPictureShell(Gtk.Box):
         self.overlay.add_overlay(self.osk_revealer)
         content.append(self.overlay)
         self.hint_bar = HintBar()
+        self._clock_settings = clock_settings()
+        self.sync_clock()
         content.append(self.hint_bar)
         self.append(content)
 
@@ -250,24 +299,13 @@ class BigPictureShell(Gtk.Box):
         self._stop_clock()
 
     # -- the clock -------------------------------------------------------------------
-    def make_status_box(self):
-        """The corner every page shows: the clock (maintainer decision 1)."""
-        clock = Gtk.Label()
-        clock.add_css_class("bp-clock")
-        clock.set_halign(Gtk.Align.END)
-        clock.set_valign(Gtk.Align.CENTER)
-        self._clocks.append(clock)
-        self._sync_clock(clock)
-        return clock
-
-    @staticmethod
-    def _sync_clock(clock):
-        clock.set_label(GLib.DateTime.new_now_local().format("%H:%M"))
+    def sync_clock(self):
+        """The time at the right of the hint bar (issue 977), as the desktop shows it."""
+        self.hint_bar.clock.set_label(clock_text(GLib.DateTime.new_now_local(), twelve_hour_clock(self._clock_settings)))
 
     def sync_status(self):
         """The clock, and the task banners the library pages show (issue 957)."""
-        for clock in self._clocks:
-            self._sync_clock(clock)
+        self.sync_clock()
         for page in (self.shelf, self.library):
             page.sync_banners()
 
