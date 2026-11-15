@@ -19147,3 +19147,26 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_every_chip_shows_an_icon_beside_its_name`, `test_a_console_with_no_art_takes_its_symbolic_icon`),
   `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`,
   `test_the_art_size_that_fills_the_slot_crisply_wins`).
+
+### RT-1201 — The Big Picture keyboard is QWERTY and the D-pad walks it like one
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, a library with games.
+- **Steps:**
+  1. Press View (Ctrl+F) to open the search keyboard.
+  2. From "1" press Down three times, then Up three times; from "P" press Right; from "1" press Up.
+  3. From "M" press Down; press Up; on the function row press Down.
+  4. Type "MARIO" with A; press X; press Y; press Start.
+  5. Settings › "Device name": look at the keys; press LT, type a letter.
+  6. Repeat step 2 with the arrow keys of a real keyboard.
+- **Expected:** 1: rows `1234567890`, `QWERTYUIOP`, `ASDFGHJKL'`, `ZXCVBNM-.&`, each starting half a
+  key right of the one above; "1" focused. 2: Down goes "Q", "A", "Z" and Up comes back the same way
+  to "1"; Right on "P" wraps to "Q"; Up on the top row keeps the focus where it is. 3: Down from "M"
+  lands on the function key nearest under it (greyed Backspace/Clear are skipped); Up returns to the
+  bottom row near where it left; Down on the function row stays put. 4: the games filter after each
+  letter; X deletes, Y types a space, Start closes with the filter kept. 5: lower-case QWERTY with
+  `- _ @` after the digits, `( ) &` after "p", `: ' " #` after "l", `, . / ! ? +` after "m"; LT
+  capitalises one letter. 6: the arrows move exactly like the D-pad.
+- **Check:** `tests/test_bigpicture_osk.py` (`TheQwertyLayout`, `WalkingTheBoard`),
+  `tests/test_bigpicture_shell.py` (`test_the_keyboard_arrows_walk_the_on_screen_keyboard_like_the_pad`),
+  `tests/test_navigation_controller.py` (`test_a_board_that_walks_its_own_keys_takes_the_move`).

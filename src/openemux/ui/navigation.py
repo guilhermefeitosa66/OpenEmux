@@ -538,6 +538,11 @@ class NavigationController:
                 if self.current_context() in (CTX_BP_GRID, CTX_BP_SELECTION):
                     self.dispatch(action)
                     return True
+                # The on-screen keyboard walks its staggered rows the same
+                # way under the arrows as under the D-pad (issue 961).
+                if self._pad_mover(focus) is not None:
+                    self._cmd_move(action)
+                    return True
             # Tab and Shift+Tab are the keyboard's shoulders: the tabs, or
             # the console chips on the games page.
             if keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
@@ -817,9 +822,24 @@ class NavigationController:
         if direction in ("left", "right") and callable(getattr(focus, "step", None)):
             if focus.step(1 if direction == "right" else -1):
                 return
+        # Big Picture's keyboard walks its own staggered rows (issue 961).
+        mover = self._pad_mover(focus)
+        if mover is not None and mover(direction, focus):
+            return
         scope.child_focus(_GTK_DIRECTIONS[direction])
         self._cross_group_if_stuck(direction, focus)
         self._leave_grid_up_if_stuck(direction, focus)
+
+    @staticmethod
+    def _pad_mover(focus):
+        """The ``pad_move`` of the nearest ancestor that walks its own focus, else None."""
+        node = focus
+        while isinstance(node, Gtk.Widget):
+            mover = getattr(node, "pad_move", None)
+            if callable(mover):
+                return mover
+            node = node.get_parent()
+        return None
 
     def _leave_grid_up_if_stuck(self, direction, previous_focus):
         """Big Picture: Up from the games' top row reaches the controls above.
