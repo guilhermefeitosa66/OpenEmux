@@ -151,6 +151,10 @@ class WindowCase(unittest.TestCase):
         # after the destroy.
         self.addCleanup(self.pump)
         self.win = OpenEmuxWindow(self.app)
+        # The app opens maximised (issue 965); a test window keeps its default
+        # size instead, or a maximise that lands late on some platforms resizes
+        # it in the middle of a measurement, and a resize test is ignored.
+        self.win.unmaximize()
         self.addCleanup(self._close_window)
 
         self.toasts = []

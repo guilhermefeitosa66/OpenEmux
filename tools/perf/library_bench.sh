@@ -119,6 +119,10 @@ s=$(settle "$start")
 echo "{\"label\":\"$label\",\"startup_settle_s\":$s}"
 snap "start"
 xdotool windowactivate --sync "$wid" 2>/dev/null
+# The window opens maximised (issue 965), and a window manager ignores a
+# resize of a maximised window: un-maximise it first.
+xdotool windowstate --remove MAXIMIZED_VERT "$wid" 2>/dev/null || true
+xdotool windowstate --remove MAXIMIZED_HORZ "$wid" 2>/dev/null || true
 xdotool windowsize "$wid" 1280 800
 xdotool windowmove "$wid" 160 100
 sleep 1
