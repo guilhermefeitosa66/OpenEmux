@@ -310,6 +310,31 @@ class TheAndroidPiecesTests(unittest.TestCase):
         rail.current = "nowhere"
         self.assertEqual(rail.neighbour(1), "recent")
 
+    def test_the_rail_ends_with_back_to_desktop(self):
+        # Issue 978: after Settings, drawn like a tab, but an action.
+        left = []
+        rail = NavRail(lambda key: key, lambda _tab: None, lambda: left.append(True))
+        children = []
+        child = rail.get_first_child()
+        while child is not None:
+            children.append(child)
+            child = child.get_next_sibling()
+        self.assertIs(children[-1], rail.desktop)
+        self.assertIs(children[-2], rail.buttons["settings"])
+        self.assertEqual(rail.desktop.label.get_label(), "big_picture.tab.desktop")
+        self.assertTrue(rail.desktop.label.get_wrap())
+        self.assertNotIn("desktop", rail.buttons)
+        rail.desktop.emit("clicked")
+        self.assertEqual(left, [True])
+        rail.mark("desktop")
+        self.assertFalse(rail.desktop.has_css_class("bp-current"))
+        rail.mark("settings")
+        self.assertEqual(rail.neighbour(1), "library")
+        rail.retranslate(lambda key: key.upper())
+        self.assertEqual(rail.desktop.label.get_label(), "BIG_PICTURE.TAB.DESKTOP")
+        # With nobody to tell, a click does nothing.
+        NavRail(lambda key: key, lambda _tab: None).desktop.emit("clicked")
+
 
 @needs_display
 class HintBarAndHelpersTests(unittest.TestCase):

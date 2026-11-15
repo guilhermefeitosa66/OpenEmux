@@ -1177,7 +1177,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "手柄",
     "big_picture.settings.updates": "检查更新",
     "big_picture.settings.about": "关于与许可",
-    "big_picture.settings.desktop": "返回桌面",
+    "big_picture.tab.desktop": "返回桌面",
     "big_picture.settings.choose": "从左侧选择一项设置",
     "big_picture.settings.bios.missing": "{count} 台主机需要文件",
     "big_picture.settings.bios.ok": "所有主机的文件都齐全",

@@ -177,9 +177,35 @@ class TheTabs(BigPictureCase):
         self.assertLess(natural, 232 * scale / 2 + theme.px("gap", scale))
         self.assertLessEqual(theme.SIZES["rail_width"], 232 // 2)
         self.assertEqual(theme.SIZES["pause_icon"], 34)
-        for button in self.shell.rail.buttons.values():
+        for button in (*self.shell.rail.buttons.values(), self.shell.rail.desktop):
             self.assertEqual(button.label.get_layout().get_unknown_glyphs_count(), 0)
             self.assertFalse(button.label.get_layout().is_ellipsized())
+        # The way out wraps rather than widening the rail: two lines at most.
+        self.assertLessEqual(self.shell.rail.desktop.label.get_layout().get_line_count(), 2)
+
+    def test_back_to_desktop_on_the_rail_leaves_the_mode(self):
+        # Issue 978: Down from Settings reaches it; A leaves, as Guide does.
+        shell = self.shell
+        self.show()
+        shell.switch_tab("settings", focus=False)
+        self.pump()
+        self.assertTrue(shell.rail.focus_current())
+        glyphs = self.win.navigation.glyphs()
+        self.assertEqual(shell.hints_for(navigation.CTX_BP_RAIL, glyphs)[0][1], self.said("big_picture.hints.open"))
+        self.press("down")
+        self.assertIs(self.focus_widget(), shell.rail.desktop)
+        self.assertEqual(self.win.navigation.current_context(), navigation.CTX_BP_RAIL)
+        # A says it leaves, not "Open", and the bar is redrawn on the way in.
+        self.assertEqual(shell.hints_for(navigation.CTX_BP_RAIL, glyphs)[0][1], self.said("big_picture.tab.desktop"))
+        labels = [slot[2].get_label() for slot in shell.hint_bar.slots if slot[0].get_visible()]
+        self.assertIn(self.said("big_picture.tab.desktop"), labels)
+        self.assertEqual(shell.tab, "settings")
+        self.press("confirm")
+        # A button's activate clicks it a moment later, by the clock.
+        self.pump_until(lambda: not self.win.big_picture)
+        self.assertFalse(self.win.big_picture)
+        self.assertEqual(self.win.mode_stack.get_visible_child_name(), "desktop")
+        self.assertIn(self.said("big_picture.toast.off"), self.toasts)
 
 
 @needs_display

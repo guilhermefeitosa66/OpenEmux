@@ -24,6 +24,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 from openemux.ui.bigpicture import theme
 from openemux.ui.bigpicture.osk import MODE_SEARCH, OnScreenKeyboard
 from openemux.ui.bigpicture.rail import (
+    DESKTOP,
     TAB_IDS,
     TAB_IMPORT,
     TAB_LIBRARY,
@@ -75,7 +76,12 @@ class BigPictureShell(Gtk.Box):
         self._color_scheme = None
         self.tab = TAB_LIBRARY
 
-        self.rail = NavRail(self.t, self.switch_tab)
+        self.rail = NavRail(self.t, self.switch_tab, lambda: self.win.toggle_big_picture())
+        # The rail's hints are one context; A says what it does on the way out,
+        # so moving onto or off it redraws them (issue 978).
+        self.rail.desktop.connect(
+            "notify::has-focus", lambda *_a: self.win.navigation.refresh_hints(force=True)
+        )
         self.append(self.rail)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -601,8 +607,9 @@ class BigPictureShell(Gtk.Box):
                 (glyphs["back"], t("big_picture.hints.close_search")),
             ]
         if context == CTX_RAIL:
+            leave = self.rail.desktop.has_focus()
             return [
-                (glyphs["confirm"], t("big_picture.hints.open")),
+                (glyphs["confirm"], t(DESKTOP[1] if leave else "big_picture.hints.open")),
                 (glyphs["consoles"], t("big_picture.hints.tabs")),
             ]
         page = self.visible_page()

@@ -1177,7 +1177,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "Manettes",
     "big_picture.settings.updates": "Rechercher des mises à jour",
     "big_picture.settings.about": "À propos et licences",
-    "big_picture.settings.desktop": "Retour au bureau",
+    "big_picture.tab.desktop": "Retour au bureau",
     "big_picture.settings.choose": "Choisissez un réglage à gauche",
     "big_picture.settings.bios.missing": "{count} consoles ont besoin de fichiers",
     "big_picture.settings.bios.ok": "Chaque console a ses fichiers",

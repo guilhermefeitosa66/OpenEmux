@@ -22,7 +22,7 @@ them.
 |---|---|
 | F11 | F11 |
 | The pad's Guide/Home/PS button | The same button |
-| The header-bar button (a screen icon, next to Search) | Settings › "Back to desktop" |
+| The header-bar button (a screen icon, next to Search) | "Back to desktop", last on the rail |
 | Main menu › Big Picture | |
 | `openemux --big-picture` | |
 | Settings › System › "Start in Big Picture" | |
@@ -77,7 +77,8 @@ the theme.
 ## The pages
 
 - **The rail**: the app's logo, then Library, Recent, Import and Settings,
-  the tab on screen on an accent pill.
+  the tab on screen on an accent pill; last, "Back to desktop", drawn like a
+  tab but an action: A leaves the mode, LB and RB skip it (issue 978).
 - **Shelf** (the Library tab's first page): "Shelf", "N consoles · M
   games", a "Search all consoles" field and "Import ROMs"; the task banners
   (a running task with its progress, a newer release); then the cards three
@@ -100,8 +101,8 @@ the theme.
   browser: folders first, A enters or marks, X marks, Y imports, B goes up),
   Receive games, and every console's accepted formats.
 - **Settings**: Android's list on the left (the BIOS card; Appearance,
-  Achievements, Artwork, one entry per console, Share nearby, General; Back
-  to desktop last), the chosen entry on the right. Every row calls what the
+  Achievements, Artwork, one entry per console, Share nearby, General), the
+  chosen entry on the right. Every row calls what the
   desktop dialog calls; Big Picture asks before the irreversible actions.
 - **The launch splash**: the game's art and "Starting <core>" until the
   game's window takes the screen; a launch that fails says why there.

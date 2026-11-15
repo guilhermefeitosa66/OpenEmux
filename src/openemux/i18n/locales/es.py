@@ -1177,7 +1177,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "Mandos",
     "big_picture.settings.updates": "Buscar actualizaciones",
     "big_picture.settings.about": "Acerca de y licencias",
-    "big_picture.settings.desktop": "Volver al escritorio",
+    "big_picture.tab.desktop": "Volver al escritorio",
     "big_picture.settings.choose": "Elige un ajuste a la izquierda",
     "big_picture.settings.bios.missing": "{count} consolas necesitan archivos",
     "big_picture.settings.bios.ok": "Todas las consolas tienen sus archivos",

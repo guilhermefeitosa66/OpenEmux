@@ -1177,7 +1177,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "コントローラー",
     "big_picture.settings.updates": "アップデートを確認",
     "big_picture.settings.about": "情報とライセンス",
-    "big_picture.settings.desktop": "デスクトップに戻る",
+    "big_picture.tab.desktop": "デスクトップに戻る",
     "big_picture.settings.choose": "左から設定を選んでください",
     "big_picture.settings.bios.missing": "{count} 機種にファイルが必要です",
     "big_picture.settings.bios.ok": "すべての機種にファイルがあります",

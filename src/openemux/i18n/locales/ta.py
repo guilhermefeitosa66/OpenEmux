@@ -1183,7 +1183,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "கட்டுப்படுத்திகள்",
     "big_picture.settings.updates": "புதுப்பிப்புகளைச் சரிபார்",
     "big_picture.settings.about": "பற்றி மற்றும் உரிமங்கள்",
-    "big_picture.settings.desktop": "டெஸ்க்டாப்புக்குத் திரும்பு",
+    "big_picture.tab.desktop": "டெஸ்க்டாப்புக்குத் திரும்பு",
     "big_picture.settings.choose": "இடப்பக்கம் ஒரு அமைப்பைத் தேர்ந்தெடுக்கவும்",
     "big_picture.settings.bios.missing": "{count} கன்சோல்களுக்குக் கோப்புகள் தேவை",
     "big_picture.settings.bios.ok": "ஒவ்வொரு கன்சோலுக்கும் அதன் கோப்புகள் உள்ளன",
