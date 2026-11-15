@@ -19,7 +19,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from openemux.ui.bigpicture import theme
 from openemux.ui.bigpicture.osk import MODE_SEARCH, OnScreenKeyboard
@@ -60,6 +60,29 @@ def scope_kind(scope_id):
     return "console"
 
 
+CLOCK_SCHEMA = "org.gnome.desktop.interface"
+
+
+def twelve_hour_clock():
+    """Whether the desktop shows a 12-hour clock (GNOME's ``clock-format``).
+
+    Read at every tick, so a change on the desktop shows within the next
+    one. A desktop without that schema (or a sandbox without it) gets 24 h.
+    """
+    source = Gio.SettingsSchemaSource.get_default()
+    schema = source.lookup(CLOCK_SCHEMA, True) if source is not None else None
+    if schema is None or not schema.has_key("clock-format"):
+        return False
+    return Gio.Settings.new(CLOCK_SCHEMA).get_string("clock-format") == "12h"
+
+
+def clock_text(now, twelve_hour):
+    """``14:05``, or ``2:05 PM`` on a 12-hour desktop."""
+    if twelve_hour:
+        return now.format("%l:%M %p").strip()
+    return now.format("%H:%M")
+
+
 class BigPictureShell(Gtk.Box):
     def __init__(self, win):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
@@ -67,7 +90,6 @@ class BigPictureShell(Gtk.Box):
         self.t = win.t
         self.add_css_class("bp-shell")
         self.set_vexpand(True)
-        self._clocks = []
         self._provider = None
         self._clock_source = 0
         self._scale = None
@@ -119,6 +141,7 @@ class BigPictureShell(Gtk.Box):
         self.overlay.add_overlay(self.osk_revealer)
         content.append(self.overlay)
         self.hint_bar = HintBar()
+        self.sync_clock()
         content.append(self.hint_bar)
         self.append(content)
 
@@ -250,24 +273,13 @@ class BigPictureShell(Gtk.Box):
         self._stop_clock()
 
     # -- the clock -------------------------------------------------------------------
-    def make_status_box(self):
-        """The corner every page shows: the clock (maintainer decision 1)."""
-        clock = Gtk.Label()
-        clock.add_css_class("bp-clock")
-        clock.set_halign(Gtk.Align.END)
-        clock.set_valign(Gtk.Align.CENTER)
-        self._clocks.append(clock)
-        self._sync_clock(clock)
-        return clock
-
-    @staticmethod
-    def _sync_clock(clock):
-        clock.set_label(GLib.DateTime.new_now_local().format("%H:%M"))
+    def sync_clock(self):
+        """The time at the right of the hint bar (issue 977), as the desktop shows it."""
+        self.hint_bar.clock.set_label(clock_text(GLib.DateTime.new_now_local(), twelve_hour_clock()))
 
     def sync_status(self):
         """The clock, and the task banners the library pages show (issue 957)."""
-        for clock in self._clocks:
-            self._sync_clock(clock)
+        self.sync_clock()
         for page in (self.shelf, self.library):
             page.sync_banners()
 

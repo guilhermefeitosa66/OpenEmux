@@ -311,7 +311,10 @@ class HintBar(Gtk.Box):
     """The bar along the bottom: what the pad's buttons do right now.
 
     Centered under the content, as on Android: the confirm key a round
-    accent, the others dark, the shoulders on one pill.
+    accent, the others dark, the shoulders on one pill. The clock sits at
+    the right end (issue 977); an empty spacer as wide as it balances the
+    left end, so the hints stay centred on the bar and the center box keeps
+    them from ever running under the time.
     """
 
     def __init__(self):
@@ -320,8 +323,22 @@ class HintBar(Gtk.Box):
         self.set_valign(Gtk.Align.END)
         self.row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
         self.row.set_halign(Gtk.Align.CENTER)
-        self.row.set_hexpand(True)
-        self.append(self.row)
+        self.clock = Gtk.Label()
+        self.clock.add_css_class("bp-hint")
+        self.clock.add_css_class("bp-clock")
+        self.clock.set_valign(Gtk.Align.CENTER)
+        self.clock.set_xalign(1.0)
+        spacer = Gtk.Box()
+        balance = Gtk.SizeGroup(mode=Gtk.SizeGroupMode.HORIZONTAL)
+        balance.add_widget(spacer)
+        balance.add_widget(self.clock)
+        self._balance = balance
+        bar = Gtk.CenterBox()
+        bar.set_hexpand(True)
+        bar.set_start_widget(spacer)
+        bar.set_center_widget(self.row)
+        bar.set_end_widget(self.clock)
+        self.append(bar)
         self.slots = []
         for _ in range(MAX_HINTS):
             slot = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -632,12 +649,14 @@ class BigPage(Adw.NavigationPage):
         self.frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
         self.frame.add_css_class("bp-safe")
         self.frame.set_vexpand(True)
+        # The breadcrumb row. The clock lives in the hint bar (issue 977), so
+        # a page with no crumb has no row at all and its content starts at
+        # the top.
         self.top_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=24)
         self.crumb_host = Gtk.Box()
         self.crumb_host.set_hexpand(True)
-        self.set_crumbs([title] if crumbs is None else crumbs)
         self.top_bar.append(self.crumb_host)
-        self.top_bar.append(shell.make_status_box())
+        self.set_crumbs([title] if crumbs is None else crumbs)
         self.frame.append(self.top_bar)
         self.body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
         self.body.set_vexpand(True)
@@ -649,6 +668,7 @@ class BigPage(Adw.NavigationPage):
         if child is not None:
             self.crumb_host.remove(child)
         self.crumb_host.append(crumb(parts))
+        self.top_bar.set_visible(any(parts))
 
     def scrolled(self, child):
         """``child`` in a vertical scroller that fills the body."""
