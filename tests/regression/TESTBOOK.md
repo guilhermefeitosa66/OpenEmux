@@ -18976,9 +18976,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
   its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left (small,
   pixel-sharp: see RT-1202), its short code ("NES", "SNES", "PS1") over its name on one line and
-  "N games" under it. The clock in the top right
-  corner. The hint bar at the bottom, centered: Enter Open · Alt+Enter Order · Ctrl+F Search ·
-  Tab Tabs. The whole mode is dark whatever the desktop theme. The focused card sits on a dark
+  "N games" under it. No strip above "Shelf": the title starts right under the top margin. The
+  hint bar at the bottom, centered: Enter Open · Alt+Enter Order · Ctrl+F Search ·
+  Tab Tabs, with the clock at its right end (see RT-1220). The whole mode is dark whatever the desktop theme. The focused card sits on a dark
   purple plate; no ring, no glow.
 - **Check:** the screenshot shows all of the above; `tests/test_bigpicture_shell.py`
   (`TheShelf`, `TheTabs`, `test_the_rail_is_slim`).
@@ -19344,3 +19344,27 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** both screenshots; `tests/test_bigpicture_shell.py`
   (`test_back_to_desktop_on_the_rail_leaves_the_mode`, `test_the_rail_is_slim`),
   `tests/test_bigpicture_widgets.py` (`test_the_rail_ends_with_back_to_desktop`).
+
+### RT-1220 — Big Picture: no clock strip at the top, the time at the right of the hint bar
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. `make devbox-res RES=1920x1080`, start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-clock-shelf.png`.
+  2. Press Tab (Recent), Tab (Import), Tab (Settings), taking a `make devbox-shot` on each; press
+     Esc, then Enter on "All games", `make devbox-shot OUT=$SCRATCH/bp-clock-games.png`; Enter again
+     for a game's details, `make devbox-shot OUT=$SCRATCH/bp-clock-details.png`.
+  3. `make devbox-res RES=1280x720` and repeat steps 1 and 2.
+  4. Inside the devbox: `gsettings set org.gnome.desktop.interface clock-format 12h`, wait 30 s,
+     `make devbox-shot`; then `gsettings set org.gnome.desktop.interface clock-format 24h`.
+- **Expected:** 1–3: no page has an empty strip at the top holding only the time: each page's
+  title, chips or grid start right under the top margin; a game's details keep their
+  "Console › Game" breadcrumb, with nothing beside it. On every page the time ("14:05") sits at
+  the right end of the bottom hint bar, in the same grey as the hint labels; the hints stay
+  centred on the bar and never run under the time, at both sizes. 4: the clock reads like
+  "2:05 PM", then back to "14:05". A desktop without that setting shows 24 hours.
+- **Check:** the screenshots show the above; `tests/test_bigpicture_widgets.py`
+  (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
+  `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
+- **Restore:** `gsettings set org.gnome.desktop.interface clock-format 24h` inside the devbox.
