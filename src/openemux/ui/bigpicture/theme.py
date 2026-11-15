@@ -99,6 +99,10 @@ SIZES = {
     "search_w": 510,
     "chip": 22,
     "chip_h": 56,
+    # The console chips' icon (issue 962): the 32-px pixel art at 1x, a glyph.
+    "chip_icon": 32,
+    "chip_glyph": 24,
+    "chip_icon_gap": 10,
     "banner_h": 66,
     "pane_width": 640,
     "pane_art_h": 400,
@@ -558,6 +562,21 @@ def stylesheet(scale=1.0):
     padding: 0 {s('gap') + 6}px;
     border: none;
     box-shadow: none;
+}}
+.big-picture .bp-chip.bp-chip-icon {{
+    padding: 0 {s('gap') + 6}px 0 {s('gap')}px;
+}}
+.big-picture .bp-chip-content {{
+    border-spacing: {s('chip_icon_gap')}px;
+}}
+.big-picture .bp-chip-art {{
+    min-width: {s('chip_icon')}px;
+    min-height: {s('chip_icon')}px;
+}}
+.big-picture .bp-chip-glyph {{
+    -gtk-icon-size: {s('chip_glyph')}px;
+    min-width: {s('chip_icon')}px;
+    min-height: {s('chip_icon')}px;
 }}
 .big-picture .bp-chip.bp-current {{
     background-color: #F3F3F6;

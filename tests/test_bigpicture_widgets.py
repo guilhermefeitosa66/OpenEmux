@@ -25,9 +25,12 @@ if HAVE_DISPLAY:
         Banner,
         Chip,
         HintBar,
+        PixelIcon,
         Row,
         Segments,
         Tile,
+        pick_pixel_art,
+        pixel_icon_geometry,
     )
     from openemux.ui.bigpicture.rail import NavRail
 
@@ -187,6 +190,71 @@ class TheAndroidPiecesTests(unittest.TestCase):
         chip.set_on(False)
         self.assertFalse(chip.is_on())
         Chip("quiet").emit("clicked")
+
+    def test_a_chip_with_an_icon_keeps_its_label(self):
+        icon = Gtk.Image.new_from_icon_name("starred-symbolic")
+        chip = Chip("Favorites", icon=icon)
+        self.assertTrue(chip.has_css_class("bp-chip-icon"))
+        self.assertIs(chip.icon, icon)
+        self.assertIs(icon.get_next_sibling(), chip.text)
+        self.assertEqual(chip.get_label(), "Favorites")
+        chip.set_label("Stars")
+        self.assertEqual(chip.get_label(), "Stars")
+        self.assertEqual(chip.text.get_label(), "Stars")
+        plain = Chip("NES")
+        self.assertFalse(plain.has_css_class("bp-chip-icon"))
+        plain.set_label("SNES")
+        self.assertEqual(plain.get_label(), "SNES")
+
+    def test_pixel_art_stays_on_whole_multiples(self):
+        # A slot the art's size: 1x, crisp.
+        self.assertEqual(pixel_icon_geometry(32, 32, 32), (0, 0, 32, True))
+        # Bigger, but not twice: still 1x, centred.
+        self.assertEqual(pixel_icon_geometry(40, 40, 32), (4, 4, 32, True))
+        # Twice or more: the whole multiple that fits.
+        self.assertEqual(pixel_icon_geometry(70, 64, 32), (3, 0, 64, True))
+        # Smaller than the art: drawn at the slot, smooth.
+        self.assertEqual(pixel_icon_geometry(21, 25, 32), (0, 2, 21, False))
+        # Nothing to draw into; no art.
+        self.assertEqual(pixel_icon_geometry(0, 0, 32), (0, 0, 0, False))
+        self.assertEqual(pixel_icon_geometry(32, 32, 0), (16, 16, 0, True))
+
+    def test_the_art_size_that_fills_the_slot_crisply_wins(self):
+        # 1080p: both fill 32 px; the 32-px art has the detail.
+        self.assertEqual(pick_pixel_art(32, 32, [32, 16]), (0, 0, 0, 32, True))
+        # 720p: the 32-px art would shrink; the 16-px one stays crisp at 1x.
+        self.assertEqual(pick_pixel_art(21, 21, [32, 16]), (1, 2, 2, 16, True))
+        # A bigger text size: the 16-px art at 3x is bigger than the 32-px at 1x.
+        self.assertEqual(pick_pixel_art(48, 48, [32, 16]), (1, 0, 0, 48, True))
+        # Smaller than every size: the biggest art, smooth.
+        self.assertEqual(pick_pixel_art(12, 12, [16, 32]), (1, 0, 0, 12, False))
+
+    def _texture(self, side=32):
+        data = GLib.Bytes.new(bytes([255, 0, 0, 255]) * side * side)
+        return Gdk.MemoryTexture.new(side, side, Gdk.MemoryFormat.R8G8B8A8, data, side * 4)
+
+    def test_a_pixel_icon_draws_its_texture(self):
+        icon = PixelIcon([self._texture()])
+        self.assertTrue(icon.has_css_class("bp-chip-art"))
+        snapshot = Gtk.Snapshot()
+        with mock.patch.object(icon, "get_width", return_value=32), \
+                mock.patch.object(icon, "get_height", return_value=32):
+            icon.do_snapshot(snapshot)
+        node = snapshot.to_node()
+        self.assertIsNotNone(node)
+        self.assertEqual(node.get_bounds().get_width(), 32)
+        # Smaller than the art: still drawn, with the smooth filter.
+        snapshot = Gtk.Snapshot()
+        with mock.patch.object(icon, "get_width", return_value=20), \
+                mock.patch.object(icon, "get_height", return_value=20):
+            icon.do_snapshot(snapshot)
+        self.assertEqual(snapshot.to_node().get_bounds().get_width(), 20)
+
+    def test_a_pixel_icon_with_no_room_draws_nothing(self):
+        icon = PixelIcon([self._texture()])
+        snapshot = Gtk.Snapshot()
+        icon.do_snapshot(snapshot)  # unallocated: 0 x 0
+        self.assertIsNone(snapshot.to_node())
 
     def test_segments_pick_and_mark(self):
         picked = []

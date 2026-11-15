@@ -28,16 +28,19 @@ from openemux.core.library_view import (
     VIEW_MODE_LIST as LIST,
 )
 from openemux.core.scraper import COVER_ART, LABEL_ART
+from openemux.core.systems import get_icon_name
 from openemux.ui.bigpicture.banners import TaskBanners
 from openemux.ui.bigpicture.details import GameDetail
 from openemux.ui.bigpicture.widgets import (
     BigPage,
     Chip,
+    PixelIcon,
     Segments,
     empty_state,
     icon_button,
     once,
 )
+from openemux.ui.console_icons import console_texture, console_texture_1x, scope_icon_name
 from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: The view switch: id, icon, the key of its tooltip and heading.
@@ -214,7 +217,8 @@ class GamesPage(BigPage):
             self.console_chips = {}
             for scope_id in ids:
                 chip = Chip(self._chip_label(scope_id),
-                            on_activate=lambda scope_id=scope_id: self.select_scope(scope_id))
+                            on_activate=lambda scope_id=scope_id: self.select_scope(scope_id),
+                            icon=self._chip_icon(scope_id))
                 chip.scope_id = scope_id
                 self.chips_box.append(chip)
                 self.console_chips[scope_id] = chip
@@ -242,6 +246,22 @@ class GamesPage(BigPage):
         if kind == "console":
             return short_name(scope_id)
         return self.win.sidebar.label_for(scope_id)
+
+    def _chip_icon(self, scope_id):
+        """The chip's icon (issue 962): the console's pixel art, as on the shelf.
+
+        All, Favorites and the playlists take their glyphs (the sidebar's); a
+        console with no art, its symbolic icon (the sidebar's fallback).
+        """
+        icon_name = scope_icon_name(scope_id)
+        if icon_name is None:
+            textures = [t for t in (console_texture(scope_id), console_texture_1x(scope_id)) if t is not None]
+            if textures:
+                return PixelIcon(textures)
+            icon_name = get_icon_name(scope_id)
+        image = Gtk.Image.new_from_icon_name(icon_name)
+        image.add_css_class("bp-chip-glyph")
+        return image
 
     def _sync_heading(self):
         from openemux.ui.bigpicture.shell import scope_kind

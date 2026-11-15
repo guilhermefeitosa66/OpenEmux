@@ -99,22 +99,56 @@ def console_texture(console_id):
     return texture
 
 
+#: console_id -> the 1x (16-px) texture, or None; the chips draw it below 1080p.
+_SMALL_TEXTURES = {}
+
+
+def console_texture_1x(console_id):
+    """Load (once) the console's 1x PNG, the art at half the size, or None."""
+    if console_id in _SMALL_TEXTURES:
+        return _SMALL_TEXTURES[console_id]
+    texture = None
+    preferred = CONSOLE_ICON_FILES.get(console_id)
+    if preferred and preferred.endswith("@2x.png"):
+        icon_path = asset_path("systems", preferred.replace("@2x.png", ".png"))
+        if icon_path.exists():
+            try:
+                texture = Gdk.Texture.new_from_filename(str(icon_path))
+            except GLib.Error as exc:
+                logger.info("console icon failed to load: %s (%s)", icon_path, exc)
+    _SMALL_TEXTURES[console_id] = texture
+    return texture
+
+
+def scope_icon_name(scope_id):
+    """The symbolic icon of a view that is not a console, or None for a console.
+
+    All, Favorites, Recently played and the playlists: one glyph each, the
+    same in the sidebar and Big Picture's chips.
+    """
+    if scope_id == ALL_CONSOLES_ID:
+        return "view-grid-symbolic"
+    if scope_id == FAVORITES_ID:
+        return "starred-symbolic"
+    if scope_id == RECENT_ID:
+        return "document-open-recent-symbolic"
+    if is_collection_scope(scope_id):
+        return "user-bookmarks-symbolic"
+    return None
+
+
 def console_icon(console_id):
     """A fresh ``Gtk.Image`` for ``console_id``, or for one of the virtual views.
 
     A widget cannot have two parents, so every caller gets its own -- only the
     texture behind it is shared.
     """
-    if console_id == ALL_CONSOLES_ID:
-        return Gtk.Image.new_from_icon_name("view-grid-symbolic")
-    if console_id == FAVORITES_ID:
-        icon = Gtk.Image.new_from_icon_name("starred-symbolic")
-        icon.add_css_class("favorites-sidebar-icon")
+    icon_name = scope_icon_name(console_id)
+    if icon_name is not None:
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        if console_id == FAVORITES_ID:
+            icon.add_css_class("favorites-sidebar-icon")
         return icon
-    if console_id == RECENT_ID:
-        return Gtk.Image.new_from_icon_name("document-open-recent-symbolic")
-    if is_collection_scope(console_id):
-        return Gtk.Image.new_from_icon_name("user-bookmarks-symbolic")
 
     texture = console_texture(console_id)
     if texture is None:

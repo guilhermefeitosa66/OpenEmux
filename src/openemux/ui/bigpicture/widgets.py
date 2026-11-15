@@ -11,7 +11,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Graphene, Gsk, Gtk, Pango
 
 
 #: Row kinds. The kind decides what sits at the end of the row and what the
@@ -362,14 +362,104 @@ def icon_button(icon_name, tooltip=None, on_click=None):
     return widget
 
 
-class Chip(Gtk.Button):
-    """A pill: a console chip, a filter chip. ``set_state`` marks it."""
+def pixel_icon_geometry(width, height, native):
+    """Where a ``native``-px pixel-art icon goes in a ``width`` x ``height`` slot.
 
-    def __init__(self, label, on_activate=None):
-        super().__init__(label=label)
+    ``(x, y, size, nearest)``: the largest whole multiple of ``native`` that
+    fits, nearest-neighbour, so every source pixel stays a sharp square
+    (issue 962). A slot smaller than the art draws it at the slot's size with
+    the smooth filter instead: nearest-neighbour shrinking drops pixel rows
+    unevenly. Centred on whole pixels.
+    """
+    side = max(0, min(width, height))
+    multiple = side // max(1, native)
+    nearest = multiple >= 1
+    size = multiple * native if nearest else side
+    return (width - size) // 2, (height - size) // 2, size, nearest
+
+
+def pick_pixel_art(width, height, natives):
+    """Which of the art's sizes fills the slot crisply: ``(index, x, y, size, nearest)``.
+
+    The one drawn biggest at a whole multiple wins, the more detailed one on a
+    tie: at 1080p the 32-px art at 1x, at 720p the 16-px art at 1x (the 32-px
+    one would have to shrink, and blur), at a 48-px slot the 16-px art at 3x.
+    Only a slot smaller than every size falls back to the smooth filter, with
+    the biggest art.
+    """
+    best = None
+    for index, native in enumerate(natives):
+        x, y, size, nearest = pixel_icon_geometry(width, height, native)
+        if not nearest:
+            continue
+        if best is None or (size, native) > (best[3], natives[best[0]]):
+            best = (index, x, y, size, nearest)
+    if best is None:
+        index = max(range(len(natives)), key=natives.__getitem__)
+        best = (index,) + pixel_icon_geometry(width, height, natives[index])
+    return best
+
+
+class PixelIcon(Gtk.Widget):
+    """A console's pixel art, scaled crisp: the console chips' icon (issue 962).
+
+    ``Gtk.Picture`` scales with a linear filter, which blurs 32-px art; this
+    draws the texture itself, picking among ``textures`` (the same art at
+    several sizes) with ``pick_pixel_art``. The slot's size comes from the
+    stylesheet (``min-width``/``min-height``).
+    """
+
+    def __init__(self, textures):
+        super().__init__()
+        self.textures = list(textures)
+        self.add_css_class("bp-chip-art")
+        self.set_valign(Gtk.Align.CENTER)
+
+    def do_snapshot(self, snapshot):
+        natives = [max(texture.get_width(), texture.get_height()) for texture in self.textures]
+        index, x, y, size, nearest = pick_pixel_art(self.get_width(), self.get_height(), natives)
+        if size <= 0:
+            return
+        scaling = Gsk.ScalingFilter.NEAREST if nearest else Gsk.ScalingFilter.TRILINEAR
+        snapshot.append_scaled_texture(self.textures[index], scaling, Graphene.Rect().init(x, y, size, size))
+
+
+class Chip(Gtk.Button):
+    """A pill: a console chip, a filter chip. ``set_state`` marks it.
+
+    With an ``icon`` widget, it sits at the left of the label (the console
+    chips, issue 962); ``get_label``/``set_label`` still read the text.
+    """
+
+    def __init__(self, label, on_activate=None, icon=None):
+        super().__init__()
         self.add_css_class("bp-chip")
+        self.icon = icon
+        self.text = None
+        if icon is None:
+            super().set_label(label)
+        else:
+            self.add_css_class("bp-chip-icon")
+            self.text = Gtk.Label(label=label)
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+            box.add_css_class("bp-chip-content")
+            box.set_halign(Gtk.Align.CENTER)
+            box.append(icon)
+            box.append(self.text)
+            self.set_child(box)
         self.on_activate = on_activate
         self.connect("clicked", lambda _b: self.on_activate() if self.on_activate else None)
+
+    def get_label(self):
+        if self.text is None:
+            return super().get_label()
+        return self.text.get_label()
+
+    def set_label(self, label):
+        if self.text is None:
+            super().set_label(label)
+        else:
+            self.text.set_label(label)
 
     def set_current(self, current):
         """The chip of the scope on screen: white, as on Android."""
