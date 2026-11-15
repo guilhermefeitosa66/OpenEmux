@@ -18593,6 +18593,47 @@ in several consoles.
 - **Check:** unit-level `ChipGlyphTest` (`./gradlew --no-daemon testDebugUnitTest --tests '*ChipGlyphTest'`);
   `adb exec-out screencap -p > chips.png` for the eye check.
 
+## Android — Soft pixel grid on console icons
+
+Issue 967 (`ui/PixelGrid.kt`, `PixelArt` in `ui/Components.kt`): a console's pixel-art icon drawn at 4 or
+more screen pixels per art pixel (the shelf cards' icon: 64 dp on a phone, 96 dp on a tablet) shows the
+soft grid of the desktop (issue 966): every opaque art pixel has a thin seam on its right and bottom edges,
+an eighth of the pixel wide (at least one screen pixel), in its own colour at 80 %. Transparent pixels get
+nothing, so the card's colour around the icon stays clean. Below 4x (list rows, chips, filter labels on a
+typical phone) the icon is plain nearest-neighbour, as before. `MANUAL`, on a phone or the emulator, a
+library with games in several consoles.
+
+### RT-1215 — Shelf icons show the soft pixel grid
+- **Area:** Android — Soft pixel grid on console icons
+- **Mode:** MANUAL
+- **Preconditions:** A phone upright (or the emulator in portrait), games in at least three consoles,
+  dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf) and look closely at a console card's icon.
+  2. Scroll the shelf quickly down and back up.
+  3. Switch the system to the light theme and look at the same cards.
+  4. On a tablet (or a large-screen emulator) open the shelf.
+- **Expected:** Step 1: every console icon shows each of its pixels as a small square with a fine,
+  slightly darker line on its right and bottom (the same colour, darker), like the desktop's Big Picture
+  shelf; the icon is sharp, not blurred, and no line is drawn on the card's colour around or inside the
+  icon's transparent areas. "All" and "Favorites" keep their grid and star glyphs, without seams. Step 2:
+  scrolling is as smooth as before. Step 3: the same look in the light theme. Step 4: the larger icon
+  shows the same grid, its seams proportionally a little thicker on a very dense screen.
+- **Check:** unit-level `PixelGridTest` (`./gradlew --no-daemon testDebugUnitTest --tests '*PixelGridTest'`);
+  `adb exec-out screencap -p > shelf-grid.png` for the eye check.
+
+### RT-1216 — Small console icons stay plain
+- **Area:** Android — Soft pixel grid on console icons
+- **Mode:** MANUAL
+- **Preconditions:** RT-1215's phone (a typical phone, density 3 or lower).
+- **Steps:**
+  1. Open Settings → a list of consoles (for example the cores or BIOS list).
+  2. Open the library's "All games" page and look at the console chips and the filter label.
+  3. Open Import with a ROM whose extension fits several consoles, so the console picker shows.
+- **Expected:** In every step the console icons look as before issue 967: sharp pixel art at a whole
+  multiple of its size, no seams between pixels, nothing blurred.
+- **Check:** human only (`adb exec-out screencap -p > small-icons.png`).
+
 ## Android — Release build
 
 Issue 916 (`build.gradle.kts`, `proguard-rules.pro`, `src/main/baseline-prof.txt`): the release build is
