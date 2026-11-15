@@ -18565,6 +18565,34 @@ state and a favourite.
   the order, the focus returns to the button.
 - **Check:** human only.
 
+## Android — Console chips with icons
+
+Issue 963 (`ui/LibraryScreens.kt`, `ConsoleChips`): every console chip in the row under a library page's
+title shows the console's pixel-art icon left of its short name; "Favorites" shows the star, "All" stays
+text only. The chip keeps its height and its selected look. Landscape has no chip row (issue 669): its
+filter pager already shows the icon. `MANUAL`, on a phone or the headless emulator, a library with games
+in several consoles.
+
+### RT-1200 — The console chips show the console's icon
+- **Area:** Android — Console chips with icons
+- **Mode:** MANUAL
+- **Preconditions:** A phone upright (or the emulator in portrait), games in at least three consoles,
+  dark theme.
+- **Steps:**
+  1. Open the library's "All games" page and look at the chip row under the title.
+  2. Tap a console chip.
+  3. Switch the system to the light theme and look at the same row.
+  4. Connect a controller and press R1 and L1.
+  5. Turn the phone sideways.
+- **Expected:** Step 1: "All" is text only, "Favorites" has a yellow star, each console chip has its
+  pixel-art icon (sharp, not blurred) left of the short name; the chips are as tall as the facet chips
+  under them. Step 2: the chip turns selected (filled), the icon and the name both readable. Step 3: the
+  same in the light theme, the selected chip dark with the icon readable on it. Step 4: the L1/R1 pills
+  sit at the row's ends and the chip changes; the chips grow a little, as before. Step 5: no chip row;
+  the header's filter pager shows the icon beside the console's name, as before.
+- **Check:** unit-level `ChipGlyphTest` (`./gradlew --no-daemon testDebugUnitTest --tests '*ChipGlyphTest'`);
+  `adb exec-out screencap -p > chips.png` for the eye check.
+
 ## Android — Release build
 
 Issue 916 (`build.gradle.kts`, `proguard-rules.pro`, `src/main/baseline-prof.txt`): the release build is
