@@ -186,6 +186,12 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Sun Nov 15 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.24.0-1
+- Big Picture: a full-screen couch layout for a TV and a controller, like the Android app
+- Sharp pixel-art console icons with a soft pixel grid when enlarged
+- The volume set during a game is remembered; the in-game bar hides behind an eye icon
+- The main window opens maximised
+
 * Fri Nov 13 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.23.5-1
 - The website moved to openemux.libre-apps.org; the app and the package metadata link it
 - About window: links to the source code and to the Libre Apps foundation
