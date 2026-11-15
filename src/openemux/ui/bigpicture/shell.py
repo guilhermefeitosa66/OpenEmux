@@ -14,6 +14,7 @@ leaving the mode lands on exactly the desktop that was there.
 """
 
 import logging
+import os
 
 import gi
 
@@ -61,24 +62,43 @@ def scope_kind(scope_id):
 
 
 CLOCK_SCHEMA = "org.gnome.desktop.interface"
+CLOCK_KEY = "clock-format"
+#: Cinnamon keeps its own switch (Linux Mint): a boolean, true for 24 hours.
+CINNAMON_CLOCK_SCHEMA = "org.cinnamon.desktop.interface"
+CINNAMON_CLOCK_KEY = "clock-use-24h"
 
 
-def clock_settings():
-    """GNOME's interface settings, when the desktop has ``clock-format``; else None.
+def clock_settings(desktop=None):
+    """The desktop's clock setting as ``(Gio.Settings, key)``, or None for 24 h.
 
-    Built once per shell: a ``Gio.Settings`` follows the desktop on its own,
-    so reading it at every tick sees a change within the next one.
+    Cinnamon's own key comes first on a Cinnamon session (GNOME's stays at
+    its default there); everywhere else, GNOME's ``clock-format``. Built
+    once per shell: a ``Gio.Settings`` follows the desktop on its own, so
+    reading it at every tick sees a change within the next one.
     """
+    if desktop is None:
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    candidates = [(CLOCK_SCHEMA, CLOCK_KEY)]
+    if "cinnamon" in desktop.lower():
+        candidates.insert(0, (CINNAMON_CLOCK_SCHEMA, CINNAMON_CLOCK_KEY))
     source = Gio.SettingsSchemaSource.get_default()
-    schema = source.lookup(CLOCK_SCHEMA, True) if source is not None else None
-    if schema is None or not schema.has_key("clock-format"):
+    if source is None:
         return None
-    return Gio.Settings.new(CLOCK_SCHEMA)
+    for schema_id, key in candidates:
+        schema = source.lookup(schema_id, True)
+        if schema is not None and schema.has_key(key):
+            return Gio.Settings.new(schema_id), key
+    return None
 
 
-def twelve_hour_clock(settings):
-    """Whether the desktop shows a 12-hour clock. No settings (no schema): 24 h."""
-    return settings is not None and settings.get_string("clock-format") == "12h"
+def twelve_hour_clock(found):
+    """Whether the desktop shows a 12-hour clock. Nothing found: 24 h."""
+    if found is None:
+        return False
+    settings, key = found
+    if key == CINNAMON_CLOCK_KEY:
+        return not settings.get_boolean(key)
+    return settings.get_string(key) == "12h"
 
 
 def clock_text(now, twelve_hour):

@@ -959,20 +959,26 @@ class TheClockFormat(unittest.TestCase):
     def test_no_schema_source_or_no_schema_is_24_hours(self):
         gio = shell_module.Gio
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=None):
-            self.assertIsNone(shell_module.clock_settings())
+            self.assertIsNone(shell_module.clock_settings("GNOME"))
         source = mock.Mock()
         source.lookup.return_value = None
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
-            self.assertIsNone(shell_module.clock_settings())
+            self.assertIsNone(shell_module.clock_settings("GNOME"))
         source.lookup.assert_called_with(shell_module.CLOCK_SCHEMA, True)
         schema = mock.Mock()
         schema.has_key.return_value = False
         source.lookup.return_value = schema
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source):
-            self.assertIsNone(shell_module.clock_settings())
+            self.assertIsNone(shell_module.clock_settings("X-Cinnamon"))
         self.assertFalse(shell_module.twelve_hour_clock(None))
 
-    def test_the_desktop_setting_decides(self):
+    def test_the_session_desktop_is_read_from_the_environment(self):
+        with mock.patch.dict(shell_module.os.environ, {"XDG_CURRENT_DESKTOP": "X-Cinnamon"}), mock.patch.object(
+            shell_module.Gio.SettingsSchemaSource, "get_default", return_value=None
+        ):
+            self.assertIsNone(shell_module.clock_settings())
+
+    def test_gnome_reads_clock_format(self):
         gio = shell_module.Gio
         source = mock.Mock()
         source.lookup.return_value.has_key.return_value = True
@@ -980,13 +986,37 @@ class TheClockFormat(unittest.TestCase):
         with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
             gio.Settings, "new", return_value=settings
         ) as new:
-            self.assertIs(shell_module.clock_settings(), settings)
+            found = shell_module.clock_settings("ubuntu:GNOME")
+        self.assertEqual(found, (settings, shell_module.CLOCK_KEY))
         new.assert_called_with(shell_module.CLOCK_SCHEMA)
         for value, expected in (("12h", True), ("24h", False)):
             settings.get_string.return_value = value
-            self.assertIs(shell_module.twelve_hour_clock(settings), expected)
+            self.assertIs(shell_module.twelve_hour_clock(found), expected)
             settings.get_string.assert_called_with("clock-format")
 
+    def test_cinnamon_reads_its_own_switch_first(self):
+        gio = shell_module.Gio
+        source = mock.Mock()
+        source.lookup.return_value.has_key.return_value = True
+        settings = mock.Mock()
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            found = shell_module.clock_settings("X-Cinnamon")
+        self.assertEqual(found, (settings, shell_module.CINNAMON_CLOCK_KEY))
+        new.assert_called_with(shell_module.CINNAMON_CLOCK_SCHEMA)
+        for use_24h, expected in ((False, True), (True, False)):
+            settings.get_boolean.return_value = use_24h
+            self.assertIs(shell_module.twelve_hour_clock(found), expected)
+        # A Cinnamon session without Cinnamon's schema falls back to GNOME's.
+        source.lookup.side_effect = lambda schema_id, _recursive: (
+            None if schema_id == shell_module.CINNAMON_CLOCK_SCHEMA else mock.Mock()
+        )
+        with mock.patch.object(gio.SettingsSchemaSource, "get_default", return_value=source), mock.patch.object(
+            gio.Settings, "new", return_value=settings
+        ) as new:
+            self.assertEqual(shell_module.clock_settings("X-Cinnamon"), (settings, shell_module.CLOCK_KEY))
+        new.assert_called_with(shell_module.CLOCK_SCHEMA)
 
 if __name__ == "__main__":
     unittest.main()

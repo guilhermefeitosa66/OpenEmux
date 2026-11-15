@@ -19365,7 +19365,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   "Console › Game" breadcrumb, with nothing beside it. On every page the time ("14:05") sits at
   the right end of the bottom hint bar, in the same grey as the hint labels; the hints stay
   centred on the bar and never run under the time, at both sizes. 4: the clock reads like
-  "2:05 PM", then back to "14:05". A desktop without that setting shows 24 hours.
+  "2:05 PM", then back to "14:05". A desktop without that setting shows 24 hours. On a Cinnamon session (Linux Mint) the
+  clock follows Cinnamon's own "Use 24h clock" switch instead (checked by the suite).
 - **Check:** the screenshots show the above; `tests/test_bigpicture_widgets.py`
   (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
   `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
