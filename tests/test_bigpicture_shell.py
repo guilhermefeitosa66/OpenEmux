@@ -180,6 +180,8 @@ class TheTabs(BigPictureCase):
         for button in (*self.shell.rail.buttons.values(), self.shell.rail.desktop):
             self.assertEqual(button.label.get_layout().get_unknown_glyphs_count(), 0)
             self.assertFalse(button.label.get_layout().is_ellipsized())
+        # The way out wraps rather than widening the rail: two lines at most.
+        self.assertLessEqual(self.shell.rail.desktop.label.get_layout().get_line_count(), 2)
 
     def test_back_to_desktop_on_the_rail_leaves_the_mode(self):
         # Issue 978: Down from Settings reaches it; A leaves, as Guide does.

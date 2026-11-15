@@ -31,8 +31,10 @@ TAB_IDS = tuple(tab_id for tab_id, _key, _icon in TABS)
 #: The way out, after the tabs: id, label key, icon (the header button's screen).
 DESKTOP = ("desktop", "big_picture.tab.desktop", "video-display-symbolic")
 
-#: How wide, in characters, the way out's label may run before it wraps.
-DESKTOP_LABEL_CHARS = 9
+#: How wide, in characters, the way out's label may run before it wraps:
+#: "Zurück zum / Desktop", "Volver al / escritorio" on two lines, no wider
+#: than "Einstellungen" already makes the rail.
+DESKTOP_LABEL_CHARS = 11
 
 #: The app's icon, the rail's logo.
 LOGO_ICON = "io.github.guilhermefeitosa66.OpenEmux"
