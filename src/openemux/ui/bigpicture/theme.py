@@ -93,9 +93,10 @@ SIZES = {
     # The shelf cards, sized so every shipped console name fits on one line
     # at 1920 and 2560 px wide (issue 964). The art box is not the icon's
     # size: the 32 px pixel art is drawn at the largest whole multiple that
-    # fits it (2x at 1080p, 3x at 1440p), so it stays sharp.
+    # fits it (2x at 1080p, 3x at 1440p, with a few px to spare for a
+    # window a little shorter than the screen), so it stays sharp.
     "shelf_card_h": 150,
-    "shelf_art": 72,
+    "shelf_art": 76,
     "shelf_gap": 20,
     "shelf_eyebrow": 16,
     "shelf_name": 28,

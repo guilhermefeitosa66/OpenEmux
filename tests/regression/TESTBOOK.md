@@ -18880,8 +18880,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   "Recent", "Import", "Settings". On the right, "Shelf" in big letters with "N consoles · M games"
   under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
   cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
-  its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left, its short
-  code ("NES", "SNES", "PS1") over its name and "N games" under it. The clock in the top right
+  its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left (small,
+  pixel-sharp: see RT-1202), its short code ("NES", "SNES", "PS1") over its name on one line and
+  "N games" under it. The clock in the top right
   corner. The hint bar at the bottom, centered: Enter Open · Alt+Enter Order · Ctrl+F Search ·
   Tab Tabs. The whole mode is dark whatever the desktop theme. The focused card sits on a dark
   purple plate; no ring, no glow.
@@ -19170,3 +19171,22 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** `tests/test_bigpicture_osk.py` (`TheQwertyLayout`, `WalkingTheBoard`),
   `tests/test_bigpicture_shell.py` (`test_the_keyboard_arrows_walk_the_on_screen_keyboard_like_the_pad`),
   `tests/test_navigation_controller.py` (`test_a_board_that_walks_its_own_keys_takes_the_move`).
+
+### RT-1202 — Big Picture shelf: console names on one line, icons small and sharp
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, text size 100%.
+- **Steps:**
+  1. `make devbox-res RES=1920x1080`, start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf-1080.png`.
+  2. Leave Big Picture, `make devbox-res RES=2560x1440`, press F11 again;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf-1440.png`.
+  3. Open a console card and change the game-grid zoom.
+- **Expected:** 1 and 2: every console card's name ("Game Boy Advance", "Sega Master System",
+  "Sony PlayStation", "Super Nintendo"...) is on one line, with no "…"; the console's pixel art is
+  small (about a third of the card's height) and drawn in sharp square pixels, twice its size at
+  1080p and three times at 1440p, never blurred; all three rows of the synthetic library fit
+  above the hint bar with room to spare. 3: the game grid opens at 200% and its zoom still works.
+- **Check:** both screenshots show the above; `tests/test_bigpicture_shell.py`
+  (`test_every_console_name_fits_on_one_line`, `test_console_art_is_drawn_at_a_whole_multiple`,
+  `test_the_pixel_multiple`).
