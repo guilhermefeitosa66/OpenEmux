@@ -1,4 +1,4 @@
-"""Big Picture's pages: the games, the detail pane, Recent, Import (issue 957)."""
+"""Big Picture's pages: the games, a game's details, Recent, Import (issues 957, 975)."""
 
 # Builds real windows through tests.window_harness (via BigPictureCase): CI runs this
 # module in the windowed process, with the other window tests.
@@ -181,50 +181,85 @@ class TheGamesPage(BigPictureCase):
         self.leave()
         self.assertEqual(self.win.display_settings_for("SFC")["view_mode"], desktop_view)
 
-    def test_a_game_shows_in_the_pane_and_b_goes_back_to_the_grid(self):
+    def focused_path(self):
+        item = self.win._focused_rom_item()
+        return item.rom.get("path") if item is not None else None
+
+    def test_the_games_take_the_whole_width(self):
+        # Issue 975: no detail pane beside the games, the grid at 200%.
         games = self.open("SFC")
-        self.assertEqual(games.pane_stack.get_visible_child_name(), "empty")
-        rom = self.rom("SFC")
+        self.assertFalse(hasattr(games, "pane"))
+        column = games.content_host.get_parent()
+        self.assertIs(column.get_parent(), games.body)
+        self.assertIsNone(column.get_next_sibling())
+        self.assertTrue(column.get_hexpand())
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, 2.0)
+
+    def test_a_opens_the_details_page_and_b_comes_back_to_the_game(self):
+        games = self.open("SFC")
+        grid = self.win.pages.grid_for("SFC")
+        self.pump_until(lambda: grid.card_for(grid.entries()[1]) is not None)
+        second = grid.visible_entries()[1].rom
+        grid.focus_path(second["path"])
+        self.pump()
+        self.assertEqual(self.focused_path(), second["path"])
+        self.press("confirm")
+        details = self.shell._details
+        self.assertIs(self.visible_page(), details)
+        self.assertEqual(details.rom["path"], second["path"])
+        self.assertEqual(self.shell.context_for(self.focus_widget()), "bp-pane")
+        self.press("back")
+        self.assertIs(self.visible_page(), games)
+        self.assertEqual(self.focused_path(), second["path"])
+        # LB/RB walked the page to another game: B lands on that one.
+        self.press("confirm")
+        self.assertTrue(details.step_section(1))
+        other = details.rom["path"]
+        self.assertNotEqual(other, second["path"])
+        self.press("back")
+        self.assertIs(self.visible_page(), games)
+        self.assertEqual(self.focused_path(), other)
+        # The back link does the same.
+        self.press("confirm")
+        details.detail.back_button.emit("clicked")
+        self.pump()
+        self.assertIs(self.visible_page(), games)
+        self.assertEqual(self.focused_path(), other)
+
+    def test_a_game_no_longer_shown_falls_back_to_the_grids_memory(self):
+        games = self.open("SFC")
         grid = self.win.pages.grid_for("SFC")
         self.pump_until(lambda: grid.card_for(grid.entries()[0]) is not None)
-        grid.focus_first_card()
-        self.pump()
-        self.press("confirm")
-        self.assertEqual(games.pane_stack.get_visible_child_name(), "game")
-        self.assertIsNotNone(games.detail.rom)
-        self.assertTrue(games.pane_has_focus())
-        self.assertEqual(games.context_for(self.focus_widget()), "bp-pane")
-        hints = games.hints(self.win.navigation.glyphs(), self.win.t)
-        self.assertEqual(hints[0][1], self.said("details.play"))
-        with mock.patch.object(self.win, "_toggle_favorite_from_ui") as favorite:
-            self.press("context")
-        favorite.assert_called_once()
-        with mock.patch.object(self.win, "share_roms") as share:
-            self.press("favorite")
-        share.assert_called_once()
-        self.press("back")
-        self.assertFalse(games.pane_has_focus())
-        self.assertIs(self.visible_page(), games)
-        self.assertFalse(games.on_pad_action("context"))
-        self.assertFalse(games.handle_back())
-        # The game going away empties the pane.
-        games.show_game(rom)
-        self.pump()
-        games.forget_games({"/somewhere/else"})
-        self.assertEqual(games.pane_stack.get_visible_child_name(), "game")
-        with mock.patch("openemux.ui.window.delete_rom"):
-            self.win._delete_roms([games.detail.rom])
-        self.pump()
-        self.assertEqual(games.pane_stack.get_visible_child_name(), "empty")
-        # Elsewhere than the games page, a game opens expanded.
-        self.shell.go_home()
-        self.pump()
+        self.assertFalse(grid.focus_path("/not/in/the/grid"))
+        games.return_to("/not/in/the/grid")
+        self.assertTrue(games.focus_default())
+        self.assertIsNone(games._return_path)
+        games.return_to("/anywhere")
+        with mock.patch.object(self.win, "_visible_grid", return_value=None):
+            self.assertFalse(games._focus_returned_game())
+        # Leaving the mode forgets it.
+        games.return_to("/anywhere")
+        self.leave()
+        self.assertIsNone(games._return_path)
+
+    def test_a_removed_game_closes_its_details_page(self):
+        self.open("SFC")
+        rom = self.rom("SFC")
         self.shell.show_game(rom)
         self.pump()
         self.assertIs(self.visible_page(), self.shell._details)
-        self.shell.forget_games({rom["path"]})
+        self.shell.forget_games({"/somewhere/else"})
+        self.assertIs(self.visible_page(), self.shell._details)
+        with mock.patch("openemux.ui.window.delete_rom"):
+            self.win._delete_roms([rom])
         self.pump()
         self.assertIsNot(self.visible_page(), self.shell._details)
+        # Elsewhere than the games page, a game opens its page all the same.
+        self.shell.go_home()
+        self.pump()
+        self.shell.show_game(self.rom("SFC", 1))
+        self.pump()
+        self.assertIs(self.visible_page(), self.shell._details)
 
     def test_y_opens_the_options_sheet(self):
         games = self.open("SFC")

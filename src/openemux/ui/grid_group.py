@@ -236,6 +236,10 @@ class GridGroup:
                 return True
         return False
 
+    def focus_path(self, path):
+        """The card of the ROM at ``path``, in whichever group shows it."""
+        return any(grid.focus_path(path) for grid in self.grids())
+
     def focus_restore(self):
         """Come back to the group the user was last in, else the first one."""
         for grid in self.grids():

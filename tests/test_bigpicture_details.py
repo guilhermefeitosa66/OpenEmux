@@ -17,7 +17,7 @@ from tests.bigpicture_harness import BigPictureCase
 from tests.gtk_display import HAVE_DISPLAY, needs_display
 
 if HAVE_DISPLAY:
-    from gi.repository import GdkPixbuf
+    from gi.repository import GdkPixbuf, Gtk
 
     from openemux.core import save_states
     from openemux.core.config import COVER_ART_TYPE_BOXART, COVER_ART_TYPE_CARTRIDGE_LABEL
@@ -80,7 +80,7 @@ class _DetailsCase(BigPictureCase):
         self.entries.append({"title": title, "initial": initial, "on_done": on_done, **kwargs})
 
     def open(self, rom=None):
-        """The game expanded; returns its detail, the page is ``self.page``."""
+        """The game's details page; returns its detail, the page is ``self.page``."""
         self.page = self.shell.open_details(rom or self.game)
         self.pump()
         return self.page.detail
@@ -128,7 +128,7 @@ class ThePage(_DetailsCase):
         self.assertIn("Snes9x", meta)
         self.assertIn(self.said("details.never_played"), meta)
         self.assertEqual(page.path_note.get_label(), self.game["path"])
-        self.assertTrue(page.path_note.get_visible())  # expanded: there is room for it
+        self.assertTrue(page.path_note.get_visible())
         self.assertEqual(page.play_label.get_label(), self.said("details.play"))
         self.assertFalse(page.fresh_row.get_visible())
         self.assertFalse(page.states_scroller.get_visible())
@@ -224,19 +224,29 @@ class ThePage(_DetailsCase):
         share.assert_called_once_with([self.game])
         self.assertFalse(page.on_pad_action("range"))
 
-    def test_the_expand_button(self):
+    def test_the_back_link_goes_back_to_the_list(self):
         page = self.open()
-        # Expanded, it goes back.
+        self.assertEqual(page.back_button.get_label(), self.said("big_picture.details.back"))
         with mock.patch.object(self.shell, "pop") as pop:
-            page.expand_button.emit("clicked")
+            page.back_button.emit("clicked")
         pop.assert_called_once()
-        # In the pane, it opens the game on a page of its own.
-        pane = self.shell.library.detail
-        pane.load(self.game)
-        self.assertFalse(pane.path_note.get_visible())
-        with mock.patch.object(self.shell, "open_details") as details:
-            pane.expand_button.emit("clicked")
-        details.assert_called_once_with(self.game)
+
+    def test_the_art_and_the_facts_sit_side_by_side(self):
+        # Issue 975: the page uses the width, the art in a column of its own
+        # on the left, the title, Play and the rows on the right.
+        page = self.open()
+        columns = page.cover.get_parent().get_parent()
+        self.assertTrue(columns.has_css_class("bp-details-columns"))
+        self.assertEqual(columns.get_orientation(), Gtk.Orientation.HORIZONTAL)
+        art, info = columns.get_first_child(), columns.get_last_child()
+        self.assertTrue(art.has_css_class("bp-details-side"))
+        self.assertIs(page.artwork_button.get_parent(), art)
+        self.assertTrue(info.get_hexpand())
+        for widget in (page.meta_label, page.play_button, page.fresh_row, page.path_note):
+            self.assertIs(widget.get_parent(), info)
+        self.assertTrue(page.play_button.is_ancestor(info))
+        self.assertTrue(page.title_label.is_ancestor(info))
+        self.assertTrue(page.core_row.is_ancestor(info))
 
 
 @needs_display
@@ -461,13 +471,11 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
 
 @needs_display
 class AfterAGame(_DetailsCase):
-    """A game that just ended: the pane and the page re-read it (issue 957)."""
+    """A game that just ended: the details page re-reads it (issue 957)."""
 
     def test_the_library_changing_refreshes_a_detail_showing_the_game(self):
         self.show()
         detail = self.open()
-        pane = self.shell.library.detail
-        pane.load(self.game)
         self.assertTrue(detail.states_empty.get_visible())
         self.state(2)
         self.win.play_history.record_launch(self.game["path"])
@@ -475,10 +483,9 @@ class AfterAGame(_DetailsCase):
         self.assertEqual(detail.state_tiles, [])
         self.shell.on_library_changed()
         self.pump()
-        for shown in (detail, pane):
-            self.assertEqual([tile.slot for tile in shown.state_tiles], [2])
-            self.assertFalse(shown.states_empty.get_visible())
-            self.assertNotIn(self.said("details.never_played"), shown.meta_label.get_label())
+        self.assertEqual([tile.slot for tile in detail.state_tiles], [2])
+        self.assertFalse(detail.states_empty.get_visible())
+        self.assertNotIn(self.said("details.never_played"), detail.meta_label.get_label())
 
     def test_a_focused_state_tile_hands_the_focus_to_play(self):
         self.show()

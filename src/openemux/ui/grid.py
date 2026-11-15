@@ -1047,6 +1047,17 @@ class RomGrid(Gtk.GridView):
             return True
         return self.focus_first_card()
 
+    def focus_path(self, path):
+        """Focus the card of the ROM at ``path``, scrolled into view; False when not shown.
+
+        Big Picture comes back from a game's details page to the game it
+        showed last (issue 975), which LB and RB may have changed.
+        """
+        for position, entry in enumerate(self.visible_entries()):
+            if entry.rom.get("path") == path:
+                return self._focus_position(position)
+        return False
+
     def _focus_position(self, position):
         """Focus the card at ``position``, scrolling it into view if need be.
 

@@ -1,15 +1,15 @@
-"""A game's details in Big Picture: the Android detail pane (issues 914, 957).
+"""A game's details in Big Picture: a page of their own (issues 914, 957, 975).
 
 The desktop keeps everything about one game in ``ui/game_details.py``, an
-``Adw.Dialog``. Big Picture follows the Android gamepad layout instead: a
-pane beside the games with the art, the title, Play, the save states and
-the per-game settings (``GameDetail``), which its expand button opens on a
-page of its own (``GameDetailsPage``). A on a row changes the setting or
-opens a chooser for it; every action calls the same window method the
-desktop dialog does, so the two never disagree about what a change means.
+``Adw.Dialog``. Big Picture gives it the whole screen instead: A on a game
+opens ``GameDetailsPage``, the art large on the left and, on the right, the
+title, Play, the save states and the per-game settings (``GameDetail``). A
+on a row changes the setting or opens a chooser for it; every action calls
+the same window method the desktop dialog does, so the two never disagree
+about what a change means.
 
 ``load(rom)`` rebuilds a detail for another game, which is also what the
-shoulders do on the expanded page.
+shoulders do on the page.
 """
 
 import logging
@@ -39,8 +39,9 @@ from openemux.ui.bigpicture.widgets import (
 logger = logging.getLogger(__name__)
 
 #: The cover, at scale 1.0, in px: the pixbuf is decoded to fit twice this,
-#: so it stays sharp on any screen; the ``bp-details-cover`` rule sizes it.
-COVER_SIZE = (400, 500)
+#: so it stays sharp on any screen; the ``bp-details-cover`` rule sizes it
+#: (``cover_w`` and ``cover_h`` in the theme).
+COVER_SIZE = (480, 600)
 #: A save state's screenshot on its tile, at scale 1.0.
 STATE_THUMBNAIL = 72
 #: The chooser id that stands for "the console default".
@@ -145,43 +146,54 @@ class StateTile(Gtk.Button):
 
 
 class GameDetail(Gtk.Box):
-    """One game, the Android detail pane's way (issue 957).
+    """One game, on its own page (issues 957, 975).
 
-    Top to bottom: the expand, favorite and share buttons; the art with
-    "Search artwork…" under it; the title with its pencil; "Console · Core ·
-    played"; Play (or Continue, when the game left an automatic state); the
-    save states; and the per-game settings rows. The same widget is the pane
-    beside the games and, expanded, a page of its own.
+    On top, "‹ Back to the list" with the favorite and share buttons across
+    from it. Below, two columns: the art with "Search artwork…" under it; and
+    the title with its pencil, "Console · Core · played", Play (or Continue,
+    when the game left an automatic state), the save states, the per-game
+    settings rows and the file's path.
     """
 
-    def __init__(self, shell, expanded=False):
+    def __init__(self, shell):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self.shell = shell
         self.win = shell.win
         t = self.t = shell.win.t
         self.rom = None
-        self.expanded = expanded
         self._states = []
         self._cover_job = 0
         self.state_tiles = []
         self.add_css_class("bp-detail")
 
-        icons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        icons.set_halign(Gtk.Align.END)
-        self.expand_button = icon_button(
-            "view-restore-symbolic" if expanded else "view-fullscreen-symbolic",
-            t("big_picture.pane.collapse" if expanded else "big_picture.pane.expand"),
-            self._on_expand,
-        )
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.back_button = Gtk.Button(label=t("big_picture.details.back"))
+        self.back_button.add_css_class("bp-back-link")
+        self.back_button.set_valign(Gtk.Align.CENTER)
+        self.back_button.connect("clicked", lambda _b: self.shell.pop())
+        top.append(self.back_button)
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        top.append(spacer)
         self.favorite_button = icon_button("non-starred-symbolic", t("hints.favorite"), self._toggle_favorite)
         self.share_button = icon_button("send-to-symbolic", t("share.menu.single"), self._on_share)
-        for button in (self.expand_button, self.favorite_button, self.share_button):
-            icons.append(button)
-        self.append(icons)
+        for button in (self.favorite_button, self.share_button):
+            top.append(button)
+        self.append(top)
+
+        columns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=48)
+        columns.add_css_class("bp-details-columns")
+        self.append(columns)
+        art = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        art.add_css_class("bp-details-side")
+        columns.append(art)
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        info.set_hexpand(True)
+        columns.append(info)
 
         self.cover = CoverFrame()
         self.cover.set_halign(Gtk.Align.CENTER)
-        self.append(self.cover)
+        art.append(self.cover)
         self.artwork_button = Gtk.Button()
         self.artwork_button.add_css_class("bp-pill-button")
         self.artwork_button.set_halign(Gtk.Align.CENTER)
@@ -190,27 +202,25 @@ class GameDetail(Gtk.Box):
         art_box.append(Gtk.Label(label=t("big_picture.pane.search_artwork")))
         self.artwork_button.set_child(art_box)
         self.artwork_button.connect("clicked", lambda _b: self._open_artwork_chooser())
-        self.append(self.artwork_button)
+        art.append(self.artwork_button)
 
         title_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        title_row.set_halign(Gtk.Align.CENTER)
-        title_row.set_margin_top(8)
-        self.title_label = Gtk.Label()
+        title_row.set_halign(Gtk.Align.START)
+        self.title_label = Gtk.Label(xalign=0.0)
         self.title_label.add_css_class("bp-pane-title")
         self.title_label.set_wrap(True)
         self.title_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         self.title_label.set_lines(2)
         self.title_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.title_label.set_justify(Gtk.Justification.CENTER)
         title_row.append(self.title_label)
         self.rename_button = icon_button("document-edit-symbolic", t("context.rename"), self._on_rename)
         self.rename_button.set_valign(Gtk.Align.CENTER)
         title_row.append(self.rename_button)
-        self.append(title_row)
-        self.meta_label = Gtk.Label()
+        info.append(title_row)
+        self.meta_label = Gtk.Label(xalign=0.0)
         self.meta_label.add_css_class("bp-pane-meta")
         self.meta_label.set_ellipsize(Pango.EllipsizeMode.END)
-        self.append(self.meta_label)
+        info.append(self.meta_label)
 
         self.play_button = Gtk.Button()
         self.play_button.add_css_class("bp-play")
@@ -222,28 +232,29 @@ class GameDetail(Gtk.Box):
         self.play_button.set_child(play_box)
         self.play_button.connect("clicked", lambda _b: self._on_play())
         self.play_button.set_margin_top(8)
-        self.append(self.play_button)
+        self.play_button.set_halign(Gtk.Align.START)
+        info.append(self.play_button)
         self.fresh_row = Row(
             t("context.start_fresh"), t("big_picture.details.start_fresh.subtitle"),
             kind=ROW_ACTION, on_activate=self._on_start_fresh,
         )
-        self.append(self.fresh_row)
+        info.append(self.fresh_row)
 
         states_title = Gtk.Label(label=t("big_picture.pane.states"), xalign=0.0)
         states_title.add_css_class("bp-section-title")
         states_title.set_margin_top(14)
-        self.append(states_title)
+        info.append(states_title)
         self.states_empty = Gtk.Label(label=t("big_picture.pane.states.empty"), xalign=0.0)
         self.states_empty.add_css_class("bp-pane-meta")
         self.states_empty.set_wrap(True)
-        self.append(self.states_empty)
+        info.append(self.states_empty)
         states_scroller = Gtk.ScrolledWindow()
         states_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
         states_scroller.set_propagate_natural_height(True)
         self.states_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         states_scroller.set_child(self.states_box)
         self.states_scroller = states_scroller
-        self.append(states_scroller)
+        info.append(states_scroller)
 
         rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         rows.set_margin_top(12)
@@ -257,11 +268,10 @@ class GameDetail(Gtk.Box):
         )
         for row in (self.core_row, self.shader_row, self.color_row, self.playlists_row):
             rows.append(row)
-        self.append(rows)
+        info.append(rows)
         self.path_note = note("")
         self.path_note.set_margin_top(8)
-        self.path_note.set_visible(expanded)
-        self.append(self.path_note)
+        info.append(self.path_note)
 
     # -- loading a game -----------------------------------------------------------
     def load(self, rom):
@@ -276,7 +286,6 @@ class GameDetail(Gtk.Box):
         self._sync_playlists()
         self._build_states()
         self._load_cover()
-        self._sync_shown()
 
     def refresh(self):
         """Re-read the game shown, its art kept: a game just ended (issue 957).
@@ -296,10 +305,6 @@ class GameDetail(Gtk.Box):
         if in_states:
             self.play_button.grab_focus()
         return True
-
-    def _sync_shown(self):
-        """What a pane shows only when there is room: the file's path."""
-        self.path_note.set_visible(self.expanded)
 
     def _read_states(self):
         rom = self.rom
@@ -474,15 +479,8 @@ class GameDetail(Gtk.Box):
         # The window is the one that knows; the star follows it, never leads.
         self._sync_meta()
 
-    def _on_expand(self):
-        """The pane's expand button: the same game on a page of its own; there, back."""
-        if self.expanded:
-            self.shell.pop()
-        else:
-            self.shell.open_details(self.rom)
-
     def on_pad_action(self, action):
-        """X toggles the favorite, Y shares: Android's pane."""
+        """X toggles the favorite, Y shares: Android's detail."""
         if action == "context":
             self._toggle_favorite()
             return True
@@ -740,7 +738,7 @@ class GameDetail(Gtk.Box):
         return self.play_button.grab_focus()
 
     def hints(self, g, t):
-        """Android's pane: A Play, X Favorite, Y Share, B Back."""
+        """Android's detail: A Play, X Favorite, Y Share, B Back."""
         play = t("big_picture.details.continue") if self.win.has_auto_state(self.rom) else t("details.play")
         return [
             (g["confirm"], play),
@@ -751,15 +749,14 @@ class GameDetail(Gtk.Box):
 
 
 class GameDetailsPage(BigPage):
-    """A game's detail, expanded to the whole screen (the pane's expand button)."""
+    """A game's details on the whole screen: A on a game opens it, B closes it."""
 
     context = "bp-pane"
 
     def __init__(self, shell):
         t = shell.win.t
         super().__init__(shell, t("details.title"), tag="bp-details")
-        self.detail = GameDetail(shell, expanded=True)
-        self.detail.set_halign(Gtk.Align.CENTER)
+        self.detail = GameDetail(shell)
         self.body.append(self.scrolled(self.detail))
         self._focus_play_on_show = False
 

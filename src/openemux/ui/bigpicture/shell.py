@@ -316,7 +316,6 @@ class BigPictureShell(Gtk.Box):
         if self._recent is not None:
             self._recent.refresh()
         # A game that just ended has new states and a new "played" line.
-        self.library.detail.refresh()
         if self._details is not None:
             self._details.detail.refresh()
 
@@ -343,16 +342,12 @@ class BigPictureShell(Gtk.Box):
         return self.library.facet_filter()
 
     def show_game(self, rom):
-        """A game activated in the grid: its detail pane (Android's A)."""
+        """A game activated in the grid: its details page (issue 975)."""
         logger.info("big picture: show %s", rom.get("name", ""))
-        if self.visible_page() is self.library:
-            self.library.show_game(rom)
-            return True
         return self.open_details(rom)
 
     def forget_games(self, paths):
-        """Games just removed: whatever shows one of them lets it go."""
-        self.library.forget_games(paths)
+        """Games just removed: the details page showing one of them closes."""
         if self._details is not None and (self._details.rom or {}).get("path") in paths:
             if self.visible_page() is self._details:
                 self.pop()
@@ -451,6 +446,9 @@ class BigPictureShell(Gtk.Box):
 
     def _on_popped(self, _nav, page):
         self._pushed.discard(page)
+        if page is self._details and self.visible_page() is self.library and page.rom is not None:
+            # Back on the games: the focus goes to the game the page showed.
+            self.library.return_to(page.rom.get("path"))
         if self.visible_page() is self.shelf:
             self.shelf.refresh()
         GLib.idle_add(self._focus_visible)
@@ -614,14 +612,19 @@ class BigPictureShell(Gtk.Box):
         return []
 
     # -- the pages ------------------------------------------------------------------------
-    def open_details(self, rom):
+    def details_page(self):
+        """The one details page, made the first time a game needs it."""
         from openemux.ui.bigpicture.details import GameDetailsPage
 
         if self._details is None:
             self._details = GameDetailsPage(self)
-        self._details.load(rom)
-        self.push(self._details)
         return self._details
+
+    def open_details(self, rom):
+        page = self.details_page()
+        page.load(rom)
+        self.push(page)
+        return page
 
     def open_settings(self, section=None, console=None):
         settings = self._root_for(TAB_SETTINGS)
