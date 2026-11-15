@@ -127,6 +127,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.set_title("OpenEmux")
         self._setup_window_icon()
         self.set_default_size(*self._default_window_size())
+        # A game library is a full-screen kind of app: open maximised every
+        # time. The share-of-the-monitor default is what un-maximising gives
+        # back, and leaving Big Picture's fullscreen lands here again (issue 965).
+        self.maximize()
         # Minimum size required for the adaptive breakpoint to compute layout.
         self.set_size_request(360, 420)
         self.load_css()

@@ -3311,6 +3311,16 @@ class TheRemainingCornersTests(WindowCase):
     def test_a_real_monitor_gives_a_share_of_itself(self):
         self.assertGreater(self.win._default_window_size()[0], 0)
 
+    def test_the_window_opens_maximised_over_its_default_size(self):
+        with mock.patch.object(window_module.OpenEmuxWindow, "maximize") as maximize:
+            win = window_module.OpenEmuxWindow(self.app)
+        try:
+            maximize.assert_called_once_with()
+            self.assertEqual(tuple(win.get_default_size()), win._default_window_size())
+        finally:
+            win.emit("close-request")
+            win.destroy()
+
     def test_a_landing_view_no_sidebar_row_matches_falls_back_to_the_first(self):
         with mock.patch.object(self.win.sidebar, "select", return_value=False):
             self.win.refresh_library(force=True)

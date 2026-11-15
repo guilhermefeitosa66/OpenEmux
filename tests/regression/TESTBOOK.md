@@ -81,6 +81,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the same check headlessly against a throwaway `HOME`; exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. This
   is what CI runs (issue #242).
 
+### RT-1200 — The main window opens maximised
+- **Area:** Startup
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the bootstrap already done; any desktop (X11 or Wayland), any package format.
+- **Steps:**
+  1. Start OpenEmux.
+  2. Un-maximise the window (double-click the header bar, or Super+Down).
+  3. Close it and start OpenEmux again.
+  4. Press F11 to enter Big Picture, then F11 again to leave it.
+- **Expected:** 1: the main window opens maximised, filling the screen up to the panel or dock.
+  2: it becomes a normal window at about 80% of the screen, never a tiny one. 3: it opens
+  maximised again — the state is not remembered, it is always maximised. 4: leaving Big Picture
+  lands on the maximised window. The first-boot window on a clean config is unchanged (issue 965).
+- **Check:** suite file `tests/test_window.py`
+  (`test_the_window_opens_maximised_over_its_default_size`); steps 1–4 on a real desktop are human
+  only (a window manager decides the maximised geometry).
+
 ### RT-229 — CI runs the suite on every supported Python, starts the app, and holds coverage
 - **Area:** Startup
 - **Mode:** AUTO-SUITE
