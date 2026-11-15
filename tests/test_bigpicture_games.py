@@ -257,7 +257,7 @@ class TheGamesPage(BigPictureCase):
         # Elsewhere than the games page, a game opens its page all the same.
         self.shell.go_home()
         self.pump()
-        self.shell.show_game(self.rom("SFC", 1))
+        self.shell.show_game(self.rom("SFC"))
         self.pump()
         self.assertIs(self.visible_page(), self.shell._details)
 

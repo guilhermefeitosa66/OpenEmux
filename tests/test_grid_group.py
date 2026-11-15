@@ -105,6 +105,10 @@ class _Grid(_Widget):
     def has_focus_memory(self):
         return False
 
+    def focus_path(self, path):
+        self.calls.append(("focus-path", path))
+        return any(e.name == path for e in self.visible_entries())
+
     # -- per-ROM refreshes
     def refresh_rom_frame(self, rom):
         return rom.get("console") == self.console
@@ -399,6 +403,13 @@ class WhereTheFocusLandsTests(unittest.TestCase):
         self.assertTrue(group.focus_restore())
         self.assertEqual(grids[1].calls, ["restore"])
         self.assertEqual(grids[0].calls, [])
+
+    def test_a_game_by_its_path_is_focused_in_the_group_showing_it(self):
+        # Big Picture back from a game's details page (issue 975).
+        group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
+        self.assertTrue(group.focus_path("Zelda"))
+        self.assertEqual(grids[1].calls, [("focus-path", "Zelda")])
+        self.assertFalse(group.focus_path("Nowhere"))
 
 
 if __name__ == "__main__":

@@ -2585,13 +2585,13 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.assertEqual(self.win.pages.grid_for("SFC").zoom, 1.0)
 
     def test_leaving_big_picture_puts_the_zoom_stepper_back_on_the_desktop(self):
-        # LB/RB in the mode syncs the header stepper to 125%; leaving must
+        # LB/RB in the mode syncs the header stepper to 200%; leaving must
         # not leave it there while the grid is back at the desktop's zoom.
         self.config.set_zoom(0.75)
         self.win.sidebar.select("SFC")
         self._toggle_big_picture_quietly()
         self.win.sidebar.select("FC")
-        self.assertEqual(self.win.zoom_label.get_label(), "125%")
+        self.assertEqual(self.win.zoom_label.get_label(), "200%")
         self._toggle_big_picture_quietly()
         self.assertEqual(self.win.zoom_label.get_label(), "75%")
         self.assertTrue(self.win.zoom_in_button.get_sensitive())
