@@ -341,6 +341,28 @@ class MovingAroundTests(_NavigationCase):
         self.nav._cmd_move("down")
         popover.child_focus.assert_called_once()
 
+    def test_a_board_that_walks_its_own_keys_takes_the_move(self):
+        board = Gtk.Box()
+        board.pad_move = mock.Mock(return_value=True)
+        key = Gtk.Button()
+        board.append(key)
+        self.focus_on(key)
+        with mock.patch.object(self.win, "child_focus") as child_focus:
+            self.nav._cmd_move("up")
+        board.pad_move.assert_called_once_with("up", key)
+        child_focus.assert_not_called()
+
+    def test_a_board_that_declines_the_move_leaves_it_to_gtk(self):
+        board = Gtk.Box()
+        board.pad_move = mock.Mock(return_value=False)
+        key = Gtk.Button()
+        board.append(key)
+        self.focus_on(key)
+        with mock.patch.object(self.win, "child_focus") as child_focus:
+            self.nav._cmd_move("left")
+        board.pad_move.assert_called_once_with("left", key)
+        child_focus.assert_called_once_with(Gtk.DirectionType.LEFT)
+
     def test_left_out_of_the_grid_falls_back_to_the_sidebar(self):
         self.focus_on(Gtk.Button())
         with mock.patch.object(
@@ -547,12 +569,12 @@ class ActivatingAndMenusTests(_NavigationCase):
         with mock.patch.object(self.win, "_focused_rom_item", return_value=item):
             self.nav._cmd_context_menu()
 
-    def test_tv_mode_and_the_keyboard_go_through_the_window(self):
+    def test_big_picture_and_the_keyboard_go_through_the_window(self):
         # Issue 914: the Guide button and Start.
-        with mock.patch.object(self.win, "toggle_tv_mode") as toggle, mock.patch.object(
+        with mock.patch.object(self.win, "toggle_big_picture") as toggle, mock.patch.object(
             self.win, "open_onscreen_keyboard"
         ) as osk:
-            self.nav._cmd_tv_mode()
+            self.nav._cmd_big_picture()
             self.nav._cmd_osk()
         toggle.assert_called_once()
         osk.assert_called_once()

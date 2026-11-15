@@ -81,6 +81,22 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   the same check headlessly against a throwaway `HOME`; exit 0 = PASS, 1 = FAIL, 2 = BLOCKED. This
   is what CI runs (issue #242).
 
+### RT-1202 — The main window opens maximised
+- **Area:** Startup
+- **Mode:** MANUAL
+- **Preconditions:** the bootstrap already done; any desktop (X11 or Wayland), any package format.
+- **Steps:**
+  1. Start OpenEmux.
+  2. Un-maximise the window (double-click the header bar, or Super+Down).
+  3. Close it and start OpenEmux again.
+  4. Press F11 to enter Big Picture, then F11 again to leave it.
+- **Expected:** 1: the main window opens maximised, filling the screen up to the panel or dock.
+  2: it becomes a normal window at about 80% of the screen, never a tiny one. 3: it opens
+  maximised again — the state is not remembered, it is always maximised. 4: leaving Big Picture
+  lands on the maximised window. The first-boot window on a clean config is unchanged (issue 965).
+- **Check:** human only: a window manager decides the maximised geometry. The request itself is
+  covered by `tests/test_window.py` (`test_the_window_opens_maximised_over_its_default_size`).
+
 ### RT-229 — CI runs the suite on every supported Python, starts the app, and holds coverage
 - **Area:** Startup
 - **Mode:** AUTO-SUITE
@@ -1366,6 +1382,41 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-1210 — Console icons in the sidebar and the settings are 16 px and pixel-sharp
+- **Area:** Navigation & search
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running on the synthetic library.
+- **Steps:**
+  1. `make devbox-shot OUT=$SCRATCH/sidebar-1x.png WIN=1` and zoom into the sidebar.
+  2. Open "Preferences" → "Input" and open the "Console" dropdown; scroll it quickly top to
+     bottom; take another screenshot.
+  3. Restart the app at scale 2 (`./devbox/devbox.sh exec env GDK_SCALE=2 devbox-app restart`)
+     and repeat step 1. Restore: `make devbox-app ACTION=restart`.
+- **Expected:** 1: every console row's icon is the same size as the "All", "Favorites" and
+  "Recently Played" glyphs (16 px), in sharp square pixels (the hand-drawn 16 px art, not a
+  blurred 32 px one), with no pixel rows missing. 2: the dropdown and the settings rows show the
+  same 16 px icons, and the list scrolls without stutter. 3: still 16 px on screen, now drawn from
+  the 32 px art one-to-one, sharp. A console with no icon file keeps its symbolic icon.
+- **Check:** the screenshots show the above; `tests/test_console_icons.py`
+  (`test_a_console_with_art_gets_the_renderer_at_16_px`,
+  `test_the_row_slot_takes_the_art_drawn_for_it_1_to_1`, `test_its_row_falls_back_to_the_themed_icon`).
+
+### RT-1211 — Console icons drawn at 4x or more show the soft pixel grid
+- **Area:** Navigation & search
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Open Big Picture (F11) where the console art is drawn at 4x its pixels or more (for example
+     the shelf with `GDK_SCALE=2`), and look closely at a console's icon. Then look at the console
+     chips and the sidebar, which draw it smaller.
+- **Expected:** At 4x and above every opaque pixel of the art has a thin seam on its right and
+  bottom edge (an eighth of the pixel, at least one screen pixel), in the pixel's own colour
+  slightly darker (80%), so the art reads as a soft grid; transparent pixels get nothing, so no grid
+  shows on the card's background. Below 4x (the chips, the sidebar) the icon is plain sharp pixels
+  with no grid. No console icon anywhere is blurred or drawn at an uneven size.
+- **Check:** `tests/test_console_icons.py` (`TheSoftGridTests`, `TheRendererTests`),
+  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`).
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render
@@ -2356,12 +2407,12 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Preconditions:** A working core and ROM for at least one console.
 - **Steps:**
   1. Double-click (or press Enter on) a game.
-  2. Play for ~30 s, then close the game with the bar's power button.
+  2. Play for ~30 s, then close the game with the bar's quit button (a red door with an arrow).
 - **Expected:** The card shows a spinner over a dimmed cover from the click until RetroArch is up,
   and the window's banner reads "Starting <game>…" with a "Stop" button, then "Playing <game>"
   while the game runs (issue 904). The game opens in RetroArch's own window — **with its title bar
   and borders** — and the in-game bar sits across the bottom edge (RT-327). Sound plays, input
-  responds, and the power button ends the game and returns to the library cleanly: the banner
+  responds, and the quit button ends the game and returns to the library cleanly: the banner
   goes and a toast reads "Played <game> for N min" (the game's title, never the file name; no exit
   code when it is zero). No OpenEmux window wraps the game and no "game window" notice is shown
   (issue #469).
@@ -2394,18 +2445,74 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** human only. Known limit: a toggle flipped from the keyboard or RetroArch's menu does
   not change the bar's icon.
 
+### RT-1140 — The volume set in a game is where the next game starts
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session; note the modification time of the
+  RetroArch config OpenEmux launches with (`~/.config/retroarch/retroarch.cfg`, or the RetroArch
+  Flatpak's `~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg`).
+- **Steps:**
+  1. Start a game and click the bar's volume − four times. Quit the game.
+  2. Start any game (another console is fine) and click volume − once.
+  3. Quit the game, close OpenEmux entirely, reopen it and start a game; click volume − once.
+  4. Start a game, leave the volume alone, quit; start a game and click volume − once.
+- **Expected:** In 1, RetroArch's volume widget ends at −2.0 dB. In 2 the game starts at that
+  quieter level, and the widget shows −2.5 dB: it continues from where the last game stopped, not
+  from 0. In 3 it continues the same way after the restart (−3.0 dB). 4 changes nothing: the
+  widget shows −3.5 dB. The RetroArch config's modification time never changes (issue 939).
+- **Check:** human for the sound. The stored value and the launch argument:
+  `grep game_volume_db ~/.openemux/config.yaml` shows the last level, and the newest
+  `~/.openemux/runtime/runtime_*.cfg` carries `audio_volume = "<that level>"`. The read, the store
+  and the launch argument: `tests/test_retroarch_log.py`, `tests/test_runtime_manager.py`,
+  `tests/test_config_bootstrap_defaults.py`, `tests/test_retroarch_launcher.py`.
+- **Restore:** click volume + until the widget shows 0.0 dB, then quit the game.
+
+### RT-1141 — A game always starts unmuted
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Start a game, click the bar's mute button (it turns red), quit the game.
+  2. Start a game.
+- **Expected:** The game in 2 has sound, and the bar's mute button is in its normal, not red,
+  state. Mute is never carried from one game to the next, so no game starts silent without a sign
+  of why (issue 939).
+- **Check:** human for the sound. The newest `~/.openemux/runtime/runtime_*.cfg` carries
+  `audio_mute_enable = "false"`; suite: `tests/test_retroarch_launcher.py`.
+
+### RT-1144 — The in-game bar draws the same action glyphs as the Android app
+- **Area:** Launch
+- **Mode:** MANUAL
+- **Preconditions:** RT-062 done in the same session.
+- **Steps:**
+  1. Look at the bar from left to right.
+  2. Click fast-forward, slow motion and turbo in turn, each twice.
+  3. Click mute twice.
+  4. Click save state, then load state.
+- **Expected:** Quit is a red door with an arrow pointing out (no power symbol), restart a
+  clockwise arrow, slow motion a dashed ring around a play triangle (no speedometer), fast-forward
+  two solid triangles, turbo a lightning bolt, save a floppy with a down arrow beside it and load
+  the same floppy with an up arrow (no dark disc behind the arrow), sound a speaker with a single
+  wave. Fast-forward, slow motion and turbo turn blue with the same glyph while on; muted is a red
+  tile with a crossed speaker; paused, pause becomes a blue solid play triangle. The glyphs match
+  the Android app's game screen (issue 944).
+- **Check:** human only; `tests/test_overlay_bar.py`
+  (`test_the_bar_draws_the_unified_action_glyphs`) pins the paths the PNGs are rendered from.
+
 ### RT-329 — Hiding the bar gives its space back to the game
 - **Area:** Launch
 - **Mode:** MANUAL
 - **Preconditions:** RT-062 done in the same session.
 - **Steps:**
-  1. Pause the game and mute it, then click the bar's down-chevron.
-  2. Click the faded up-chevron that appears in the bottom-right corner.
+  1. Pause the game and mute it, then click the bar's rightmost button, an eye with a slash.
+  2. Click the faded eye that appears in the bottom-right corner.
 - **Expected:** Hidden, the bar is gone, the game grows to the full height of the window, and only
-  a small faded button remains in the bottom-right corner (RetroArch says `Shader: "Controls
-  hidden.glslp"`). Shown again, the bar returns with its state intact — still paused (blue play),
-  still muted (red) — and the game shrinks back above it.
-- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`).
+  a small faded button with a plain eye remains in the bottom-right corner (RetroArch says
+  `Shader: "Controls hidden.glslp"`). Neither button is a chevron any more: the eye-slash hides,
+  the eye shows, as in the Android app (issue #938). Shown again, the bar returns with its state
+  intact — still paused (blue play), still muted (red) — and the game shrinks back above it.
+- **Check:** human only; the preset pair in `tests/test_overlay_bar.py` (`PrepareShadersTests`)
+  and its `test_the_hide_and_show_buttons_draw_the_android_eye` for the two glyphs.
 
 ### RT-330 — A console's shader keeps its quality with the bar
 - **Area:** Launch
@@ -2496,7 +2603,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   repo) with RetroArch from Flathub (`org.libretro.RetroArch`); a game of any console.
 - **Steps:**
   1. Launch the game from the Flatpak OpenEmux.
-  2. Hide the bar with its down-chevron, then show it again.
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye.
 - **Expected:** The game opens with OpenEmux's bar on the bottom edge and the game above it, as
   in RT-327; hiding and showing behave as in RT-329. `~/.openemux/runtime/overlay/` holds
   `openemux-bar.cfg`, its PNGs and the margin shaders, and that is where the launch points
@@ -2512,7 +2619,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   on; a console with no shader and one with a shader (e.g. `dot` on GBA).
 - **Steps:**
   1. Launch a game on each console.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Turn the switch off again and launch one of the games.
 - **Expected:** With the switch on, the game fills the whole height of the window and the bar is
@@ -2535,7 +2642,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   1. Open "Settings" → "Video": the "Game Window" group sits above "In-Game Bar". Launch a game, then
      quit it.
   2. Turn "Start games in fullscreen" on, close "Settings" and launch a game.
-  3. In that game, hide the bar with its down-chevron and show it again with the faded button; press
+  3. In that game, hide the bar with its eye-slash button and show it again with the faded eye; press
      the fullscreen hotkey (`F` by default) twice.
   4. Turn the switch off while the game is still running, quit the game and launch it again.
 - **Expected:** With the switch off the game opens in a decorated window. With it on, the game window
@@ -2572,7 +2679,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   "Simple"; the game window 16:9 (its default shape).
 - **Steps:**
   1. Launch the MD game.
-  2. Hide the bar with its down-chevron, then show it again with the faded button in the
+  2. Hide the bar with its eye-slash button, then show it again with the faded eye in the
      bottom-right corner.
   3. Click every button on the bar: pause, reset, slow motion, fast-forward, turbo, save, load,
      mute, volume, fullscreen, menu, close.
@@ -2657,7 +2764,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   included) — what a stop signal reaches depends on how RetroArch was launched.
 - **Steps:**
   1. Launch a game and let it run until sound is playing.
-  2. Close it with the bar's power button; repeat with the window's "×".
+  2. Close it with the bar's quit button (a red door with an arrow); repeat with the window's "×".
   3. Each time, wait 5 s, then run `pgrep -af retroarch` in a terminal.
 - **Expected:** The window closes, the sound stops with it, and no RetroArch process is left
   behind — `pgrep` prints nothing. The library window is still there, with the "finished" toast.
@@ -6119,13 +6226,13 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-471's landscape shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Press DPAD_DOWN until "All games" has the focus ring; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
+  1. Press DPAD_DOWN until "All games" has the focus highlight; press DPAD_RIGHT, DPAD_DOWN, DPAD_LEFT.
   2. Keep pressing DPAD_DOWN to the last row.
   3. Press L1 and R1.
   4. Focus a card in the right column, press A, then go back.
 - **Expected:** Focus moves to the card on the right, the one below, then the one on the left; the
-  list scrolls to keep the focused card on screen and the ring is never lost. L1/R1 switch tabs.
-  After going back, the focus ring is on the card that was opened.
+  list scrolls to keep the focused card on screen and the focus highlight is never lost. L1/R1 switch tabs.
+  After going back, the focus highlight is on the card that was opened.
 - **Check:** human only.
 
 ### RT-474 — Reorder by drag and by the menu across columns
@@ -6233,12 +6340,12 @@ no cartridge frame (e.g. PlayStation or PC Engine) and two favourite games.
 - **Mode:** MANUAL
 - **Preconditions:** RT-849's portrait shelf; a gamepad (or `adb shell input gamepad keyevent`).
 - **Steps:**
-  1. Open the shelf: press DPAD_DOWN until a focus ring shows on "All".
+  1. Open the shelf: press DPAD_DOWN until a focus highlight shows on "All".
   2. Press DPAD_RIGHT, then DPAD_LEFT, then DPAD_DOWN.
   3. Go back up to "Favorites", press A, then go back.
   4. With "All" focused, press Y.
-- **Expected:** Step 2: the ring moves to "Favorites", back to "All", then to the first console.
-  Step 3: the Favorites view opens, and after going back the ring is on "Favorites". Step 4: no
+- **Expected:** Step 2: the focus highlight moves to "Favorites", back to "All", then to the first console.
+  Step 3: the Favorites view opens, and after going back the focus highlight is on "Favorites". Step 4: no
   reorder menu opens.
 - **Check:** human only.
   in `pkg/android/openemux` of `openemux-android`.
@@ -6323,7 +6430,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
   ```bash
   adb pull "/sdcard/Download/OpenEmux backup $(date +%F).zip" backup.zip
   unzip -Z1 backup.zip | head -2                                          # manifest.json, prefs/openemux.json
-  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system)/|internal/(meta\.json|nds-layout|labels/))'   # 0
+  unzip -Z1 backup.zip | grep -vcE '^(manifest\.json|prefs/openemux\.json|external/(roms|saves|states|playtime|screenshots|system|skins)/|internal/(meta\.json|nds-layout|labels/))'   # 0
   unzip -p backup.zip | grep -ac '<ra-username>\|cheevos_token'           # 0
   ```
 
@@ -6356,7 +6463,7 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Steps:**
   1. Import any `.zip` that is not a backup (e.g. a zipped ROM).
   2. Import a copy cut inside the manifest: `head -c 100 backup.zip > cut.zip`, pushed to Downloads.
-  3. Import a backup whose `manifest.json` says `"version":2` (unzip, edit, zip again with
+  3. Import a backup whose `manifest.json` says `"version":3` (unzip, edit, zip again with
      `manifest.json` first).
   4. Import a copy cut in half (`head -c $(( $(stat -c %s backup.zip) / 2 )) backup.zip > half.zip`),
      then tap "Replace and restore" on the sheet.
@@ -6399,6 +6506,49 @@ emulator with `adb`, the debug APK (`run-as` needs it). `$PKG` is `com.openemux.
 - **Check:**
   ```bash
   adb shell ls /sdcard/Download | grep -c 'OpenEmux backup'    # 0 (or the count from before)
+  ```
+
+### RT-1138 — The backup carries the player's skins and they are in use after a restore
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A Delta or Manic skin imported for one console and an edited copy of a bundled
+  skin saved for another (#843), each picked for its console in the skin picker.
+- **Steps:**
+  1. Settings → "Back up and restore": read the "Settings and artwork" row. Switch "Include ROMs"
+     off and export.
+  2. `adb shell pm clear $PKG`, open the app, finish the first-run setup, then import the archive
+     and tap "Replace and restore".
+  3. After the restart, open each console's skin picker and start a game of each console.
+- **Expected:** 1: the row reads "Settings, favorites, labels, BIOS, skins" and its size includes
+  the skins. The archive lists both skins under `external/skins/` and nothing else there: no
+  bundled skin, no `.tmp`, `.old` or draft entry; its manifest says `"version":2`. 3: both skins
+  are listed, each is the selected one for its console, and the games draw them.
+- **Check:**
+  ```bash
+  unzip -Z1 backup.zip | grep '^external/skins/'                   # the two skins only
+  unzip -Z1 backup.zip | grep -c '^external/skins/.*/\.'           # 0
+  unzip -p backup.zip manifest.json | grep -o '"version":[0-9]*'   # "version":2
+  adb shell ls -R $EXT/skins                                        # after step 2: both back
+  ```
+
+### RT-1139 — A backup without skins stays readable by older versions and keeps the phone's skins
+- **Area:** Android — Backup and restore
+- **Mode:** MANUAL
+- **Preconditions:** A phone with no skin of the player's (none imported or edited); a second
+  phone (or the same one, later) with skins.
+- **Steps:**
+  1. On the phone without skins, export.
+  2. On the phone with skins, import that archive and tap "Replace and restore".
+  3. Import an archive made by the app before #843 (version 1) the same way.
+- **Expected:** 1: the archive has no `external/skins/` entry and its manifest says
+  `"version":1`, so an app from before #843 restores it. 2 and 3: the restore ends with the green
+  box and the restart; the phone's own skins are still there and still picked. A console whose
+  picked skin is gone plays its default skin, with no error.
+- **Check:**
+  ```bash
+  unzip -Z1 backup.zip | grep -c '^external/skins/'                # 0
+  unzip -p backup.zip manifest.json | grep -o '"version":[0-9]*'   # "version":1
+  adb shell ls -R $EXT/skins                                        # after step 2: unchanged
   ```
 
 
@@ -6615,7 +6765,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Expected:** While the first console's games are at the row's start its label stays at the start,
   over the first game in view. The second console's label rides over its own first game; when it
   reaches the first label it pushes it out to the left and takes its place at the start. Dragging
-  back does the reverse. The labels never cover a game or the focus ring, and they do not jitter.
+  back does the reverse. The labels never cover a game or the focus highlight, and they do not jitter.
 - **Check:** human only (a screenshot at the start, mid-push and after the push).
 - **Restore:** `adb shell settings put system user_rotation 0`.
 
@@ -6686,7 +6836,7 @@ least two consoles, one with cartridge frames (e.g. Game Boy Advance) and one wi
 - **Expected:** "Previous"/"next" show LB/RB, then L/R, then L1/R1 instead of chevrons; the caret is
   hidden. Each shoulder press switches the filter and the label follows. The hint bar has no
   "Console" hint. UP reaches the header row; LEFT/RIGHT walk back, previous, the filter name, next,
-  search, sort and the view buttons with a whole focus ring (also on a dimmed step). A opens the
+  search, sort and the view buttons with a whole focus highlight (also on a dimmed step). A opens the
   menu, the D-pad moves in it, A picks, B closes it.
 - **Check:** human only (a screenshot per family).
 - **Restore:** "Button labels" back to "Automatic"; `adb shell wm size reset`,
@@ -6879,7 +7029,7 @@ a tablet (or a headless emulator, `emulator -avd <avd> -no-window -read-only`, w
 
 ## Android — Gamepad navigation
 
-The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus ring
+The Android app's gamepad mode (#538): where scrolling puts the focused item, the focus highlight
 never cut, and touch living alongside it. `MANUAL`, like the other Android sections: a phone with a
 gamepad, or a headless emulator (`emulator -avd <avd> -no-window -read-only`) driven with
 `adb shell input keyevent` (`KEYCODE_DPAD_UP/DOWN/LEFT/RIGHT`, `KEYCODE_BUTTON_A/B/X/Y/L1/R1`,
@@ -6889,7 +7039,7 @@ nothing focused (after a tap, or with the focused item scrolled away by finger) 
 on the sensible item and does nothing else. A library of a few games over two consoles, one of them
 with 10 or more, is enough. `$PKG` is `com.openemux.mobile`.
 
-Since issue 642 the gamepad layout (the ring always on one item, the hint bar always shown, larger
+Since issue 642 the gamepad layout (the focus highlight always on one item, the hint bar always shown, larger
 focus targets, L1/R1 pills by the console chips) follows a connected controller and the setting
 "Settings → General → Controllers → Interface mode" ("Automatic", "Touch screen", "Controller"; issue 873
 renamed it from "Controller layout" with "Automatic", "Never" and "Always", and stores the same `auto`,
@@ -6915,11 +7065,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   middle of the screen and the row scrolls under it; near the end focus moves on to the right and
   the last game rests at the right padding. The focused game's title is bold and the others are
   dimmed. Headers never take focus, and neither does the back link (B goes back). RIGHT past the last
-  game leaves focus on it, it never jumps up to the header. In the header the ring and its halo are
+  game leaves focus on it, it never jumps up to the header. In the header the focus highlight is
   whole, not cut by the top of the screen.
 - **Check:** human only (a screenshot per step: `adb exec-out screencap -p > shot.png`).
 
-### RT-435 — No focus ring is cut or covered, on any screen
+### RT-435 — No focus highlight is cut or covered, on any screen
 - **Area:** Android — Gamepad navigation
 - **Mode:** MANUAL
 - **Preconditions:** First-run setup done; a library as in the section's header.
@@ -6932,11 +7082,38 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   4. Press START for "Settings" and walk every page, BIOS included, with the swatches of a console's
      page; then the in-game pause sheet (START during a game) and its "Load state" grid.
   5. Repeat 1 to 4 in landscape, and in the light theme.
-- **Expected:** The ring and its halo are whole around every focused item: not cut by the screen's
-  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items.
-  The view toggle's buttons keep their whole ring. Rows inside a card show the inside highlight,
-  never scaled and never past the card.
+- **Expected:** The focus highlight is whole on every focused item: a row or button filled edge to
+  edge, and the plate behind a cover, cartridge, console card or swatch not cut by the screen's
+  sides, a list's edge, a sheet's edge or a button group, and drawn over the neighbouring items. The
+  view toggle's buttons keep their whole fill. Rows inside a card fill inside the card, never scaled
+  and never past it. No ring and no glow anywhere (issue 951).
 - **Check:** human only (a screenshot per screen).
+
+### RT-1138 — The controller focus is the item's background, readable in both themes
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** First-run setup done; a library as in the section's header; a controller
+  connected (or faked with the `DEBUG_GAMEPAD` broadcast above).
+- **Steps:**
+  1. On a console's shelf, walk the grid in "Cartridges", then covers, then the list view.
+  2. Press UP to the console chips and the view toggle, then open "Shelf" and walk the console cards.
+  3. Open a game's detail: focus "Play", the other buttons, the colour swatches and "See all".
+  4. Press START for "Settings"; walk a page of rows; open "Theme" and walk its choices, ending on
+     the one already chosen.
+  5. Start a game, press START for the pause sheet and walk its tiles, the slot slider and
+     "Load state".
+  6. Open the skin editor on a skin of your own (its card's "⋮" › "Edit") and walk its bar, the
+     paint panel and the "Leave" dialog.
+  7. Switch the app to the light theme ("Settings" › "Theme" › "Light") and repeat 1 to 6.
+  8. Touch the screen (or disconnect the controller) and look at the item that had the focus.
+- **Expected:** The focused item shows no ring and no glow around it. A row, a chip, a quiet button
+  or a text link takes the violet tone of a toggle that is on as its background; "Play" and the other
+  violet buttons turn a deeper violet with their white label; a cover, a cartridge, a console card or
+  a swatch sits on a violet plate a little larger than itself and grows slightly. In "Theme" the
+  chosen row keeps its check mark, and focusing it turns it a deeper violet than the other focused
+  rows. Every focused label and icon stays readable in both themes; the skin editor's bar and paint
+  panel stay dark, with a dark violet focus, in the light theme too. Step 8: no highlight remains.
+- **Check:** human only (a screenshot per screen and theme: `adb exec-out screencap -p > shot.png`).
 
 ### RT-436 — Vertical lists keep the focused item clear of the edges and the hint bar
 - **Area:** Android — Gamepad navigation
@@ -7016,7 +7193,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
      share.
   5. In each one: D-pad down to its last item, A on an item, then reopen it and press B.
 - **Expected:** Focus enters each sheet, dialog or menu on its first item (in the remove dialogs, on
-  "Cancel") with the ring visible; the D-pad moves inside it and reaches its last item, the sheet
+  "Cancel") with the focus highlight visible; the D-pad moves inside it and reaches its last item, the sheet
   scrolling when it is taller than the screen; A picks the focused item; B closes it, and focus is
   back on the button or row that opened it. A sheet's own buttons (X, Y, L1/R1, START) work while
   it is open, and none of them reaches the screen behind it.
@@ -7068,9 +7245,9 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   2. Disconnect it (the same broadcast with `false`).
   3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
 - **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
-  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), a ring on one game, and "L1" and
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and "L1" and
   "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
-  Disconnecting removes the hint bar, the ring and the pills and gives the chips and the toggle
+  Disconnecting removes the hint bar, the highlight and the pills and gives the chips and the toggle
   their old size, again without a restart. With the controller connected every main tab keeps its
   hint bar. No toast or message announces either change.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
@@ -7086,11 +7263,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   3. Back on the shelf, scroll and fling the grid with a finger, open the search and type, and on
      the "Shelf" page long-press a shelf and drag it.
   4. Tap a game's cover and come back with B.
-- **Expected:** Each tap moves the ring to the tapped item and the hint bar never hides. RIGHT moves
+- **Expected:** Each tap moves the focus highlight to the tapped item and the hint bar never hides. RIGHT moves
   one chip right on that same press; DOWN goes from the toggle into the grid on the first press,
-  and A opens the focused game. A scroll, a fling or a drag never moves the ring to the item under
+  and A opens the focused game. A scroll, a fling or a drag never moves the focus highlight to the item under
   the finger, and clicking, long-pressing, dragging and typing behave as in the touch layout.
-  Back on the shelf the ring is on the game that was tapped.
+  Back on the shelf the focus highlight is on the game that was tapped.
 - **Check:** human only.
 
 ### RT-580 — The "Interface mode" setting
@@ -7106,8 +7283,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Force-stop and relaunch, open the setting again, then pick "Automatic" and disconnect and
      connect the controller.
 - **Expected:** "Interface mode" is the first section of the Controllers screen, with the lead
-  "Whether the app is used with a controller or by touch. Controller mode shows the focus ring and the
-  button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
+  "Whether the app is used with a controller or by touch. Controller mode highlights the focused item and
+  shows the button hints."; the default is "Automatic". The cards read, in this order, "Automatic" ("Controller
   mode while a controller is connected, touch mode otherwise."), "Touch screen" ("Touch navigation,
   as if no controller were connected. Pressing a controller button switches to controller navigation
   until you touch the screen again. Games open with the on-screen controls. Pick this if the app thinks
@@ -7115,8 +7292,8 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   "Controller" ("Always controller mode, even before a controller is detected. For handhelds with
   built-in controls."). Each choice applies at once. "Controller" shows the gamepad layout with no
   controller, a tap does not hide it, and it is still on after the relaunch. "Touch screen" with a
-  controller detected opens the library with no focus ring or hint bar; DOWN still moves the focus
-  with the ring and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
+  controller detected opens the library with no focus highlight or hint bar; DOWN still moves the focus
+  with the highlight and the hint bar showing (RT-1014), the tap hides them again, and the chips keep their
   touch size. "Touch screen" survives the relaunch. "Automatic" follows the controller again.
   `adb shell run-as $PKG cat shared_prefs/openemux.xml` holds `controller_layout` with `always`
   (Controller), `never` (Touch screen) or `auto`.
@@ -7137,7 +7314,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
      language and look at the setting and the hint bar.
   6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
 - **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
-  swatches are larger and every text link is a full-height target with its ring whole; without it
+  swatches are larger and every text link is a full-height target with its highlight whole; without it
   everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
   the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
   Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
@@ -7174,7 +7351,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Press START, focus "BIOS" (then "Backup", then "About") and press A; press B.
   6. In a console's list, press R1, then L1.
   7. Open a game's detail by touch, then press a D-pad key.
-- **Expected:** 1: the console's first game holds the focus ring (or, coming back, the game that was
+- **Expected:** 1: the console's first game holds the focus highlight (or, coming back, the game that was
   opened), and the hint bar's "A: Details" is true. 2: the game's detail opens with "Play" (or
   "Continue") focused, and "A: Play" is true. 3: the list comes back with the opened game focused. 4:
   the same in the landscape row and the landscape detail. 5: the page opens on its first item, not
@@ -7550,7 +7727,7 @@ files are in `files/launch/current/`.
   titled "Controller skins" with the same groups and cards as the console's settings, and the row then reads
   titled "Default skin" with the same cards as the console's settings, and the row then reads
   "Dark". Step 3 opens the game on the Dark skin and the row still reads "Dark". In step 4 the gamepad
-  focus ring lands on each card in turn and A selects "Console colors"; the section title follows.
+  focus highlight lands on each card in turn and A selects "Console colors"; the section title follows.
   Step 5 opens the usual light grey SNES skin.
 - **Check:**
   ```bash
@@ -7679,7 +7856,7 @@ color's id: `white`, `clear-blue`, ...). The packages are built by `tools/skins/
   2. With the gamepad only, move down through the sheet to the last card, "Clear", and press A.
   3. Close the sheet and launch the game.
 - **Expected:** The sheet lists "Console colors", "Dark", "Red", "Yellow", "Green", "Blue", "Black",
-  "White" and "Clear", each with its swatch; the focus ring reaches every card and the sheet scrolls to
+  "White" and "Clear", each with its swatch; the focus highlight reaches every card and the sheet scrolls to
   keep it in view. The row then reads "Clear" and the game opens on a pale, translucent-looking grey
   shell with the Game Boy's layout.
 - **Check:**
@@ -7771,7 +7948,7 @@ runs them on a phone or a headless emulator with `adb`. "Old" and "future" build
   1. Cold-start the app and press D-pad Down until the first shelf card is focused.
   2. Press D-pad Up once.
   3. Press D-pad Left, then "A".
-- **Expected:** At step 2 the focus ring is on "Download"; at step 3 it moves to "Not now", and "A"
+- **Expected:** At step 2 the focus highlight is on "Download"; at step 3 it moves to "Not now", and "A"
   hides the banner and puts the focus on the first shelf card. At no point does the banner take the
   focus by itself.
 - **Check:** human only (a screenshot after each step).
@@ -8378,7 +8555,7 @@ at least once and a few games imported recently. Every scenario ends with
 - **Expected:** The first press focuses an item of the shelf (the search field), never the rail.
   Left from a first-column card focuses the current tab ("Library") on the rail; Up/Down move
   between the tabs; Right returns to the same card. Every card, the continue cards, the search
-  field, "Import ROMs" and "Import more games" show the focus ring whole. L1/R1 switch tabs. In
+  field, "Import ROMs" and "Import more games" show the focus highlight whole. L1/R1 switch tabs. In
   gamepad mode "Long press to reorder" is hidden.
 - **Check:** human only (a screenshot at each step).
 - **Restore:** `adb shell wm size reset`, `adb shell wm density reset`.
@@ -8521,7 +8698,7 @@ Every scenario ends with `adb shell wm size reset`, `adb shell wm density reset`
   tile last, RT-1008); there is no "Restart game" row (issue 881) and nothing is pinned at the foot.
   The focus starts on "Continue". On the left the game stays visible,
   dimmed, with a "PAUSED" chip and the four newest saved states (never more) with "Tap to load".
-  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus ring shows on every control;
+  "Load" loads the slot shown; the save states ("See all") and shader pages open inside the panel. The focus highlight shows on every control;
   B goes back a page or resumes, START resumes. In portrait (800dp across) the panel keeps its
   440dp, at most 55% of the width, and the game still shows on the left. The panel is readable in
   both themes. Tapping a saved state on the left loads it and resumes.
@@ -9574,7 +9751,7 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
      `adb emu fold`, then `adb emu unfold`.
   2. Repeat on a game's detail.
 - **Expected:** After every change the same screen is open, the grid is still scrolled to the
-  same games and the focus ring is on the same game (or on "Continue" on the detail). An open
+  same games and the focus highlight is on the same game (or on "Continue" on the detail). An open
   sheet stays open.
 - **Check:** human only.
 
@@ -9587,8 +9764,8 @@ cartridge frames (e.g. Game Boy Advance), and a game with a saved state. Every s
   2. Walk the chips and the tabs; press B.
   3. Use L1/R1; open a game with A and walk its bottom half.
   4. On "Shelf" and on "Settings", press down until the focus leaves the top half.
-- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the ring
-  is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
+- **Expected:** Down crosses the fold into the bottom half's controls and then the tabs; the focus
+  highlight is never drawn on the fold. B from the bottom half brings the focus back to the game it left on
   top. L1/R1 change console as before. From the shelf, down reaches "Import ROMs" and the tabs;
   from Settings, down reaches the tabs.
 - **Check:** human only.
@@ -10300,7 +10477,7 @@ same way, from "Share" in the skin's sheet (RT-908 to RT-913); `$SKINS` there is
 - **Expected:** 1: "Receive games", with the share icon, is the third button, under "Choose files"
   and "Choose a whole folder". 2: it opens "Receive Games" with "Ready to receive…" and "Visible as
   “<name>”"; the back link reads "Import" and returns to the Import tab. 3: the button gets the
-  focus ring, A opens the receive screen, B returns to Import. 4: the button is shown and works in
+  focus highlight, A opens the receive screen, B returns to Import. 4: the button is shown and works in
   every layout. 5: none of the three buttons is shown while copying; they come back afterwards.
   6: "SHARE NEARBY" holds only "Device name", with no "Receive Games" row and no stray divider;
   renaming still works. 7: the button is readable in both themes and reads "Receber jogos".
@@ -11498,7 +11675,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
 - **Expected:** The "Artwork" row sits between "Shader" and "Controller skin" in every window,
   and the D-pad reaches it right after "Shader" and before "Controller skin". Phone: the cards stack, nothing is cut, the screen only scrolls vertically.
   Tablet: the cover and label cards sit side by side, the tabs in the header. Each card's
-  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus ring and "A"
+  "Search", "Adjust" and "Remove" fit on one row. Every button gets the focus highlight and "A"
   presses it; "B" goes back to the game. TalkBack reads the "Artwork" row with its value, then "Cover of <name>", "Label of <name>", the
   pill text and each button. Both themes are legible.
 - **Check:** human only.
@@ -11673,7 +11850,7 @@ on the device; a cover kept on the device is one received through "Share nearby"
   3. TalkBack through a search's results, the editor's tools and the crop area; Settings ›
      "Artwork providers".
   4. Tablet landscape and phone landscape, both themes.
-- **Expected:** Every control takes the focus ring; "A" on the image cycles "Moving the crop box",
+- **Expected:** Every control takes the focus highlight; "A" on the image cycles "Moving the crop box",
   then each corner, then back to moving focus, and the D-pad moves what it says. TalkBack reads
   "Result 2 from ScreenScraper" with its selected state, each tool by name, the crop area's
   actions ("Move crop left", "Grow crop"…), "Move OpenEmux mirror up" and the switches. On the
@@ -12247,7 +12424,7 @@ tablet-only one is a copy with the `phone-portrait/` and `phone-landscape/` entr
      buttons.
   2. On a card you can use: D-pad right, then left.
   3. A on a card; A on a "⋮"; D-pad in the sheet; B.
-- **Expected:** The focus ring lands on each card and each "⋮" in turn. In step 2, right moves the
+- **Expected:** The focus highlight lands on each card and each "⋮" in turn. In step 2, right moves the
   focus from the card to its own "⋮" (right again goes on to the next card) and left brings it back
   to the card. A on a card picks it, A on "⋮" opens its sheet, whose rows take the focus; B closes it
   with the focus back on the "⋮".
@@ -12506,7 +12683,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
   a phone (or emulator) with an on-screen keyboard that the D-pad can drive, or a hardware keyboard.
 - **Steps:**
   1. With the gamepad, open the game's detail screen and press UP from "Play" until the pencil
-     after the game's name has the focus ring; press A.
+     after the game's name has the focus highlight; press A.
   2. Type a new name and move down to "Rename" with the D-pad; press A.
   3. Focus the pencil again, press A, then press B.
 - **Expected:** In step 1 the pencil takes the focus right above "Play" and A opens the sheet; the
@@ -12546,7 +12723,7 @@ the app's files are under `/sdcard/Android/data/$PKG/files/` (`roms/<console>/`,
   bin icon and "Remove from library" in red. 2: "Share Nearby" opens with that game. 3: "Remove
   <title>?" asks first; Cancel keeps the game. 4: the screen goes back to the library without the
   game. 5: the bar says "Y: Share Nearby" and Y opens "Share Nearby"; DOWN ends on "Remove from
-  library" with a focus ring.
+  library" with a focus highlight.
 - **Check:** human only.
 ## Android — Skin template zip
 
@@ -12647,7 +12824,7 @@ zip edits happen on a computer. A bundled skin's sheet has "Download as template
   2. With the pad only: "Import .zip" → pick the zip → move between "A new skin", the name field,
      "Replace one of your skins", the chips, "Cancel" and "Import"; import over `mine`.
   3. Switch the app to Português (Brasil) and open both sheets again.
-- **Expected:** The focus ring reaches every control of both sheets, A activates it, B closes the sheet
+- **Expected:** The focus highlight reaches every control of both sheets, A activates it, B closes the sheet
   with the focus back where it was. In Portuguese every text of both sheets and the "Importar .zip"
   button is translated.
 
@@ -12765,7 +12942,7 @@ emulator) with `adb`, `$PKG` is `com.openemux.mobile`, `$SKINS` is
   1. With the gamepad only: open the game's detail screen → the "Controller skin" row (A) → D-pad to
      the "⋮" of "Console colors" (A) → D-pad to "Duplicate" (A).
   2. "⋮" of "Console colors" again (A) → D-pad to "Edit" (A); in the editor that opens, B.
-- **Expected:** The focus ring lands on each row of the sheet in turn ("Use it", "Edit", "Duplicate",
+- **Expected:** The focus highlight lands on each row of the sheet in turn ("Use it", "Edit", "Duplicate",
   "Download as template"). Step 1 lists "Console colors (copy)" under "Your skins", not in use.
   Step 2 makes "Console colors - edited", opens it in the editor, and B closes the editor: the
   sheet's list shows it under "Your skins" with "In use", and the detail screen's skin row then
@@ -13180,7 +13357,7 @@ on the side away from the selection sideways.
      Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
   3. B closes the panel, B again clears the selection.
   4. Switch the app to Português (Brasil) and open the panel.
-- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+- **Expected:** Every control of the panel takes the focus highlight and works with A; the D-pad does not
   nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
   "Pintar", "Paletas", "Remover textura, voltar para a cor".
 - **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
@@ -13437,7 +13614,7 @@ on the side away from the selection sideways.
      Palettes, B goes back), the saturation square and hue bar (left/right/up/down change them).
   3. B closes the panel, B again clears the selection.
   4. Switch the app to Português (Brasil) and open the panel.
-- **Expected:** Every control of the panel takes the focus ring and works with A; the D-pad does not
+- **Expected:** Every control of the panel takes the focus highlight and works with A; the D-pad does not
   nudge the control while the panel is open. In Portuguese the panel reads "Cor", "Textura",
   "Pintar", "Paletas", "Remover textura, voltar para a cor".
 - **Check:** JVM suite `SkinPaintTextTest.everyLocaleHasEveryStringWithItsArguments`.
@@ -13808,7 +13985,7 @@ packages of the twelve consoles that moved (`NDS.deltaskin` included).
 - **Mode:** MANUAL
 - **Preconditions:** RT-796's imported package; a gamepad connected.
 - **Steps:**
-  1. With the gamepad only: on the Imported row press Right (the focus ring moves to its "⋮"), A,
+  1. With the gamepad only: on the Imported row press Right (the focus highlight moves to its "⋮"), A,
      D-pad to "Duplicate", A.
   2. With the gamepad only: "⋮" of an NDS bundled card → "Edit" (since issue 808 a copy of the zip
      as it is, RT-828); B closes the editor that opens.
@@ -14409,9 +14586,9 @@ logic is unit-tested in `src/test/java/com/openemux/mobile/data/BiosImportTest.k
   2. Move down with the D-pad to the "Sega CD" card's "Import" button and press A; pick the file.
   3. Press A on the sheet.
 - **Expected:** The hint bar shows "A Import" and "B Back". D-pad down moves from one "Import" button
-  to the next, with the focus ring on the button. A opens the picker. The sheet opens with the focus
+  to the next, with the focus highlight on the button. A opens the picker. The sheet opens with the focus
   on "Done"; A closes it and the focus is back on the Sega CD "Import" button.
-- **Check:** human only (a screenshot with the focus ring on the button and on "Done").
+- **Check:** human only (a screenshot with the focus highlight on the button and on "Done").
 
 ### RT-855 — Importing in the tablet list and detail layout
 - **Area:** Android — BIOS import
@@ -15194,7 +15371,7 @@ file is missing). The runner has no Android device, so these are `MANUAL`.
      the menu each time.
   4. Turn on RetroAchievements hardcore (RT-351), start the game and open the menu.
 - **Expected:** Steps 1 and 2: the first press lands on "Continue"; then "Save", then the slider
-  (focus ring around the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
+  (focus highlight behind the whole bar); right, right, left move the thumb 3 → 4 → 5 → 4, one stop per
   press, and "Save" follows; up goes to "See all"; the focus never starts on the slider. At an end
   (0 with left, 9 with right) the press moves the focus on instead, as a seek bar does. Step 3: the
   same block ("Save" + "Load", "See all", the slider) sits in the left column in landscape, at the
@@ -15226,7 +15403,7 @@ engine's mute state, whatever muted the game.
   "Unmute" and a red background with a red border and a red icon. Step 3: the game is still silent
   and the tile still shows "Unmute" in red. Step 4: sound comes back with the toast "Sound on"; the
   reopened sheet shows the speaker, "Mute" and the neutral tile. Step 5: each press flips the tile
-  and the sound as a tap does, the focus ring staying on the tile. Step 6: the same in every layout;
+  and the sound as a tap does, the focus highlight staying on the tile. Step 6: the same in every layout;
   the red tile and its label are legible in both themes; in Português the labels read "Silenciar" and
   "Ativar som", not clipped.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` per state).
@@ -15251,6 +15428,425 @@ engine's mute state, whatever muted the game.
 
 Scenarios move here instead of being deleted: the ID is kept, never reused, with the reason and
 the date.
+
+### RT-1045 — Big Picture: the couch layout replaces the zoomed desktop
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
+  pipeline's virtual pad), a library with several consoles and a game played at least once.
+- **Steps:**
+  1. Press F11 (or the pad's Guide button, or the screen button in the header bar, or "Big
+     Picture" in the main menu); take a screenshot and scale it to 25%.
+  2. On the home page press Down, then Right twice, then A on a console tile.
+  3. Press RB/R1 twice, then LB/L1; then Start, type "mar" on the keyboard, press Start again.
+  4. Plug a PlayStation pad (or set Settings › System › "Controller button labels" to
+     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button.
+  5. Press B until the home page shows, then Guide (or F11, or "Back to desktop").
+- **Expected:** 1: the window goes fullscreen and the desktop layout is replaced by the home page:
+  "Continue playing", "Consoles" and "System" rows, a hint bar along the bottom with the pad's
+  letters, titles 40 px and rows 24 px at 1080p, still readable at 25%. The user's zoom setting
+  is untouched; the grids under the rail are drawn at 150% at least. 2: the focus walks the
+  rows; A opens the library page with the console rail over that console's games, its tile
+  marked and centred. 3: the rail steps to the next console and back with the focus staying in
+  the games; Start slides the keyboard over the games, each letter filters them at once, Start
+  again lands on the first match. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family),
+  the confirm key drawn filled; with the swap on, the east button confirms and the labels follow.
+  5: B pops one page at a time and never leaves the mode; Guide, F11 or "Back to desktop" bring
+  the desktop layout back exactly as it was (sidebar, page, zoom). Reduced motion follows
+  RT-1044's class; GNOME's large text scales the labels as everywhere else.
+- **Check:** suite files `tests/test_bigpicture_shell.py`, `tests/test_bigpicture_pages.py`,
+  `tests/test_bigpicture_widgets.py`, `tests/test_bigpicture_osk.py`, `tests/test_controller_glyphs.py`,
+  `tests/test_navigation.py`, `tests/test_navigation_controller.py`
+  (`test_big_picture_and_the_keyboard_go_through_the_window`), `tests/test_ui_gamepad.py`,
+  `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_escape_in_big_picture_is_b_and_never_leaves_the_mode`,
+  `test_the_capture_handler_takes_escape_only_in_big_picture`).
+
+### RT-1148 — The home page: continue playing, the consoles, the system row
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library and a game played at least once.
+- **Steps:**
+  1. Enter Big Picture; `make devbox-shot OUT=$SCRATCH/bp-home.png`.
+  2. Press Down twice and Right three times; `make devbox-shot OUT=$SCRATCH/bp-home-focus.png`.
+  3. Press A.
+- **Expected:** 1: the page reads "Library" with the clock at the right; "Continue playing" holds
+  the last games as wide cards with their cover, name and "console · when · how long"; "Consoles"
+  holds All, Recently played, Favorites (when they exist), each playlist and each console with
+  games, with its icon and count; "System" holds Search, Import ROMs, Sync covers, Share nearby,
+  Settings and Back to desktop. The focus starts on the first continue card (or the first console
+  tile). 2: the focused system tile is filled with the purple accent, its icon and name in white,
+  with no ring around it. 3: the tile's action runs
+  (Search opens the library with the keyboard; Settings the settings page).
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheHomePage`), `tests/test_bigpicture_pages.py`
+  (`ContinueCards`); the screenshots show the three rows and the filled tile.
+
+### RT-1149 — The console rail replaces the sidebar
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1183, 1184.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with three or more consoles.
+- **Steps:**
+  1. Open a console from the home page.
+  2. Press RB/R1 three times, LB/L1 once; then Tab and Shift+Tab on a keyboard.
+  3. Press Up until the focus is on the rail; press Right twice, then A.
+  4. Star a game (Y); press B; look at the rail.
+- **Expected:** 1: the library page shows the rail across the top (LB and RB drawn at its ends,
+  the current scope marked and centred) and that scope's games under it; the focus is on the
+  first card. 2: each press moves the current scope by one, wrapping at the ends, and reloads the
+  games under it; the focus stays in the games. Tab and Shift+Tab do the same from a keyboard.
+  3: from the rail, Right moves the focus along the tiles and A opens that scope with the focus
+  back on the games. 4: when a scope appears or goes (the first favorite, an emptied playlist), the
+  rail rebuilds and keeps the current one marked.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheLibraryPage`),
+  `tests/test_bigpicture_pages.py` (`TheLibraryPageCorners`), `tests/test_bigpicture_widgets.py`
+  (`TileAndRailTests`).
+
+### RT-1150 — The search keyboard slides over the games
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1190.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console with several games.
+- **Steps:**
+  1. On the library page press Start (Ctrl+F on a keyboard).
+  2. Walk to "M", press A, then "A", press A; press X; press Y; press A on "R".
+  3. Press Start (or Done); then press Start and B.
+  4. From the home page press Start.
+- **Expected:** 1: a sheet with the letter grid slides up over the games and the first key is
+  focused; the field reads the query and in which scope it searches. 2: each letter goes into the
+  search box at once and the games filter; X deletes the last letter, Y types a space (never as the
+  first character). 3: Done closes the sheet and puts the focus on the first match; B closes it
+  too; with the query emptied, the search bar closes with it. 4: the library opens on the current
+  scope with the sheet already up.
+- **Check:** suite files `tests/test_bigpicture_osk.py`, `tests/test_bigpicture_shell.py`
+  (`test_the_search_sheet_types_into_the_search_box`), `tests/test_bigpicture_pages.py`
+  (`test_the_search_sheet_toggles_and_respects_a_disabled_search`).
+
+### RT-1151 — The quick menu is the View button's page of everything else
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1189, 1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a cover sync running for step 3.
+- **Steps:**
+  1. Press View (Select / Share / −; Menu on a keyboard).
+  2. Walk the tiles; press B.
+  3. Start a cover sync, open the menu again.
+  4. Choose "Back to desktop"; then "Quit OpenEmux".
+- **Expected:** 1: a dialog with the tiles Search, Import ROMs, Sync covers, Share nearby, Receive
+  games, Rescan library, Settings, Back to desktop and Quit OpenEmux (red), the first one focused,
+  the hints reading A Choose · B Close. 2: B closes it and the focus returns where it was. 3: a
+  "Stop" tile leads the list, naming the task; A on it stops the sync. 4: the first leaves the
+  mode; the second quits the app.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheQuickMenu`).
+
+### RT-1152 — The hint bar always says what the buttons do
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1198.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, no pad connected; then a pad.
+- **Steps:**
+  1. Enter the mode with the mouse (the header button) and look at the bottom bar.
+  2. Connect a pad and press any button; open a dialog (Y on a game then "Remove"); enter
+     selection mode (hold A on a card).
+- **Expected:** 1: the hints are shown even before any key is pressed, with the keyboard's keys
+  standing in (Enter, Esc, Tab, Ctrl+F, Menu, F11). 2: the hints switch to the pad's letters with
+  the confirm key drawn filled; a dialog reads Confirm · Close; selection mode keeps its own
+  hints. The desktop's own hint slots stay empty while the mode is on and come back after it.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheNavigatorInBigPicture`).
+
+### RT-1153 — Everything scales with the window and the text size
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. `make devbox-res RES=1280x720`, then `RES=1920x1080`; `make devbox-shot` after each.
+  2. Settings › System › "Big Picture text size": step it to 150%, then back to 100%.
+  3. Switch the theme to light.
+- **Expected:** 1: every size follows the window's height (1080 is the design's: titles 40 px,
+  rows 24 px, hints 22 px, a 64 px hint bar; 720 draws them at two thirds). 2: the text size
+  multiplies the same scale, live. 3: the surfaces follow the light theme, the purple accent stays.
+  The stylesheet is regenerated only when the scale or the theme actually changes, and released
+  when the window closes.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheTheme`,
+  `test_the_stylesheet_is_released_when_the_window_closes`), `tests/test_bigpicture_pages.py`
+  (`test_the_scale_falls_back_to_the_monitor_and_then_the_design`).
+
+### RT-1154 — Leaving the mode lands on the desktop exactly as it was
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1182.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop on a console page at 100% zoom with the sidebar shown.
+- **Steps:**
+  1. Enter Big Picture, open another console from the rail, press Guide.
+  2. Enter again, press Escape three times on the home page.
+- **Expected:** 1: the desktop layout comes back, not fullscreen, the sidebar where it was, the
+  page stack back in the content pane on the console the rail left it on, the zoom at 100%, the
+  focus on the games; the toast says "Back to the desktop". 2: Escape is B: it pops pages and
+  closes the search sheet, and on the home page it does nothing -- it never leaves the mode. F11,
+  Guide, "Back to desktop" and the quick menu are the ways out.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
+  `tests/test_window.py` (`test_escape_in_big_picture_is_b_and_never_leaves_the_mode`).
+
+### RT-1160 — A game's details is a page: the cover, the save states, the rows
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox; a game with a cover and two save states, one
+  with a screenshot.
+- **Steps:**
+  1. On the library, focus that game and press X (Alt+Enter on a keyboard);
+     `make devbox-shot OUT=$SCRATCH/bp-details.png`.
+  2. Press RB; `make devbox-shot OUT=$SCRATCH/bp-details-next.png`.
+  3. Press B.
+- **Expected:** 1: the page reads "<console> › <game>"; the cover on the left with up to three
+  tiles under it ("Continue / Automatic save" when the game resumes, then "Slot N" with its date
+  and screenshot); on the right the title, "<console> · Never played" (or when and for how long),
+  then the rows "Continue" (or "Play") in the soft accent, with the focus (filled solid purple), "Start fresh" (only when
+  resuming), "Load state" ("N saved", or greyed "No save states yet"), "Favorite", "Settings for
+  this game" (Core, Shader, "Cartridge color" only where the console has two or more shells),
+  "Library and file" (Playlists, Artwork, "Rename…", "Share Nearby…", "Delete ROM…" in red) and the
+  file path; the hints read A Choose · B Back · Y Favorite · LB/RB Previous / next game. 2: the
+  page reloads in place for the next game of the grid, wrapping at the end. 3: back on the grid.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePage`, `TheShoulders`); the
+  screenshots show the two columns and the focused row filled with the accent.
+
+### RT-1161 — Continue, Start fresh and the save states launch the game
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a game with an automatic state and the slots 0 and 3 saved; "Resume where I
+  left off" on.
+- **Steps:**
+  1. Open its details; press A on "Continue".
+  2. Press A on "Start fresh".
+  3. Press A on the "Slot 3" tile; then A on "Load state" and pick a slot.
+  4. Open the details of a game with no state.
+- **Expected:** 1: the accent row reads "Continue" with "Play picks up where you left off", and A
+  launches the game resuming it (the "Continue" tile does the same). 2: launches once without the
+  automatic state. 3: launches into that slot; the chooser lists only the saved slots, each with
+  its date. 4: "Play", no "Start fresh", no tiles, "Load state" greyed with "No save states yet".
+- **Check:** suite file `tests/test_bigpicture_details.py`
+  (`test_play_continue_and_start_fresh_follow_the_automatic_state`,
+  `test_save_states_become_tiles_and_a_chooser`).
+
+### RT-1162 — The per-game settings are choosers that say where the value comes from
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a console with two cores installed.
+- **Steps:**
+  1. On a game's details press A on "Core"; pick the second core.
+  2. Press A on "Core" again; pick the same core; then pick "Console default (…)".
+  3. The same on "Shader"; on "Cartridge color" where the console has shells.
+- **Expected:** 1: the chooser lists "Console default (X)" first, then the cores, the current one
+  marked; after the pick the row's value is the core, its subtitle "Set for this game", and the
+  toast says the core was set. 2: picking the current value writes nothing (no toast); the default
+  clears the override and the row goes back to "Console default (X)" with no subtitle.
+  3: likewise; "Cartridge color" is absent for a console with a single shell.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`TheSettingsRows`).
+
+### RT-1163 — Favorite from the row, from Y, and on the meta line
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a game that is not a favorite.
+- **Steps:**
+  1. On its details press A on "Favorite".
+  2. Press Y (Ctrl+D) anywhere on the page.
+- **Expected:** 1: the switch turns on, the toast "… added to favorites", the meta line gains
+  "★ Favorite" and Favorites appears on the rail. 2: everything toggles back.
+- **Check:** suite file `tests/test_bigpicture_details.py`
+  (`test_the_favorite_switch_the_pad_and_the_meta_line`).
+
+### RT-1164 — Playlists and artwork from the details page
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1188.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; one playlist; a game with a cover on disk.
+- **Steps:**
+  1. Press A on "Playlists"; pick the playlist; pick it again; pick "New playlist".
+  2. Press A on "Artwork"; try "Fetch artwork", "Choose cover image" and "Remove cover image".
+- **Expected:** 1: each playlist says "✓ In this playlist" or "Not in it yet"; a pick toggles
+  membership and the chooser comes straight back with the mark redrawn; the row lists the
+  playlists the game is in; "New playlist" opens the name prompt and the game goes into the new
+  one. 2: Fetch starts one sync (box art and, where a frame exists, the label), replacing what is
+  on disk, and the page's cover reloads when it ends; Choose opens the system picker; Remove is
+  offered only with a cover on disk and asks "Remove cover image" first (B cancels), then the cover
+  goes, the toast says so and the placeholder shows.
+- **Check:** suite file `tests/test_bigpicture_details.py` (`ThePlaylistsArtworkAndFileRows`).
+
+### RT-1165 — Rename, Share nearby and Delete from the details page
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1189.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; two games on the same console.
+- **Steps:**
+  1. Press A on "Rename…"; type a new name on the keyboard page; Done.
+  2. Rename again to the other game's name.
+  3. Press A on "Share Nearby…"; then on "Delete ROM…"; confirm.
+- **Expected:** 1: the file and the library entry are renamed and the page follows the game (new
+  title, new path). 2: the toast "… already exists" and the page keeps the game. 3: the Share
+  nearby dialog opens with that game; "Delete ROM…" asks the desktop's "Delete …?" question first,
+  and once the game is gone the details page pops back to the grid.
+- **Check:** suite files `tests/test_bigpicture_details.py`
+  (`test_rename_goes_through_the_keyboard_and_follows_the_game`,
+  `test_share_delete_focus_and_the_hints`), `tests/test_bigpicture_pages.py`
+  (`test_deleting_the_game_a_details_page_shows_pops_it`).
+
+### RT-1166 — Import and Sync covers are pages with the progress beside the options
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1192.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox with the synthetic library.
+- **Steps:**
+  1. From home open "Import ROMs"; `make devbox-shot OUT=$SCRATCH/bp-import.png`.
+  2. Press A on "Rescan library"; `make devbox-shot OUT=$SCRATCH/bp-import-running.png` while it
+     runs.
+  3. Open "Sync covers"; `make devbox-shot OUT=$SCRATCH/bp-covers.png`.
+  4. Press A on a console row; `make devbox-shot OUT=$SCRATCH/bp-covers-running.png`; press A on
+     "Stop".
+- **Expected:** 1: the lead text and the rows "Choose files…", "Scan a folder…", "Receive games",
+  "Rescan library" on the left; on the right the "In progress" panel reading "Nothing is running
+  right now…". 2: the panel shows the banner's title ("Starting ROM scan…", then "Scanning ROMs
+  (n/m)"), a bar when the task has a total and a spinner when not, and a red "Stop" while it can be
+  stopped; the corner chip shows the same title. 3: "Every console" with the game count and one row
+  per console with games; on the right the panel and "Providers, in order" listing the enabled
+  providers as the config orders them, with the note about Settings › Library. 4: the sync starts
+  for that console (toast "Cover sync started…"); "Stop" marks it stopping and disappears; when it
+  ends the panel is idle again.
+- **Check:** suite file `tests/test_bigpicture_tasks.py` (`TheImportPage`, `TheProgressPanel`,
+  `TheCoversPage`); the screenshots show the panel with the bar and "Stop".
+
+### RT-1168 — Settings is a two-column page the shoulders walk
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Open "Settings" from the home page's "System" row (or the quick menu).
+  2. Press RB/R1 once, then LB/L1 twice; press A on the "Video" button at the left.
+  3. Press B.
+- **Expected:** 1: the page shows Library, BIOS, Input, Video, Cores and System down the left,
+  "Library" marked, the crumbs reading "Settings › Library", and the focus on the "ROMs folder"
+  row; the hints read A Change · B Back · LB/RB Section. 2: each shoulder press marks the previous
+  or next section (wrapping at the ends) and lands the focus on its first row; A on a section
+  button does the same. 3: B returns to the home page and never leaves the mode.
+- **Check:** suite file `tests/test_bigpicture_settings.py` (`ThePage`).
+
+### RT-1169 — A choice opens a full-page list that pops when picked
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1193.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, Settings › Video.
+- **Steps:**
+  1. Press A on "Sort order".
+  2. Press Down once and A.
+  3. Press A on "Sort order" again, then B.
+- **Expected:** 1: a page lists every order as a row, the one in force marked ● and focused, the
+  crumbs reading "Settings › Video › Sort order", the hints A Pick · B Keep current. 2: the list
+  pops, the row's value reads the new order and the focus is back on that row; the library is
+  re-sorted (same as the desktop's combo). 3: B pops the list and the value is unchanged.
+- **Check:** suite files `tests/test_bigpicture_chooser.py` (`TheChooserPage`),
+  `tests/test_bigpicture_settings.py` (`test_coming_back_from_a_chooser_keeps_the_rows_and_the_focus`).
+
+### RT-1175 — The focus fills the item with the accent, and the console icons have no box
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least two consoles that have icons.
+- **Steps:**
+  1. On the home page, walk the "Consoles" row with Right; `make devbox-shot OUT=$SCRATCH/bp-focus-home.png`.
+  2. Open a console, walk the rail and then the games; `make devbox-shot OUT=$SCRATCH/bp-focus-grid.png`.
+  3. Open Settings and walk a section with a switch and a number row; then open a game's details.
+- **Expected:** 1: the focused tile turns solid purple (#7C3AED) with white name, count and icon;
+  no ring, halo or enlargement is drawn, so nothing is clipped at the edges of the row. The
+  console icons sit straight on the tile, with no square of another colour behind them. 2: the
+  focused rail tile and the focused game card fill with the purple the same way; the current console
+  on the rail stays in the soft purple. 3: the focused row is purple with white text; a switch on it
+  reads white when on, and the number pill stays legible; "Continue"/"Play" and the suggested
+  buttons are drawn in the soft purple until focused, so only one item on screen is solid purple.
+- **Check:** suite file `tests/test_bigpicture_shell.py` (`TheTheme`); the screenshots show the
+  filled focus and no badge background.
+
+### RT-1176 — Big Picture shows the covers and cartridges at the largest zoom
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1199.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 75% zoom (or any zoom other than 200%), a console page
+  in cover view and another in cartridge view (or one page with its own layout).
+- **Steps:**
+  1. Enter Big Picture and open a console; switch to the other one with LB/RB.
+  2. Press Ctrl+minus.
+  3. Leave Big Picture and open both consoles again on the desktop.
+- **Expected:** 1: the game grid itself is built at 200%, the largest zoom, whatever the desktop
+  (or the page's own layout) had: the covers and the cartridges are visibly twice the size of the
+  desktop's 100%, on every page opened in the mode. 2: nothing changes; the zoom is fixed in the
+  mode and the desktop's setting is not written. 3: every page is back at the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`,
+  `test_a_page_opened_in_big_picture_follows_the_mode_both_ways`,
+  `test_a_scope_with_its_own_zoom_still_gets_big_pictures`).
+
+### RT-1178 — Starting straight into Big Picture opens the games at 200%
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1199.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 100% zoom; Settings › "Big Picture" › start in Big
+  Picture on (or the app run with `--big-picture`).
+- **Steps:**
+  1. Close OpenEmux and open it again.
+  2. Open a console in Big Picture's library.
+  3. Leave Big Picture.
+- **Expected:** 1–2: the app opens in Big Picture and the game grid is at 200% from the first page,
+  with no zoom change needed. 3: the desktop is at 100%, the zoom it had before.
+- **Check:** suite file `tests/test_window.py` (`test_starting_in_big_picture_opens_the_games_at_its_zoom`).
+
+### RT-1179 — Big Picture home tile names stay on one line
+- **Retired:** 2026-11-14 (issue 957, Big Picture follows the Android gamepad layout).
+- **Reason:** The layout this scenario describes was replaced; see RT-1181.
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on, a library with at least five consoles; locale pt_BR
+  (Settings › System › "Idioma").
+- **Steps:**
+  1. `make devbox-res RES=2560x1440`, open the home page; `make devbox-shot OUT=$SCRATCH/bp-home-1440.png`.
+  2. `make devbox-res RES=1920x1080`; `make devbox-shot OUT=$SCRATCH/bp-home-1080.png`.
+  3. Switch the locale to Français and to Español; capture the home page each time.
+  4. Big Picture Settings › "Text size" at the maximum; walk the "Sistema" row to its last tile.
+  5. Press Menu to open the quick menu.
+- **Expected:** 1 and 2: the "Sistema" row reads "Buscar", "Importar ROMs", "Sincronizar capas",
+  "Compartilhar por perto", "Configurações", "Voltar ao desktop", each an icon and one line of
+  text, all six side by side; in "Consoles", "Jogados recentemente", "Game Boy Advance" and
+  "Super Nintendo" are on one line, and every console tile has the same width. No word anywhere is
+  split with a hyphen and no name is cut mid-letter. 3: the same; a name too long for its tile ends
+  in "…". 4: the names stay whole; the row scrolls with the focus instead of squeezing the tiles.
+  5: the quick menu tile names are on one line, none hyphenated.
+- **Check:** suite files `tests/test_bigpicture_widgets.py`
+  (`test_a_tile_name_stays_on_one_line_and_never_breaks_a_word`), `tests/test_bigpicture_shell.py`
+  (`test_the_stylesheet_is_scoped_and_scaled`); the screenshots show no hyphenated word.
 
 ### RT-341 — The site states the relationship with OpenEmu in every language
 - **Retired:** 2026-11-13 (no issue; the website moved to its own repository).
@@ -16011,9 +16607,9 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
   4. Open the menu, tap stop 1 on the slot slider under the row and press "Load".
   5. Set the app language to Deutsch, then to தமிழ், and open the menu each time.
 - **Expected:** Step 1: the row reads "Save" with "Slot N · Empty" under it and "Load", which is faded
-  and does nothing on the empty slot; both carry the down and up arrow icons of the save and load
-  keys under the game (issue 881); there are no slot arrows (the slot slider and "See all" sit
-  under the row, RT-996). Step 2 says "State saved to slot N"
+  and does nothing on the empty slot; both carry the outlined floppy icons, with a down and an up
+  arrow, of the save and load keys under the game (issues 881 and 945); there are no slot arrows
+  (the slot slider and "See all" sit under the row, RT-996). Step 2 says "State saved to slot N"
   and the line turns "Slot N · In use". Step 3 closes the menu and the game is back at the moment it
   was saved. Step 4 loads the slot 1 state. Step 5: "Save", "Load", "See all", "Continue" and
   "Restart" are translated, "Save" and "Load" keep their icons, and no text is cut off.
@@ -16034,13 +16630,53 @@ A phone in landscape, a tablet's side panel and a half-open foldable start with 
 - **Expected:** Step 1: under the header, two rows of two: "Continue" (purple) and "Restart", then
   "Save" with "Slot N · Empty" and "Load" (faded). The four buttons are the same width and height,
   with the same gap between the columns in both rows, so their left and right edges line up. "Save"
-  and "Load" show the same down and up arrow icons as the strip's save and load keys. Step 2: every
+  and "Load" show the same outlined floppy icons, with a down and an up arrow, as the strip's save
+  and load keys (issue 945). Step 2: every
   label is whole except, where it does not fit, the slot line under "Save", which ends in "…"; "Save"
   and "Load" always keep their icons ("Restart" may drop its icon in Tamil so the word fits). Step 3:
   the same layout in light. Step 4: the left column starts with the same grid.
 - **Check:** human only (`adb shell uiautomator dump`: the four buttons share two left edges and
   two right edges).
 
+
+### RT-1145 — Save and load are the desktop's outlined floppy, on the pause sheet and every skin
+- **Area:** Android — Pause sheet on a phone in portrait
+- **Mode:** MANUAL
+- **Preconditions:** A phone at about 360 dp wide, a game of a console with a bundled skin (Game Boy
+  Advance), its skin set to the console's own colours.
+- **Steps:**
+  1. Look at the save and load keys on the strip under the game, then open the in-game menu.
+  2. Turn the phone to landscape and look at the same keys.
+  3. In "Skin", pick the Game Boy Advance's "White", then "Clear blue", then "Dark", and look at the
+     keys each time.
+  4. Pick a drawn skin (one that is not a bundled package) and turn fast forward on.
+  5. Press the save key, play a few seconds, then press the load key.
+- **Expected:** Step 1: the save key shows a floppy disk with a down arrow at its bottom right, the
+  load key the same floppy with an up arrow; both are outlined, not solid, and the menu's "Save"
+  and "Load" buttons show the same two icons in their text colour, matching the desktop's in-game
+  bar. Steps 2 and 3: the floppies are legible at the keys' size on the console's colours, on the
+  light, the translucent and the dark shells, and each arrow stays clear of the floppy's outline. Step 4: the
+  drawn strip's save and load are the same outlined floppies; turbo, slow motion and the anchor look
+  as before and fast forward is still solid, its lit pill unchanged. Step 5: the state saves and
+  loads as before.
+- **Check:** human only.
+### RT-1146 — A skin copied before the floppy icons shows the floppy too
+- **Area:** Android — Skins
+- **Mode:** MANUAL
+- **Preconditions:** An install of 1.23.5 or earlier where a bundled skin was copied ("Create copy and
+  edit" on the Game Boy Advance's own colours) and that copy picked; one more copy whose save key
+  image was replaced with a picture of the player's own (template downloaded, `save.png` edited,
+  imported back). Then the app updated to this version.
+- **Steps:**
+  1. Start a Game Boy Advance game with the first copy and look at the save and load keys on the
+     strip under the game, in portrait and in landscape.
+  2. Open "Skin", look at the copy's thumbnail, then open it in the skin editor.
+  3. Pick the copy with the player's own save picture and start the game again.
+- **Expected:** Step 1: save and load show the outlined floppy with a down / up arrow, the same as
+  the bundled skin and the in-game menu, in the copy's icon colour; no arrow-only icon is left.
+  Step 2: the thumbnail and the editor show the same floppies. Step 3: the player's own save picture
+  is kept as it is (only the old stock arrows are replaced); load shows the floppy.
+- **Check:** human only.
 ### RT-974 — The menu opens under the game and stretches up by its handle
 - **Area:** Android — Pause sheet on a phone in portrait
 - **Mode:** MANUAL
@@ -16655,11 +17291,11 @@ Since issue 873 every setting about physical controllers sits on one Settings sc
      itself only as a joystick (`adb shell input joystick keyevent KEYCODE_BUTTON_A`).
   5. Tap the screen.
   6. Open "Settings" → "Controllers".
-- **Expected:** 1: no focus ring and no hint bar, although a controller is detected, and the volume
+- **Expected:** 1: no focus highlight and no hint bar, although a controller is detected, and the volume
   key does not bring them (the phone's own keys never count as a controller press). 2: at once, the
-  focus ring lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
-  layout keeps its touch sizes. 3: the tap hides the ring and the hint bar again; the app is back to
-  touch navigation. 4: the press lands the ring on a card and the hint bar comes back, with no
+  focus highlight lands on a card and the hint bar shows ("A Open", "Y Order", "Search", "LB RB Tabs"); the
+  layout keeps its touch sizes. 3: the tap hides the highlight and the hint bar again; the app is back to
+  touch navigation. 4: the press lands the focus highlight on a card and the hint bar comes back, with no
   controller reported. 5: touch navigation again. 6: "Interface mode" still reads "Touch screen"; a
   press never changes the setting.
 - **Check:** human only (`adb exec-out screencap -p`).
@@ -16689,7 +17325,7 @@ and title to the favourite star at the far right. The look is judged by eye on a
   console header is plain. Following a tinted row from its title to its star is easy. Step 2: the same,
   with a barely darker tint. Step 3: the stripes are there at every size. Step 4: both ticked rows show
   the accent background, clearly stronger than any stripe; the other rows keep their stripes. Step 5:
-  the focus ring is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
+  the focus highlight is clearly visible on tinted and plain rows. Step 6: the table rows alternate the same
   way, and the column names stay over their columns. Step 7: no stripes; the tiles are where they were.
 - **Check:** human only.
 
@@ -16752,7 +17388,7 @@ whole cover. Judged by eye on a device, so these are `MANUAL`.
   2. Turn the phone to landscape.
 - **Expected:** Step 1: at every step the covers keep the wide SNES shape and the rows stay level; only
   their size changes, with the usual glide and step pill. Step 2: the row of games shows every cover in
-  the same wide shape at the row's height, and the focus ring is not cut.
+  the same wide shape at the row's height, and the focus highlight is not cut.
 - **Check:** human only.
 
 ### RT-1013 — The detail screen and the list view still show the whole cover
@@ -17236,6 +17872,46 @@ has no Android device, so these are `MANUAL`.
   (`StartFreshTests`), `tests/test_rom_card_widget.py` (`ThePlayStateTests`),
   `tests/test_preferences.py` (`test_the_resume_switch_is_stored_and_the_page_re_read`).
 
+### RT-1142 — Recently played follows the library's view mode
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** games played on at least two consoles that have a cartridge (SNES, NES, N64,
+  GBA) and on one that has none (PlayStation); the global view mode is "Cartridge".
+- **Steps:**
+  1. Open "Recently played" and read the cards.
+  2. While on the page, switch the view mode from the header bar to "Cover", then to "List", then
+     back to "Cartridge".
+  3. Give "Recently played" a layout of its own ("List") from the page's view menu; open "All",
+     then come back.
+  4. Narrow the window to about 520 px wide.
+- **Expected:** 1: one grid in play order, newest first; every game is drawn in its own console's
+  cartridge (in the shell colour chosen for it), the cartridges of a row stand on the same line
+  right above their titles, and the PlayStation game shows its cover; the caption under each title
+  is still when and for how long (issue 942). 2: the page changes at once each time, the same way
+  "All" does, and keeps its order. 3: "Recently played" shows rows while "All" keeps the global
+  layout. 4: the grid reflows to fewer columns, nothing is clipped.
+- **Check:** suite files `tests/test_library_pages.py` (`TheRecentPageTests`),
+  `tests/test_cartridge_on_mixed_pages.py` (`OneGridInPlayOrderTests`),
+  `tests/test_rom_card_widget.py` (`ACartridgeOnAPageThatMixesConsolesTests`); human for the look
+  of the shelf.
+
+### RT-1143 — Recently played keeps only the 12 latest games
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a library with at least 13 games.
+- **Steps:**
+  1. Launch and quit 13 different games, one after the other. Open "Recently played" and read the
+     header count and the order.
+  2. Launch a game that is already on the page, the sixth from the top; quit it.
+  3. Open the details of the first game launched in step 1 (the one that is no longer listed).
+- **Expected:** 1: the header says "12 games"; the last game launched is first and the first
+  game launched is gone (issue 942). 2: that game moves to the first position and appears only
+  once; still 12 games. 3: its play count and play time are still shown; only the page is capped,
+  `~/.openemux/play_history.json` still has all 13 games.
+- **Check:** suite files `tests/test_play_history.py`
+  (`test_the_page_is_capped_at_twelve_but_the_history_is_not`), `tests/test_library_pages.py`
+  (`TheRecentPageTests`).
+
 ### RT-1040 — Launching answers at once, runs off the main thread, and speaks the player's language when it ends
 - **Area:** Launch
 - **Mode:** AUTO-SUITE
@@ -17359,37 +18035,6 @@ has no Android device, so these are `MANUAL`.
 - **Check:** suite files `tests/test_rom_card_widget.py` (`WhatAScreenReaderHearsTests`),
   `tests/test_window.py` (`test_the_card_transitions_follow_the_desktops_animation_setting`).
 
-### RT-1045 — TV mode: fullscreen couch layout, the pad's own letters in the hints, an on-screen keyboard and shoulder jumps
-- **Area:** Navigation
-- **Mode:** AUTO-SUITE
-- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), a gamepad (or the
-  pipeline's virtual pad), a library with several consoles.
-- **Steps:**
-  1. Press F11 (or the pad's Guide button); take a screenshot and scale it to 25%.
-  2. Press Start on the pad; type "mar" on the on-screen keyboard; press Done.
-  3. On "All", press RB/R1 twice, then LB/L1.
-  4. Plug a PlayStation pad (or set Preferences › System › "Controller button labels" to
-     PlayStation); read the hint bar. Turn on "Swap confirm and cancel"; press the east button on a
-     card.
-  5. Press Escape; press F11 again.
-- **Expected:** 1: the window goes fullscreen with the sidebar hidden; the shelf is drawn at least at
-  150% zoom, titles and hints are larger (26 px or more at 1080p) and the focused card has a
-  4 px ring and a slight scale, still distinguishable at 25% (issue 914). The user's zoom setting
-  is untouched. 2: a letter grid the D-pad walks; each press filters the library at once; Done
-  closes it and the focus lands on the first match. 3: the focus jumps to the first card of the next
-  console group, then back. 4: the hints read ✕ ○ □ △ (or A B X Y / B A Y X per family), never Ⓐ-style
-  glyphs; with the swap on, the east button confirms and the labels follow. 5: Escape leaves TV mode
-  (sidebar back, zoom back); F11 toggles it again. Reduced motion follows RT-1044's class; GNOME's
-  large text scales the labels as everywhere else.
-- **Check:** suite files `tests/test_controller_glyphs.py`, `tests/test_onscreen_keyboard.py`,
-  `tests/test_ui_gamepad.py` (`TheConfirmCancelSwapTests`), `tests/test_navigation.py`,
-  `tests/test_navigation_controller.py` (`test_the_hints_use_the_connected_pads_letters`,
-  `test_the_shoulders_walk_the_groups_of_a_grouped_page`), `tests/test_window.py`
-  (`test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up`,
-  `test_escape_leaves_tv_mode_when_nothing_else_wants_it`,
-  `test_the_on_screen_keyboard_opens_over_a_searchable_page`), `tests/test_preferences.py`
-  (`test_the_controller_label_family_and_the_swap_are_stored`).
-
 ## Android — Pause with the controller
 
 The controller combination that opens the pause sheet while a game plays (issue 924;
@@ -17506,7 +18151,7 @@ emulator.
   3. Go back; connect a controller (or "Controller" interface mode) and press a D-pad key on the shelf.
   4. Press Right, then A.
 - **Expected:** Step 1: the game opens and continues from the state, as the play button on "Recent"
-  does. Step 2: the game's page opens (no launch). Step 3: the focus ring is on the first continue card,
+  does. Step 2: the game's page opens (no launch). Step 3: the focus highlight is on the first continue card,
   before "All games". Step 4: Right moves along the row (the row scrolls to show the card), A resumes
   that game.
 - **Check:** human only; TalkBack announces the row as a list ("in list, 3 items").
@@ -17553,7 +18198,7 @@ declares `android.software.leanback` as not required, so one APK serves phones, 
   1. Open the app; press A on "Start"; wait for the setup.
   2. Go to "Import" with the D-pad and import the ROM from the folder picker.
   3. Open the game from its console; hold Start for two seconds; pick "Quit".
-- **Expected:** Every step completes with the D-pad and the face buttons; the focus ring is visible
+- **Expected:** Every step completes with the D-pad and the face buttons; the focus highlight is visible
   from the sofa; the setup, the import and the game never ask for a touch. Phones and tablets behave as
   before.
 - **Check:** human only.
@@ -17966,10 +18611,79 @@ state and a favourite.
 - **Steps:**
   1. Walk the header with the D-pad: the sort button, then down to the facet chips.
   2. Press A on "Never played", then on the sort button; Down and A on "Most played".
-- **Expected:** The focus ring lands on each facet chip (the console chips are stepped with L1/R1, not
+- **Expected:** The focus highlight lands on each facet chip (the console chips are stepped with L1/R1, not
   focused) and on the sort button; A toggles the chip; the menu opens with the focus inside, A picks
   the order, the focus returns to the button.
 - **Check:** human only.
+
+## Android — Console chips with icons
+
+Issue 963 (`ui/LibraryScreens.kt`, `ConsoleChips`): every console chip in the row under a library page's
+title shows the console's pixel-art icon left of its short name; "Favorites" shows the star, "All" stays
+text only. The chip keeps its height and its selected look. Landscape has no chip row (issue 669): its
+filter pager already shows the icon. `MANUAL`, on a phone or the headless emulator, a library with games
+in several consoles.
+
+### RT-1200 — The console chips show the console's icon
+- **Area:** Android — Console chips with icons
+- **Mode:** MANUAL
+- **Preconditions:** A phone upright (or the emulator in portrait), games in at least three consoles,
+  dark theme.
+- **Steps:**
+  1. Open the library's "All games" page and look at the chip row under the title.
+  2. Tap a console chip.
+  3. Switch the system to the light theme and look at the same row.
+  4. Connect a controller and press R1 and L1.
+  5. Turn the phone sideways.
+- **Expected:** Step 1: "All" is text only, "Favorites" has a yellow star, each console chip has its
+  pixel-art icon (sharp, not blurred) left of the short name; the chips are as tall as the facet chips
+  under them. Step 2: the chip turns selected (filled), the icon and the name both readable. Step 3: the
+  same in the light theme, the selected chip dark with the icon readable on it. Step 4: the L1/R1 pills
+  sit at the row's ends and the chip changes; the chips grow a little, as before. Step 5: no chip row;
+  the header's filter pager shows the icon beside the console's name, as before.
+- **Check:** unit-level `ChipGlyphTest` (`./gradlew --no-daemon testDebugUnitTest --tests '*ChipGlyphTest'`);
+  `adb exec-out screencap -p > chips.png` for the eye check.
+
+## Android — Soft pixel grid on console icons
+
+Issue 967 (`ui/PixelGrid.kt`, `PixelArt` in `ui/Components.kt`): a console's pixel-art icon drawn at 4 or
+more screen pixels per art pixel (the shelf cards' icon: 64 dp on a phone, 96 dp on a tablet) shows the
+soft grid of the desktop (issue 966): every opaque art pixel has a thin seam on its right and bottom edges,
+an eighth of the pixel wide (at least one screen pixel), in its own colour at 80 %. Transparent pixels get
+nothing, so the card's colour around the icon stays clean. Below 4x (list rows, chips, filter labels on a
+typical phone) the icon is plain nearest-neighbour, as before. `MANUAL`, on a phone or the emulator, a
+library with games in several consoles.
+
+### RT-1215 — Shelf icons show the soft pixel grid
+- **Area:** Android — Soft pixel grid on console icons
+- **Mode:** MANUAL
+- **Preconditions:** A phone upright (or the emulator in portrait), games in at least three consoles,
+  dark theme.
+- **Steps:**
+  1. Open the "Library" tab (the shelf) and look closely at a console card's icon.
+  2. Scroll the shelf quickly down and back up.
+  3. Switch the system to the light theme and look at the same cards.
+  4. On a tablet (or a large-screen emulator) open the shelf.
+- **Expected:** Step 1: every console icon shows each of its pixels as a small square with a fine,
+  slightly darker line on its right and bottom (the same colour, darker), like the desktop's Big Picture
+  shelf; the icon is sharp, not blurred, and no line is drawn on the card's colour around or inside the
+  icon's transparent areas. "All" and "Favorites" keep their grid and star glyphs, without seams. Step 2:
+  scrolling is as smooth as before. Step 3: the same look in the light theme. Step 4: the larger icon
+  shows the same grid, its seams proportionally a little thicker on a very dense screen.
+- **Check:** unit-level `PixelGridTest` (`./gradlew --no-daemon testDebugUnitTest --tests '*PixelGridTest'`);
+  `adb exec-out screencap -p > shelf-grid.png` for the eye check.
+
+### RT-1216 — Small console icons stay plain
+- **Area:** Android — Soft pixel grid on console icons
+- **Mode:** MANUAL
+- **Preconditions:** RT-1215's phone (a typical phone, density 3 or lower).
+- **Steps:**
+  1. Open Settings → a list of consoles (for example the cores or BIOS list).
+  2. Open the library's "All games" page and look at the console chips and the filter label.
+  3. Open Import with a ROM whose extension fits several consoles, so the console picker shows.
+- **Expected:** In every step the console icons look as before issue 967: sharp pixel art at a whole
+  multiple of its size, no seams between pixels, nothing blurred.
+- **Check:** human only (`adb exec-out screencap -p > small-icons.png`).
 
 ## Android — Release build
 
@@ -18018,3 +18732,642 @@ the app's own classes, installed at first run by profileinstaller. `MANUAL`; the
 - **Expected:** The profile lists methods of `com.openemux.mobile` (hundreds of lines), proof that the
   shipped profile was installed and merged with what ran.
 - **Check:** the commands above. Cold start TTFD on the maintainer's phone, before and after, goes in the issue.
+
+
+## Desktop — Big Picture
+
+The couch layout (issue 914, revised): a layout of its own for a TV and a controller, with a
+console rail instead of the sidebar, pages instead of dialogs, the on-screen keyboard over the
+games, and every setting of the desktop dialog as rows a D-pad walks. `docs/BIG_PICTURE.md`
+records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, send F11 by keycode
+(`make devbox-xdo CMD='key 95'`): `xdotool key F11` arrives as Alt+F11 on its Xvnc.
+
+### RT-1147 — F11 is taken in the capture phase, and three other ways in exist
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the devbox running the app from this checkout.
+- **Steps:**
+  1. Press F11 once; wait two seconds; press it again.
+  2. Click the screen icon in the header bar (next to Search); then open the main menu and choose
+     "Big Picture".
+  3. Start the app with `openemux --big-picture`, and separately with Settings › System › "Start in
+     Big Picture" on.
+- **Expected:** 1: one press toggles once (on, then off): the toggle is handled by the window's
+  capture-phase key controller and no longer registered as an application accelerator, which in
+  the 1.23.5 AppImage on Cinnamon never fired for F11 and, together with the handler, toggled
+  twice. Ctrl+F11 and Alt+F11 are left to whoever bound them; during a button capture F11 does
+  nothing. 2: both toggle the mode. 3: the window opens on the home page, fullscreen.
+- **Check:** suite files `tests/test_bigpicture_shell.py` (`TheWayInAndOut`), `tests/test_window.py`
+  (`test_the_capture_handler_takes_escape_only_in_big_picture`); the app log says `big picture: on`
+  once per press (`make devbox-app ACTION=log`).
+
+### RT-1155 — Big Picture Settings › Input: the desktop's Input page as rows
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; Settings open on "Input".
+- **Steps:**
+  1. Press A on "Console", pick "N64"; press A on "Input device", pick "Gamepad Port 2".
+  2. Press Right on "Analog deadzone" and on "Turbo period"; press Left on "Turbo period" ten times.
+  3. Press A on "Controller type" with "SFC" chosen.
+- **Expected:** 1: the rows reload for N64 ("D-pad also moves the analog stick" appears, "Controller
+  type" goes); on port 2 "Enable this port" appears and "System hotkeys" is gone. 2: the values step
+  by 0.05 and 1 and are written at once; the duty cycle follows the period down (2/1). 3: a chooser
+  with "Core default", "SNES Joypad", "SNES Mouse", "Multitap".
+- **Check:** suite file `tests/test_bigpicture_input.py` (`TheRows`).
+
+### RT-1156 — Capturing a binding takes the screen and the pad, and ends on its own
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Settings › Input on "SFC", keyboard device.
+- **Steps:**
+  1. Press A on "A" (bound to "z"); choose "Remap".
+  2. Wait without pressing anything; then repeat and press "j".
+- **Expected:** 1: a card covers the section ("SFC — Super Nintendo · Keyboard", "Press a key for
+  A", "8 seconds", the note); the hint bar empties; the pad does nothing. The countdown ends the
+  capture after 8 s with the binding still "z". 2: "j" is stored in the row, the card goes, the
+  focus is back on the row, "Save" reads "Unsaved changes. Save keeps them."; the profile on disk
+  still says "z".
+- **Check:** suite file `tests/test_bigpicture_input.py` (`KeyboardCapture`).
+
+### RT-1157 — Escape, the Guide button and "Clear binding" are different things
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Settings › Input on "SFC"; a pad for step 2.
+- **Steps:**
+  1. Remap "A"; press Escape.
+  2. Switch to "Gamepad Port 1"; remap "A"; press the Guide button.
+  3. Press A on "A" and choose "Clear binding"; press A on it again.
+- **Expected:** 1 and 2: the capture ends and the binding is kept (the desktop clears on Escape; Big
+  Picture never does). 3: the row reads "--"; A on an empty row starts a capture at once, with no
+  chooser.
+- **Check:** suite file `tests/test_bigpicture_input.py` (`test_escape_cancels_and_keeps_the_binding`,
+  `test_the_guide_button_cancels_instead_of_binding`, `test_clear_empties_the_binding_and_keep_leaves_it`);
+  `tests/test_window.py` (`test_the_capture_handler_takes_escape_only_in_big_picture`: the window's
+  own Escape handler stands aside during a capture).
+
+### RT-1158 — X maps every control in turn, Y asks before resetting
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Settings › Input on "SFC".
+- **Steps:**
+  1. Press X; answer each prompt with a different key.
+  2. Press X again, answer two prompts, press Escape.
+  3. Press Y; choose "Cancel"; press Y; choose "Reset defaults".
+- **Expected:** 1: the card counts "Map all · 1 of 18 …" upwards; one toast at the end ("Mapping
+  sequence completed"); released keys are not announced one by one. 2: "Mapping sequence cancelled",
+  the two answers stay in the rows unsaved, the focus is back on "Map all". 3: "Reset the mapping
+  for SFC?"; Cancel changes nothing; Reset writes the defaults, re-syncs the stick, turbo and
+  controller-type rows and toasts "Input mapping reset for SFC".
+- **Check:** suite file `tests/test_bigpicture_input.py` (`MapAll`,
+  `test_reset_asks_first_and_then_restores_the_defaults`).
+
+### RT-1159 — Save reaches the running game of this console, and leaving asks about unsaved changes
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a game running (SNES) for step 1.
+- **Steps:**
+  1. Remap "A" and press "Save"; repeat with the Input page on "GB".
+  2. Remap "B" without saving; press B to leave the section.
+- **Expected:** 1: "Input mapping saved for SFC"; the running SNES game is relaunched with its
+  state; saving the GB map leaves it alone; the "Saving applies your changes to the running game"
+  row is visible only while a game runs. 2: "Leave with unsaved controller changes?" with "Discard"
+  as the destructive answer; Cancel stays, Discard leaves and drops the change.
+- **Check:** suite file `tests/test_bigpicture_input.py` (`SavingAndResetting`).
+
+### RT-1167 — The desktop's dialogs and the first-boot screen are drawn for the couch
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; a fresh home for step 2.
+- **Steps:**
+  1. Press A on "Delete ROM…" (then B), open "Share nearby", and import a file whose extension more
+     than one console uses; look at each dialog.
+  2. Start the app with `openemux --big-picture` on a fresh home (or with "Start in Big Picture"
+     on).
+- **Expected:** 1: the alert's heading, body and buttons, the rows of the share dialog, the import
+  "Which console?" dropdown and buttons are at Big Picture sizes; nothing else about them changes.
+  2: the first-boot window opens fullscreen at the mode's sizes (the title and icon bigger, the
+  subtitle and status lines at the mode's body sizes); the main window then takes over on the home
+  page.
+- **Check:** suite files `tests/test_bigpicture_tasks.py` (`TheDialogTheme`),
+  `tests/test_app_bootstrap.py` (`test_opening_into_big_picture_dresses_the_progress_screen`,
+  `test_its_labels_carry_the_big_picture_classes`).
+
+### RT-1170 — A text value is typed on the on-screen keyboard
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, Settings › "Device name" (under SHARE NEARBY).
+- **Steps:**
+  1. Press A on "Device name"; type "Couch" with A on the keys; press X once; press A on "Done".
+  2. Press A on "Device name" again; type a letter; press A on "Cancel" (or B).
+  3. In "RetroAchievements", press A on "Password" and type.
+- **Expected:** 1: the keyboard page opens with the current value in the field and the first key
+  focused; X deletes the last letter, Y types a space, LT shifts a capital, Start is Done; Done
+  stores "Couc" (the config the desktop reads) and pops to the row, which shows it. 2: Cancel or B
+  pops without storing anything. 3: the field is masked; the row shows dots instead of the value,
+  "Not set" when empty.
+- **Check:** suite files `tests/test_bigpicture_chooser.py` (`TheTextEntryPage`),
+  `tests/test_bigpicture_settings.py` (`test_welcome_troubleshooting_and_share`,
+  `test_the_screenscraper_account_is_typed_on_the_keyboard`), `tests/test_navigation.py`
+  (`test_big_picture_contexts`: the text page's own context).
+
+### RT-1171 — Left and Right reorder consoles and artwork providers
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, a library with two or more consoles; Settings › "ROM folder"
+  for the console order, Settings › "Artwork providers" for the providers.
+- **Steps:**
+  1. Focus the first row under "Console order"; press Left, then Right.
+  2. Focus the first row under "Artwork providers"; press Right; press A on the row.
+  3. Press A on "Restore default order"; choose "Cancel"; repeat and confirm.
+- **Expected:** 1: Left at the top does nothing; Right swaps it with the next console, the rows
+  are rebuilt with the new positions and the focus stays on the moved console; the sidebar and the
+  grouped pages follow (same as the desktop's arrows). A console the order remembers with no games
+  keeps its row, saying so. 2: the provider moves to "2." and the focus follows; A flips its
+  switch; with ScreenScraper off, its account rows disappear. 3: a dialog asks first with Cancel
+  focused; Cancel changes nothing; confirming clears the stored order.
+- **Check:** suite file `tests/test_bigpicture_settings.py` (`TheLibrarySection`).
+
+### RT-1172 — Destructive settings actions ask first on the couch
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on; signed in to RetroAchievements for step 3.
+- **Steps:**
+  1. Settings › System › "Restore defaults": press A, then B.
+  2. Settings › System › Saves › "Import saves": press A, then A on "Choose a backup…".
+  3. Settings › System › RetroAchievements › "Sign out": press A, then A on "Sign out".
+- **Expected:** 1: an alert with Cancel focused; B closes it and the shaders are untouched (the
+  desktop restores without asking). 2: the question comes before the file picker; confirming opens
+  it. 3: confirming signs out, the rows switch to Username/Password/Sign in and a toast says so.
+- **Check:** suite file `tests/test_bigpicture_settings.py` (`test_appearance_launch_and_bar_rows`,
+  `test_saves_are_exported_and_imported_through_the_picker`,
+  `test_retroachievements_sign_in_and_out`).
+
+### RT-1173 — The BIOS section lists each console and its files
+- **Area:** BIOS
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, Settings › BIOS.
+- **Steps:**
+  1. Press A on a console row (e.g. "PS — Sony PlayStation").
+  2. Press A on "Import" and pick a BIOS file; press B back to the list.
+  3. Press A on "Reload BIOS status".
+- **Expected:** 1: a page lists every file with ✓ or ⚠ and "Required BIOS"/"Optional BIOS", then
+  "Import" (focused) and "Show folder"; crumbs read "Settings › BIOS › PS — …". 2: the same picker
+  and summary dialog as the desktop; the file shows ✓ and the console row's "present/total" count
+  rises; B lands back on that console's row. 3: the counts re-read the disk and a toast confirms.
+- **Check:** suite file `tests/test_bigpicture_settings.py` (`TheBiosSection`).
+
+### RT-1174 — The desktop Settings gain a "Big Picture" group
+- **Area:** Settings
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop layout.
+- **Steps:**
+  1. Settings › System › "Big Picture": turn "Start in Big Picture" on; step "Big Picture text
+     size" to 150.
+  2. Restart the app.
+- **Expected:** 1: both are written to `ui.big_picture` in config.yaml (`start`, `text_size`); with
+  the mode on, the text size applies live. 2: the app opens in Big Picture.
+- **Check:** suite files `tests/test_preferences.py` (`TheBigPictureGroupTests`),
+  `tests/test_bigpicture_config.py`, `tests/test_bigpicture_shell.py`
+  (`test_the_setting_and_the_flag_open_the_mode_at_start`).
+
+### RT-1177 — A game opened from Big Picture starts fullscreen
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Settings › System › "Start games in fullscreen" off.
+- **Steps:**
+  1. Enter Big Picture and launch a game.
+  2. Quit the game, leave Big Picture and launch a game from the desktop.
+- **Expected:** 1: the game fills the screen (the runtime override says `video_fullscreen = "true"`).
+  2: the game opens windowed again, as the desktop setting says; the setting itself never changed.
+- **Check:** suite files `tests/test_window.py` (`test_big_picture_swaps_the_layout_and_scales_up`),
+  `tests/test_retroarch_launcher.py` (`test_the_launch_mode_setting_reaches_the_launch_both_ways`).
+
+### RT-1180 — The Big Picture game grid only scrolls down, never sideways
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console with a dozen games or more, one of them with a long title
+  (e.g. "The Legend of Zelda - A Link to the Past (USA) (Rev 1)").
+- **Steps:**
+  1. Enter Big Picture and open that console from the Shelf.
+  2. Scroll sideways over the games (touchpad, or Shift + mouse wheel); press D-pad right along a
+     row until the last game of the row.
+  3. Scroll down with the wheel, or D-pad down, to the last game.
+  4. Press LB and RB.
+- **Expected:** 1: the games fill the screen width in rows; no horizontal scrollbar, and a long
+  title is cut short (it ends in an ellipsis) instead of widening its card. 2: the page does not
+  move sideways; D-pad right walks along the row. 3: every game is reachable by scrolling down.
+  4: the previous and next console open, as before.
+- **Check:** suite file `tests/test_bigpicture_pages.py`
+  (`test_a_long_title_never_widens_the_columns_past_the_screen`).
+
+### RT-1181 — Big Picture opens on the Shelf: the rail, the console cards in their colors
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`) with the synthetic
+  library, locale English.
+- **Steps:**
+  1. Start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf.png`.
+- **Expected:** On the left, the rail: the app's logo, then "Library" (on a purple pill),
+  "Recent", "Import", "Settings" and, last, "Back to desktop" (a screen icon, its label on two
+  lines, never on a pill; RT-1219), each icon over its label, the whole rail about 115 px wide (well
+  under half the 232 px it had before issue 975), every label whole. On the right, "Shelf" in big letters with "N consoles · M games"
+  under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
+  cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
+  its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left (small,
+  pixel-sharp: see RT-1202), its short code ("NES", "SNES", "PS1") over its name on one line and
+  "N games" under it. No strip above "Shelf": the title starts right under the top margin. The
+  hint bar at the bottom, centered: Enter Open · Alt+Enter Order · Ctrl+F Search ·
+  Tab Tabs, with the clock at its right end (see RT-1220). The whole mode is dark whatever the desktop theme. The focused card sits on a dark
+  purple plate; no ring, no glow.
+- **Check:** the screenshot shows all of the above; `tests/test_bigpicture_shell.py`
+  (`TheShelf`, `TheTabs`, `test_the_rail_is_slim`).
+
+### RT-1182 — LB and RB walk the tabs from a tab's first page; B goes back to the Library
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, the Shelf showing.
+- **Steps:**
+  1. Press RB four times (Tab on a keyboard), then LB once.
+  2. On "Recent", press B; on the Shelf press B again.
+- **Expected:** 1: Library → Recent → Import → Settings → Library, then back to Settings; the pill
+  follows the tab. 2: B on another tab's first page lands on the Shelf; B on the Shelf does
+  nothing and never leaves the mode.
+- **Check:** `tests/test_bigpicture_shell.py` (`TheTabs`).
+
+### RT-1183 — A console card opens its games across the whole width
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1181 done.
+- **Steps:**
+  1. Press A on the "NES" card; `make devbox-shot OUT=$SCRATCH/bp-games.png`.
+- **Expected:** On the left: "‹ Shelf" with a search and a filter button; "NES" as the eyebrow,
+  "Nintendo (NES)" in big letters and "N games"; the console chips (All · Favorites · NES · GB ...),
+  each with its icon left of the name (RT-1200), with NES white; the filter chips "Favorites · N", "Has save state · N", "Missing artwork · N",
+  "Never played · N"; "Cartridges" with a three-way switch; the cartridges at the desktop's 200%
+  size (RT-1217), as many to a row as the width holds. There is no detail pane: the games reach
+  the right edge of the screen (issue 975). Hints: Enter Details · Ctrl+D Favorite ·
+  Alt+Enter Options · Tab Console · Menu Select · Esc Shelf.
+- **Check:** the screenshot shows the above; `tests/test_bigpicture_games.py` (`TheGamesPage`,
+  `test_the_games_take_the_whole_width`).
+
+### RT-1184 — LB and RB change the console chip and the games follow
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the games page of a console, the focus on a game.
+- **Steps:**
+  1. Press RB, then LB.
+- **Expected:** the next chip becomes current (white) and the grid shows its games, the focus
+  still in the grid; LB comes back. The chips row scrolls, the grid never does sideways.
+- **Check:** `tests/test_bigpicture_games.py`
+  (`test_the_shoulders_walk_the_chips_and_the_focus_stays_in_the_grid`).
+
+### RT-1185 — The filter chips count and filter the games
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a console where one game is a favorite.
+- **Steps:**
+  1. With the focus on the first game, press Up until the filter chips; press A on
+     "Favorites · 1"; press it again.
+  2. Press the filter button (the "⋯" at the top) twice.
+- **Expected:** 1: the first Up from the top row of games lands on the view switch, the next ones
+  on the filter chips, the console chips and the top row; the chip turns purple and only the
+  favorite is listed; again, every game comes back. 2: the chips row hides and comes back; a chip
+  that was on stays on.
+- **Check:** `tests/test_bigpicture_games.py` (`test_the_filter_chips_count_and_filter`),
+  `tests/test_bigpicture_shell.py` (`test_up_from_the_top_row_reaches_the_view_switch`).
+
+### RT-1186 — The view switch is Big Picture's own
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop shows a console as covers.
+- **Steps:**
+  1. In Big Picture, on that console, press A on the list button of the switch; then on covers.
+  2. Leave Big Picture.
+- **Expected:** 1: the heading reads "List", then "Covers", and the games follow. 2: the desktop
+  shows that console exactly as before (its own view untouched).
+- **Check:** `tests/test_bigpicture_games.py` (`test_the_view_switch_is_big_pictures_own`).
+
+### RT-1187 — All games is grouped by console with a header per console
+- **Area:** Library
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1183 done.
+- **Steps:**
+  1. Press LB until "All" is current; `make devbox-shot OUT=$SCRATCH/bp-all.png`.
+- **Expected:** "ALL CONSOLES" over "All games"; the games under one header per console (icon,
+  name, "N games").
+- **Check:** the screenshot shows the headers.
+
+### RT-1188 — A on a game opens its details page: the art, Play, the states, the per-game rows
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** RT-1183 done, the synthetic library; run the app with
+  `GSK_RENDERER=cairo` (the devbox's GL renderer can stop redrawing).
+- **Steps:**
+  1. Press A on a game; `make devbox-shot OUT=$SCRATCH/bp-details.png`.
+  2. Press X; press B.
+- **Expected:** 1: a page of its own over the whole content area (issue 975): "‹ Back to the
+  list" on the left with the star and share buttons across from it; below, on the left, the art
+  large with "Search artwork…" under it; on the right, the title with a pencil, "Console · Core ·
+  never played", a purple "Play" (focused), "Save states" with "None yet. Save from the in-game
+  menu.", the Core and Shader rows with a "DEFAULT" tag and the file's path. The hints read Play ·
+  Favorite · Share · Back. 2: X fills the star (the game is a favorite); B goes back to the games
+  with the focus on that game (RT-1218).
+- **Check:** the screenshot; `tests/test_bigpicture_games.py`
+  (`test_a_opens_the_details_page_and_b_comes_back_to_the_game`), `tests/test_bigpicture_details.py`
+  (`test_the_art_and_the_facts_sit_side_by_side`, `test_the_back_link_goes_back_to_the_list`).
+
+### RT-1189 — Y on a game opens its options; Menu selects several
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the games page, the focus on a game.
+- **Steps:**
+  1. Press Y; press B.
+  2. Press Menu (Start on the pad); press A on two games; press X; press B.
+- **Expected:** 1: a page lists "Share nearby", "Rename", "Artwork", "Core", "Playlists",
+  "Remove from library"; B closes it. 2: multi-select: A toggles a game, X selects all, Y would
+  remove the selection (asking first), View shares it, B leaves.
+- **Check:** `tests/test_bigpicture_games.py` (`test_y_opens_the_options_sheet`),
+  `tests/test_bigpicture_shell.py` (`test_the_resolution_of_every_context`,
+  `test_a_in_multi_select_toggles_the_game_and_stays`).
+
+### RT-1190 — Search works with the pad: the keyboard over the games
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, the Shelf showing.
+- **Steps:**
+  1. Press View (Ctrl+F); type "C" with A on the keys; type "h" on a real keyboard.
+  2. Press Start (Done).
+  3. Press View again and type "zzz", a query no game matches.
+- **Expected:** 1: "All games" opens and the keyboard slides up over it with its first key
+  focused and the keyboard's hints; each letter (pad or keyboard) filters the games live and the
+  page says "Searching “ch”". 2: the keyboard goes, the filter stays. 3: every console's group
+  empties and "No games match" shows; the app keeps running.
+- **Check:** `tests/test_bigpicture_games.py` (`TheSearch`), `tests/test_bigpicture_shell.py`
+  (`test_search_from_the_shelf_keeps_the_focus_on_the_keyboard`), `tests/test_grouped_scroll.py`
+  (`test_a_group_unmapped_by_a_search_sleeps_after_the_change`).
+
+### RT-1191 — Recent lists the games played last
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** two games played; then a fresh library.
+- **Steps:**
+  1. Open the "Recent" tab; press A on the first row.
+  2. With nothing played, open "Recent".
+- **Expected:** 1: the games played, newest first (at most 12), each with its last save state's
+  screenshot (or its art) and "Console · played ..."; A opens the game's page. 2: "Nothing played
+  yet".
+- **Check:** `tests/test_bigpicture_games.py` (`TheRecentTab`).
+
+### RT-1192 — Import: choose files or a folder with the pad
+- **Area:** Library
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a folder with a subfolder and two .sfc files.
+- **Steps:**
+  1. Open the "Import" tab; press A on "Choose files".
+  2. Press A on a file; press Y.
+  3. Press A on "Choose a whole folder"; enter the subfolder; press B; press Y.
+- **Expected:** 1: the tab shows the intro, "Choose files" (purple), "Choose a whole folder",
+  "Receive games" and "ACCEPTED FORMATS" with every console's extensions (".zip" included); the
+  browser lists folders first, then only importable files. 2: the file is marked (✓) and Y
+  imports it, each file to the console its extension names. 3: A enters, B goes up a folder, Y
+  imports the folder on screen.
+- **Check:** `tests/test_bigpicture_games.py` (`TheImportTab`, `TheFileBrowser`).
+
+### RT-1193 — Settings: Android's list on the left, the entry on the right
+- **Area:** Settings
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Open the "Settings" tab; `make devbox-shot OUT=$SCRATCH/bp-settings.png`.
+  2. Press A on "Theme"; press B; walk to a console entry and press A.
+- **Expected:** 1: "Settings"; the BIOS card ("N consoles need files"); APPEARANCE (Theme,
+  Language); ACHIEVEMENTS (RetroAchievements); ARTWORK (Artwork providers); CONSOLES (one entry per
+  console with games, "core · shader" under it); SHARE NEARBY (Device name); GENERAL (ROM folder,
+  Controllers, Check for updates — not in a Flatpak —, System, About and licenses), "About and
+  licenses" last: no "Back to desktop" entry (it is on the rail, RT-1219). The right side reads
+  "Choose a setting on the left". 2: the entry opens on the
+  right with the focus in it; B goes back to the list; a console shows its core, shader, bezel
+  (4:3 consoles) and core options.
+- **Check:** the screenshot; `tests/test_bigpicture_settings.py` (`ThePage`, `TheConsoleSection`).
+
+### RT-1194 — Settings › Controllers chooses what opens the pause menu
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on.
+- **Steps:**
+  1. Settings › "Controllers" › "Open the pause menu with": pick "Hold Start".
+- **Expected:** the choices are "Guide button" (the default), "Hold Start", "Start + Select",
+  "L3 + R3" and "Off"; the pick is stored and the pad reader uses it at once. "Button mapping"
+  opens the controller drawing on the right.
+- **Check:** `tests/test_bigpicture_settings.py`
+  (`test_language_theme_and_the_interface_rows`, `test_the_controllers_entry_opens_the_mapping`).
+
+### RT-1195 — A game starts behind a splash with its art
+- **Area:** Navigation
+- **Mode:** MANUAL
+- **Preconditions:** Big Picture on, a real game and its core.
+- **Steps:**
+  1. Press Play on a game.
+  2. Launch a game whose core is missing (or a broken file).
+- **Expected:** 1: the screen goes black with the game's art in the middle and "Starting
+  <core>" under it until the game's window takes over. 2: the splash says why it closed straight
+  away, with "Show log" and "Close" (B closes it).
+- **Check:** human only (needs RetroArch); the logic is `tests/test_bigpicture_pause.py`
+  (`TheSplash`, `TheGameSessionHooks`).
+
+### RT-1196 — Guide during a game opens the pause menu
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** Big Picture on, a pad with a Guide button, a game running.
+- **Steps:**
+  1. Press Guide.
+  2. Press A on "Save"; move the slot slider with LB/RB; press A on "Load".
+  3. Press Guide again; toggle "Fast forward"; press A on "Continue".
+  4. Press Guide; "Quit"; confirm.
+- **Expected:** 1: the game pauses and the menu covers the screen: the title, "Playing for N min ·
+  <core>", Continue (purple) and Restart, Save and Load with the slot ("Slot 0 · empty"), the
+  slider and "See all", then Fast forward, Slow motion, Screenshot, Audio, RetroArch menu and Quit
+  (red). 2: Save writes the slot (Load turns on, "Saved to slot N"); Load loads it and the game
+  resumes. 3: fast forward is on when the game resumes. 4: the game ends and Big Picture comes back.
+  If the menu cannot come to the front within two seconds, RetroArch's own menu opens instead.
+- **Check:** human only (needs RetroArch and a pad); the logic is
+  `tests/test_bigpicture_pause.py` (`ThePauseMenu`), `tests/test_pause_session.py`.
+
+### RT-1197 — Hold Start opens the pause menu; a short press still reaches the game
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** RT-1194 with "Hold Start"; a game running in Big Picture.
+- **Steps:**
+  1. Tap Start; then hold it for one second; then press Guide.
+- **Expected:** the tap acts in the game (its own Start); the hold opens the pause menu; Guide no
+  longer does.
+- **Check:** human only; the gesture is `tests/test_pause_trigger.py` and
+  `tests/test_ui_gamepad.py` (`ThePauseGestureDuringAGameTests`).
+
+### RT-1198 — The keyboard and the mouse still work in Big Picture
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, no pad connected.
+- **Steps:**
+  1. Click a rail tab, a console card, a chip and a game; press Tab, Ctrl+F, Ctrl+D, Alt+Enter,
+     Menu and Escape on the games page.
+- **Expected:** clicks do what A does; Tab is RB, Ctrl+F searches, Ctrl+D is X (favorite),
+  Alt+Enter is Y (options), Menu selects several, Escape is B; the hints show those keys.
+- **Check:** `tests/test_bigpicture_shell.py` (`test_the_keyboard_keys_stand_in_for_the_pad`,
+  `test_the_hints_are_the_pages_and_always_shown`).
+
+### RT-1199 — Big Picture shows three cartridges to a row beside the pane
+- **Retired:** 2026-11-15 (issue 975, the games take the whole width at 200%).
+- **Reason:** There is no pane beside the games any more; see RT-1217.
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** the desktop library at 75% zoom.
+- **Steps:**
+  1. Enter Big Picture and open a console.
+  2. Leave Big Picture.
+- **Expected:** 1: the games are at 125%, three cartridges to a row beside the detail pane. 2: the
+  desktop is at 75% again.
+- **Check:** `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
+  `tests/test_window.py`.
+
+### RT-1217 — Big Picture builds the games at 200%, the desktop's largest zoom
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), the synthetic
+  library, locale English, the desktop library at 100%.
+- **Steps:**
+  1. On the desktop, open "Nintendo (NES)" and set the zoom to 200% with the header's "+";
+     `make devbox-shot OUT=$SCRATCH/desktop-200.png`. Set it back to 100%.
+  2. Press F11, open the "NES" card; `make devbox-shot OUT=$SCRATCH/bp-200.png`.
+  3. Press Ctrl+minus; leave Big Picture (F11).
+- **Expected:** 1–2: a cartridge (or cover) in Big Picture has the same width and height as on
+  the desktop at 200%, measured on the two screenshots. 3: nothing changes in the mode; the
+  desktop is back at 100%, its setting never written.
+- **Check:** the two screenshots; `tests/test_window.py`
+  (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`).
+
+### RT-1218 — Back from a game's details lands on the same game, the scroll kept
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080, Big Picture on "All games" (enough games to scroll).
+- **Steps:**
+  1. Walk the D-pad down until the grid scrolls; note the focused game; press A.
+  2. Press B (Escape on the keyboard).
+  3. Press A again, press RB twice, then click "‹ Back to the list".
+- **Expected:** 1: the game's details page opens. 2: the games are back, scrolled as they were,
+  the same game focused. 3: the details page walked two games further; back on the list, the
+  focus is on the game the page showed last, scrolled into view.
+- **Check:** `make devbox-shot` before step 1 and after step 2 show the same rows;
+  `tests/test_bigpicture_games.py` (`test_a_opens_the_details_page_and_b_comes_back_to_the_game`,
+  `test_the_returned_game_survives_every_focus_pass`), `tests/test_grid_group.py`
+  (`test_a_game_by_its_path_is_remembered_by_the_group_showing_it`).
+
+### RT-1200 — The console chips show the console icon beside the short name
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920x1080 (`make devbox-res RES=1920x1080`), the app in Big
+  Picture, a playlist "Couch" with a game in it.
+- **Steps:**
+  1. Open a console's games (A on its card); `make devbox-shot OUT=$SCRATCH/bp-chips.png`.
+  2. Press RB, then walk the focus up to the chips; take another screenshot.
+  3. `make devbox-res RES=1280x720`; take another screenshot.
+- **Expected:** 1: every console chip shows the console's pixel-art icon (the shelf card's art) at
+  the left of its short name, sharp, every source pixel a square, no blur; "All" shows a grid
+  glyph, "Favorites" a star, "Couch" a bookmark. The chips are as tall as the filter chips below.
+  2: the white current chip and the purple focused chip both read clearly with their icon. 3: the
+  icons shrink with the chips (the console's 16 px art at 1x) and stay sharp and inside them. A console with no icon file shows its
+  symbolic icon instead (suite only).
+- **Check:** the screenshots show the above; `tests/test_bigpicture_games.py`
+  (`test_every_chip_shows_an_icon_beside_its_name`, `test_a_console_with_no_art_takes_its_symbolic_icon`),
+  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`,
+  `test_the_art_size_that_fills_the_slot_crisply_wins`).
+
+### RT-1201 — The Big Picture keyboard is QWERTY and the D-pad walks it like one
+- **Area:** Navigation
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Big Picture on, a library with games.
+- **Steps:**
+  1. Press View (Ctrl+F) to open the search keyboard.
+  2. From "1" press Down three times, then Up three times; from "P" press Right; from "1" press Up.
+  3. From "M" press Down; press Up; on the function row press Down.
+  4. Type "MARIO" with A; press X; press Y; press Start.
+  5. Settings › "Device name": look at the keys; press LT, type a letter.
+  6. Repeat step 2 with the arrow keys of a real keyboard.
+- **Expected:** 1: rows `1234567890`, `QWERTYUIOP`, `ASDFGHJKL'`, `ZXCVBNM-.&`, each starting half a
+  key right of the one above; "1" focused. 2: Down goes "Q", "A", "Z" and Up comes back the same way
+  to "1"; Right on "P" wraps to "Q"; Up on the top row keeps the focus where it is. 3: Down from "M"
+  lands on the function key nearest under it (greyed Backspace/Clear are skipped); Up returns to the
+  bottom row near where it left; Down on the function row stays put. 4: the games filter after each
+  letter; X deletes, Y types a space, Start closes with the filter kept. 5: lower-case QWERTY with
+  `- _ @` after the digits, `( ) &` after "p", `: ' " #` after "l", `, . / ! ? +` after "m"; LT
+  capitalises one letter. 6: the arrows move exactly like the D-pad.
+- **Check:** `tests/test_bigpicture_osk.py` (`TheQwertyLayout`, `WalkingTheBoard`),
+  `tests/test_bigpicture_shell.py` (`test_the_keyboard_arrows_walk_the_on_screen_keyboard_like_the_pad`),
+  `tests/test_navigation_controller.py` (`test_a_board_that_walks_its_own_keys_takes_the_move`).
+
+### RT-1202 — Big Picture shelf: console names on one line, icons small and sharp
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, text size 100%.
+- **Steps:**
+  1. `make devbox-res RES=1920x1080`, start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf-1080.png`.
+  2. Leave Big Picture, `make devbox-res RES=2560x1440`, press F11 again;
+     `make devbox-shot OUT=$SCRATCH/bp-shelf-1440.png`.
+  3. Open a console card and change the game-grid zoom.
+- **Expected:** 1 and 2: every console card's name ("Game Boy Advance", "Sega Master System",
+  "Sony PlayStation", "Super Nintendo"...) is on one line, with no "…"; the console's pixel art is
+  small (about a third of the card's height) and drawn in sharp square pixels, twice its size at
+  1080p and three times at 1440p, never blurred; all three rows of the synthetic library fit
+  above the hint bar with room to spare. 3: the game grid opens at 200% and its zoom still works.
+- **Check:** both screenshots show the above; `tests/test_bigpicture_shell.py`
+  (`test_every_console_name_fits_on_one_line`, `test_console_art_is_drawn_at_a_whole_multiple`).
+
+### RT-1219 — "Back to desktop" ends the Big Picture rail and leaves the mode
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, Big Picture on
+  (F11 by keycode: `make devbox-xdo CMD='key 95'`).
+- **Steps:**
+  1. `make devbox-shot OUT=$SCRATCH/bp-rail-desktop.png`.
+  2. Press Left until the focus is on the rail ("Library"), then Down four times;
+     `make devbox-shot OUT=$SCRATCH/bp-rail-desktop-focus.png`. Press Enter.
+  3. Press F11 again; press Tab (RB) four times.
+- **Expected:** 1: the rail ends with "Back to desktop" right after "Settings": a screen icon over
+  its label, the label whole on one or two lines, drawn like the tabs and never on the purple
+  pill. 2: Down from "Settings" focuses it with the same fill as a focused tab; Enter (A, or a
+  click) leaves Big Picture: the normal window comes back and the toast reads "Back to the
+  desktop". 3: RB walks Library → Recent → Import → Settings → Library; it never lands on "Back to
+  desktop".
+- **Check:** both screenshots; `tests/test_bigpicture_shell.py`
+  (`test_back_to_desktop_on_the_rail_leaves_the_mode`, `test_the_rail_is_slim`),
+  `tests/test_bigpicture_widgets.py` (`test_the_rail_ends_with_back_to_desktop`).
+
+### RT-1220 — Big Picture: no clock strip at the top, the time at the right of the hint bar
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. `make devbox-res RES=1920x1080`, start the app (`make devbox-app ACTION=restart`), press F11;
+     `make devbox-shot OUT=$SCRATCH/bp-clock-shelf.png`.
+  2. Press Tab (Recent), Tab (Import), Tab (Settings), taking a `make devbox-shot` on each; press
+     Esc, then Enter on "All games", `make devbox-shot OUT=$SCRATCH/bp-clock-games.png`; Enter again
+     for a game's details, `make devbox-shot OUT=$SCRATCH/bp-clock-details.png`.
+  3. `make devbox-res RES=1280x720` and repeat steps 1 and 2.
+  4. On the devbox's own session bus (a plain `make devbox` shell carries the host's, and would
+     change the maintainer's desktop instead):
+     `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 12h'`,
+     wait 30 s, `make devbox-shot`; then the same command with `24h`.
+- **Expected:** 1–3: no page has an empty strip at the top holding only the time: each page's
+  title, chips or grid start right under the top margin; a game's details keep their
+  "Console › Game" breadcrumb, with nothing beside it. On every page the time ("14:05") sits at
+  the right end of the bottom hint bar, in the same grey as the hint labels; the hints stay
+  centred on the bar and never run under the time, at both sizes. 4: the clock reads like
+  "2:05 PM", then back to "14:05". A desktop without that setting shows 24 hours. On a Cinnamon session (Linux Mint) the
+  clock follows Cinnamon's own "Use 24h clock" switch instead (checked by the suite).
+- **Check:** the screenshots show the above; `tests/test_bigpicture_widgets.py`
+  (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
+  `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
+- **Restore:** `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 24h'`.

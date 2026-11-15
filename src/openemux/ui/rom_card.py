@@ -124,13 +124,17 @@ class RomEntry(GObject.Object):
         self.composite_pixbuf_key = None
 
 
-def entry_matches(entry, query=(), only_missing_artwork=False):
+def entry_matches(entry, query=(), only_missing_artwork=False, facet_predicate=None):
     """Whether a ROM survives the search box and the "no artwork" filter.
 
     ``query`` is the parsed query (``library_search.parse_query``): words in
     any order, each a substring of the entry's folded name (issue 906).
+    ``facet_predicate`` is one more predicate over the ROM dict: Big
+    Picture's filter chips (issue 957).
     """
     if query and not matches(query, entry.search_name):
+        return False
+    if facet_predicate is not None and not facet_predicate(entry.rom):
         return False
     if only_missing_artwork and entry.has_artwork is not False:
         # `None` means the fetch has not resolved yet: hide it rather than
@@ -188,6 +192,7 @@ class CardContext:
         shadow_pad=0,
         play_caption=None,
         has_auto_state=None,
+        fit_titles=False,
         on_launch,
         on_toggle_favorite,
         on_reveal_in_files,
@@ -221,6 +226,9 @@ class CardContext:
         # resume badge (issue 910). Both optional.
         self.play_caption = play_caption
         self.has_auto_state = has_auto_state
+        # Big Picture's titles are drawn in a much larger font: there a title
+        # is ellipsized to the card instead of widening it (issue 954).
+        self.fit_titles = bool(fit_titles)
         self.frame_for_rom = frame_for_rom
         self.context_services = context_services
         self.on_launch = on_launch
@@ -297,10 +305,10 @@ class RomItem(Gtk.Box):
         # (issue #508).
         self.mixed_consoles = ctx.mixed_consoles
         self._backdrop = None
-        # Inside a cartridge frame the label sticker is what belongs there.
-        # The box art is still looked for after it, but only to know whether
-        # the ROM has artwork at all: it is never drawn as a label (#457).
-        self._art_kinds = (LABEL_ART, COVER_ART) if ctx.cartridge else (COVER_ART,)
+        # Where the art sits in the backdrop: centred, except a cartridge on a
+        # page mixing consoles, which stands on the bottom of its cell so the
+        # shells of one row line up over their titles (issue 942).
+        self._cover_valign = Gtk.Align.CENTER
         self.add_css_class("rom-card")
         if compact:
             self.add_css_class("rom-row")
@@ -518,11 +526,16 @@ class RomItem(Gtk.Box):
         self.name_label = Gtk.Label()
         self.name_label.set_halign(label_align)
         self.name_label.set_xalign(0.0 if compact else 0.5)
-        if compact:
+        if compact or ctx.fit_titles:
+            # In Big Picture too: GtkGridView sizes every column to the widest
+            # card it has built, so one long title in the couch layout's big
+            # font made the columns overflow the screen and the games scroll
+            # sideways (issue 954). Ellipsized, a title never widens its card.
             self.name_label.set_ellipsize(Pango.EllipsizeMode.END)
         else:
-            self.name_label.set_max_width_chars(self._preview_limit + 3)
             self.name_label.set_ellipsize(Pango.EllipsizeMode.NONE)
+        if not compact:
+            self.name_label.set_max_width_chars(self._preview_limit + 3)
         self.name_label.add_css_class("rom-title")
         text_box.append(self.name_label)
 
@@ -632,7 +645,12 @@ class RomItem(Gtk.Box):
         token = self._generation
         rom = entry.rom
         roms_dir = self.roms_dir
-        kinds = self._art_kinds
+        # Inside a cartridge frame the label sticker is what belongs there.
+        # The box art is still looked for after it, but only to know whether
+        # the ROM has artwork at all: it is never drawn as a label (#457).
+        # Asked of the card's own shell, not the page: a page mixing consoles
+        # in cartridge view has games with no shell drawn (issue 942).
+        kinds = (LABEL_ART, COVER_ART) if self.cartridge_frame_path else (COVER_ART,)
 
         def _worker():
             # First thing, before any disk work: a job queued for a card that
@@ -721,7 +739,11 @@ class RomItem(Gtk.Box):
         # the paintable is the card's share of the library's memory, and an
         # unbound card must not keep it.
         self.cover_image.set_paintable(None)
-        self.cover_image.set_size_request(*self._cover_target_size())
+        self._size_cover_image(*self._cover_target_size())
+        if self._backdrop is not None:
+            # A recycled card may have last shown a cartridge, which takes
+            # the backdrop's fill away (issue 942).
+            self._backdrop.add_css_class("rom-cover-backdrop")
         if not self._showing_placeholder:
             self._set_cover_widget(self._placeholder)
             self._showing_placeholder = True
@@ -863,8 +885,11 @@ class RomItem(Gtk.Box):
         if self._is_stale(token) or self._is_abandoned():
             return False
         try:
-            if not full_resolution and self._backdrop is not None:
-                self._fit_cover_to(pixbuf)
+            if self._backdrop is not None:
+                if full_resolution:
+                    self._fit_cartridge_to(pixbuf)
+                else:
+                    self._fit_cover_to(pixbuf)
             # One texture per cached pixbuf, cover or composite: a rebind to
             # art the cache still holds re-attaches it rather than uploading
             # it again (issue 902).
@@ -911,16 +936,44 @@ class RomItem(Gtk.Box):
         """
         art_size = (pixbuf.get_width(), pixbuf.get_height())
         card_size = (self.cover_width, self.cover_height)
+        self._backdrop.add_css_class("rom-cover-backdrop")
+        self._set_cover_valign(Gtk.Align.CENTER)
         if not self.mixed_consoles and cover_fills_box(art_size, card_size):
             self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
-            self.cover_image.set_size_request(*card_size)
+            self._size_cover_image(*card_size)
             return
         # Shrink the widget to the scaled art so the rounded corners and
         # shadow hug the cover, not the empty area around it. Never in a row
         # (it has no backdrop): there the thumbnail box is a column shared with
         # every other row, and resizing it per cover would stagger the titles.
         self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
-        self.cover_image.set_size_request(*art_size)
+        self._size_cover_image(*art_size)
+
+    def _fit_cartridge_to(self, pixbuf):
+        """Centre a cartridge in the card's cell, with nothing behind it.
+
+        Only a page mixing consoles in cartridge view gets here (issue 942):
+        its cell is as tall as the tallest shell on the page, and each card
+        draws its own. The composite is rendered at the display's scale, so
+        its slot is its pixel size divided by that scale. The backdrop that
+        fills the cell around a cover would draw a box around the cartridge.
+        """
+        scale = self.ctx.render_scale
+        self._backdrop.remove_css_class("rom-cover-backdrop")
+        self._set_cover_valign(Gtk.Align.END)
+        self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self._size_cover_image(pixbuf.get_width() // scale, pixbuf.get_height() // scale)
+
+    def _set_cover_valign(self, align):
+        self._cover_valign = align
+        self.cover_image.set_valign(align)
+
+    def _size_cover_image(self, width, height):
+        """Size the picture inside the backdrop, a fixed slot included."""
+        self.cover_image.set_size_request(width, height)
+        set_slot_size = getattr(self.cover_image, "set_slot_size", None)
+        if set_slot_size is not None:
+            set_slot_size(width, height)
 
     def _cover_target_size(self):
         if self.compact:
@@ -959,7 +1012,9 @@ class RomItem(Gtk.Box):
             widget.set_hexpand(True)
             widget.set_vexpand(True)
             widget.set_halign(Gtk.Align.CENTER)
-            widget.set_valign(Gtk.Align.CENTER)
+            widget.set_valign(
+                self._cover_valign if widget is self.cover_image else Gtk.Align.CENTER
+            )
             self._backdrop.append(widget)
             return
         self.cover_overlay.set_child(widget)

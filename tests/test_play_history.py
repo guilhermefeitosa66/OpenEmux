@@ -162,6 +162,20 @@ class ThePlayTimeTests(unittest.TestCase):
             self.assertEqual(history.recent(), ["/roms/a.sfc", "/roms/c.sfc", "/roms/b.sfc"])
             self.assertEqual(history.recent(limit=2), ["/roms/a.sfc", "/roms/c.sfc"])
 
+    def test_the_page_is_capped_at_twelve_but_the_history_is_not(self):
+        # Issue 942: only the page is capped; every game stays recorded, with
+        # its play count and play time.
+        from openemux.core.play_history import RECENT_LIMIT
+
+        self.assertEqual(RECENT_LIMIT, 12)
+        with TemporaryDirectory() as tmp_dir:
+            history = self._history(tmp_dir)
+            paths = [f"/roms/{index}.sfc" for index in range(RECENT_LIMIT + 3)]
+            for path in paths:
+                history.record_launch(path)
+            self.assertEqual(history.recent(), list(reversed(paths)))
+            self.assertEqual(history.play_count(paths[0]), 1)
+
     def test_a_game_only_timed_but_never_launched_is_not_recent(self):
         # A play time recorded for a game with no launch stamp (a hand-edited
         # file) has no place in the order.

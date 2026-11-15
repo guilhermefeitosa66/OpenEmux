@@ -262,5 +262,27 @@ class TheAutomaticStateTests(unittest.TestCase):
                 self.assertFalse(save_states.has_auto_state(console, ROM))
 
 
+
+
+class StemsWithStatesTests(unittest.TestCase):
+    """One listing for a whole console (issue 957)."""
+
+    def test_user_slots_count_auto_states_do_not(self):
+        import tempfile
+        from pathlib import Path
+
+        from openemux.core.save_states import stems_with_states
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "Core").mkdir()
+            (root / "A.state").write_text("x")
+            (root / "Core" / "B.state3").write_text("x")
+            (root / "C.state.auto").write_text("x")
+            (root / "D.state.png").write_text("x")
+            self.assertEqual(stems_with_states(root), {"A", "B"})
+            self.assertEqual(stems_with_states(root / "missing"), set())
+
+
 if __name__ == "__main__":
     unittest.main()

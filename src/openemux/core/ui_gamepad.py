@@ -25,6 +25,8 @@ import threading
 import time
 from collections import namedtuple
 
+from openemux.core.pause_trigger import PauseTrigger
+
 from openemux.core.gamepad_reader import (
     EV_ABS,
     EV_KEY,
@@ -65,13 +67,16 @@ NAV_TOKEN_ACTIONS = {
     "6": "menu",      # Select/Back/View: the primary menu, so Preferences,
                       # Shortcuts and About are reachable without a mouse
     "7": "search",    # Start: the on-screen keyboard (issue 914)
-    "8": "tv_mode",   # Guide/Home/PS: TV mode on and off (issue 914)
+    "8": "big_picture",  # Guide/Home/PS: Big Picture on and off (issue 914)
     # The analog triggers, pressed direction only: the pad's Shift for range
     # selection (issue #78). The resting direction ("-2"/"-5") stays unmapped
     # so an idle trigger cannot read as held.
     "+2": "range",
     "+5": "range",
 }
+
+#: What the navigator emits when the pause gesture happens during a game.
+PAUSE_MENU_ACTION = "pause_menu"
 
 #: Actions that auto-repeat while their control is held.
 REPEATABLE_ACTIONS = {"up", "down", "left", "right"}
@@ -287,11 +292,17 @@ class NavigatorCore:
     #: Name of the reader thread, so `top -H` and a traceback say which backend.
     THREAD_NAME = "gamepad-nav"
 
-    def __init__(self, on_action, on_connected=None, on_disconnected=None, should_suspend=None):
+    def __init__(self, on_action, on_connected=None, on_disconnected=None, should_suspend=None,
+                 watch_game=None):
         self._on_action = on_action
         self._on_connected = on_connected
         self._on_disconnected = on_disconnected
         self._should_suspend = should_suspend or (lambda: False)
+        #: While suspended for a running game, whether to watch for the pause
+        #: gesture (issue 957): Big Picture's pause menu. The trigger's mode
+        #: is the window's to set from the preference.
+        self._watch_game = watch_game or (lambda: False)
+        self.pause_trigger = PauseTrigger()
         self._cancel = threading.Event()
         self._thread = None
         #: Nintendo-style confirm on the east button (issue 914): the window
@@ -347,8 +358,31 @@ class NavigatorCore:
             logger.warning("gamepad navigation: suspend check failed", exc_info=True)
             return True
 
+    def _watching(self):
+        """Whether the pause gesture is being watched, with a failure as "no"."""
+        try:
+            watching = bool(self._watch_game())
+        except Exception:  # noqa: BLE001 - a caller's bug must not end the thread
+            logger.warning("gamepad navigation: game watch check failed", exc_info=True)
+            watching = False
+        if not watching:
+            self.pause_trigger.reset()
+        return watching
+
+    def _watch_token(self, token, pressed):
+        """A suspended transition: the pause gesture is the only thing read."""
+        if self._watching() and self.pause_trigger.feed(token, pressed, time.monotonic()):
+            self._emit(self._on_action, PAUSE_MENU_ACTION)
+
+    def _watch_tick(self, suspended):
+        """Once per loop while suspended: the hold gesture's clock."""
+        if suspended and self._watching() and self.pause_trigger.poll(time.monotonic()):
+            self._emit(self._on_action, PAUSE_MENU_ACTION)
+
     def _dispatch(self, token, pressed, repeat, hold, suspended):
         """Turn one ``(token, pressed)`` transition into UI actions."""
+        if suspended:
+            self._watch_token(token, pressed)
         action = self.action_for(token)
         if action is None:
             return
@@ -443,10 +477,15 @@ class GamepadNavigator(NavigatorCore):
                         pad.tracker.release_all()
                     repeat.clear()
                     hold.clear()
+                    # The pause gesture too: the buttons that opened the pause
+                    # menu were let go while it showed, unseen by the trigger,
+                    # which would otherwise fire on half the chord (issue 957).
+                    self.pause_trigger.reset()
                 was_suspended = suspended
 
                 timeout = IDLE_POLL
-                for deadline in (repeat.next_deadline(), hold.next_deadline()):
+                for deadline in (repeat.next_deadline(), hold.next_deadline(),
+                                 self.pause_trigger.next_deadline(time.monotonic())):
                     if deadline is not None:
                         timeout = min(timeout, deadline)
                 try:
@@ -467,6 +506,7 @@ class GamepadNavigator(NavigatorCore):
                             pad.tracker.release_all()
                         repeat.clear()
                         hold.clear()
+                        self.pause_trigger.reset()
                     was_suspended = suspended
 
                 for fd in readable:
@@ -485,6 +525,7 @@ class GamepadNavigator(NavigatorCore):
                         self._emit(self._on_action, action)
                     for action in hold.due_actions():
                         self._emit(self._on_action, f"{action}_hold")
+                self._watch_tick(suspended)
         finally:
             self._close_all(pads)
 

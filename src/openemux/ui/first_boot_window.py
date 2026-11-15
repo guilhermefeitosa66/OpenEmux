@@ -38,9 +38,14 @@ class FirstBootWindow(Adw.ApplicationWindow):
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         body.set_halign(Gtk.Align.CENTER)
         body.set_size_request(420, -1)
+        # The ``bp-*`` classes do nothing on the desktop: they only match under
+        # the ``big-picture`` class the application puts on this window when
+        # the app opens straight into the couch layout (issue 914).
+        body.add_css_class("bp-first-boot")
 
         self.subtitle_label = Gtk.Label(label=tr(self.locale, "bootstrap.subtitle.initial"))
         self.subtitle_label.add_css_class("dim-label")
+        self.subtitle_label.add_css_class("bp-body")
         self.subtitle_label.set_wrap(True)
         self.subtitle_label.set_justify(Gtk.Justification.CENTER)
         body.append(self.subtitle_label)
@@ -54,6 +59,7 @@ class FirstBootWindow(Adw.ApplicationWindow):
         self.status_label = Gtk.Label(label="")
         self.status_label.add_css_class("caption")
         self.status_label.add_css_class("dim-label")
+        self.status_label.add_css_class("bp-note")
         self.status_label.set_wrap(True)
         self.status_label.set_justify(Gtk.Justification.CENTER)
         body.append(self.status_label)

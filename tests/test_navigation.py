@@ -49,7 +49,50 @@ class ResolveTests(unittest.TestCase):
         # The pad's X opens the game details (issue 913).
         self.assertEqual(resolve(CTX_GRID, "context"), ("details",))
         # Guide and Start work from anywhere in the main window (issue 914).
-        self.assertEqual(resolve(CTX_GRID, "tv_mode"), ("tv-mode",))
+        self.assertEqual(resolve(CTX_GRID, "big_picture"), ("big-picture",))
+
+    def test_big_picture_contexts(self):
+        from openemux.ui.navigation import (
+            CTX_BP_GAMES, CTX_BP_GRID, CTX_BP_OSK, CTX_BP_PAGE, CTX_BP_PANE, CTX_BP_RAIL, CTX_BP_SHELF,
+            CTX_BP_TEXT,
+        )
+
+        # The pad means the same thing on every page of the couch layout.
+        for context in (CTX_BP_SHELF, CTX_BP_GAMES, CTX_BP_PANE, CTX_BP_RAIL, CTX_BP_PAGE, CTX_BP_GRID,
+                        CTX_BP_TEXT, CTX_BP_OSK):
+            self.assertEqual(resolve(context, "up"), ("move", "up"))
+            self.assertEqual(resolve(context, "big_picture"), ("big-picture",))
+        for context in (CTX_BP_SHELF, CTX_BP_GAMES, CTX_BP_PANE, CTX_BP_RAIL, CTX_BP_PAGE, CTX_BP_GRID):
+            self.assertEqual(resolve(context, "back"), ("bp-back",))
+            # Android's View button searches (issue 957).
+            self.assertEqual(resolve(context, "menu"), ("bp-search",))
+            self.assertEqual(resolve(context, "prev_console"), ("bp-console-delta", -1))
+            self.assertEqual(resolve(context, "next_console"), ("bp-console-delta", 1))
+        for context in (CTX_BP_SHELF, CTX_BP_GAMES, CTX_BP_PANE, CTX_BP_RAIL, CTX_BP_PAGE):
+            self.assertEqual(resolve(context, "confirm"), ("activate",))
+            self.assertEqual(resolve(context, "search"), ("bp-search",))
+        # On a game: A shows it, X is the favorite, Y its options, Menu selects.
+        self.assertEqual(resolve(CTX_BP_GRID, "confirm"), ("bp-details",))
+        self.assertEqual(resolve(CTX_BP_GRID, "confirm_hold"), ("selection-enter",))
+        self.assertEqual(resolve(CTX_BP_GRID, "context"), ("favorite",))
+        self.assertEqual(resolve(CTX_BP_GRID, "favorite"), ("bp-options",))
+        self.assertEqual(resolve(CTX_BP_GRID, "search"), ("selection-enter",))
+        self.assertEqual(resolve(CTX_BP_GRID, "range"), ("noop",))
+        # A page takes X and Y for itself.
+        self.assertEqual(resolve(CTX_BP_PAGE, "context"), ("bp-page-action", "context"))
+        self.assertEqual(resolve(CTX_BP_PAGE, "favorite"), ("bp-page-action", "favorite"))
+        self.assertEqual(resolve(CTX_BP_SHELF, "range"), ("noop",))
+        # The search keyboard: X, Y, Start, B and LT are its own.
+        for action in ("back", "context", "favorite", "search", "range"):
+            self.assertEqual(resolve(CTX_BP_OSK, action), ("bp-osk", action))
+        self.assertEqual(resolve(CTX_BP_OSK, "confirm"), ("activate",))
+        self.assertEqual(resolve(CTX_BP_OSK, "prev_console"), ("noop",))
+        # The text keyboard page: the same shortcuts go to the page, B pops.
+        self.assertEqual(resolve(CTX_BP_TEXT, "confirm"), ("activate",))
+        self.assertEqual(resolve(CTX_BP_TEXT, "back"), ("bp-back",))
+        for action in ("context", "favorite", "search", "range"):
+            self.assertEqual(resolve(CTX_BP_TEXT, action), ("bp-page-action", action))
+        self.assertEqual(resolve(CTX_BP_TEXT, "prev_console"), ("noop",))
         self.assertEqual(resolve(CTX_SIDEBAR, "search"), ("osk",))
         self.assertEqual(resolve(CTX_GRID, "favorite"), ("favorite",))
 

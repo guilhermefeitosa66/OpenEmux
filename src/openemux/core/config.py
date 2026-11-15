@@ -21,6 +21,8 @@ from openemux.core.platform import (
 from openemux.core.state_recovery import quarantine_state_file
 from openemux.core.library_view import (
     DEFAULT_SORT_ORDER,
+    DEFAULT_VIEW_MODE,
+    VIEW_MODES,
     DEFAULT_ZOOM,
     DISPLAY_KEYS,
     normalize_display_value,
@@ -45,10 +47,12 @@ from openemux.core.cores import CoreConfigStore
 from openemux.core.cartridge_colors import CartridgeColorStore
 from openemux.core.core_options import CoreOptionsStore
 from openemux.core.retroachievements import AchievementsStore
+from openemux.core.retroarch_log import clamp_volume_db
 from openemux.core.session_store import SessionStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
+from openemux.core.pause_trigger import normalize_mode as normalize_pause_trigger
 from openemux.core.update_checker import (
     DEFAULT_API_URL as DEFAULT_UPDATE_API_URL,
     DEFAULT_DOWNLOAD_URL as DEFAULT_UPDATE_DOWNLOAD_URL,
@@ -433,6 +437,11 @@ DEFAULT_CONFIG = {
         "translucent_game_bar": False,
         # Games open filling the screen instead of in a window (issue #505).
         "start_games_fullscreen": False,
+        # The couch layout: whether OpenEmux opens in it, and how big its
+        # text is drawn, as a percentage of the design's.
+        "big_picture": {"start": False, "text_size": 100},
+        # Big Picture's own view mode and the in-game pause menu's gesture
+        # (issue 957) live in the same mapping, read with their defaults.
     },
     # A picture beside 4:3 games on a wide window, per console (issue #507).
     # A console absent from console_overrides has none; custom_names keeps
@@ -486,6 +495,28 @@ DEFAULT_CONFIG = {
         }
     },
 }
+
+
+#: Big Picture's "Text size": a percentage of the design's, in whole steps.
+DEFAULT_BIG_PICTURE_TEXT_SIZE = 100
+MIN_BIG_PICTURE_TEXT_SIZE = 80
+MAX_BIG_PICTURE_TEXT_SIZE = 150
+BIG_PICTURE_TEXT_SIZE_STEP = 10
+
+
+def normalize_big_picture_view_mode(value):
+    """Big Picture's view mode: one of the library's, cartridges by default."""
+    return value if value in VIEW_MODES else DEFAULT_VIEW_MODE
+
+
+def normalize_big_picture_text_size(value):
+    """A stored text size back into its range, rounded to a step."""
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_BIG_PICTURE_TEXT_SIZE
+    size = max(MIN_BIG_PICTURE_TEXT_SIZE, min(MAX_BIG_PICTURE_TEXT_SIZE, size))
+    return int(round(size / BIG_PICTURE_TEXT_SIZE_STEP) * BIG_PICTURE_TEXT_SIZE_STEP)
 
 
 def _merge_defaults(defaults, data):
@@ -1150,6 +1181,29 @@ class ConfigManager:
         self.save_config()
         return retroarch["auto_resume"]
 
+    def get_game_volume_db(self):
+        """The volume the last game ended at, in dB, or ``None`` (issue 939).
+
+        ``None`` until a game has changed the volume once: then no launch
+        names one, and the user's own retroarch.cfg value still applies.
+        Deliberately not ``master_volume_db``, which belonged to the retired
+        game window and is dropped on load (RETIRED_RUNTIME_KEYS).
+        """
+        value = self.config.get("runtime", {}).get("retroarch", {}).get("game_volume_db")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return clamp_volume_db(value)
+
+    def set_game_volume_db(self, value):
+        """Remember ``value`` (dB) for the next launch; saves only on a change."""
+        value = round(clamp_volume_db(value), 1)
+        retroarch = self.config.setdefault("runtime", {}).setdefault("retroarch", {})
+        if retroarch.get("game_volume_db") == value:
+            return value
+        retroarch["game_volume_db"] = value
+        self.save_config()
+        return value
+
     def set_show_log_panel(self, enabled):
         ui = self.config.setdefault("ui", {})
         ui["show_log_panel"] = bool(enabled)
@@ -1212,6 +1266,43 @@ class ConfigManager:
         ui = self.config.setdefault("ui", {})
         ui["show_welcome_on_startup"] = bool(enabled)
         self.save_config()
+
+    def get_big_picture_settings(self):
+        """The couch layout's own settings: opening in it, and its text size."""
+        big_picture = _mapping(self.config.get("ui", {}).get("big_picture"))
+        return {
+            "start": bool(big_picture.get("start", False)),
+            "text_size": normalize_big_picture_text_size(
+                big_picture.get("text_size", DEFAULT_BIG_PICTURE_TEXT_SIZE)
+            ),
+            "view_mode": normalize_big_picture_view_mode(big_picture.get("view_mode")),
+            "pause_trigger": normalize_pause_trigger(big_picture.get("pause_trigger")),
+        }
+
+    def set_big_picture_view_mode(self, mode):
+        """Big Picture's games view (issue 957); the desktop's scopes keep theirs."""
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["view_mode"] = normalize_big_picture_view_mode(mode)
+        self.save_config_soon()
+        return big_picture["view_mode"]
+
+    def set_big_picture_pause_trigger(self, mode):
+        """What opens the pause menu during a game (issue 957)."""
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["pause_trigger"] = normalize_pause_trigger(mode)
+        self.save_config_soon()
+        return big_picture["pause_trigger"]
+
+    def set_big_picture_start(self, enabled):
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["start"] = bool(enabled)
+        self.save_config_soon()
+
+    def set_big_picture_text_size(self, size):
+        big_picture = self.config.setdefault("ui", {}).setdefault("big_picture", {})
+        big_picture["text_size"] = normalize_big_picture_text_size(size)
+        self.save_config_soon()
+        return big_picture["text_size"]
 
     def get_share_device_name(self):
         """The name Share nearby shows to other devices (issue #587).

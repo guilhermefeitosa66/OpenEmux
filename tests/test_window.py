@@ -2250,8 +2250,14 @@ class TheDialogsAndMenusTests(WindowCase):
         self.assertEqual(model.get_n_items(), 1)
         return model.get_item_link(0, "section")
 
-    def test_the_primary_menu_offers_the_five_entries(self):
-        self.assertEqual(self.app_section().get_n_items(), 5)
+    def test_the_primary_menu_offers_the_six_entries(self):
+        # Big Picture leads them (issue 914): the couch layout, one entry
+        # from the menu for a mouse user who does not know F11.
+        section = self.app_section()
+        self.assertEqual(section.get_n_items(), 6)
+        self.assertEqual(
+            section.get_item_attribute_value(0, "action", None).get_string(), "win.big-picture"
+        )
 
     def test_the_import_button_is_a_split_button(self):
         # One click still opens the file picker; the arrow holds the rest
@@ -2490,66 +2496,162 @@ class TheGameAndInputHandoffTests(WindowCase):
             self.win.on_launch_game(rom)
         launch.assert_called_once_with(rom)
 
-    def test_tv_mode_goes_fullscreen_without_the_sidebar_and_scales_up(self):
-        # Issue 914: F11 or the pad's Guide button.
-        self.assertFalse(self.win.tv_mode)
+    def test_big_picture_swaps_the_layout_and_scales_up(self):
+        # Issue 914: F11, the Guide button, the header button or the menu.
+        # The shell itself is covered in tests/test_bigpicture_shell.py.
+        self.assertFalse(self.win.big_picture)
         self.config.set_zoom(1.0)
         with mock.patch.object(self.win, "fullscreen") as full, mock.patch.object(
             self.win, "unfullscreen"
         ) as unfull:
-            self.assertTrue(self.win.toggle_tv_mode())
-            self.assertTrue(self.win.has_css_class("tv-mode"))
-            self.assertTrue(self.win.split_view.get_collapsed())
-            self.assertEqual(self.win._zoom, window_module.TV_MODE_MIN_ZOOM)
+            self.assertTrue(self.win.toggle_big_picture())
+            self.assertTrue(self.win.has_css_class("big-picture"))
+            self.assertEqual(self.win.mode_stack.get_visible_child_name(), "big-picture")
+            # Big Picture's own zoom, whatever the desktop's: the largest, 200%
+            # (issues 953, 975); zooming does nothing there and never touches
+            # the desktop's setting.
+            self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
+            self.assertEqual(window_module.BIG_PICTURE_ZOOM, 2.0)
+            self.win._step_zoom(-1)
+            self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
+            self.assertEqual(self.config.get_display_settings(self.win._current_scope())["zoom"], 1.0)
+            # Games open fullscreen while the mode is on.
+            launcher = self.win.runtime_manager.retroarch_launcher
+            self.assertTrue(launcher.force_fullscreen)
             full.assert_called_once()
-            self.assertIn(self.said("toast.tv_mode.on"), self.toasts)
-            self.assertFalse(self.win.toggle_tv_mode())
+            self.assertIn(self.said("big_picture.toast.on"), self.toasts)
+            self.assertFalse(self.win.toggle_big_picture())
             unfull.assert_called_once()
-        self.assertFalse(self.win.has_css_class("tv-mode"))
+            self.assertFalse(launcher.force_fullscreen)
+            self.assertEqual(self.win._zoom, 1.0)
+        self.assertFalse(self.win.has_css_class("big-picture"))
+        self.assertEqual(self.win.mode_stack.get_visible_child_name(), "desktop")
         self.assertEqual(self.win._zoom, 1.0)
 
-    def test_escape_leaves_tv_mode_before_it_looks_for_the_sidebar(self):
-        # With the split view collapsed, stepping back to the sidebar would
-        # show it as a full-screen page with no games on it.
+    def _toggle_big_picture_quietly(self):
+        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
+            self.win, "unfullscreen"
+        ):
+            return self.win.toggle_big_picture()
+
+    def test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back(self):
+        # Issue 953: the page on screen is rebuilt at 200% on the way in, in
+        # cover and cartridge view alike, and at the desktop's zoom on the
+        # way out; the saved zoom is never written.
+        for mode in ("cover", "cartridge"):
+            with self.subTest(mode=mode):
+                self.config.set_view_mode(mode)
+                self.config.set_zoom(0.75)
+                self.win.sidebar.select("SFC")
+                self.win._reload_current_page()
+                self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.75)
+                self.assertTrue(self._toggle_big_picture_quietly())
+                grid = self.win.pages.grid_for("SFC")
+                self.assertEqual(grid.zoom, window_module.BIG_PICTURE_ZOOM)
+                self.assertEqual(grid.zoom, 2.0)
+                self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.75)
+                self.assertFalse(self._toggle_big_picture_quietly())
+                self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.75)
+                self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.75)
+
+    def test_a_page_opened_in_big_picture_follows_the_mode_both_ways(self):
+        self.config.set_zoom(1.25)
+        self.win.sidebar.select("SFC")
+        self._toggle_big_picture_quietly()
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.pages.grid_for("FC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self._toggle_big_picture_quietly()
+        self.win.sidebar.select("SFC")
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.pages.grid_for("FC").zoom, 1.25)
+
+    def test_a_scope_with_its_own_zoom_still_gets_big_pictures(self):
+        self.config.set_scope_display("SFC", "zoom", 0.5)
+        self.win.sidebar.select("SFC")
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.5)
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.5)
+
+    def test_starting_in_big_picture_opens_the_games_at_its_zoom(self):
+        self.config.set_zoom(1.0)
+        self.win.sidebar.select("SFC")
+        with mock.patch.object(self.win, "fullscreen"):
+            self.assertEqual(self.win._enter_big_picture_at_start(), GLib.SOURCE_REMOVE)
+        self.assertTrue(self.win.big_picture)
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, window_module.BIG_PICTURE_ZOOM)
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.pages.grid_for("SFC").zoom, 1.0)
+
+    def test_leaving_big_picture_puts_the_zoom_stepper_back_on_the_desktop(self):
+        # LB/RB in the mode syncs the header stepper to 200%; leaving must
+        # not leave it there while the grid is back at the desktop's zoom.
+        self.config.set_zoom(0.75)
+        self.win.sidebar.select("SFC")
+        self._toggle_big_picture_quietly()
+        self.win.sidebar.select("FC")
+        self.assertEqual(self.win.zoom_label.get_label(), "200%")
+        self._toggle_big_picture_quietly()
+        self.assertEqual(self.win.zoom_label.get_label(), "75%")
+        self.assertTrue(self.win.zoom_in_button.get_sensitive())
+
+    def test_the_big_picture_layout_is_a_copy_of_the_saved_one(self):
+        self.config.set_zoom(1.0)
+        self.win._big_picture = True
+        try:
+            settings = self.win.display_settings_for("SFC")
+        finally:
+            self.win._big_picture = False
+        self.assertEqual(settings["zoom"], window_module.BIG_PICTURE_ZOOM)
+        self.assertEqual(self.win.display_settings_for("SFC")["zoom"], 1.0)
+        self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 1.0)
+
+    def test_escape_in_big_picture_is_b_and_never_leaves_the_mode(self):
         with mock.patch.object(self.win, "fullscreen"), mock.patch.object(self.win, "unfullscreen"):
-            self.win.toggle_tv_mode()
-            with mock.patch.object(
+            self.win.toggle_big_picture()
+            shell = self.win.big_picture_shell
+            with mock.patch.object(shell, "handle_back", return_value=True) as back:
+                self.assertTrue(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
+            back.assert_called_once()
+            self.assertTrue(self.win.big_picture)
+            # At home there is nothing to go back to, and still no way out.
+            with mock.patch.object(shell, "handle_back", return_value=False), mock.patch.object(
                 self.win.navigation, "escape_to_sidebar", return_value=True
             ) as to_sidebar:
                 self.assertTrue(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
             to_sidebar.assert_not_called()
-            self.assertFalse(self.win.tv_mode)
+            self.assertTrue(self.win.big_picture)
+            self.win.toggle_big_picture()
             with mock.patch.object(self.win.navigation, "escape_to_sidebar", return_value=False):
                 self.assertFalse(self.win._on_window_escape(None, Gdk.KEY_Escape, 0, 0))
 
-    def test_the_capture_handler_leaves_tv_mode_before_the_split_view_pops(self):
-        # Collapsed, the split view pops its content page on Escape before the
-        # bubble handler runs; the capture handler gets there first.
-        with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
-            self.win, "unfullscreen"
-        ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None):
-            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
-            self.win.toggle_tv_mode()
-            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_a, 0, 0))
-            self.assertTrue(self.win.tv_mode)
-            self.assertTrue(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
-            self.assertFalse(self.win.tv_mode)
-
-    def test_the_capture_handler_leaves_a_dialog_a_popover_and_the_search_box_their_escape(self):
+    def test_the_capture_handler_takes_escape_only_in_big_picture(self):
+        # The navigation views inside the mode would pop their pages on
+        # Escape before a bubble handler ran; the capture handler gets there
+        # first, and leaves anything that owns its Escape alone.
         with mock.patch.object(self.win, "fullscreen"), mock.patch.object(
             self.win, "unfullscreen"
         ), mock.patch.object(self.win.navigation, "_active_popover", return_value=None) as popover:
-            self.win.toggle_tv_mode()
+            self.assertFalse(self.win._on_big_picture_key(None, Gdk.KEY_Escape, 0, 0))
+            self.win.toggle_big_picture()
+            self.assertFalse(self.win._on_big_picture_key(None, Gdk.KEY_a, 0, 0))
+            self.assertTrue(self.win.big_picture)
             with mock.patch.object(self.win, "get_visible_dialog", return_value=mock.Mock()):
-                self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+                self.assertFalse(self.win._on_big_picture_key(None, Gdk.KEY_Escape, 0, 0))
             popover.return_value = mock.Mock()
-            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
+            self.assertFalse(self.win._on_big_picture_key(None, Gdk.KEY_Escape, 0, 0))
             popover.return_value = None
-            self.win.search_bar.set_search_mode(True)
-            self.assertFalse(self.win._on_tv_mode_escape(None, Gdk.KEY_Escape, 0, 0))
-            self.win.search_bar.set_search_mode(False)
-            self.assertTrue(self.win.tv_mode)
-            self.win.toggle_tv_mode()
+            self.assertTrue(self.win.big_picture)
+            # A button capture owns Escape (it cancels the capture).
+            self.win.input_capture_active = True
+            self.assertFalse(self.win._on_big_picture_key(None, Gdk.KEY_Escape, 0, 0))
+            self.win.input_capture_active = False
+            # Taken, as B: on the home page that is nothing, and still the mode.
+            self.assertTrue(self.win._on_big_picture_key(None, Gdk.KEY_Escape, 0, 0))
+            self.assertTrue(self.win.big_picture)
+            self.win.toggle_big_picture()
+            self.assertFalse(self.win.big_picture)
 
     def test_the_on_screen_keyboard_opens_over_a_searchable_page(self):
         from openemux.ui.onscreen_keyboard import OnScreenKeyboard
@@ -3208,6 +3310,16 @@ class TheRemainingCornersTests(WindowCase):
 
     def test_a_real_monitor_gives_a_share_of_itself(self):
         self.assertGreater(self.win._default_window_size()[0], 0)
+
+    def test_the_window_opens_maximised_over_its_default_size(self):
+        with mock.patch.object(window_module.OpenEmuxWindow, "maximize") as maximize:
+            win = window_module.OpenEmuxWindow(self.app)
+        try:
+            maximize.assert_called_once_with()
+            self.assertEqual(tuple(win.get_default_size()), win._default_window_size())
+        finally:
+            win.emit("close-request")
+            win.destroy()
 
     def test_a_landing_view_no_sidebar_row_matches_falls_back_to_the_first(self):
         with mock.patch.object(self.win.sidebar, "select", return_value=False):

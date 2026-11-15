@@ -88,6 +88,17 @@
   </keywords>
 
   <releases>
+    <release version="1.24.0" date="2026-11-15">
+      <description>
+        <p>Big Picture: a full-screen layout for the couch, a TV and a controller.</p>
+        <ul>
+          <li>A shelf of consoles, a large game grid, a page for each game and a pause menu, all driven by the controller</li>
+          <li>A QWERTY on-screen keyboard and a file browser for importing with the controller</li>
+          <li>Sharp pixel-art console icons</li>
+          <li>The volume set during a game is remembered, and the window opens maximised</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.23.5" date="2026-11-13">
       <description>
         <p>The website moved to its own address, part of the Libre Apps foundation.</p>

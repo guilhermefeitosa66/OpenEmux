@@ -45,6 +45,12 @@ class TaskBanner:
     def __len__(self):
         return len(self._tasks)
 
+    def current_task(self):
+        """The task the banner shows, or None: the first one registered."""
+        if not self._tasks:
+            return None
+        return next(iter(self._tasks.values()))
+
     def begin(self, kind, label, total=0, on_cancel=None, cancel_label=None):
         """Register a background task. ``on_cancel`` makes it interruptible.
 

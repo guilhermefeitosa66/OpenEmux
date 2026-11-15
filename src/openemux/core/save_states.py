@@ -120,6 +120,25 @@ def has_auto_state(states_dir, rom_path):
     return False
 
 
+def stems_with_states(states_dir):
+    """Every content stem that has at least one user slot in ``states_dir``.
+
+    One listing of the console directory and its per-core subdirectories,
+    for a whole library at once: asking ``list_states`` per game walks the
+    same directories once per game, which a filter count over a console of
+    a few hundred games cannot afford (issue 957).
+    """
+    directory = Path(states_dir)
+    if not directory.is_dir():
+        return set()
+    stems = set()
+    for scan_dir in _scan_dirs(directory):
+        for path in _entries(scan_dir):
+            if _slot_for(path) is not None:
+                stems.add(path.stem)
+    return stems
+
+
 def slot_entries(states_dir, rom_path, max_slot=9):
     """``(slot, mtime-or-None)`` for every slot up to ``max_slot``.
 
