@@ -123,7 +123,6 @@ class TextModeTests(unittest.TestCase):
         self.assertEqual(osk.text, "")
 
 
-
 #: The A-Z boards this layout replaced: nothing they could type may be lost.
 _OLD_SEARCH = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ-.'&"
 _OLD_TEXT = "1234567890-_@abcdefghijklmnopqrstuvwxyz.,:/!?'\"()&#+"

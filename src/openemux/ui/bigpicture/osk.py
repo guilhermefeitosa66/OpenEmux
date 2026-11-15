@@ -98,7 +98,9 @@ class OnScreenKeyboard(Gtk.Box):
         #: The keys row by row, the function row last: what the pad walks.
         self.rows = []
         # Half-key columns: a key spans two, so a row can start half a key in.
-        grid = Gtk.Grid(row_spacing=10, column_spacing=5)
+        # The spacing between columns is also the gap between two keys, so it
+        # stays at the 10 px the A-Z grid had.
+        grid = Gtk.Grid(row_spacing=10, column_spacing=10)
         grid.set_halign(Gtk.Align.FILL)
         grid.set_column_homogeneous(True)
         for row_index, row in enumerate(rows):
@@ -278,8 +280,10 @@ class OnScreenKeyboard(Gtk.Box):
         """The D-pad over the board. True when the move is the keyboard's to make.
 
         Up and Down take the key of the next row nearest under the one
-        left, the same index on a tie, so Down then Up comes back to it;
-        Left and Right wrap inside the row. At the top and at the function
+        left, the same index on a tie, so Down then Up between two letter
+        rows comes back to it (the function row is mapped by each key's
+        share of the row, so a trip through it lands near, not always on,
+        the key it left); Left and Right wrap inside the row. At the top and at the function
         row the focus holds still rather than escaping to the page behind.
         """
         step = _STEPS.get(direction)
