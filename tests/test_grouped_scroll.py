@@ -303,9 +303,6 @@ class TheAllPageTests(WindowCase):
 
     def setUp(self):
         super().setUp()
-        # The window opens maximised (issue 965), and a maximised window keeps
-        # its size whatever the default says: these tests resize it.
-        self.win.unmaximize()
         self.win.set_default_size(1400, 700)
         self.win.sidebar.select(ALL_CONSOLES_ID)
         self.show()
