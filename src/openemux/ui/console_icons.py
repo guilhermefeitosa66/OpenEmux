@@ -17,6 +17,9 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gsk", "4.0")
+gi.require_version("Graphene", "1.0")
 from gi.repository import Gdk, GLib, Graphene, Gsk, Gtk
 
 from openemux.core.systems import get_icon_name
