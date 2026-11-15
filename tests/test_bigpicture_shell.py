@@ -302,7 +302,7 @@ class TheShelf(BigPictureCase):
         from gi.repository import Pango
 
         from openemux.core.systems import SYSTEMS, get_system_display_name
-        from openemux.ui.bigpicture.shelf import COLUMNS
+        from openemux.ui.bigpicture.shelf import COLUMNS, GRID_SPACING
 
         label = self.shell.shelf.cards[0].name_label
         font = label.get_pango_context().get_font_description().copy()
@@ -312,7 +312,7 @@ class TheShelf(BigPictureCase):
         for width, height in ((1920, 1080), (2560, 1440)):
             scale = theme.scale_for(height)
             s = lambda name, scale=scale: theme.px(name, scale)  # noqa: E731
-            content = width - s("rail_width") - s("safe_x") - 24 * (COLUMNS - 1)
+            content = width - s("rail_width") - s("safe_x") - GRID_SPACING * (COLUMNS - 1)
             column = content // COLUMNS - 2 * (s("gap") * 3 // 2) - s("shelf_art") - s("shelf_gap")
             font.set_absolute_size(s("shelf_name") * Pango.SCALE)
             for name in names:

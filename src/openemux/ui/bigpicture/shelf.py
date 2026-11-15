@@ -25,6 +25,8 @@ from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: Cards in a row, as on Android's landscape shelf.
 COLUMNS = 3
+# The space between the cards, both ways (unscaled).
+GRID_SPACING = 24
 
 
 def pixel_scale(space, size):
@@ -162,8 +164,8 @@ class ShelfPage(BigPage):
         consoles.add_css_class("bp-section-title")
         column.append(consoles)
         self.grid = Gtk.Grid()
-        self.grid.set_column_spacing(24)
-        self.grid.set_row_spacing(24)
+        self.grid.set_column_spacing(GRID_SPACING)
+        self.grid.set_row_spacing(GRID_SPACING)
         self.grid.set_column_homogeneous(True)
         self.grid.set_margin_bottom(24)
         column.append(self.grid)
@@ -269,4 +271,4 @@ class ShelfPage(BigPage):
         ]
 
 
-__all__ = ["ShelfCard", "ShelfPage", "PixelArt", "COLUMNS", "pixel_rect", "pixel_scale"]
+__all__ = ["ShelfCard", "ShelfPage", "PixelArt", "COLUMNS", "GRID_SPACING", "pixel_rect", "pixel_scale"]
