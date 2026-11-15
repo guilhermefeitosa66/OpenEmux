@@ -75,7 +75,7 @@ class BigPictureShell(Gtk.Box):
         self._color_scheme = None
         self.tab = TAB_LIBRARY
 
-        self.rail = NavRail(self.t, self.switch_tab)
+        self.rail = NavRail(self.t, self.switch_tab, lambda: self.win.toggle_big_picture())
         self.append(self.rail)
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

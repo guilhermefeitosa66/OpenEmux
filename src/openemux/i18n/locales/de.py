@@ -1177,7 +1177,7 @@ TRANSLATIONS = {
     "big_picture.settings.controllers": "Controller",
     "big_picture.settings.updates": "Nach Updates suchen",
     "big_picture.settings.about": "Info und Lizenzen",
-    "big_picture.settings.desktop": "Zurück zum Desktop",
+    "big_picture.tab.desktop": "Zurück zum Desktop",
     "big_picture.settings.choose": "Wähle links eine Einstellung",
     "big_picture.settings.bios.missing": "{count} Konsolen brauchen Dateien",
     "big_picture.settings.bios.ok": "Jede Konsole hat ihre Dateien",

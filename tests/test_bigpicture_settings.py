@@ -199,10 +199,14 @@ class ThePage(SettingsCase):
         self.press("back")
         self.assertIs(self.visible_page(), self.shell.shelf)
         self.assertTrue(self.win.big_picture)
-        # Back to desktop is the list's last entry.
-        with mock.patch.object(self.win, "toggle_big_picture") as toggle:
-            page.desktop_row.emit("clicked")
-        toggle.assert_called_once()
+        # The way out is on the rail now (issue 978), not in the list.
+        self.assertFalse(hasattr(page, "desktop_row"))
+        labels = []
+        child = page.entry_column.get_first_child()
+        while child is not None:
+            labels.append(child)
+            child = child.get_next_sibling()
+        self.assertIs(labels[-1], page.entries["about"])
 
     def test_the_shoulders_walk_the_tabs_from_the_list(self):
         page = self.open_settings()

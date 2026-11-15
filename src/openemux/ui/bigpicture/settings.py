@@ -4,7 +4,7 @@ Two columns, Android's (issue 957). On the left the BIOS card, then the
 entries under their headings -- Appearance (Theme, Language), Achievements,
 Artwork, one entry per console ("Snes9x · CRT Geom" under it), Share
 nearby, and General (ROM folder, Controllers, Check for updates, System,
-About) -- with Back to desktop last; LB and RB walk the tabs. A opens an
+About); LB and RB walk the tabs. The way out is on the rail (issue 978). A opens an
 entry on the right, "Choose a setting on the left" until one is; B goes
 back to the list. On the right the rows of that entry, every one a
 full-width card the D-pad walks: A flips a switch in place, opens a
@@ -1569,7 +1569,7 @@ class SettingsPage(BigPage):
 
     # -- the left column --------------------------------------------------------------------
     def _build_entries(self):
-        """The BIOS card, the groups and their entries, Back to desktop last."""
+        """The BIOS card, then the groups and their entries."""
         t = self.t
         clear_children(self.entry_column)
         self.entries = {}
@@ -1590,11 +1590,6 @@ class SettingsPage(BigPage):
                     # The Flatpak is updated by its remote, not by the app.
                     continue
                 self._add_entry(name, t(title_key))
-        desktop = Row(t("big_picture.settings.desktop"), kind=ROW_ACTION, icon_name="video-display-symbolic",
-                      on_activate=lambda: self.win.toggle_big_picture())
-        desktop.set_margin_top(14)
-        self.entry_column.append(desktop)
-        self.desktop_row = desktop
         self.sync_entries()
 
     def _consoles(self):
