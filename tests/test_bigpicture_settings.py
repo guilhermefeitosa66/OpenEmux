@@ -201,12 +201,7 @@ class ThePage(SettingsCase):
         self.assertTrue(self.win.big_picture)
         # The way out is on the rail now (issue 978), not in the list.
         self.assertFalse(hasattr(page, "desktop_row"))
-        labels = []
-        child = page.entry_column.get_first_child()
-        while child is not None:
-            labels.append(child)
-            child = child.get_next_sibling()
-        self.assertIs(labels[-1], page.entries["about"])
+        self.assertIs(list(_children(page.entry_column))[-1], page.entries["about"])
 
     def test_the_shoulders_walk_the_tabs_from_the_list(self):
         page = self.open_settings()

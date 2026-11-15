@@ -188,9 +188,15 @@ class TheTabs(BigPictureCase):
         shell.switch_tab("settings", focus=False)
         self.pump()
         self.assertTrue(shell.rail.focus_current())
+        glyphs = self.win.navigation.glyphs()
+        self.assertEqual(shell.hints_for(navigation.CTX_BP_RAIL, glyphs)[0][1], self.said("big_picture.hints.open"))
         self.press("down")
         self.assertIs(self.focus_widget(), shell.rail.desktop)
         self.assertEqual(self.win.navigation.current_context(), navigation.CTX_BP_RAIL)
+        # A says it leaves, not "Open", and the bar is redrawn on the way in.
+        self.assertEqual(shell.hints_for(navigation.CTX_BP_RAIL, glyphs)[0][1], self.said("big_picture.tab.desktop"))
+        labels = [slot[2].get_label() for slot in shell.hint_bar.slots if slot[0].get_visible()]
+        self.assertIn(self.said("big_picture.tab.desktop"), labels)
         self.assertEqual(shell.tab, "settings")
         self.press("confirm")
         # A button's activate clicks it a moment later, by the clock.
