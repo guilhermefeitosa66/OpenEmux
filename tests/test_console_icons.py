@@ -150,6 +150,11 @@ class ThePixelArtGeometryTests(unittest.TestCase):
     def test_a_scale_below_one_counts_as_one(self):
         self.assertEqual(console_icons.pixel_icon_geometry(40, 40, 32, 0), (4, 4, 32, True))
 
+    def test_a_fractional_scale_counts_its_real_physical_pixels(self):
+        # 16 logical at 1.25 = 20 physical: the 32-px art would have to shrink,
+        # so the 16-px art at 1x, 2 physical pixels in.
+        self.assertEqual(console_icons.pick_pixel_art(16, 16, [32, 16], 1.25), (1, 1.6, 1.6, 12.8, True))
+
     def test_the_seam_is_an_eighth_of_the_cell_and_never_nothing(self):
         self.assertEqual(console_icons.soft_grid_seam(4), 1)
         self.assertEqual(console_icons.soft_grid_seam(8), 1)
@@ -199,6 +204,13 @@ class TheSoftGridTests(unittest.TestCase):
         first = console_icons.soft_grid_texture(self.art, 4)
         self.assertIs(console_icons.soft_grid_texture(self.art, 4), first)
         self.assertIsNot(console_icons.soft_grid_texture(self.art, 5), first)
+
+    def test_only_the_latest_cells_of_an_art_are_kept(self):
+        first = console_icons.soft_grid_texture(self.art, 4)
+        console_icons.soft_grid_texture(self.art, 5)
+        console_icons.soft_grid_texture(self.art, 6)
+        self.assertEqual(sorted(console_icons._GRIDDED[self.art]), [5, 6])
+        self.assertIsNot(console_icons.soft_grid_texture(self.art, 4), first)
 
 
 @needs_display
@@ -250,6 +262,21 @@ class TheRendererTests(unittest.TestCase):
         node, grid = self._draw(art, 10, 10)
         self.assertEqual(node.get_bounds().get_width(), 10)
         grid.assert_not_called()
+
+    def test_no_art_at_all_draws_nothing(self):
+        node, _grid = self._draw(console_icons.ConsolePixelArt([None]), 16, 16)
+        self.assertIsNone(node)
+
+    def test_the_scale_is_the_surface_s_not_the_rounded_factor(self):
+        art = console_icons.ConsolePixelArt([self.big, self.small])
+        native = mock.Mock()
+        native.get_surface.return_value.get_scale.return_value = 1.25
+        with mock.patch.object(art, "get_native", return_value=native):
+            self.assertEqual(art._device_scale(), 1.25)
+        native.get_surface.return_value = None
+        with mock.patch.object(art, "get_native", return_value=native), \
+                mock.patch.object(art, "get_scale_factor", return_value=2):
+            self.assertEqual(art._device_scale(), 2)
 
     def test_no_room_draws_nothing(self):
         node, _grid = self._draw(console_icons.ConsolePixelArt([self.big]), 0, 0)

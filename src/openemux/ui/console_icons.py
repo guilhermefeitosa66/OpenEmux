@@ -160,17 +160,19 @@ def pixel_icon_geometry(width, height, native, scale=1):
 
     ``(x, y, size, nearest)`` in logical pixels: the largest whole multiple of
     ``native`` that fits the slot *in physical pixels* (``scale`` is the
-    widget's scale factor), nearest-neighbour, so every source pixel stays a
-    sharp square (issues 962, 966). A slot smaller than the art draws it at
-    the slot's size with the smooth filter instead: nearest-neighbour
-    shrinking drops pixel rows unevenly. Centred on whole physical pixels.
+    surface's scale, fractional ones included), nearest-neighbour, so every
+    source pixel stays a sharp square (issues 962, 966). A slot smaller than
+    the art draws it at the slot's size with the smooth filter instead:
+    nearest-neighbour shrinking drops pixel rows unevenly. Centred on whole
+    physical pixels.
     """
-    scale = max(1, int(scale))
-    side = max(0, min(width, height)) * scale
+    scale = max(1, scale)
+    physical_width, physical_height = int(width * scale), int(height * scale)
+    side = max(0, min(physical_width, physical_height))
     multiple = side // max(1, native)
     nearest = multiple >= 1
     size = multiple * native if nearest else side
-    x, y = (width * scale - size) // 2, (height * scale - size) // 2
+    x, y = (physical_width - size) // 2, (physical_height - size) // 2
     if scale == 1:
         return x, y, size, nearest
     return x / scale, y / scale, size / scale, nearest
@@ -203,8 +205,11 @@ def soft_grid_seam(cell):
     return max(1, (cell + 4) // 8)
 
 
-#: (texture, cell) -> the art blown up with its soft grid; built once each.
+#: texture -> {cell: the art blown up with its soft grid}. A shelf card's cell
+#: follows the window's size, so only the latest few per art are kept: a
+#: resize must not leave a full-size copy behind for every size it went past.
 _GRIDDED = {}
+_GRIDDED_PER_ART = 2
 
 
 def soft_grid_texture(texture, cell):
@@ -215,8 +220,8 @@ def soft_grid_texture(texture, cell):
     a transparent one gets nothing, so no grid shows on the background
     (issue 966, the POC's variant D). Drawn 1:1, nearest-neighbour.
     """
-    key = (texture, cell)
-    gridded = _GRIDDED.get(key)
+    cells = _GRIDDED.setdefault(texture, {})
+    gridded = cells.get(cell)
     if gridded is not None:
         return gridded
     width, height = texture.get_width(), texture.get_height()
@@ -244,7 +249,9 @@ def soft_grid_texture(texture, cell):
     side = width * cell
     gridded = Gdk.MemoryTexture.new(side, height * cell, Gdk.MemoryFormat.R8G8B8A8,
                                     GLib.Bytes.new(bytes(out)), side * 4)
-    _GRIDDED[key] = gridded
+    while len(cells) >= _GRIDDED_PER_ART:
+        cells.pop(next(iter(cells)))
+    cells[cell] = gridded
     return gridded
 
 
@@ -265,8 +272,18 @@ class ConsolePixelArt(Gtk.Widget):
         self.textures = [texture for texture in textures if texture is not None]
         self.set_valign(Gtk.Align.CENTER)
 
+    def _device_scale(self):
+        """The surface's real scale: ``get_scale_factor`` rounds 1.25 up to 2."""
+        native = self.get_native()
+        surface = native.get_surface() if native is not None else None
+        if surface is not None:
+            return surface.get_scale()
+        return self.get_scale_factor()
+
     def do_snapshot(self, snapshot):
-        scale = max(1, self.get_scale_factor())
+        if not self.textures:
+            return
+        scale = max(1, self._device_scale())
         natives = [max(texture.get_width(), texture.get_height()) for texture in self.textures]
         index, x, y, size, nearest = pick_pixel_art(self.get_width(), self.get_height(), natives, scale)
         if size <= 0:

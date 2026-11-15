@@ -40,7 +40,7 @@ from openemux.ui.bigpicture.widgets import (
     icon_button,
     once,
 )
-from openemux.ui.console_icons import console_texture, console_texture_1x, scope_icon_name
+from openemux.ui.console_icons import console_art_textures, scope_icon_name
 from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: The view switch: id, icon, the key of its tooltip and heading.
@@ -255,7 +255,7 @@ class GamesPage(BigPage):
         """
         icon_name = scope_icon_name(scope_id)
         if icon_name is None:
-            textures = [t for t in (console_texture(scope_id), console_texture_1x(scope_id)) if t is not None]
+            textures = console_art_textures(scope_id)
             if textures:
                 return PixelIcon(textures)
             icon_name = get_icon_name(scope_id)

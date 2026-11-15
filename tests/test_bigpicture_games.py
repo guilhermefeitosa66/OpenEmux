@@ -67,8 +67,7 @@ class TheGamesPage(BigPictureCase):
 
         games = self.open("SFC")
         games._chip_ids = None  # the chips are rebuilt, this time with no art
-        with mock.patch.object(games_module, "console_texture", return_value=None), \
-                mock.patch.object(games_module, "console_texture_1x", return_value=None):
+        with mock.patch.object(games_module, "console_art_textures", return_value=[]):
             games.sync()
         icon = games.console_chips["SFC"].icon
         self.assertIsInstance(icon, Gtk.Image)
