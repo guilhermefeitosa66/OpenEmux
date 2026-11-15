@@ -259,42 +259,37 @@ class TheShelf(BigPictureCase):
         self.assertIs(self.focus_widget(), shelf.import_button)
 
     def test_console_art_is_drawn_at_a_whole_multiple(self):
-        # Issue 964: 32 px pixel art, nearest-neighbour, never stretched.
+        # Issue 964: the pixel art in the shelf's art box, nearest-neighbour
+        # at a whole multiple (issue 962's PixelIcon), never stretched.
         from gi.repository import Gsk
 
-        from openemux.ui.bigpicture.shelf import PixelArt
+        from openemux.ui.bigpicture.shelf import ShelfCard
+        from openemux.ui.bigpicture.widgets import PixelIcon
 
         sfc = next(card for card in self.shell.shelf.cards if card.scope_id == "SFC")
-        self.assertIsInstance(sfc.art, PixelArt)
+        self.assertIsInstance(sfc.art, PixelIcon)
         self.assertTrue(sfc.art.has_css_class("bp-shelf-art"))
-        size = sfc.art.texture.get_width()
-        self.assertGreaterEqual(sfc.art.measure(Gtk.Orientation.HORIZONTAL, -1)[0], size)
-        self.assertEqual(sfc.art.do_measure(Gtk.Orientation.VERTICAL, -1)[0], sfc.art.texture.get_height())
+        self.assertFalse(sfc.art.has_css_class("bp-chip-art"))
+        self.assertFalse(sfc.art.get_hexpand())
+        size = sfc.art.textures[0].get_width()
         snapshot = Gtk.Snapshot()
         with mock.patch.object(sfc.art, "get_width", return_value=size * 2 + 8), \
-                mock.patch.object(sfc.art, "get_height", return_value=size * 3):
+                mock.patch.object(sfc.art, "get_height", return_value=size * 2 + 8):
             sfc.art.do_snapshot(snapshot)
         node = snapshot.to_node()
         self.assertIsInstance(node, Gsk.TextureScaleNode)
         self.assertEqual(node.get_filter(), Gsk.ScalingFilter.NEAREST)
         bounds = node.get_bounds()
-        self.assertEqual((bounds.get_x(), bounds.get_width(), bounds.get_height()), (4, size * 2, size * 2))
+        self.assertEqual((bounds.get_x(), bounds.get_width()), (4, size * 2))
         # The library cards keep a symbolic icon, centred in the art box.
         first = self.shell.shelf.cards[0]
-        self.assertIsInstance(first.art, Gtk.Image)
-        self.assertIsInstance(first.art.get_parent(), Gtk.CenterBox)
-        self.assertTrue(first.art.get_parent().has_css_class("bp-shelf-art"))
-
-    def test_the_pixel_multiple(self):
-        from openemux.ui.bigpicture.shelf import pixel_rect, pixel_scale
-
-        self.assertEqual(pixel_scale(72, 32), 2)
-        self.assertEqual(pixel_scale(96, 32), 3)
-        self.assertEqual(pixel_scale(20, 32), 1)  # smaller than the art: 1x
-        self.assertEqual(pixel_scale(0, 32), 1)
-        self.assertEqual(pixel_scale(72, 0), 1)
-        self.assertEqual(pixel_rect(72, 72, 32, 32), (4, 4, 64, 64))
-        self.assertEqual(pixel_rect(100, 40, 32, 16), (18, 4, 64, 32))  # one multiple for both sides
+        self.assertIsInstance(first.art, Gtk.CenterBox)
+        self.assertTrue(first.art.has_css_class("bp-shelf-art"))
+        self.assertIsInstance(first.art.get_center_widget(), Gtk.Image)
+        # A console with no art at all: the generic pad glyph.
+        bare = ShelfCard("XX", "XX", "Unknown", "", textures=(None, None))
+        self.assertIsInstance(bare.art, Gtk.CenterBox)
+        self.assertEqual(bare.art.get_center_widget().get_icon_name(), "input-gaming-symbolic")
 
     def test_every_console_name_fits_on_one_line(self):
         # Issue 964: at 1920x1080 and 2560x1440 the text column of a card is
@@ -313,7 +308,7 @@ class TheShelf(BigPictureCase):
             scale = theme.scale_for(height)
             s = lambda name, scale=scale: theme.px(name, scale)  # noqa: E731
             content = width - s("rail_width") - s("safe_x") - GRID_SPACING * (COLUMNS - 1)
-            column = content // COLUMNS - 2 * (s("gap") * 3 // 2) - s("shelf_art") - s("shelf_gap")
+            column = content // COLUMNS - 2 * s("shelf_pad_x") - s("shelf_art") - s("shelf_gap")
             font.set_absolute_size(s("shelf_name") * Pango.SCALE)
             for name in names:
                 layout = label.create_pango_layout(name)

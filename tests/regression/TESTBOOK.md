@@ -19188,5 +19188,4 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   1080p and three times at 1440p, never blurred; all three rows of the synthetic library fit
   above the hint bar with room to spare. 3: the game grid opens at 200% and its zoom still works.
 - **Check:** both screenshots show the above; `tests/test_bigpicture_shell.py`
-  (`test_every_console_name_fits_on_one_line`, `test_console_art_is_drawn_at_a_whole_multiple`,
-  `test_the_pixel_multiple`).
+  (`test_every_console_name_fits_on_one_line`, `test_console_art_is_drawn_at_a_whole_multiple`).

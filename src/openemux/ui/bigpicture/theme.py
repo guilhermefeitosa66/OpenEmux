@@ -98,6 +98,7 @@ SIZES = {
     "shelf_card_h": 150,
     "shelf_art": 76,
     "shelf_gap": 20,
+    "shelf_pad_x": 24,
     "shelf_eyebrow": 16,
     "shelf_name": 28,
     "shelf_count": 19,
@@ -450,7 +451,7 @@ def stylesheet(scale=1.0):
     border-radius: {s('radius') + 6}px;
     background-color: {p['surface2']};
     color: #ffffff;
-    padding: {s('gap')}px {s('gap') * 3 // 2}px;
+    padding: {s('gap')}px {s('shelf_pad_x')}px;
     border: none;
     box-shadow: none;
 }}
