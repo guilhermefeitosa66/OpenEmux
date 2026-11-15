@@ -1366,6 +1366,41 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   EOF
   ```
 
+### RT-1210 — Console icons in the sidebar and the settings are 16 px and pixel-sharp
+- **Area:** Navigation & search
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running on the synthetic library.
+- **Steps:**
+  1. `make devbox-shot OUT=$SCRATCH/sidebar-1x.png WIN=1` and zoom into the sidebar.
+  2. Open "Preferences" → "Input" and open the "Console" dropdown; scroll it quickly top to
+     bottom; take another screenshot.
+  3. Restart the app at scale 2 (`./devbox/devbox.sh exec env GDK_SCALE=2 devbox-app restart`)
+     and repeat step 1. Restore: `make devbox-app ACTION=restart`.
+- **Expected:** 1: every console row's icon is the same size as the "All", "Favorites" and
+  "Recently Played" glyphs (16 px), in sharp square pixels (the hand-drawn 16 px art, not a
+  blurred 32 px one), with no pixel rows missing. 2: the dropdown and the settings rows show the
+  same 16 px icons, and the list scrolls without stutter. 3: still 16 px on screen, now drawn from
+  the 32 px art one-to-one, sharp. A console with no icon file keeps its symbolic icon.
+- **Check:** the screenshots show the above; `tests/test_console_icons.py`
+  (`test_a_console_with_art_gets_the_renderer_at_16_px`,
+  `test_the_row_slot_takes_the_art_drawn_for_it_1_to_1`, `test_its_row_falls_back_to_the_themed_icon`).
+
+### RT-1211 — Console icons drawn at 4x or more show the soft pixel grid
+- **Area:** Navigation & search
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:**
+  1. Open Big Picture (F11) where the console art is drawn at 4x its pixels or more (for example
+     the shelf with `GDK_SCALE=2`), and look closely at a console's icon. Then look at the console
+     chips and the sidebar, which draw it smaller.
+- **Expected:** At 4x and above every opaque pixel of the art has a thin seam on its right and
+  bottom edge (an eighth of the pixel, at least one screen pixel), in the pixel's own colour
+  slightly darker (80%), so the art reads as a soft grid; transparent pixels get nothing, so no grid
+  shows on the card's background. Below 4x (the chips, the sidebar) the icon is plain sharp pixels
+  with no grid. No console icon anywhere is blurred or drawn at an uneven size.
+- **Check:** `tests/test_console_icons.py` (`TheSoftGridTests`, `TheRendererTests`),
+  `tests/test_bigpicture_widgets.py` (`test_pixel_art_stays_on_whole_multiples`).
+
 ## View modes & layout
 
 ### RT-030 — The three view modes render

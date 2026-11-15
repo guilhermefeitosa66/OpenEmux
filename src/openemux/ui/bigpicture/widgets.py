@@ -11,7 +11,11 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, Graphene, Gsk, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
+
+# The pixel-art renderer is every console icon's (issue 966); the chips' icon
+# and its geometry helpers (issue 962) are still reached from here.
+from openemux.ui.console_icons import ConsolePixelArt, pick_pixel_art, pixel_icon_geometry  # noqa: F401
 
 
 #: Row kinds. The kind decides what sits at the end of the row and what the
@@ -362,66 +366,17 @@ def icon_button(icon_name, tooltip=None, on_click=None):
     return widget
 
 
-def pixel_icon_geometry(width, height, native):
-    """Where a ``native``-px pixel-art icon goes in a ``width`` x ``height`` slot.
+class PixelIcon(ConsolePixelArt):
+    """A console chip's icon (issue 962): the shared pixel-art renderer.
 
-    ``(x, y, size, nearest)``: the largest whole multiple of ``native`` that
-    fits, nearest-neighbour, so every source pixel stays a sharp square
-    (issue 962). A slot smaller than the art draws it at the slot's size with
-    the smooth filter instead: nearest-neighbour shrinking drops pixel rows
-    unevenly. Centred on whole pixels.
-    """
-    side = max(0, min(width, height))
-    multiple = side // max(1, native)
-    nearest = multiple >= 1
-    size = multiple * native if nearest else side
-    return (width - size) // 2, (height - size) // 2, size, nearest
-
-
-def pick_pixel_art(width, height, natives):
-    """Which of the art's sizes fills the slot crisply: ``(index, x, y, size, nearest)``.
-
-    The one drawn biggest at a whole multiple wins, the more detailed one on a
-    tie: at 1080p the 32-px art at 1x, at 720p the 16-px art at 1x (the 32-px
-    one would have to shrink, and blur), at a 48-px slot the 16-px art at 3x.
-    Only a slot smaller than every size falls back to the smooth filter, with
-    the biggest art.
-    """
-    best = None
-    for index, native in enumerate(natives):
-        x, y, size, nearest = pixel_icon_geometry(width, height, native)
-        if not nearest:
-            continue
-        if best is None or (size, native) > (best[3], natives[best[0]]):
-            best = (index, x, y, size, nearest)
-    if best is None:
-        index = max(range(len(natives)), key=natives.__getitem__)
-        best = (index,) + pixel_icon_geometry(width, height, natives[index])
-    return best
-
-
-class PixelIcon(Gtk.Widget):
-    """A console's pixel art, scaled crisp: the console chips' icon (issue 962).
-
-    ``Gtk.Picture`` scales with a linear filter, which blurs 32-px art; this
-    draws the texture itself, picking among ``textures`` (the same art at
-    several sizes) with ``pick_pixel_art``. The slot's size comes from the
-    stylesheet (``min-width``/``min-height``).
+    ``ConsolePixelArt`` (issue 966) draws it crisp, at a whole multiple, with
+    the soft grid from 4x; this only adds the class the stylesheet sizes the
+    chip's slot with (``min-width``/``min-height``).
     """
 
     def __init__(self, textures):
-        super().__init__()
-        self.textures = list(textures)
+        super().__init__(textures)
         self.add_css_class("bp-chip-art")
-        self.set_valign(Gtk.Align.CENTER)
-
-    def do_snapshot(self, snapshot):
-        natives = [max(texture.get_width(), texture.get_height()) for texture in self.textures]
-        index, x, y, size, nearest = pick_pixel_art(self.get_width(), self.get_height(), natives)
-        if size <= 0:
-            return
-        scaling = Gsk.ScalingFilter.NEAREST if nearest else Gsk.ScalingFilter.TRILINEAR
-        snapshot.append_scaled_texture(self.textures[index], scaling, Graphene.Rect().init(x, y, size, size))
 
 
 class Chip(Gtk.Button):
