@@ -105,9 +105,12 @@ class _Grid(_Widget):
     def has_focus_memory(self):
         return False
 
-    def focus_path(self, path):
-        self.calls.append(("focus-path", path))
+    def remember_path(self, path):
+        self.calls.append(("remember", path))
         return any(e.name == path for e in self.visible_entries())
+
+    def forget_focus(self):
+        self.calls.append("forget")
 
     # -- per-ROM refreshes
     def refresh_rom_frame(self, rom):
@@ -404,12 +407,14 @@ class WhereTheFocusLandsTests(unittest.TestCase):
         self.assertEqual(grids[1].calls, ["restore"])
         self.assertEqual(grids[0].calls, [])
 
-    def test_a_game_by_its_path_is_focused_in_the_group_showing_it(self):
-        # Big Picture back from a game's details page (issue 975).
+    def test_a_game_by_its_path_is_remembered_by_the_group_showing_it(self):
+        # Big Picture back from a game's details page (issue 975): only the
+        # group showing the game keeps a memory, so focus_restore goes there.
         group, grids = _group(("FC", ["Contra"]), ("SFC", ["Zelda"]))
-        self.assertTrue(group.focus_path("Zelda"))
-        self.assertEqual(grids[1].calls, [("focus-path", "Zelda")])
-        self.assertFalse(group.focus_path("Nowhere"))
+        self.assertTrue(group.remember_path("Zelda"))
+        self.assertEqual(grids[1].calls, [("remember", "Zelda")])
+        self.assertEqual(grids[0].calls, [("remember", "Zelda"), "forget"])
+        self.assertFalse(group.remember_path("Nowhere"))
 
 
 if __name__ == "__main__":

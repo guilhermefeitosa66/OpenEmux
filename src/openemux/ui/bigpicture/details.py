@@ -291,7 +291,7 @@ class GameDetail(Gtk.Box):
         """Re-read the game shown, its art kept: a game just ended (issue 957).
 
         Playing it leaves new save states, an automatic one (Play becomes
-        Continue) and a "played" line; the pane must not keep the old ones.
+        Continue) and a "played" line; the page must not keep the old ones.
         A state tile that held the focus is rebuilt, so the focus goes to Play.
         """
         if self.rom is None:

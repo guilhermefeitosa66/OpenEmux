@@ -420,7 +420,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
         self.assertEqual(page.rom["name"], "Chrono Trigger DX")
         self.assertIs(self.visible_page(), self.page)
         # The game gone from the playlist altogether: nothing left to show.
-        gone = page.rom
+        self.assertIsNotNone(page.rom)
 
         def _vanish(rom, _name):
             self.win.playlist_manager.forget_rom(rom["console"], rom["path"])
@@ -429,7 +429,7 @@ class ThePlaylistsArtworkAndFileRows(_DetailsCase):
             page._apply_rename("whatever")
         self.pump()
         self.assertIsNot(self.visible_page(), self.page)
-        self.assertEqual(page.rom, gone)
+        self.assertIsNone(page.rom)  # gone, so nothing for the games to return to
 
     def test_options_delete_focus_and_the_hints(self):
         page = self.open()

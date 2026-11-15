@@ -84,7 +84,7 @@ SIZES = {
     # The Android layout (issue 957), at 1080p: the 720p captures times 1.5.
     # The rail is about half its first width (issue 975): it only shows
     # four tabs, and the games need the room more.
-    "rail_width": 112,
+    "rail_width": 96,
     "rail_icon": 26,
     "rail_label": 15,
     "rail_pill": 60,
@@ -279,11 +279,12 @@ def stylesheet(scale=1.0):
     min-width: {s('rail_width')}px;
     background-color: {p['bg']};
     border-right: 1px solid {p['divider']};
-    padding: {s('safe_y')}px 0;
+    padding: {s('safe_y')}px {s('gap') // 2}px;
 }}
 .big-picture .bp-rail-logo {{
     min-width: {s('logo')}px;
     min-height: {s('logo')}px;
+    -gtk-icon-size: {s('logo')}px;
     margin-bottom: {s('gap') * 2}px;
 }}
 .big-picture .bp-tab {{

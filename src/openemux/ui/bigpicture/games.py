@@ -72,7 +72,6 @@ class GamesPage(BigPage):
         self._attached = False
         self.console_chips = {}
         self.facet_chips = {}
-        self._return_path = None
 
         self.body.set_spacing(0)
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
@@ -175,7 +174,6 @@ class GamesPage(BigPage):
         self.content_host.remove(win.content_overlay)
         win.content_toolbar.set_content(win.content_overlay)
         self._attached = False
-        self._return_path = None
         self.set_facets(frozenset())
 
     # -- the scope -------------------------------------------------------------------
@@ -411,16 +409,11 @@ class GamesPage(BigPage):
         """The details page closed on ``path``: the grid's focus goes back to it.
 
         LB and RB may have walked the page to another game than the one A
-        opened; the grid follows it, so B lands on the game last on screen.
+        opened; the grid remembers that one, so B lands on the game last on
+        screen and the grid's own ``focus_restore`` does the rest.
         """
-        self._return_path = path
-
-    def _focus_returned_game(self):
-        path, self._return_path = self._return_path, None
-        if path is None:
-            return False
         grid = self.win._visible_grid()
-        return grid is not None and grid.focus_path(path)
+        return grid is not None and grid.remember_path(path)
 
     # -- the shell's view of it -----------------------------------------------------------
     def sync_banners(self):
@@ -436,8 +429,6 @@ class GamesPage(BigPage):
         return self.segments.focus_current()
 
     def focus_default(self):
-        if self._focus_returned_game():
-            return True
         grid = self.win.pages.grid_for(self.win.current_console)
         if grid is not None and grid.count() > 0:
             self.win.navigation._cmd_focus_grid()

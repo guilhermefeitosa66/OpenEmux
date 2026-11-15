@@ -18969,7 +18969,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   1. Start the app (`make devbox-app ACTION=restart`), press F11;
      `make devbox-shot OUT=$SCRATCH/bp-shelf.png`.
 - **Expected:** On the left, the rail: the app's logo, then "Library" (on a purple pill),
-  "Recent", "Import", "Settings", each icon over its label, the whole rail about 110 px wide (well
+  "Recent", "Import", "Settings", each icon over its label, the whole rail about 115 px wide (well
   under half the 232 px it had before issue 975), every label whole. On the right, "Shelf" in big letters with "N consoles · M games"
   under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
   cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
@@ -19259,8 +19259,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   focus is on the game the page showed last, scrolled into view.
 - **Check:** `make devbox-shot` before step 1 and after step 2 show the same rows;
   `tests/test_bigpicture_games.py` (`test_a_opens_the_details_page_and_b_comes_back_to_the_game`,
-  `test_a_game_no_longer_shown_falls_back_to_the_grids_memory`), `tests/test_grid_group.py`
-  (`test_a_game_by_its_path_is_focused_in_the_group_showing_it`).
+  `test_the_returned_game_survives_every_focus_pass`), `tests/test_grid_group.py`
+  (`test_a_game_by_its_path_is_remembered_by_the_group_showing_it`).
 
 ### RT-1200 — The console chips show the console icon beside the short name
 - **Area:** Navigation

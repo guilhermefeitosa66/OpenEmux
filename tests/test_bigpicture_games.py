@@ -200,7 +200,8 @@ class TheGamesPage(BigPictureCase):
         grid = self.win.pages.grid_for("SFC")
         self.pump_until(lambda: grid.card_for(grid.entries()[1]) is not None)
         second = grid.visible_entries()[1].rom
-        grid.focus_path(second["path"])
+        grid.remember_path(second["path"])
+        grid.focus_restore()
         self.pump()
         self.assertEqual(self.focused_path(), second["path"])
         self.press("confirm")
@@ -226,21 +227,38 @@ class TheGamesPage(BigPictureCase):
         self.assertIs(self.visible_page(), games)
         self.assertEqual(self.focused_path(), other)
 
-    def test_a_game_no_longer_shown_falls_back_to_the_grids_memory(self):
+    def test_the_returned_game_survives_every_focus_pass(self):
+        # The idle after the pop and the page's ``shown`` both put the focus
+        # back: both must land on the game the details page showed.
         games = self.open("SFC")
         grid = self.win.pages.grid_for("SFC")
-        self.pump_until(lambda: grid.card_for(grid.entries()[0]) is not None)
-        self.assertFalse(grid.focus_path("/not/in/the/grid"))
-        games.return_to("/not/in/the/grid")
+        self.pump_until(lambda: grid.card_for(grid.entries()[1]) is not None)
+        first, second = (entry.rom["path"] for entry in grid.visible_entries()[:2])
+        grid.remember_path(first)
+        self.assertTrue(games.return_to(second))
+        for _ in range(2):
+            self.assertTrue(games.focus_default())
+            self.pump()
+            self.assertEqual(self.focused_path(), second)
+        # A game the grid does not show leaves its memory alone.
+        self.assertFalse(games.return_to("/not/in/the/grid"))
         self.assertTrue(games.focus_default())
-        self.assertIsNone(games._return_path)
-        games.return_to("/anywhere")
+        self.pump()
+        self.assertEqual(self.focused_path(), second)
         with mock.patch.object(self.win, "_visible_grid", return_value=None):
-            self.assertFalse(games._focus_returned_game())
-        # Leaving the mode forgets it.
-        games.return_to("/anywhere")
-        self.leave()
-        self.assertIsNone(games._return_path)
+            self.assertFalse(games.return_to(first))
+
+    def test_all_games_returns_to_the_group_showing_the_game(self):
+        games = self.open(ALL_CONSOLES_ID)
+        group = self.win.pages.grid_for(ALL_CONSOLES_ID)
+        grids = group.grids()
+        self.assertGreater(len(grids), 1)
+        grids[0].focus_first_card()
+        self.pump()
+        last = grids[-1].visible_entries()[0].rom["path"]
+        self.assertTrue(games.return_to(last))
+        self.assertFalse(grids[0].has_focus_memory())
+        self.assertTrue(grids[-1].has_focus_memory())
 
     def test_a_removed_game_closes_its_details_page(self):
         self.open("SFC")

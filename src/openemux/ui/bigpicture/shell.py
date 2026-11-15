@@ -350,6 +350,8 @@ class BigPictureShell(Gtk.Box):
         """Games just removed: the details page showing one of them closes."""
         if self._details is not None and (self._details.rom or {}).get("path") in paths:
             if self.visible_page() is self._details:
+                # Nothing to come back to: the grid keeps its own memory.
+                self._details.detail.rom = None
                 self.pop()
 
     # -- tabs ----------------------------------------------------------------------------
@@ -447,7 +449,8 @@ class BigPictureShell(Gtk.Box):
     def _on_popped(self, _nav, page):
         self._pushed.discard(page)
         if page is self._details and self.visible_page() is self.library and page.rom is not None:
-            # Back on the games: the focus goes to the game the page showed.
+            # Back on the games: the focus goes to the game the page showed
+            # (none when the game was removed: forget_games let it go).
             self.library.return_to(page.rom.get("path"))
         if self.visible_page() is self.shelf:
             self.shelf.refresh()
@@ -490,9 +493,9 @@ class BigPictureShell(Gtk.Box):
     def step_console(self, delta):
         """LB and RB: the page's own sections, else the tabs.
 
-        The games page walks its console chips; a game expanded walks the
-        games beside it (``step_section(delta)``); a tab's first page walks
-        the tabs.
+        The games page walks its console chips; a game's details page walks
+        the games beside it (``step_section(delta)``); a tab's first page
+        walks the tabs.
         """
         page = self.visible_page()
         step = getattr(page, "step_section", None)

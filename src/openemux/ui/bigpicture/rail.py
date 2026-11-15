@@ -71,7 +71,6 @@ class NavRail(Gtk.Box):
         logo = Gtk.Image.new_from_icon_name(LOGO_ICON)
         logo.add_css_class("bp-rail-logo")
         logo.set_halign(Gtk.Align.CENTER)
-        logo.set_pixel_size(44)
         self.append(logo)
         self.buttons = {}
         for tab_id, key, icon in TABS:
