@@ -109,11 +109,11 @@ logger = logging.getLogger(__name__)
 MAX_INPUT_HINTS = 8
 
 #: Big Picture (issue 914) always shows the covers and the cartridges at one
-#: zoom of its own, the user's being left alone and back on the way out. Since
-#: the games share the screen with the detail pane (issue 957), it is the zoom
-#: that lays three cartridges to a row beside it, as Android does; the couch
-#: scale (``bigpicture.theme``) already makes everything else bigger.
-BIG_PICTURE_ZOOM = ZOOM_LEVELS[3]
+#: zoom of its own, the user's being left alone and back on the way out: the
+#: largest, 200% (issue 953). The games take the whole width and a game's
+#: details are a page of their own (issue 975), so nothing shares the row with
+#: them; the couch scale (``bigpicture.theme``) makes everything else bigger.
+BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
 
 
 
@@ -3244,8 +3244,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # forget_rom drops the ROM from FAVORITES.list too, so the last
         # favorite can go this way as well as through the star.
         self.sidebar.sync_favorites_row()
-        # Big Picture: a detail showing a game that just went has nothing
-        # left to show (issue 957).
+        # Big Picture: a details page showing a game that just went has nothing
+        # left to show (issues 957, 975).
         if deleted and self._big_picture:
             self.big_picture_shell.forget_games({rom["path"] for rom in roms})
 
@@ -3799,13 +3799,13 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
     def on_grid_activate(self, rom):
         """A card activated (Enter, a click): launch it, or in Big Picture show it.
 
-        Big Picture's A on a game opens its detail pane, as on Android; Play
-        is there (issue 957).
+        Big Picture's A on a game opens its details page; Play is there
+        (issues 957, 975).
         """
         if self._big_picture and self.big_picture_shell is not None:
             if self.selection_mode_active:
                 # Multi-select: A (Enter, a click) toggles the game, as on
-                # Android; it neither opens the pane nor leaves the mode
+                # Android; it neither opens the details nor leaves the mode
                 # (issue 957, QA round 1).
                 self._toggle_selected_rom(rom)
                 return

@@ -1047,6 +1047,25 @@ class RomGrid(Gtk.GridView):
             return True
         return self.focus_first_card()
 
+    def remember_path(self, path):
+        """Make the ROM at ``path`` the card ``focus_restore`` comes back to.
+
+        Big Picture's details page may have walked to another game with LB
+        and RB (issue 975); back on the games, every focus pass -- the idle
+        one and the one after the slide -- must land on that game, so it
+        goes into the grid's own memory rather than a one-shot request.
+        False, and the memory untouched, when the grid does not show it.
+        """
+        for entry in self.visible_entries():
+            if entry.rom.get("path") == path:
+                self._focused_entry = entry
+                return True
+        return False
+
+    def forget_focus(self):
+        """Drop the remembered card: another group of the page has it now."""
+        self._focused_entry = None
+
     def _focus_position(self, position):
         """Focus the card at ``position``, scrolling it into view if need be.
 

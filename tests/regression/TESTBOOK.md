@@ -18969,7 +18969,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   1. Start the app (`make devbox-app ACTION=restart`), press F11;
      `make devbox-shot OUT=$SCRATCH/bp-shelf.png`.
 - **Expected:** On the left, the rail: the app's logo, then "Library" (on a purple pill),
-  "Recent", "Import", "Settings". On the right, "Shelf" in big letters with "N consoles · M games"
+  "Recent", "Import", "Settings", each icon over its label, the whole rail about 115 px wide (well
+  under half the 232 px it had before issue 975), every label whole. On the right, "Shelf" in big letters with "N consoles · M games"
   under it, a "Search all consoles" field and a purple "Import ROMs" button; under "Consoles" the
   cards three to a row: "LIBRARY · All games" first, then one card per console with games, each in
   its own color (NES red, Game Boy olive, GBA indigo...), the console's art on the left (small,
@@ -18979,7 +18980,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   Tab Tabs. The whole mode is dark whatever the desktop theme. The focused card sits on a dark
   purple plate; no ring, no glow.
 - **Check:** the screenshot shows all of the above; `tests/test_bigpicture_shell.py`
-  (`TheShelf`, `TheTabs`).
+  (`TheShelf`, `TheTabs`, `test_the_rail_is_slim`).
 
 ### RT-1182 — LB and RB walk the tabs from a tab's first page; B goes back to the Library
 - **Area:** Navigation
@@ -18993,7 +18994,7 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   nothing and never leaves the mode.
 - **Check:** `tests/test_bigpicture_shell.py` (`TheTabs`).
 
-### RT-1183 — A console card opens its games beside the detail pane
+### RT-1183 — A console card opens its games across the whole width
 - **Area:** Navigation
 - **Mode:** AUTO-UI
 - **Preconditions:** RT-1181 done.
@@ -19002,10 +19003,12 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Expected:** On the left: "‹ Shelf" with a search and a filter button; "NES" as the eyebrow,
   "Nintendo (NES)" in big letters and "N games"; the console chips (All · Favorites · NES · GB ...),
   each with its icon left of the name (RT-1200), with NES white; the filter chips "Favorites · N", "Has save state · N", "Missing artwork · N",
-  "Never played · N"; "Cartridges" with a three-way switch; the cartridges three to a row. On the
-  right, the pane reads "Select a game to see it here". Hints: Enter Details · Ctrl+D Favorite ·
+  "Never played · N"; "Cartridges" with a three-way switch; the cartridges at the desktop's 200%
+  size (RT-1217), as many to a row as the width holds. There is no detail pane: the games reach
+  the right edge of the screen (issue 975). Hints: Enter Details · Ctrl+D Favorite ·
   Alt+Enter Options · Tab Console · Menu Select · Esc Shelf.
-- **Check:** the screenshot shows the above; `tests/test_bigpicture_games.py` (`TheGamesPage`).
+- **Check:** the screenshot shows the above; `tests/test_bigpicture_games.py` (`TheGamesPage`,
+  `test_the_games_take_the_whole_width`).
 
 ### RT-1184 — LB and RB change the console chip and the games follow
 - **Area:** Navigation
@@ -19054,21 +19057,24 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   name, "N games").
 - **Check:** the screenshot shows the headers.
 
-### RT-1188 — A on a game shows it in the pane: Play, the states, the per-game rows
+### RT-1188 — A on a game opens its details page: the art, Play, the states, the per-game rows
 - **Area:** Navigation
 - **Mode:** AUTO-UI
 - **Preconditions:** RT-1183 done, the synthetic library; run the app with
   `GSK_RENDERER=cairo` (the devbox's GL renderer can stop redrawing).
 - **Steps:**
-  1. Press A on a game; `make devbox-shot OUT=$SCRATCH/bp-pane.png`.
+  1. Press A on a game; `make devbox-shot OUT=$SCRATCH/bp-details.png`.
   2. Press X; press B.
-- **Expected:** 1: the pane shows the expand, star and share buttons, the art with "Search
-  artwork…" under it, the title with a pencil, "Console · Core · never played", a purple "Play"
-  (focused), "Save states" with "None yet. Save from the in-game menu.", and the Core and Shader
-  rows with a "DEFAULT" tag. The hints read Play · Favorite · Share · Back. 2: X fills the star
-  (the game is a favorite); B puts the focus back on the game in the grid.
+- **Expected:** 1: a page of its own over the whole content area (issue 975): "‹ Back to the
+  list" on the left with the star and share buttons across from it; below, on the left, the art
+  large with "Search artwork…" under it; on the right, the title with a pencil, "Console · Core ·
+  never played", a purple "Play" (focused), "Save states" with "None yet. Save from the in-game
+  menu.", the Core and Shader rows with a "DEFAULT" tag and the file's path. The hints read Play ·
+  Favorite · Share · Back. 2: X fills the star (the game is a favorite); B goes back to the games
+  with the focus on that game (RT-1218).
 - **Check:** the screenshot; `tests/test_bigpicture_games.py`
-  (`test_a_game_shows_in_the_pane_and_b_goes_back_to_the_grid`), `tests/test_bigpicture_details.py`.
+  (`test_a_opens_the_details_page_and_b_comes_back_to_the_game`), `tests/test_bigpicture_details.py`
+  (`test_the_art_and_the_facts_sit_side_by_side`, `test_the_back_link_goes_back_to_the_list`).
 
 ### RT-1189 — Y on a game opens its options; Menu selects several
 - **Area:** Navigation
@@ -19210,6 +19216,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `test_the_hints_are_the_pages_and_always_shown`).
 
 ### RT-1199 — Big Picture shows three cartridges to a row beside the pane
+- **Retired:** 2026-11-15 (issue 975, the games take the whole width at 200%).
+- **Reason:** There is no pane beside the games any more; see RT-1217.
 - **Area:** Navigation
 - **Mode:** AUTO-SUITE
 - **Preconditions:** the desktop library at 75% zoom.
@@ -19220,6 +19228,39 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   desktop is at 75% again.
 - **Check:** `tests/test_bigpicture_shell.py` (`test_the_toggle_swaps_the_layout_and_goes_fullscreen`),
   `tests/test_window.py`.
+
+### RT-1217 — Big Picture builds the games at 200%, the desktop's largest zoom
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080 (`make devbox-res RES=1920x1080`), the synthetic
+  library, locale English, the desktop library at 100%.
+- **Steps:**
+  1. On the desktop, open "Nintendo (NES)" and set the zoom to 200% with the header's "+";
+     `make devbox-shot OUT=$SCRATCH/desktop-200.png`. Set it back to 100%.
+  2. Press F11, open the "NES" card; `make devbox-shot OUT=$SCRATCH/bp-200.png`.
+  3. Press Ctrl+minus; leave Big Picture (F11).
+- **Expected:** 1–2: a cartridge (or cover) in Big Picture has the same width and height as on
+  the desktop at 200%, measured on the two screenshots. 3: nothing changes in the mode; the
+  desktop is back at 100%, its setting never written.
+- **Check:** the two screenshots; `tests/test_window.py`
+  (`test_big_picture_swaps_the_layout_and_scales_up`,
+  `test_big_picture_builds_the_games_at_its_zoom_and_gives_it_back`).
+
+### RT-1218 — Back from a game's details lands on the same game, the scroll kept
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox at 1920×1080, Big Picture on "All games" (enough games to scroll).
+- **Steps:**
+  1. Walk the D-pad down until the grid scrolls; note the focused game; press A.
+  2. Press B (Escape on the keyboard).
+  3. Press A again, press RB twice, then click "‹ Back to the list".
+- **Expected:** 1: the game's details page opens. 2: the games are back, scrolled as they were,
+  the same game focused. 3: the details page walked two games further; back on the list, the
+  focus is on the game the page showed last, scrolled into view.
+- **Check:** `make devbox-shot` before step 1 and after step 2 show the same rows;
+  `tests/test_bigpicture_games.py` (`test_a_opens_the_details_page_and_b_comes_back_to_the_game`,
+  `test_the_returned_game_survives_every_focus_pass`), `tests/test_grid_group.py`
+  (`test_a_game_by_its_path_is_remembered_by_the_group_showing_it`).
 
 ### RT-1200 — The console chips show the console icon beside the short name
 - **Area:** Navigation

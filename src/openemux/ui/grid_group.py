@@ -236,6 +236,20 @@ class GridGroup:
                 return True
         return False
 
+    def remember_path(self, path):
+        """Remember the ROM at ``path`` in the group showing it, and only there.
+
+        ``focus_restore`` goes to the first group with a memory, so the
+        others forget theirs.
+        """
+        owner = next((grid for grid in self.grids() if grid.remember_path(path)), None)
+        if owner is None:
+            return False
+        for grid in self.grids():
+            if grid is not owner:
+                grid.forget_focus()
+        return True
+
     def focus_restore(self):
         """Come back to the group the user was last in, else the first one."""
         for grid in self.grids():

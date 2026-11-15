@@ -2507,11 +2507,11 @@ class TheGameAndInputHandoffTests(WindowCase):
             self.assertTrue(self.win.toggle_big_picture())
             self.assertTrue(self.win.has_css_class("big-picture"))
             self.assertEqual(self.win.mode_stack.get_visible_child_name(), "big-picture")
-            # Big Picture's own zoom, whatever the desktop's: three cartridges
-            # to a row beside the detail pane (issue 957); zooming does nothing
-            # there and never touches the desktop's setting.
+            # Big Picture's own zoom, whatever the desktop's: the largest, 200%
+            # (issues 953, 975); zooming does nothing there and never touches
+            # the desktop's setting.
             self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
-            self.assertEqual(window_module.BIG_PICTURE_ZOOM, 1.25)
+            self.assertEqual(window_module.BIG_PICTURE_ZOOM, 2.0)
             self.win._step_zoom(-1)
             self.assertEqual(self.win._zoom, window_module.BIG_PICTURE_ZOOM)
             self.assertEqual(self.config.get_display_settings(self.win._current_scope())["zoom"], 1.0)
@@ -2548,7 +2548,7 @@ class TheGameAndInputHandoffTests(WindowCase):
                 self.assertTrue(self._toggle_big_picture_quietly())
                 grid = self.win.pages.grid_for("SFC")
                 self.assertEqual(grid.zoom, window_module.BIG_PICTURE_ZOOM)
-                self.assertEqual(grid.zoom, 1.25)
+                self.assertEqual(grid.zoom, 2.0)
                 self.assertEqual(self.config.get_display_settings("SFC")["zoom"], 0.75)
                 self.assertFalse(self._toggle_big_picture_quietly())
                 self.assertEqual(self.win.pages.grid_for("SFC").zoom, 0.75)
@@ -2585,13 +2585,13 @@ class TheGameAndInputHandoffTests(WindowCase):
         self.assertEqual(self.win.pages.grid_for("SFC").zoom, 1.0)
 
     def test_leaving_big_picture_puts_the_zoom_stepper_back_on_the_desktop(self):
-        # LB/RB in the mode syncs the header stepper to 125%; leaving must
+        # LB/RB in the mode syncs the header stepper to 200%; leaving must
         # not leave it there while the grid is back at the desktop's zoom.
         self.config.set_zoom(0.75)
         self.win.sidebar.select("SFC")
         self._toggle_big_picture_quietly()
         self.win.sidebar.select("FC")
-        self.assertEqual(self.win.zoom_label.get_label(), "125%")
+        self.assertEqual(self.win.zoom_label.get_label(), "200%")
         self._toggle_big_picture_quietly()
         self.assertEqual(self.win.zoom_label.get_label(), "75%")
         self.assertTrue(self.win.zoom_in_button.get_sensitive())

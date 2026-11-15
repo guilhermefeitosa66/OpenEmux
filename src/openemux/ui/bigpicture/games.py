@@ -1,6 +1,6 @@
-"""The games of a console, the Android gamepad layout's list-detail (issue 957).
+"""The games of a console, across the whole width (issues 957, 975).
 
-On the left, top to bottom: "‹ Shelf" with the search and filter buttons;
+Top to bottom: "‹ Shelf" with the search and filter buttons;
 the scope's eyebrow (ALL CONSOLES, FAVORITES, the console's short code),
 its big title and how many games it has; the task banners; the console
 chips (All · Favorites · the playlists · every console), which LB and RB
@@ -8,10 +8,10 @@ walk; the filter chips (Favorites · N, Has save state · N, Missing artwork
 · N, Never played · N); the view's name with the Cartridges / Covers /
 List switch; and the games themselves -- the window's own page for the
 scope, borrowed while the mode is on, so its grids, its per-console
-sections in "All" and its empty states are the desktop's.
+sections in "All" and its empty states are the desktop's, at 200%.
 
-On the right, the detail pane: "Select a game to see it here" until A
-picks a game, then ``details.GameDetail``.
+A game's details are a page of their own (``details.GameDetailsPage``),
+which A opens; B comes back here, to the same game, the scroll kept.
 """
 
 import gi
@@ -30,13 +30,11 @@ from openemux.core.library_view import (
 from openemux.core.scraper import COVER_ART, LABEL_ART
 from openemux.core.systems import get_icon_name
 from openemux.ui.bigpicture.banners import TaskBanners
-from openemux.ui.bigpicture.details import GameDetail
 from openemux.ui.bigpicture.widgets import (
     BigPage,
     Chip,
     PixelIcon,
     Segments,
-    empty_state,
     icon_button,
     once,
 )
@@ -75,11 +73,9 @@ class GamesPage(BigPage):
         self.console_chips = {}
         self.facet_chips = {}
 
-        self.body.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.body.set_spacing(0)
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         left.set_hexpand(True)
-        left.set_margin_end(24)
 
         top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.back_button = Gtk.Button(label=t("big_picture.games.back"))
@@ -124,7 +120,7 @@ class GamesPage(BigPage):
         left.append(self.chips_scroller)
 
         # In a scroller of its own, like the console chips: four chips with
-        # their counts are wider than the column on a 1280 px screen, and a
+        # their counts can be wider than the page on a 1280 px screen, and a
         # row that cannot shrink pushes the whole window wider than itself.
         self.facets_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         for facet in library_facets.FACETS:
@@ -158,24 +154,6 @@ class GamesPage(BigPage):
         self.content_host.set_vexpand(True)
         left.append(self.content_host)
         self.body.append(left)
-
-        self.pane = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.pane.add_css_class("bp-pane")
-        self.pane_stack = Gtk.Stack()
-        self.pane_stack.set_vexpand(True)
-        self.pane_empty = empty_state("view-reveal-symbolic", t("big_picture.pane.empty"))
-        self.pane_stack.add_named(self.pane_empty, "empty")
-        self.detail = GameDetail(shell)
-        self.detail.set_margin_start(28)
-        self.detail.set_margin_end(28)
-        self.detail.set_margin_top(12)
-        self.detail.set_margin_bottom(12)
-        self.pane_scroller = Gtk.ScrolledWindow()
-        self.pane_scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        self.pane_scroller.set_child(self.detail)
-        self.pane_stack.add_named(self.pane_scroller, "game")
-        self.pane.append(self.pane_stack)
-        self.body.append(self.pane)
         self.sync_view()
 
     # -- the desktop's content, borrowed ------------------------------------
@@ -196,7 +174,6 @@ class GamesPage(BigPage):
         self.content_host.remove(win.content_overlay)
         win.content_toolbar.set_content(win.content_overlay)
         self._attached = False
-        self.clear_game()
         self.set_facets(frozenset())
 
     # -- the scope -------------------------------------------------------------------
@@ -416,53 +393,29 @@ class GamesPage(BigPage):
         self.sync_facets()
         return True
 
-    # -- the detail pane -----------------------------------------------------------------
-    def show_game(self, rom):
-        """A on a game: its detail on the right, the focus on Play."""
-        self.detail.load(rom)
-        self.pane_stack.set_visible_child_name("game")
-        self.pane_scroller.get_vadjustment().set_value(0)
-        GLib.idle_add(once(self.detail.focus_default))
-        return True
-
-    def clear_game(self):
-        self.detail.rom = None
-        self.pane_stack.set_visible_child_name("empty")
-
-    def forget_games(self, paths):
-        if (self.detail.rom or {}).get("path") in paths:
-            self.clear_game()
-            GLib.idle_add(once(self.win.navigation._cmd_focus_grid))
-
-    def pane_has_focus(self, focus=None):
-        focus = focus if focus is not None else self.win.get_focus()
-        return focus is not None and focus.is_ancestor(self.pane)
-
-    def handle_back(self):
-        """B in the pane goes back to the grid; anywhere else the page pops."""
-        if self.pane_has_focus():
-            self.win.navigation._cmd_focus_grid()
-            return True
-        return False
-
-    def on_pad_action(self, action):
-        if self.pane_has_focus():
-            return self.detail.on_pad_action(action)
-        return False
-
+    # -- a game's details ------------------------------------------------------------
     def open_options(self, rom):
-        """Y on a game: Android's options sheet."""
-        self.detail.load(rom)
-        self.pane_stack.set_visible_child_name("game")
-        self.detail.open_options()
+        """Y on a game: Android's options sheet, run by the details page's detail.
+
+        The page is not pushed: the sheet opens over the games, and what an
+        option opens next (a chooser, the rename dialog) opens over it too.
+        """
+        detail = self.shell.details_page().detail
+        detail.load(rom)
+        detail.open_options()
         return True
+
+    def return_to(self, path):
+        """The details page closed on ``path``: the grid's focus goes back to it.
+
+        LB and RB may have walked the page to another game than the one A
+        opened; the grid remembers that one, so B lands on the game last on
+        screen and the grid's own ``focus_restore`` does the rest.
+        """
+        grid = self.win._visible_grid()
+        return grid is not None and grid.remember_path(path)
 
     # -- the shell's view of it -----------------------------------------------------------
-    def context_for(self, focus):
-        if self.pane_has_focus(focus):
-            return "bp-pane"
-        return self.context
-
     def sync_banners(self):
         self.banners.sync()
 
@@ -486,8 +439,6 @@ class GamesPage(BigPage):
         return self.back_button.grab_focus()
 
     def hints(self, g, t):
-        if self.pane_has_focus():
-            return self.detail.hints(g, t)
         return [
             (g["confirm"], t("big_picture.hints.open")),
             (g["back"], t("big_picture.hints.shelf")),

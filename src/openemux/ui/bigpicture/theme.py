@@ -74,19 +74,23 @@ SIZES = {
     "radius": 18,
     "radius_small": 12,
     "card_title": 22,
-    # A game's details: the cover column and the save-state tiles under it.
+    # A game's details page (issue 975): the art column, on the left.
     "details_side": 520,
-    "cover_w": 400,
-    "cover_h": 500,
+    "cover_w": 480,
+    "cover_h": 600,
     "state_tile": 150,
     # The tasks pages' side panel (the progress mirror, the providers).
     "side": 560,
     # The Android layout (issue 957), at 1080p: the 720p captures times 1.5.
-    "rail_width": 232,
-    "rail_icon": 34,
-    "rail_label": 20,
-    "rail_pill": 84,
-    "logo": 72,
+    # The rail is about half its first width (issue 975): it only shows
+    # four tabs, and the games need the room more.
+    "rail_width": 96,
+    "rail_icon": 26,
+    "rail_label": 15,
+    "rail_pill": 60,
+    "logo": 48,
+    # The pause menu's tile icons, the rail's old size.
+    "pause_icon": 34,
     "page_title": 58,
     "page_subtitle": 22,
     "section_title": 26,
@@ -111,8 +115,7 @@ SIZES = {
     "chip_glyph": 24,
     "chip_icon_gap": 10,
     "banner_h": 66,
-    "pane_width": 640,
-    "pane_art_h": 400,
+    "splash_art_h": 400,
     "pane_title": 38,
     "play_h": 78,
     "icon_button": 66,
@@ -276,19 +279,20 @@ def stylesheet(scale=1.0):
     min-width: {s('rail_width')}px;
     background-color: {p['bg']};
     border-right: 1px solid {p['divider']};
-    padding: {s('safe_y')}px 0;
+    padding: {s('safe_y')}px {s('gap') // 2}px;
 }}
 .big-picture .bp-rail-logo {{
     min-width: {s('logo')}px;
     min-height: {s('logo')}px;
-    margin-bottom: {s('gap') * 3}px;
+    -gtk-icon-size: {s('logo')}px;
+    margin-bottom: {s('gap') * 2}px;
 }}
 .big-picture .bp-tab {{
     background: none;
     border: none;
     box-shadow: none;
     color: {p['muted']};
-    padding: {s('gap') // 2}px {s('gap')}px;
+    padding: {s('gap') // 4}px {s('gap') // 4}px;
     border-radius: {s('radius')}px;
 }}
 .big-picture .bp-tab .bp-tab-pill {{
@@ -619,20 +623,7 @@ def stylesheet(scale=1.0):
     font-weight: 600;
 }}
 
-/* The detail pane. */
-.big-picture .bp-pane {{
-    min-width: {s('pane_width')}px;
-    background-color: {p['bg']};
-    border-left: 1px solid {p['divider']};
-    background-image: radial-gradient(circle at 60% 0%, rgba(124, 58, 237, 0.28), transparent 55%);
-}}
-.big-picture .bp-pane .bp-details-cover {{
-    min-width: {s('pane_art_h') * 3 // 4}px;
-    min-height: {s('pane_art_h') * 3 // 4}px;
-}}
-.big-picture .bp-pane-art {{
-    min-height: {s('pane_art_h')}px;
-}}
+/* A game's details: the title, the meta line, Play. */
 .big-picture .bp-pane-title {{
     font-size: {s('pane_title')}px;
     font-weight: 700;
@@ -825,7 +816,7 @@ def stylesheet(scale=1.0):
     color: {p['text']};
 }}
 
-/* A game's details, expanded: the cover column on the left. */
+/* A game's details page: the art column on the left. */
 .big-picture .bp-details-side {{
     min-width: {s('details_side')}px;
 }}
@@ -860,7 +851,7 @@ def stylesheet(scale=1.0):
     color: {p['text']};
 }}
 .big-picture .bp-splash-art {{
-    min-height: {s('pane_art_h')}px;
+    min-height: {s('splash_art_h')}px;
 }}
 .big-picture .bp-splash-caption {{
     font-size: {s('row_title')}px;
@@ -881,7 +872,7 @@ def stylesheet(scale=1.0):
     min-height: {s('pause_tile_h')}px;
 }}
 .bp-pause-window .bp-tile image {{
-    -gtk-icon-size: {s('rail_icon')}px;
+    -gtk-icon-size: {s('pause_icon')}px;
 }}
 .bp-pause-window .bp-tile.bp-primary {{
     background-color: {ACCENT};

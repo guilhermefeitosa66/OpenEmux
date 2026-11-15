@@ -34,7 +34,7 @@ class TheWayInAndOut(BigPictureCase):
         self.assertTrue(shell.active)
         # The desktop's page stack is under the chips now.
         self.assertIs(self.win.content_overlay.get_parent(), shell.library.content_host)
-        self.assertEqual(self.win._zoom, 1.25)  # three cartridges beside the pane
+        self.assertEqual(self.win._zoom, 2.0)  # the largest zoom, the games alone on the page
 
         self.assertFalse(self.win.toggle_big_picture())
         self.unfullscreen_calls.assert_called_once()
@@ -164,6 +164,22 @@ class TheTabs(BigPictureCase):
         self.assertEqual(shell.rail.neighbour(-1), "settings")
         shell.rail.retranslate(lambda key: key.upper())
         self.assertEqual(shell.rail.buttons["library"].label.get_label(), "BIG_PICTURE.TAB.LIBRARY")
+
+    def test_the_rail_is_slim(self):
+        # Issue 975: well under half the width it had (232 px at 1080p), the
+        # labels still whole and the pause menu's icons left as they were.
+        self.show()
+        # The test window is small, so the labels, not the theme's minimum,
+        # set the width here: it must still be under the old rail's half at
+        # 1080p (plus a gap of slack), never near the 232 px it was.
+        scale = max(self.shell.apply_scale(), 1.0)
+        natural = self.shell.rail.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        self.assertLess(natural, 232 * scale / 2 + theme.px("gap", scale))
+        self.assertLessEqual(theme.SIZES["rail_width"], 232 // 2)
+        self.assertEqual(theme.SIZES["pause_icon"], 34)
+        for button in self.shell.rail.buttons.values():
+            self.assertEqual(button.label.get_layout().get_unknown_glyphs_count(), 0)
+            self.assertFalse(button.label.get_layout().is_ellipsized())
 
 
 @needs_display

@@ -1,4 +1,4 @@
-"""The navigation rail of Big Picture: Android's tabs, down the left (issue 957).
+"""The navigation rail of Big Picture: Android's tabs, down the left (issues 957, 975).
 
 The app's logo on top, then Library, Recent, Import and Settings, each an
 icon over its label; the tab on screen sits on an accent pill. LB and RB
@@ -35,7 +35,7 @@ class TabButton(Gtk.Button):
         super().__init__()
         self.tab_id = tab_id
         self.add_css_class("bp-tab")
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.set_halign(Gtk.Align.CENTER)
         pill = Gtk.Box()
         pill.add_css_class("bp-tab-pill")
@@ -61,7 +61,7 @@ class NavRail(Gtk.Box):
     """The rail. ``on_select(tab_id)`` runs when a tab is activated."""
 
     def __init__(self, t, on_select):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add_css_class("bp-rail")
         # Set, not left to the children: an expanding icon inside a tab
         # would make the whole rail take the screen's spare width.
@@ -71,7 +71,6 @@ class NavRail(Gtk.Box):
         logo = Gtk.Image.new_from_icon_name(LOGO_ICON)
         logo.add_css_class("bp-rail-logo")
         logo.set_halign(Gtk.Align.CENTER)
-        logo.set_pixel_size(64)
         self.append(logo)
         self.buttons = {}
         for tab_id, key, icon in TABS:

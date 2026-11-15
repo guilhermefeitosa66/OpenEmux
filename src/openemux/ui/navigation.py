@@ -33,7 +33,7 @@ CTX_GRID_SELECTION = "grid-selection"
 CTX_SIDEBAR = "sidebar"
 CTX_OTHER = "other"
 # Big Picture, the couch layout, Android's gamepad layout (issue 957): the
-# focus is on the Shelf, the games page's chips, a game's detail pane, the
+# focus is on the Shelf, the games page's chips, a game's details page, the
 # tab rail, a page of rows, the search keyboard, the library grid (which
 # keeps the grid's own behaviours, with the mode's buttons), the pad file
 # browser or the in-game pause menu.
@@ -117,7 +117,7 @@ def resolve(context, action):
       ("bp-back",)               Big Picture: close the keyboard, else pop the page
       ("bp-console-delta", n)    Big Picture: the previous/next tab or console chip
       ("bp-search",)             Big Picture: the search keyboard over the games
-      ("bp-details",)            Big Picture: the focused game's detail pane
+      ("bp-details",)            Big Picture: the focused game's details page
       ("bp-options",)            Big Picture: the focused game's options sheet
       ("bp-remove-selected",)    Big Picture: remove the selected games (asks first)
       ("bp-share-selected",)     Big Picture: share the selected games
@@ -251,7 +251,7 @@ def _resolve_big_picture(context, action):
 
     A opens, B goes back one level and never leaves the mode, the shoulders
     walk the tabs (or the console chips on the games page), View is search
-    and Guide is the way out. On the games: A shows the detail pane, X is
+    and Guide is the way out. On the games: A opens the details page, X is
     the favorite, Y the options sheet and Menu multi-select. The pad's
     "menu" action is View; its "search" action is Menu (Start).
     """
