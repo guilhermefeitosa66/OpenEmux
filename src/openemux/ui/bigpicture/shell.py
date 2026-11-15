@@ -570,7 +570,7 @@ class BigPictureShell(Gtk.Box):
 
     # -- contexts and hints -----------------------------------------------------------------
     def context_for(self, focus):
-        """Where the focus is, for the navigator: the keyboard, the rail, the page's part."""
+        """Where the focus is, for the navigator: the keyboard, the rail, the page."""
         if self.splash.shown:
             return CTX_PAGE
         if focus is not None:
@@ -578,11 +578,7 @@ class BigPictureShell(Gtk.Box):
                 return CTX_OSK
             if focus.is_ancestor(self.rail):
                 return CTX_RAIL
-        page = self.visible_page()
-        part = getattr(page, "context_for", None)
-        if part is not None:
-            return part(focus)
-        return getattr(page, "context", CTX_PAGE)
+        return getattr(self.visible_page(), "context", CTX_PAGE)
 
     def set_hints(self, pairs):
         glyphs = self.win.navigation.glyphs()

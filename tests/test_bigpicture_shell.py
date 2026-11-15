@@ -169,7 +169,10 @@ class TheTabs(BigPictureCase):
         # Issue 975: well under half the width it had (232 px at 1080p), the
         # labels still whole and the pause menu's icons left as they were.
         self.show()
-        scale = self.shell.scale()
+        # The test window is small, so the labels, not the theme's minimum,
+        # set the width here: it must still be under the old rail's half at
+        # 1080p (plus a gap of slack), never near the 232 px it was.
+        scale = max(self.shell.apply_scale(), 1.0)
         natural = self.shell.rail.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
         self.assertLess(natural, 232 * scale / 2 + theme.px("gap", scale))
         self.assertLessEqual(theme.SIZES["rail_width"], 232 // 2)
