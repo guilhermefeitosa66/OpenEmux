@@ -90,11 +90,18 @@ SIZES = {
     "page_title": 58,
     "page_subtitle": 22,
     "section_title": 26,
-    "shelf_card_h": 222,
-    "shelf_art": 132,
-    "shelf_eyebrow": 18,
-    "shelf_name": 36,
-    "shelf_count": 21,
+    # The shelf cards, sized so every shipped console name fits on one line
+    # at 1920 and 2560 px wide (issue 964). The art box is not the icon's
+    # size: the 32 px pixel art is drawn at the largest whole multiple that
+    # fits it (2x at 1080p, 3x at 1440p, with a few px to spare for a
+    # window a little shorter than the screen), so it stays sharp.
+    "shelf_card_h": 150,
+    "shelf_art": 76,
+    "shelf_gap": 20,
+    "shelf_pad_x": 24,
+    "shelf_eyebrow": 16,
+    "shelf_name": 28,
+    "shelf_count": 19,
     "search_h": 70,
     "search_w": 510,
     "chip": 22,
@@ -444,9 +451,12 @@ def stylesheet(scale=1.0):
     border-radius: {s('radius') + 6}px;
     background-color: {p['surface2']};
     color: #ffffff;
-    padding: {s('gap')}px {s('gap') * 2}px;
+    padding: {s('gap')}px {s('shelf_pad_x')}px;
     border: none;
     box-shadow: none;
+}}
+.big-picture .bp-shelf-card > box {{
+    border-spacing: {s('shelf_gap')}px;
 }}
 .big-picture .bp-shelf-art {{
     min-width: {s('shelf_art')}px;

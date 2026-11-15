@@ -17,40 +17,47 @@ from gi.repository import Gtk, Pango
 
 from openemux.core.big_picture_shelf import css_class, short_name
 from openemux.ui.bigpicture.banners import TaskBanners
-from openemux.ui.bigpicture.widgets import BigPage, page_heading
-from openemux.ui.console_icons import console_texture
+from openemux.ui.bigpicture.widgets import BigPage, PixelIcon, page_heading
+from openemux.ui.console_icons import console_texture, console_texture_1x
 from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID
 
 #: Cards in a row, as on Android's landscape shelf.
 COLUMNS = 3
+# The space between the cards, both ways (unscaled).
+GRID_SPACING = 24
 
 
 class ShelfCard(Gtk.Button):
     """A console's card: its art, its short code, its name, its count."""
 
-    def __init__(self, scope_id, eyebrow, name, count, texture=None, icon_name=None, style=None):
+    def __init__(self, scope_id, eyebrow, name, count, textures=None, icon_name=None, style=None):
         super().__init__()
         self.scope_id = scope_id
         self.add_css_class("bp-shelf-card")
         if style:
             self.add_css_class(style)
         self.set_hexpand(True)
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=28)
+        # The gap between the art and the text is the stylesheet's
+        # (``border-spacing``), so it scales with everything else.
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         box.set_valign(Gtk.Align.CENTER)
-        art = Gtk.Box()
+        textures = [texture for texture in (textures or ()) if texture is not None]
+        if textures:
+            # The console's pixel art at a whole multiple, nearest-neighbour
+            # (issue 964), the chips' widget (issue 962) in the shelf's box.
+            # Neither it nor its box expands, so the text column gets the
+            # rest of the card, for the name.
+            art = PixelIcon(textures)
+            art.remove_css_class("bp-chip-art")
+        else:
+            # Centred in the box without expanding it (an expanding child
+            # would take width from the name).
+            art = Gtk.CenterBox()
+            art.set_center_widget(Gtk.Image.new_from_icon_name(icon_name or "input-gaming-symbolic"))
+        #: The art's box, the one the stylesheet sizes (``.bp-shelf-art``).
+        self.art = art
         art.add_css_class("bp-shelf-art")
         art.set_valign(Gtk.Align.CENTER)
-        if texture is not None:
-            picture = Gtk.Picture.new_for_paintable(texture)
-            picture.set_content_fit(Gtk.ContentFit.CONTAIN)
-            picture.set_can_shrink(True)
-            picture.set_hexpand(True)
-            art.append(picture)
-        else:
-            image = Gtk.Image.new_from_icon_name(icon_name or "input-gaming-symbolic")
-            image.set_hexpand(True)
-            image.set_halign(Gtk.Align.CENTER)
-            art.append(image)
         box.append(art)
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         text.set_valign(Gtk.Align.CENTER)
@@ -111,8 +118,8 @@ class ShelfPage(BigPage):
         consoles.add_css_class("bp-section-title")
         column.append(consoles)
         self.grid = Gtk.Grid()
-        self.grid.set_column_spacing(24)
-        self.grid.set_row_spacing(24)
+        self.grid.set_column_spacing(GRID_SPACING)
+        self.grid.set_row_spacing(GRID_SPACING)
         self.grid.set_column_homogeneous(True)
         self.grid.set_margin_bottom(24)
         column.append(self.grid)
@@ -189,7 +196,8 @@ class ShelfPage(BigPage):
                              icon_name="user-bookmarks-symbolic")
         else:
             card = ShelfCard(scope_id, short_name(scope_id), name, count,
-                             texture=console_texture(scope_id), style=css_class(scope_id))
+                             textures=(console_texture(scope_id), console_texture_1x(scope_id)),
+                             style=css_class(scope_id))
         card.style_kind = kind
         return card
 
@@ -218,4 +226,4 @@ class ShelfPage(BigPage):
         ]
 
 
-__all__ = ["ShelfCard", "ShelfPage", "COLUMNS"]
+__all__ = ["ShelfCard", "ShelfPage", "COLUMNS", "GRID_SPACING"]
