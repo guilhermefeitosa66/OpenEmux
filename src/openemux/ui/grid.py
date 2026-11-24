@@ -216,6 +216,11 @@ class RomGrid(Gtk.GridView):
         # The game that had the focus when the cards were rebuilt, until its
         # new card is bound and takes it back.
         self._refocus_entry = None
+        # The sleeping groups' resize after the page's width changed, waiting
+        # for the width to settle; and whether the grid was torn down, which
+        # the idle callbacks check before touching anything.
+        self._siblings_source = None
+        self._torn_down = False
         # (path, monotonic microseconds) of the last launch this grid started.
         self._last_activation = (None, 0)
         # The cards that exist right now, by the entry each is showing.
@@ -434,6 +439,9 @@ class RomGrid(Gtk.GridView):
         if dormant == (not self._awake):
             return
         if dormant:
+            # A card that never came back before the grid slept must not take
+            # the focus whenever it is bound again.
+            self._refocus_entry = None
             vadj = self.get_vadjustment()
             self._sleep_scroll = vadj.get_value() if vadj is not None else None
             self._awake = False
@@ -495,7 +503,8 @@ class RomGrid(Gtk.GridView):
             if self._column_state:
                 return self._column_state[0]
             if self._fit_width and RomGrid._fit_viewport:
-                return self._growth_for(RomGrid._fit_viewport - 2 * self._margin)[0]
+                columns = self._growth_for(RomGrid._fit_viewport - 2 * self._margin)[0]
+                return max(1, min(columns, len(self._entries) or 1))
             return 1
         available = self._available_width(for_size)
         if available <= 0:
@@ -513,7 +522,6 @@ class RomGrid(Gtk.GridView):
         count = self._filtered.get_n_items()
         if count == 0:
             return 0
-        self._fit_while_asleep()
         rows = -(-count // self._columns_for(for_size))
         return rows * self._row_height()
 
@@ -532,6 +540,11 @@ class RomGrid(Gtk.GridView):
         if self._refit_source is not None:
             GLib.source_remove(self._refit_source)
             self._refit_source = None
+        if self._siblings_source is not None:
+            GLib.source_remove(self._siblings_source)
+            self._siblings_source = None
+        self._refocus_entry = None
+        self._torn_down = True
         self._bound.clear()
         self._store.remove_all()
         self._entries = []
@@ -733,6 +746,9 @@ class RomGrid(Gtk.GridView):
         self._focused_card = card
         if card is None:
             return
+        if card.entry is not self._refocus_entry:
+            # The user moved on before the rebuilt card came back.
+            self._refocus_entry = None
         if card.entry is not None:
             self._focused_entry = card.entry
         card.set_focus_visual(True)
@@ -1068,18 +1084,21 @@ class RomGrid(Gtk.GridView):
         viewport = available + 2 * self._margin
         if viewport != RomGrid._fit_viewport:
             RomGrid._fit_viewport = viewport
-            # Deferred: this runs from size-allocate.
-            GLib.idle_add(self._fit_sleeping_siblings)
+            self._schedule_siblings()
         if growth != self._growth:
             self._schedule_refit(growth)
         elif self._refit_source is not None:
             # Back to the size the cards already have: nothing to rebuild.
             GLib.source_remove(self._refit_source)
             self._refit_source = None
+        # Until the rebuild, the cards are as wide as they are now: a window
+        # that shrank lays them out in the columns they still fit in, never
+        # in more than the width has room for.
+        cell = self._min_card_allocation_width() + max(growth, self._growth) + self._spacing
+        columns = max(1, min(columns, available // cell))
         count = len(self._entries) or 1
         if count >= columns:
             return columns, 0
-        cell = self._min_card_allocation_width() + growth + self._spacing
         return columns, max(0, available - count * cell)
 
     def _fit_while_asleep(self):
@@ -1095,8 +1114,26 @@ class RomGrid(Gtk.GridView):
         if growth != self._growth:
             self._size_cards(growth)
 
+    def _schedule_siblings(self):
+        """Resize the page's sleeping groups once the width stops changing.
+
+        Debounced like the rebuild: a window drag changes the width every
+        frame, and each pass re-measures and re-lays out the whole page.
+        """
+        if self._siblings_source is not None:
+            GLib.source_remove(self._siblings_source)
+        self._siblings_source = GLib.timeout_add(
+            REFIT_DELAY_MS if self._refitted else 0, self._fit_sleeping_siblings
+        )
+
     def _fit_sleeping_siblings(self):
-        """The page's width changed: its sleeping groups take the new size."""
+        """The page's width changed: its sleeping groups take the new size.
+
+        Here and not while the page measures them: a measure must only read.
+        """
+        self._siblings_source = None
+        if self._torn_down:
+            return GLib.SOURCE_REMOVE
         parent = self.get_parent()
         if isinstance(parent, GroupedScroll):
             for grid in parent.grids():
@@ -1180,10 +1217,17 @@ class RomGrid(Gtk.GridView):
         return int(rows) * columns, fraction / row
 
     def _restore_anchor(self, anchor):
+        if self._torn_down:
+            return GLib.SOURCE_REMOVE
         position, fraction = anchor
         vadj = self.get_vadjustment()
         if vadj is not None:
-            columns = self._column_state[0] if self._column_state else 1
+            # The relayout that sets the columns again may not have run yet:
+            # then they are the ones the width calls for, not one.
+            columns = (
+                self._column_state[0] if self._column_state
+                else self._columns_for(self.get_width())
+            )
             target = (position // columns + fraction) * self._row_height()
             vadj.set_value(max(0.0, min(target, vadj.get_upper() - vadj.get_page_size())))
         return GLib.SOURCE_REMOVE
@@ -1194,7 +1238,7 @@ class RomGrid(Gtk.GridView):
         The new factory builds the cards on the next layout, which may come
         after this idle: then the card takes the focus when it is bound.
         """
-        position = self._position_of(entry)
+        position = None if self._torn_down else self._position_of(entry)
         if position is None:
             self._refocus_entry = None
             return GLib.SOURCE_REMOVE

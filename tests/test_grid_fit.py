@@ -216,6 +216,47 @@ class FitColumnsTests(_FitCase):
         refit.assert_called_once_with(grid._pending_growth)
         self.assertTrue(grid._refitted)
 
+    def test_a_shrinking_window_never_asks_for_more_than_the_cards_fit(self):
+        # Review of PR 1008: until the rebuild, the cards keep their width.
+        grid = self.open_grid()
+        grid._growth = 400
+        available = grid._available_width()
+        with mock.patch.object(grid, "_schedule_refit"):
+            columns, _slack = grid._fit_columns(available)
+        cell = grid._min_card_allocation_width() + 400 + grid._spacing
+        self.assertLessEqual(columns * cell, max(cell, available))
+
+    def test_the_sleeping_groups_wait_for_the_width_to_settle(self):
+        grid = self.open_grid()
+        grid._refitted = True
+        with mock.patch.object(grid_module.GLib, "timeout_add", side_effect=[5, 6]) as timeout, \
+                mock.patch.object(grid_module.GLib, "source_remove") as remove:
+            grid._schedule_siblings()
+            grid._schedule_siblings()
+        remove.assert_called_once_with(5)
+        self.assertEqual(timeout.call_args[0][0], REFIT_DELAY_MS)
+        self.assertEqual(grid._siblings_source, 6)
+        grid._siblings_source = None
+
+    def test_a_torn_down_grid_touches_nothing_from_its_idles(self):
+        grid = self.open_grid()
+        siblings = GLib.timeout_add(60_000, lambda: False)
+        grid._siblings_source = siblings
+        with mock.patch.object(grid_module.GLib, "source_remove") as remove:
+            grid.teardown()
+        remove.assert_any_call(siblings)
+        GLib.source_remove(siblings)
+        self.assertIsNone(grid._siblings_source)
+        with mock.patch.object(grid, "get_parent") as parent:
+            self.assertEqual(grid._fit_sleeping_siblings(), GLib.SOURCE_REMOVE)
+        parent.assert_not_called()
+        with mock.patch.object(grid, "get_vadjustment") as vadj:
+            self.assertEqual(grid._restore_anchor((0, 0.0)), GLib.SOURCE_REMOVE)
+        vadj.assert_not_called()
+        with mock.patch.object(grid, "_take_focus_back") as focus:
+            grid._refocus_after_refit(object())
+        focus.assert_not_called()
+
     def test_tearing_down_cancels_a_waiting_rebuild(self):
         grid = self.open_grid()
         source = GLib.timeout_add(60_000, lambda: False)
@@ -272,6 +313,20 @@ class RefittingTests(_FitCase):
         expected = min(1.5 * grid._row_height(), vadj.get_upper() - vadj.get_page_size())
         self.assertAlmostEqual(vadj.get_value(), expected, delta=1)
 
+    def test_the_anchor_counts_the_columns_the_width_calls_for_before_the_relayout(self):
+        # Review of PR 1008: restoring before the relayout used to count one.
+        grid = self.open_grid()
+        vadj = mock.Mock()
+        vadj.get_upper.return_value = 100_000
+        vadj.get_page_size.return_value = 100
+        grid._column_state = None
+        columns = grid._columns_for(grid.get_width())
+        self.assertGreater(columns, 1)
+        with mock.patch.object(grid, "get_vadjustment", return_value=vadj), \
+                mock.patch.object(grid, "_row_height", return_value=100):
+            grid._restore_anchor((columns, 0.5))
+        vadj.set_value.assert_called_once_with(150.0)
+
     def test_an_unscrolled_page_has_no_anchor(self):
         grid = self.open_grid()
         grid.get_vadjustment().set_value(0)
@@ -293,10 +348,6 @@ class RefittingTests(_FitCase):
         with mock.patch.object(grid, "get_vadjustment", return_value=vadj), \
                 mock.patch.object(grid, "_row_height", return_value=20):
             self.assertEqual(grid._scroll_anchor(), (1, 0.5))
-            vadj.get_upper.return_value = 1000
-            vadj.get_page_size.return_value = 100
-            grid._restore_anchor((3, 0.5))
-        vadj.set_value.assert_called_once_with(70.0)
 
     def test_restoring_with_no_scroller_does_nothing(self):
         grid = self.open_grid()
@@ -344,6 +395,33 @@ class RefittingTests(_FitCase):
             self.assertEqual(grid._refocus_after_refit(object()), GLib.SOURCE_REMOVE)
         focus.assert_not_called()
         self.assertIsNone(grid._refocus_entry)
+
+    def test_a_game_that_never_came_back_does_not_take_the_focus_later(self):
+        # Review of PR 1008: leaving the page, sleeping, or moving on drops it.
+        grid = self.open_grid()
+        entry = grid.visible_entries()[3]
+        grid._refocus_entry = entry
+        grid.set_dormant(True)
+        self.assertIsNone(grid._refocus_entry)
+        grid.set_dormant(False)
+        self.pump()
+        grid._refocus_entry = entry
+        other = grid.card_for(grid.visible_entries()[0])
+        self.assertIsNotNone(other)
+        root = self.win
+        with mock.patch.object(grid, "item_for_widget", return_value=other):
+            grid._on_root_focus_changed(root, None)
+        self.assertIsNone(grid._refocus_entry)
+
+    def test_the_rebuilt_card_itself_keeps_the_pending_focus(self):
+        grid = self.open_grid()
+        entry = grid.visible_entries()[0]
+        card = grid.card_for(entry)
+        grid._refocus_entry = entry
+        with mock.patch.object(grid, "item_for_widget", return_value=card):
+            grid._on_root_focus_changed(self.win, None)
+        self.assertIs(grid._refocus_entry, entry)
+        grid._refocus_entry = None
 
     def test_taking_the_focus_back_follows_the_new_card(self):
         grid = self.open_grid()
@@ -413,6 +491,15 @@ class AllGamesTests(_FitCase):
         self.shell.open_library("SFC")
         grid = self.win.pages.grid_for("SFC")
         self.assertEqual(grid._fit_sleeping_siblings(), GLib.SOURCE_REMOVE)
+
+    def test_a_sleeping_grid_counts_no_more_columns_than_it_has_games(self):
+        self.show()
+        self.shell.open_library(ALL_CONSOLES_ID)
+        grid = self.win.pages.grid_for(ALL_CONSOLES_ID).grids()[-1]
+        self.assertTrue(self.pump_until(lambda: RomGrid._fit_viewport is not None))
+        grid._column_state = None
+        with mock.patch.object(grid, "_entries", grid._entries[:1]):
+            self.assertEqual(grid._columns_for(-1), 1)
 
     def test_with_no_width_known_a_sleeping_grid_keeps_its_size(self):
         self.show()
