@@ -133,7 +133,7 @@ def _choice(key, section, group, default, choices):
 
 
 def _image_keys(area):
-    group = area
+    group = f"{area}_image"
     return (
         ThemeKey(f"{area}_image", SECTION_BACKGROUNDS, group, KIND_IMAGE, "", ""),
         _choice(f"{area}_image_fit", SECTION_BACKGROUNDS, group, "cover", FITS),
@@ -225,7 +225,12 @@ def validate_value(spec, value):
         # A bool is an int to Python (True == 1), and never a choice.
         if isinstance(value, bool):
             return None
-        return value if value in spec.choices else None
+        # The choice's own value, never an equal one of another type
+        # (16.0 for 16), so it is written back exactly as the table has it.
+        for choice in spec.choices:
+            if type(choice) is type(value) and choice == value:
+                return choice
+        return None
     if spec.kind == KIND_FONT:
         if not isinstance(value, str) or value != value.strip():
             return None

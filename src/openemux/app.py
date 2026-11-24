@@ -92,10 +92,7 @@ class OpenEmuxApplication(Adw.Application):
 
         # Before the first window is drawn: setting the scheme afterwards
         # repaints a window the user is already looking at (issue #198).
-        from openemux.ui.theming import apply_theme
-        apply_theme(
-            self.config_manager.get_ui_settings()["theme"], store=self.config_manager.themes
-        )
+        self._apply_theme_at_start()
 
         if self._bootstrap_running:
             if self._bootstrap_window:
@@ -180,11 +177,18 @@ class OpenEmuxApplication(Adw.Application):
         self.config_manager = ConfigManager()
         # The profile's own settings: its theme, and no second offer even if
         # its first boot never finished.
-        from openemux.ui.theming import apply_theme
-        apply_theme(
-            self.config_manager.get_ui_settings()["theme"], store=self.config_manager.themes
-        )
+        self._apply_theme_at_start()
         self.config_manager.set_portable_import_dismissed(True)
+
+    def _apply_theme_at_start(self):
+        """The stored theme, with its backgrounds' cache (issue 1012)."""
+        from openemux.ui import theming
+        themes = self.config_manager.themes
+        # An editor or an import that a crash cut short leaves a hidden
+        # folder behind; nothing reads them, so they go.
+        themes.purge_leftovers()
+        theming.set_cache_dir(self.config_manager.store_path("theme_backgrounds"))
+        theming.apply_theme(self.config_manager.get_ui_settings()["theme"], store=themes)
 
     def do_shutdown(self):
         # Last line of defence against a game outliving the app. Closing the

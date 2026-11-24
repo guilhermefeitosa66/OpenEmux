@@ -102,7 +102,7 @@ from openemux.ui.rom_context import RomContextMenuServices
 from openemux.ui.task_banner import TaskBanner
 from openemux.ui.navigation import NavigationController
 from openemux.ui.preferences import OpenEmuxPreferences
-from openemux.ui import theming
+from openemux.ui import theme_css, theming
 from openemux.ui.welcome import WelcomeAssistant
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,14 @@ MAX_INPUT_HINTS = 8
 #: details are a page of their own (issue 975), so nothing shares the row with
 #: them; the couch scale (``bigpicture.theme``) makes everything else bigger.
 BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
+
+#: The console sidebar's width: (min, max) px and the share of the window.
+DEFAULT_SIDEBAR_WIDTHS = (260, 360)
+DEFAULT_SIDEBAR_FRACTION = 0.28
+#: With a theme's sidebar width (issue 1012): the width is the ceiling, and
+#: a narrow window still takes the sidebar down to this, by this share.
+THEMED_SIDEBAR_MIN = 200
+THEMED_SIDEBAR_FRACTION = 0.4
 
 
 
@@ -253,13 +261,15 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.content_stack.connect("notify::visible-child-name", self._on_visible_child_changed)
 
         self.split_view = Adw.NavigationSplitView()
-        self.split_view.set_min_sidebar_width(260)
-        self.split_view.set_max_sidebar_width(360)
-        self.split_view.set_sidebar_width_fraction(0.28)
+        self.split_view.set_min_sidebar_width(DEFAULT_SIDEBAR_WIDTHS[0])
+        self.split_view.set_max_sidebar_width(DEFAULT_SIDEBAR_WIDTHS[1])
+        self.split_view.set_sidebar_width_fraction(DEFAULT_SIDEBAR_FRACTION)
         self.sidebar = ConsoleSidebar(self)
         # navigation.py steers the list directly, so it keeps a plain name.
         self.console_list = self.sidebar.list_box
         self.split_view.set_sidebar(self.sidebar.page)
+        # What a custom theme's sidebar image paints (issue 1012).
+        self.sidebar.page.add_css_class("console-sidebar-pane")
         self.split_view.set_content(self._build_content())
         # The desktop layout and Big Picture share the window: one stack,
         # the split view on one side and the couch shell (built on first use)
@@ -955,6 +965,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             "notify::dark", lambda *_: self._sync_theme_button()
         )
         self.connect("close-request", self._on_close_disconnect_style_manager)
+        # A custom theme's sizes the widgets read themselves (issue 1012).
+        self._theme_grid_metrics = (None, None)
+        theming.add_listener(self._on_theme_painted)
+        self._on_theme_painted()
         self._translatable(self._sync_theme_button)
         self._sync_theme_button()
         return self.theme_btn
@@ -969,8 +983,36 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             self.t("header.theme.to_light" if dark else "header.theme.to_dark")
         )
 
+    def _on_theme_painted(self):
+        """Follow a theme's sidebar width, grid gap and card size (issue 1012).
+
+        The width is a ceiling: the split view still shares a narrow window
+        (fraction) and collapses at its breakpoint as before, so a wide
+        sidebar never squeezes the library out. The grid only rebuilds when
+        its gap or card size really changed -- a color change repaints by CSS.
+        """
+        metrics = theme_css.layout_metrics(theming.current_paint().values)
+        width = metrics.get("sidebar_width")
+        if width is None:
+            self.split_view.set_min_sidebar_width(DEFAULT_SIDEBAR_WIDTHS[0])
+            self.split_view.set_max_sidebar_width(DEFAULT_SIDEBAR_WIDTHS[1])
+            self.split_view.set_sidebar_width_fraction(DEFAULT_SIDEBAR_FRACTION)
+        else:
+            self.split_view.set_min_sidebar_width(min(width, THEMED_SIDEBAR_MIN))
+            self.split_view.set_max_sidebar_width(width)
+            self.split_view.set_sidebar_width_fraction(THEMED_SIDEBAR_FRACTION)
+        grid = (metrics.get("grid_gap"), metrics.get("card_scale"))
+        if grid == self._theme_grid_metrics:
+            return
+        self._theme_grid_metrics = grid
+        pages = getattr(self, "pages", None)
+        if pages is not None and not getattr(self, "_big_picture", False):
+            pages.invalidate_contents()
+            self._reload_current_page()
+
     def _on_close_disconnect_style_manager(self, *_args):
         """Let go of the process-lifetime style manager on the way out."""
+        theming.remove_listener(self._on_theme_painted)
         handler = getattr(self, "_style_manager_handler", None)
         if handler is not None:
             self._style_manager.disconnect(handler)

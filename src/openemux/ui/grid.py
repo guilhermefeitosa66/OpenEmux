@@ -55,6 +55,7 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     fit_card_width,
     uniform_slot_size,
 )
+from openemux.ui import theme_css, theming
 from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
 from openemux.ui.grouped_scroll import GroupedScroll
@@ -240,8 +241,15 @@ class RomGrid(Gtk.GridView):
         # apart, smaller cards packed tighter -- the grid density the user is
         # really asking for when they zoom out.
         self.zoom = normalize_zoom(self.ui_settings.get("zoom", DEFAULT_ZOOM))
+        # A custom theme's grid gap and card size (issue 1012), on top of the
+        # zoom. Big Picture keeps its own couch sizes.
+        metrics = {} if self.ui_settings.get("big_picture") else theme_css.layout_metrics(
+            theming.current_paint().values
+        )
+        self._card_scale = 1.0 if self.compact else metrics.get("card_scale", 100) / 100
         self._spacing = scale_spacing(
-            LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
+            LIST_ROW_SPACING if self.compact else metrics.get("grid_gap", GRID_SPACING),
+            self.zoom,
         )
         # A cartridge composite carries its shadow in a transparent margin
         # (issue 903): the card grows by it on every side, and the gaps and
@@ -273,7 +281,7 @@ class RomGrid(Gtk.GridView):
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. The artwork is FIXED_ITEM_WIDTH at the zoom; Big
         # Picture may draw it wider, see _size_cards.
-        self._base_artwork_width = scale_length(FIXED_ITEM_WIDTH, self.zoom)
+        self._base_artwork_width = scale_length(FIXED_ITEM_WIDTH * self._card_scale, self.zoom)
         cover_size = self._cover_size_for(cartridge_frame_path, self._base_artwork_width)
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
         # The console's authored shell; per-ROM colors swap in a variant of it.
@@ -1054,11 +1062,14 @@ class RomGrid(Gtk.GridView):
             # Every card gets the same slot and its art, cover or cartridge,
             # is fitted into it standing on the slot's bottom edge (issue
             # 996); the cell no longer grows to the tallest shell.
-            cover_size = (
-                uniform_slot_size(self.zoom)
-                if artwork_width == self._base_artwork_width
-                else cover_size_for_width(self.console, artwork_width, mixed_consoles=True)
-            )
+            if artwork_width == self._base_artwork_width:
+                slot_w, slot_h = uniform_slot_size(self.zoom)
+                cover_size = (
+                    max(1, round(slot_w * self._card_scale)),
+                    max(1, round(slot_h * self._card_scale)),
+                )
+            else:
+                cover_size = cover_size_for_width(self.console, artwork_width, mixed_consoles=True)
             if frame_path:
                 cover_size = (
                     cover_size[0] + 2 * self._shadow_pad,
