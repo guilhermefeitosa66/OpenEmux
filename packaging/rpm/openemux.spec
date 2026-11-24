@@ -186,6 +186,13 @@ if [ $1 -eq 0 ]; then
 fi
 
 %changelog
+* Tue Nov 24 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.25.0-1
+- Themes: create your own, five ready-made ones, a theme editor with live preview, Big Picture follows the theme
+- Any cartridge colour, with saved colours and palettes
+- Clicks no longer stop registering and right-click menus no longer flicker
+- Recently played lines up; Big Picture fills the screen and keeps the focus whole
+- The Flatpak sees gamepads; AUR recipes for Arch
+
 * Sun Nov 15 2026 Guilherme Feitoza <guilhermefeitosa66@gmail.com> - 1.24.0-1
 - Big Picture: a full-screen couch layout for a TV and a controller, like the Android app
 - Sharp pixel-art console icons with a soft pixel grid when enlarged
