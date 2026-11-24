@@ -275,6 +275,9 @@ class BigPictureThemeTests(BigPictureCase):
         theming._paint.backgrounds = {"library": {"uri": "file:///x.png", "fit": "tile",
                                                   "path": Path("/x.png")}}
         args = self.shell.theme_args()
+        self.assertNotIn("console_list", args)
+        theming._paint.values["console_list_bg"] = "#123456"
+        self.assertEqual(self.shell.theme_args()["console_list"], "#123456")
         self.assertEqual(args["font_family"], "Sans")
         self.assertEqual(args["background"], {"uri": "file:///x.png", "fit": "tile"})
         self.assertEqual(args["palette"]["bg"].lower(), "#fafafa")

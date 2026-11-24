@@ -33,6 +33,7 @@ _DEFINITIONS = {
         "accent_button_bg": "#7c3aed", "accent_button_fg": "#ffffff",
         "border_color": "#f5d0e6", "corner_radius": 16,
         "shadow_color": "#c084fc", "shadow_strength": 20, "icon_color": "#6d28d9",
+        "console_list_bg": "#fce7f3",
         "library_image": "library.png", "library_image_dim": 55,
     }),
     "dracula": ("Dracula", THEME_DARK, {
@@ -44,6 +45,7 @@ _DEFINITIONS = {
         "accent": "#bd93f9", "selection_bg": "#44475a",
         "accent_button_bg": "#bd93f9", "accent_button_fg": "#282a36",
         "border_color": "#44475a", "shadow_strength": 45, "icon_color": "#ff79c6",
+        "console_list_bg": "#44475a",
         "library_image": "library.png", "library_image_dim": 45,
     }),
     "kitty": ("Kitty", THEME_DARK, {
@@ -56,6 +58,7 @@ _DEFINITIONS = {
         "accent_button_bg": "#f5c2e7", "accent_button_fg": "#2a2438",
         "border_color": "#4a3b5c", "corner_radius": 20,
         "shadow_color": "#f5c2e7", "shadow_strength": 20, "icon_color": "#b4befe",
+        "console_list_bg": "#3b3250",
         "library_image": "library.png", "library_image_dim": 30,
     }),
     "neon": ("Neon", THEME_DARK, {
@@ -68,6 +71,7 @@ _DEFINITIONS = {
         "accent_button_bg": "#ff2a6d", "accent_button_fg": "#0d0221",
         "border_color": "#ff2a6d", "border_width": 1,
         "shadow_color": "#ff2a6d", "shadow_strength": 60, "icon_color": "#05d9e8",
+        "console_list_bg": "#1b0838",
         "library_image": "library.png", "library_image_dim": 35,
     }),
     "tokyo-night": ("Tokyo Night", THEME_DARK, {
@@ -79,6 +83,7 @@ _DEFINITIONS = {
         "accent": "#7aa2f7", "selection_bg": "#292e42",
         "accent_button_bg": "#7aa2f7", "accent_button_fg": "#1a1b26",
         "border_color": "#3b4261", "icon_color": "#bb9af7",
+        "console_list_bg": "#24283b",
         "library_image": "library.png", "library_image_dim": 40,
     }),
 }

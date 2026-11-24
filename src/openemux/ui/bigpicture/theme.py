@@ -18,7 +18,7 @@ its font and its library image; the shelf's console colors stay as they are.
 """
 
 from openemux.core.big_picture_shelf import ALL_GAMES_COLOR, SHELF_COLORS, css_class
-from openemux.core.cartridge_colors import hex_to_rgb
+from openemux.core.cartridge_colors import hex_to_rgb, parse_hex
 from openemux.core.contrast import WCAG_AA, contrast_ratio
 from openemux.core.custom_themes import FONT_NAME, mix, readable_on
 from openemux.core.theme import THEME_DARK
@@ -462,7 +462,33 @@ def background_rules(background):
 """
 
 
-def stylesheet(scale=1.0, palette=None, font_family=None, background=None):
+def console_list_rules(color, p):
+    """Every console card in one theme color, with the theme's ink on it.
+
+    After ``shelf_rules`` and one class more specific than them, so it wins
+    over each console's own color. ``color`` must be a ``#rrggbb``.
+    """
+    color = parse_hex(color) if isinstance(color, str) else None
+    if color is None:
+        return ""
+    return f"""
+/* The console list in a theme's color (issue 1012). */
+.big-picture .bp-content .bp-shelf-card,
+.big-picture .bp-content .bp-shelf-card.bp-shelf-all {{
+    background-color: {color};
+    color: {p['text']};
+}}
+.big-picture .bp-content .bp-shelf-card .bp-shelf-name {{
+    color: {p['text']};
+}}
+.big-picture .bp-content .bp-shelf-card .bp-shelf-eyebrow,
+.big-picture .bp-content .bp-shelf-card .bp-shelf-count {{
+    color: {p['muted']};
+}}
+"""
+
+
+def stylesheet(scale=1.0, palette=None, font_family=None, background=None, console_list=None):
     """The whole Big Picture stylesheet at ``scale``.
 
     Every rule is scoped under ``.big-picture``, the class the window carries
@@ -476,6 +502,7 @@ def stylesheet(scale=1.0, palette=None, font_family=None, background=None):
     s = lambda name: px(name, scale)  # noqa: E731 - a local shorthand
     extra = "" if palette is None else themed_rules(p)
     extra += font_rule(font_family) + background_rules(background)
+    extra += console_list_rules(console_list, p)
     return f"""
 /* Big Picture, generated at scale {scale}. */
 .big-picture .bp-shell,

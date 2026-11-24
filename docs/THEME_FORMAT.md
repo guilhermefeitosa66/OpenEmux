@@ -54,6 +54,7 @@ table's order.
 | `card_bg` | colors | color | `#rrggbb` | `#ffffff` | `#363636` |
 | `popover_bg` | colors | color | `#rrggbb` | `#ffffff` | `#383838` |
 | `details_bg` | colors | color | `#rrggbb` | `#fafafa` | `#383838` |
+| `console_list_bg` | colors | color | `#rrggbb` | `#ffffff` | `#24242c` |
 | `text_primary` | text | color | `#rrggbb` | `#323232` | `#ffffff` |
 | `text_secondary` | text | color | `#rrggbb` | `#6e6e6e` | `#a8a8a8` |
 | `sidebar_text_primary` | text | color | `#rrggbb` | `#2f2f2f` | `#ffffff` |
@@ -95,6 +96,11 @@ Value formats:
   the fits are strings.
 - **font**: a family name; quotes, backslashes and braces are never allowed.
 - **image**: a file name, never a path (see below).
+
+`console_list_bg` is Big Picture's console list (the TV layout on the
+desktop, the gamepad layout on Android). Absent, each console card keeps its
+own color; present, every card takes it, with the theme's primary and
+secondary text on top (both are checked for contrast against it).
 
 ## Images
 
@@ -185,6 +191,7 @@ ordinary, editable theme; exporting one writes an ordinary theme file.
 | `card_bg` | `#ffffff` | `#44475a` | `#3b3250` | `#1b0838` | `#24283b` |
 | `popover_bg` | `#ffffff` | `#343746` | `#352c47` | `#1b0838` | `#24283b` |
 | `details_bg` | `#fff7fb` | `#2e303e` | `#30293f` | `#150530` | `#1f2335` |
+| `console_list_bg` | `#fce7f3` | `#44475a` | `#3b3250` | `#1b0838` | `#24283b` |
 | `text_primary` | `#3f3350` | `#f8f8f2` | `#f5e0ee` | `#d1f7ff` | `#c0caf5` |
 | `text_secondary` | `#5f526f` | `#c6c9de` | `#cdbcd9` | `#a8b8e8` | `#a9b1d6` |
 | `sidebar_text_primary` | `#3f3350` | `#f8f8f2` | `#f5e0ee` | `#d1f7ff` | `#c0caf5` |

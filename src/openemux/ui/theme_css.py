@@ -76,6 +76,8 @@ SHAPE_KEYS = (
     "font_family", "density",
 )
 LAYOUT_KEYS = ("grid_gap", "card_scale", "sidebar_width")
+#: Keys only Big Picture paints (``bigpicture.theme``), never the desktop.
+BIG_PICTURE_KEYS = ("console_list_bg",)
 #: Background image settings: used through ``backgrounds``, which the UI
 #: builds from processed files (never from the theme file itself).
 IMAGE_KEYS = tuple(

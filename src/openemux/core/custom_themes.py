@@ -160,6 +160,10 @@ THEME_KEYS = (
     _color("card_bg", SECTION_COLORS, "surfaces", "#ffffff", "#363636"),
     _color("popover_bg", SECTION_COLORS, "surfaces", "#ffffff", "#383838"),
     _color("details_bg", SECTION_COLORS, "surfaces", "#fafafa", "#383838"),
+    # Big Picture's console list (issue 1012, the maintainer's Android test):
+    # left alone, each console card keeps its own color; set, every card
+    # takes this one, so a theme never clashes with the per-console colors.
+    _color("console_list_bg", SECTION_COLORS, "big_picture", "#ffffff", "#24242c"),
     _color("text_primary", SECTION_TEXT, "content", "#323232", "#ffffff"),
     _color("text_secondary", SECTION_TEXT, "content", "#6e6e6e", "#a8a8a8"),
     _color("sidebar_text_primary", SECTION_TEXT, "sidebar", "#2f2f2f", "#ffffff"),
@@ -193,9 +197,9 @@ KEYS_BY_NAME = {spec.key: spec for spec in THEME_KEYS}
 #: warns when a pair the theme changed falls below WCAG AA.
 CONTRAST_PAIRS = (
     ("text_primary", ("window_bg", "library_bg", "card_bg", "popover_bg",
-                      "details_bg", "headerbar_bg")),
+                      "details_bg", "headerbar_bg", "console_list_bg")),
     ("text_secondary", ("window_bg", "library_bg", "card_bg", "popover_bg",
-                        "details_bg")),
+                        "details_bg", "console_list_bg")),
     ("sidebar_text_primary", ("sidebar_bg", "selection_bg")),
     ("sidebar_text_secondary", ("sidebar_bg",)),
     ("accent", ("window_bg",)),

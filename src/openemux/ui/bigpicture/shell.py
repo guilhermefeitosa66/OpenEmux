@@ -309,6 +309,8 @@ class BigPictureShell(Gtk.Box):
             "palette": theme.palette_for(values, paint.base),
             "font_family": values["font_family"] or None,
         }
+        if "console_list_bg" in paint.values:
+            args["console_list"] = paint.values["console_list_bg"]
         library = paint.backgrounds.get("library")
         if library is not None:
             args["background"] = {"uri": library["uri"], "fit": library["fit"]}

@@ -302,6 +302,15 @@ class PaletteTests(_RowsCase):
         self.assertIs(row.ensure_palettes(), area)
         self.assertIs(area.store, self.config.cartridge_colors)
         self.assertIn("#123456", [color for color in area.store.saved_colors()])
+        # Every color field offers the 8 palettes shared with Android (issue
+        # 1012, maintainer's Android test), the user's and the saved colors.
+        from openemux.core.cartridge_colors import PRESET_PALETTES
+        ids = [row[0] for row in area._palettes()]
+        for palette_id, _colors in PRESET_PALETTES:
+            self.assertIn(palette_id, ids)
+        for row in dialog.rows.values():
+            if hasattr(row, "ensure_palettes"):
+                self.assertIsNotNone(row.ensure_palettes(), row.key)
         area.on_pick("#654321")
         self.assertEqual(dialog.draft.values["card_bg"], "#654321")
         dialog.reset_value("card_bg")

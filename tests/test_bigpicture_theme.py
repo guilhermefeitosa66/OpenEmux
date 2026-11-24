@@ -330,3 +330,22 @@ class GeneratedCssTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConsoleListTests(unittest.TestCase):
+    """Issue 1012, maintainer's Android test: the console list follows a theme."""
+
+    def test_no_color_no_rule(self):
+        from openemux.ui.bigpicture import theme as bp
+        self.assertEqual(bp.console_list_rules(None, bp.DEFAULT_PALETTE), "")
+        self.assertEqual(bp.console_list_rules("red; }", bp.DEFAULT_PALETTE), "")
+
+    def test_every_card_takes_the_color_with_the_themes_ink(self):
+        from openemux.ui.bigpicture import theme as bp
+        palette = dict(bp.DEFAULT_PALETTE, text="#111111", muted="#222222")
+        css = bp.stylesheet(1.0, palette=palette, console_list="#ABCDEF")
+        rule_at = css.index(".big-picture .bp-content .bp-shelf-card,")
+        self.assertGreater(rule_at, css.index(".bp-shelf-card.bp-shelf-all {"))
+        self.assertIn("background-color: #abcdef;", css[rule_at:])
+        self.assertIn("color: #111111;", css[rule_at:])
+        self.assertIn("color: #222222;", css[rule_at:])

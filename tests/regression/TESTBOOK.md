@@ -20131,9 +20131,12 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a saved custom cartridge color and a palette of your own (issue 983).
-- **Steps:** In the editor, click any color swatch.
-- **Expected:** under the picker, the same "Saved" colors and palette picker as card ▸ "Cartridge
-  color" ▸ "Custom…"; a click on a swatch sets the row's color.
+- **Steps:** In the editor, click the color swatch of rows in every section that has colors
+  (Colors, Text, Accent, Borders and Shadows, Icons); open the palette list.
+- **Expected:** under the picker of every one of them, the same "Saved" colors and palette picker
+  as card ▸ "Cartridge color" ▸ "Custom…": Shell Colors, the 8 palettes shared with Android
+  (Basic, Dracula, Pastel, Nord, Gruvbox, Neon, Earth, Green screen) and your own; a click on a
+  swatch sets the row's color.
 - **Check:** suite file `tests/test_theme_editor_rows.py` (`PaletteTests`).
 
 ### RT-1257 — Big Picture follows a custom theme
@@ -20184,3 +20187,20 @@ import replaced. Save states are not part of it. The runner has no Android devic
   "Duplicate" and "Export…" work. 2: "Dracula (copy)" is created with the same picture and picked;
   it can be edited, renamed and deleted; "Dracula" itself is unchanged.
 - **Check:** suite file `tests/test_theme_picker_share.py` (`ReadyMadeTests`).
+
+### RT-1261 — Big Picture's console list follows the theme
+- **Area:** Custom themes, Big Picture
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. Open Big Picture; look at the console list (Library).
+  2. Edit the theme ▸ "Colors" ▸ "Big Picture" ▸ "Console list": pick a color; "Save"; open Big
+     Picture again. Then reset the row and save.
+  3. Pick each ready-made theme and open Big Picture.
+  4. Pick a "Console list" color close to the primary text color.
+- **Expected:** 1: as before, each console card in its own color. 2: every card takes the picked
+  color, names and counts in the theme's text colors; after the reset, the per-console colors are
+  back. 3: each ready-made theme gives its own console-list color, all readable. 4: a contrast
+  warning on the "Console list" row (and on the text rows) in the editor.
+- **Check:** suite file `tests/test_bigpicture_theme.py` (`ConsoleListTests`); the ready-made
+  contrast in `tests/test_ready_themes.py`.

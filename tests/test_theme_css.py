@@ -5,6 +5,7 @@ import unittest
 from openemux.core.custom_themes import THEME_KEYS
 from openemux.ui.theme_css import (
     APP_RULES,
+    BIG_PICTURE_KEYS,
     IMAGE_KEYS,
     LAYOUT_KEYS,
     NAMED_COLORS,
@@ -23,7 +24,8 @@ class StylesheetTests(unittest.TestCase):
         for spec in THEME_KEYS:
             self.assertTrue(
                 spec.key in NAMED_COLORS or spec.key in APP_RULES or spec.key in SHAPE_KEYS
-                or spec.key in LAYOUT_KEYS or spec.key in IMAGE_KEYS,
+                or spec.key in LAYOUT_KEYS or spec.key in IMAGE_KEYS
+                or spec.key in BIG_PICTURE_KEYS,
                 spec.key,
             )
 
