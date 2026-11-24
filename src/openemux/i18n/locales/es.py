@@ -515,6 +515,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "Pulsa Esc para cancelar",
     "input.capture.no_gamepad": "No se detectó ningún mando. Conecta un mando e inténtalo de nuevo.",
     "input.capture.permission_denied": "No se pudo leer el mando. Puede que tu usuario deba estar en el grupo 'input'.",
+    "input.capture.sandbox_no_input": "No se pueden leer los mandos: este Flatpak no tiene acceso a los dispositivos de entrada. Permite \"Todos los dispositivos\" para OpenEmux en Flatseal.",
     "input.binding.button": "Botón {index}",
     "input.binding.axis": "Eje {axis}",
     "input.binding.hat": "Cruceta {direction}",

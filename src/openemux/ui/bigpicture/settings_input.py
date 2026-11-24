@@ -26,7 +26,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango
 
 from openemux.core.controller_layouts import layout_for
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader, make_held_reader
-from openemux.core.gamepad_reader import describe_token
+from openemux.core.gamepad_reader import GAMEPAD_ERROR_KEYS, describe_token
 from openemux.core.input_actions import (
     ACTION_ORDER,
     GLOBAL_HOTKEY_ACTIONS,
@@ -1056,10 +1056,7 @@ class InputSection:
             return False
         self._gamepad_reader = None
         self._cancel_capture()
-        key = (
-            "input.capture.permission_denied" if reason == "permission_denied"
-            else "input.capture.no_gamepad"
-        )
+        key = GAMEPAD_ERROR_KEYS.get(reason, "input.capture.no_gamepad")
         self._toast(self.t(key), timeout=6)
         return False
 

@@ -4356,6 +4356,50 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite files `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`,
   `WhetherTheInputPageIsLiveTests`) and `tests/test_gamepad_held.py`.
 
+### RT-1226 — The Flatpak sees a controller the same way the other formats do
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed as a Flatpak built from this branch or later (`make
+  flatpak`, or the openemux-flatpak repo), RetroArch from Flathub (`org.libretro.RetroArch`), a USB
+  gamepad that the AppImage already recognizes, and a game of any console.
+- **Steps:**
+  1. With the pad plugged in, open OpenEmux from the Flatpak and move around the library with the
+     D-pad; open a game's page with A and go back with B.
+  2. Open "Big Picture" and navigate it with the pad.
+  3. Open "Preferences" → "Input", pick "Gamepad Port 1" and remap one button by pressing it.
+  4. Start the game from the Flatpak and play a few seconds with the pad.
+  5. With the app open, unplug the pad, then plug it back and keep navigating.
+- **Expected:** The "Controller connected" toast shows and the library, Big Picture and the
+  remapping all answer the pad, as in the AppImage. In game the buttons do what they do from the
+  AppImage. Unplugging shows "Controller disconnected"; plugging back shows "Controller
+  connected" and navigation works again without restarting (issue 1001).
+- **Check:** human only for the pad; headless half:
+  `flatpak info --user --show-permissions io.github.guilhermefeitosa66.OpenEmux | grep '^devices='`
+  names `all`, and
+  `flatpak run --user --command=test io.github.guilhermefeitosa66.OpenEmux -d /dev/input && echo ok`
+  prints `ok` (in the test containers: `make flatpak-devices`). Suite file
+  `tests/test_flatpak_sandbox.py` (`TheControllersAreVisibleInsideTests`).
+
+### RT-1227 — A Flatpak without the input devices says so when remapping
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none (in a real run: OpenEmux as a Flatpak, with
+  `flatpak override --user --nodevice=all io.github.guilhermefeitosa66.OpenEmux`; that also takes
+  the GPU away, so the app renders in software for this run and how it looks is not part of the
+  verdict).
+- **Steps:**
+  1. Open "Preferences" → "Input", pick "Gamepad Port 1" and click a binding to remap it.
+  2. Do the same in "Big Picture" → settings → input.
+- **Expected:** Instead of "No controller detected", a toast says "Can't read controllers: this
+  Flatpak has no access to input devices. Allow "All devices" for OpenEmux in Flatseal." and the
+  capture ends. The app log has one warning per app run with the
+  `flatpak override --user --device=all` command. Outside a Flatpak a missing `/dev/input` still reads as no controller.
+- **Check:** suite files `tests/test_gamepad_capture.py` (`TheSandboxCheckTests`,
+  `test_a_flatpak_without_the_input_devices_says_that_instead`), `tests/test_ui_gamepad.py`,
+  `tests/test_preferences.py`, `tests/test_bigpicture_input.py`.
+- **Restore:** `flatpak override --user --reset io.github.guilhermefeitosa66.OpenEmux` after a real
+  run.
+
 ## Shaders
 
 ### RT-080 — Shader selection round-trips through the store

@@ -205,6 +205,20 @@ for it, and `tests/test_flatpak_sandbox.py` pins the permission set so a new one
 is a deliberate edit rather than a line that slips through — it also fails if a
 `Gtk.FileChooserDialog` comes back, since that would undo the prerequisite.
 
+**The Flatpak sees every device node, for the controllers.** The gamepad
+reader on Linux is evdev: it lists pads from `/proc/bus/input/devices` and
+reads `/dev/input/event*`. With only `--device=dri` there is no `/dev/input` in
+the sandbox, so no pad was ever seen there while every other format saw it
+(issue 1001). `--device=all` binds the host's `/dev`, which also makes hotplug
+work. The narrower `--device=input` needs **Flatpak 1.15.6**, and the floor
+(Ubuntu 24.04, Linux Mint 22) ships 1.14.6, which rejects it as an unknown
+device type; once the floor moves past 1.15.6, `--device=dri` plus
+`--device=input` is the pair to switch to. `tests/test_flatpak_sandbox.py`
+fails if the grant is dropped, and the test containers check it
+(`make flatpak-devices` in `testenv/`). Remapping inside a Flatpak that had the
+access removed (Flatseal, `flatpak override`) says so instead of reporting no
+controller.
+
 **TryExec belongs to the native packages only.** The shared
 `common/openemux.desktop` carries none. `TryExec` is resolved against the user's
 `PATH`, and AppImage integrators (appimaged, AppImageLauncher, GearLever)

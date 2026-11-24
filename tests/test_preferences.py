@@ -1541,6 +1541,11 @@ class TheGamepadReaderTests(_PreferencesCase):
         self.assertEqual(self.toasts(), ["input.capture.permission_denied"])
         self.assertFalse(self.prefs._capture.capturing)
 
+    def test_a_flatpak_without_the_input_devices_says_so(self):
+        self.prefs._on_binding_clicked(None, "a")
+        self.assertFalse(self.prefs._on_gamepad_error("sandbox_no_input"))
+        self.assertEqual(self.toasts(), ["input.capture.sandbox_no_input"])
+
     def test_any_other_reader_failure_reports_no_gamepad(self):
         self.prefs._on_binding_clicked(None, "a")
         self.assertFalse(self.prefs._on_gamepad_error("gone"))

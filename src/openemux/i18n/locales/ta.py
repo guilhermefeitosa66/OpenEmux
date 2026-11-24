@@ -517,6 +517,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "ரத்து செய்ய Esc அழுத்தவும்",
     "input.capture.no_gamepad": "கன்ட்ரோலர் எதுவும் கண்டறியப்படவில்லை. ஒரு கேம்பேடை இணைத்து மீண்டும் முயற்சிக்கவும்.",
     "input.capture.permission_denied": "கன்ட்ரோலரைப் படிக்க முடியவில்லை. உங்கள் பயனர் 'input' குழுவில் இருக்க வேண்டியிருக்கலாம்.",
+    "input.capture.sandbox_no_input": "கன்ட்ரோலர்களைப் படிக்க முடியவில்லை: இந்த Flatpak-க்கு உள்ளீட்டுச் சாதனங்களுக்கான அணுகல் இல்லை. Flatseal-இல் OpenEmux-க்கு \"அனைத்துச் சாதனங்களையும்\" அனுமதியுங்கள்.",
     "input.binding.button": "பொத்தான் {index}",
     "input.binding.axis": "அச்சு {axis}",
     "input.binding.hat": "D-Pad {direction}",

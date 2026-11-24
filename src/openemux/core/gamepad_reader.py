@@ -49,6 +49,9 @@ ABS_HAT3Y = 0x17
 ABS_MAX = 0x3F
 
 PROC_INPUT_DEVICES = "/proc/bus/input/devices"
+INPUT_DEV_DIR = "/dev/input"
+#: Present at the root of every Flatpak sandbox, and nowhere else.
+FLATPAK_INFO = "/.flatpak-info"
 
 # struct input_event { struct timeval time; __u16 type; __u16 code; __s32 value; }
 INPUT_EVENT_FORMAT = "llHHi"
@@ -76,12 +79,21 @@ class GamepadError(Exception):
     """Raised when no usable gamepad can be opened.
 
     ``reason`` is a stable machine-readable code the UI maps to a message:
-    ``"no_gamepad"`` or ``"permission_denied"``.
+    ``"no_gamepad"``, ``"permission_denied"`` or ``"sandbox_no_input"``.
     """
 
     def __init__(self, reason, message=""):
         super().__init__(message or reason)
         self.reason = reason
+
+
+#: The message each ``GamepadError`` reason is shown with, in both input
+#: screens (Preferences and Big Picture). Anything unknown reads as "no pad".
+GAMEPAD_ERROR_KEYS = {
+    "no_gamepad": "input.capture.no_gamepad",
+    "permission_denied": "input.capture.permission_denied",
+    "sandbox_no_input": "input.capture.sandbox_no_input",
+}
 
 
 # ----- /proc/bus/input/devices parsing ---------------------------------------
@@ -340,7 +352,18 @@ def _read_proc_devices(path=PROC_INPUT_DEVICES):
         return ""
 
 
-def list_gamepads(proc_content=None, dev_dir="/dev/input"):
+def sandbox_hides_input(dev_dir=INPUT_DEV_DIR, flatpak_info=FLATPAK_INFO):
+    """True inside a Flatpak that was not given the input devices (issue 1001).
+
+    The sandbox still shows ``/proc/bus/input/devices``, so a pad is *listed*
+    there while its ``/dev/input/event*`` node does not exist -- which used to
+    surface as "no controller", the one thing it is not. Only a Flatpak
+    counts: anywhere else a missing ``/dev/input`` has no permission to fix.
+    """
+    return os.path.exists(flatpak_info) and not os.path.isdir(dev_dir)
+
+
+def list_gamepads(proc_content=None, dev_dir=INPUT_DEV_DIR):
     """Return the connected gamepads, in /dev/input/event* order."""
     content = proc_content if proc_content is not None else _read_proc_devices()
     gamepads = []
@@ -445,6 +468,9 @@ class GamepadCaptureReader:
             self._on_error(reason)
 
     def _run(self):
+        if sandbox_hides_input():
+            self._emit_error("sandbox_no_input")
+            return
         device = self._device
         if device is None:
             gamepads = list_gamepads()

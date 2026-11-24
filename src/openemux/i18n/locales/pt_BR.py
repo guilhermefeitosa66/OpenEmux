@@ -517,6 +517,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "Pressione Esc para cancelar",
     "input.capture.no_gamepad": "Nenhum controle detectado. Conecte um controle e tente novamente.",
     "input.capture.permission_denied": "Não foi possível ler o controle. Seu usuário talvez precise estar no grupo 'input'.",
+    "input.capture.sandbox_no_input": "Não é possível ler os controles: este Flatpak não tem acesso aos dispositivos de entrada. Permita \"Todos os dispositivos\" para o OpenEmux no Flatseal.",
     "input.binding.button": "Botão {index}",
     "input.binding.axis": "Eixo {axis}",
     "input.binding.hat": "Direcional {direction}",

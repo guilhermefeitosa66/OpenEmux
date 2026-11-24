@@ -515,6 +515,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "Appuyez sur Échap pour annuler",
     "input.capture.no_gamepad": "Aucune manette détectée. Branchez une manette et réessayez.",
     "input.capture.permission_denied": "Impossible de lire la manette. Votre utilisateur doit peut-être appartenir au groupe 'input'.",
+    "input.capture.sandbox_no_input": "Impossible de lire les manettes : ce Flatpak n'a pas accès aux périphériques d'entrée. Autorisez « Tous les périphériques » pour OpenEmux dans Flatseal.",
     "input.binding.button": "Bouton {index}",
     "input.binding.axis": "Axe {axis}",
     "input.binding.hat": "Croix directionnelle {direction}",
