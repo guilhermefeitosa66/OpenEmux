@@ -63,8 +63,11 @@ esac
 echo "==> namcap: the findings that would break an install"
 NAMCAP="$(namcap "$PKG_PATH" || true)"
 echo "$NAMCAP"
+# Plus the two this recipe settles by itself: nothing in it is compiled, so it
+# is an `any` package, and the doc directory stage_tree.sh leaves is removed.
 for finding in 'Missing custom license directory' 'Package contains reference to \$srcdir' \
-               'Invalid syntax'; do
+               'Invalid syntax' 'No ELF files and not an "any" package' \
+               'Directory (usr/share/doc) is empty'; do
   if grep -qi "$finding" <<< "$NAMCAP"; then
     echo "FAIL: namcap reports: $finding" >&2
     exit 1
@@ -135,7 +138,7 @@ sed "s/^pkgver=.*/pkgver=${PKGVER}/" "$RECIPE" > "$OUT/PKGBUILD"
 chown -R builder:builder "$OUT"
 runuser -u builder -- bash -lc "cd '$PWD/$OUT' && makepkg --printsrcinfo > .SRCINFO"
 SRCINFO="$(cat "$OUT/.SRCINFO")"
-for line in 'pkgbase = openemux-git' "pkgver = ${PKGVER}" 'provides = openemux' \
+for line in 'pkgbase = openemux-git' "pkgver = ${PKGVER}" 'arch = any' 'provides = openemux' \
             'conflicts = openemux' 'depends = retroarch' \
             'source = openemux::git+https://github.com/guilhermefeitosa66/OpenEmux.git#branch=develop'; do
   grep -qF "$line" <<< "$SRCINFO" || { echo "FAIL: .SRCINFO lacks '$line'" >&2; exit 1; }

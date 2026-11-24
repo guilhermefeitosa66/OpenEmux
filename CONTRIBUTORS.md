@@ -202,6 +202,14 @@ Asked on Reddit for a way to rename a game inside the Android app. That request 
 screen renames its file and carries its save states, battery saves, playtime, artwork and per-game
 settings along, so the game resumes where it was under its new name.
 
+### mtesseracttech ([@mtesseracttech](https://github.com/mtesseracttech))
+
+Asked for an `openemux-git` package on the AUR, so Arch users can install and update OpenEmux with
+one command instead of downloading each release. That request became
+[#986](https://github.com/guilhermefeitosa66/OpenEmux/issues/986): the `openemux-git` recipe in
+`packaging/aur/`, built from the repository with the distribution's RetroArch, and `make aur-git`
+to build, test and prepare it for the AUR.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

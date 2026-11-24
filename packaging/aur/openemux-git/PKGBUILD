@@ -26,7 +26,9 @@ _branch=develop
 pkgver=0.0.0
 pkgrel=1
 pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu (development version)"
-arch=('x86_64' 'aarch64')
+# Pure Python, now that the emulator is the distribution's: the same package
+# runs wherever Arch (or Arch Linux ARM) ships a retroarch.
+arch=('any')
 url="https://openemux.libre-apps.org/"
 license=('MIT')
 
@@ -83,4 +85,5 @@ package() {
   install -Dm644 packaging/common/copyright \
     "$pkgdir/usr/share/licenses/$pkgname/copyright"
   rm -rf "$pkgdir/usr/share/doc/openemux"
+  rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
 }
