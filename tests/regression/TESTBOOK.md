@@ -20188,3 +20188,57 @@ openemux-android: `UserThemeTest`, `ThemeYamlTest`, `ThemeStoreTest`, `ResolvedT
 - **Steps:** Settings ▸ "Backup": export with settings; delete "Midnight"; import the backup.
 - **Expected:** "Midnight" is back with its pictures, and picked.
 - **Check:** human only (`unzip -l` of the backup lists `internal/themes/`).
+
+### RT-1260 — Ready-made themes: a preview each, applied in one tap, kept after a restart
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a few games of different consoles; locale English.
+- **Steps:**
+  1. Settings ▸ "Theme": look under "READY-MADE".
+  2. Tap "Pastel", "Dracula", "Kitty", "Neon" and "Tokyo Night" in turn, going back to the shelf after each.
+  3. With one of them picked, force-stop the app and open it again.
+- **Expected:** 1: the five, each with a picture preview, its name and base, a Duplicate button and no Edit or "⋮"; the hint "Read-only. Duplicate one to make it your own.". 2: the app takes each one's colors and library picture at once (Kitty shows a cat in the upper right beside the title); every text stays readable over the picture; buttons with a light accent (Kitty, Pastel) have dark labels. 3: the same theme.
+- **Check:** human only; `ReadyThemesTest` (`theFiveShipWithTheirPictureAndOnlyKnownKeys`, `everyTextPairPassesAA`, `installCopiesOncePerStampAndLoads`); `tools/gen-ready-themes.py --check` in openemux-android exits 0.
+
+### RT-1261 — A ready-made theme is read-only; Duplicate makes an editable copy
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1260.
+- **Steps:**
+  1. Tap the Duplicate button of "Dracula".
+  2. Under "MY THEMES", tap Edit on "Dracula"; change "Background"; "Save".
+  3. Duplicate "Dracula" from "READY-MADE" again.
+  4. "New theme" named "Dracula".
+- **Expected:** 1: "Dracula" appears under "MY THEMES", picked, with the same colors and picture. 2: the copy changes; the ready-made "Dracula" is unchanged. 3: "Dracula (2)". 4: created as a separate theme (its file is `files/themes/dracula-2/` or later), never over the ready-made one.
+- **Check:** human only (`adb shell run-as com.openemux.mobile ls files/themes`); `ReadyThemesTest.readyIdsAreNeverAUserTheme`.
+
+### RT-1262 — The ready-made artwork and palettes are credited
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app.
+- **Steps:** Settings ▸ "About" ▸ "Licenses".
+- **Expected:** "Dracula (colors of the Dracula theme)" (MIT), "Tokyo Night (colors of the Tokyo Night theme)" (MIT) and "Ready-made theme artwork" (original, MIT) are listed and open their pages.
+- **Check:** human only; openemux-android `pkg/android/openemux/art/themes/CREDITS.md` names the source and license of each picture and palette.
+
+### RT-1263 — Every theme color field takes a color from the eight palettes and the saved colors
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A user theme (RT-1249's "Midnight"); a skin edited once in the skin editor with a few colors.
+- **Steps:**
+  1. Edit the theme; tap any color row ("Cards", "Primary text", "Border color"…).
+  2. Tap "Palettes ›" and pick "Nord"; tap one of its colors.
+  3. Look under "Hex"; then open the skin editor's color panel.
+- **Expected:** 1: the sheet shows "Palette" with the palette's name, "Palettes ›" and seven colors, the square, the hue bar and "Hex". 2: the list has Basic, Dracula, Pastel, Nord, Gruvbox, Neon, Earth and Green screen; after picking, the row shows Nord's colors and the tapped one goes to the setting and the preview. 3: "Recent" lists the colors used, the same as the skin editor's, which also shows "Nord".
+- **Check:** human only.
+
+### RT-1264 — The console list background follows the theme
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; games of three consoles.
+- **Steps:**
+  1. Edit "Midnight" ▸ "Colors" ▸ "Console list": pick a color; "Save"; look at the shelf.
+  2. Edit again and set "Console list" close to "Primary text".
+  3. Reset "Console list"; "Save".
+  4. Pick each ready-made theme and look at the shelf.
+- **Expected:** 1: every console card (and All games, Favorites) takes the color, with the theme's text color. 2: a contrast warning naming "Console list". 3: each console's own color is back. 4: each theme gives the console cards its own color, readable.
+- **Check:** human only; `ResolvedThemeTest.everyColorKeyReachesItsTokens`, `UserThemeTest.contrastProblemsOnlyForChangedPairs`, `ReadyThemesTest.theFiveShipWithTheirPictureAndOnlyKnownKeys`.
