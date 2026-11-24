@@ -144,11 +144,12 @@ class NoScrollbarInTheMode(BigPictureCase):
             self.assertGreaterEqual(bounds.get_x(), mat)
             self.assertLessEqual(bounds.get_x() + bounds.get_width(), width - mat)
         # The cards still sit on the page margin: the gutter is given back.
-        ok, origin = page.cards[0].compute_point(page, Graphene.Point())
+        ok, origin = page.grid.compute_point(page, Graphene.Point())
         self.assertTrue(ok)
-        ok, heading = page.grid.get_prev_sibling().compute_point(page, Graphene.Point())
+        ok, body = page.body.compute_point(page, Graphene.Point())
         self.assertTrue(ok)
-        self.assertEqual(origin.x, heading.x)
+        self.assertEqual(origin.x, body.x)
+        self.assertEqual(page.grid.get_width(), page.body.get_width())
 
     def test_the_desktop_keeps_its_scrollbars(self):
         self.leave()
