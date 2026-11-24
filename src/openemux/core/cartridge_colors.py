@@ -12,7 +12,9 @@ in ``~/.openemux/cartridge_colors.config``. Same shape, same edge cases --
 rename follows the ROM, delete forgets it.
 """
 
+import colorsys
 import copy
+import re
 import time
 from pathlib import Path
 
@@ -60,6 +62,13 @@ _TABLE_BY_ID = {entry[0]: entry for entry in CARTRIDGE_COLOR_TABLE}
 #: Swatch for an id the table does not know (a color someone dropped on disk).
 UNKNOWN_SWATCH = "#9A9996"
 
+#: A color picked freely (issue 983) is stored as its own lowercase hex,
+#: ``#rrggbb``, in the same maps as the named ids. No named id starts with
+#: ``#``, so the two can never be mistaken for each other.
+CUSTOM_COLOR_KEY = "cartridge_color.custom"
+_CUSTOM_RE = re.compile(r"^#[0-9a-f]{6}$")
+_HEX_INPUT_RE = re.compile(r"^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
 DEFAULT_CARTRIDGE_COLOR_CONFIG = {
     "version": 1,
     # Per-console default shell, so "all my Mega Drive carts are red" is one
@@ -76,10 +85,56 @@ def normalize_color_id(color_id):
     return value or DEFAULT_COLOR_ID
 
 
+def is_custom_color(color_id):
+    """True for a freely picked color, stored as ``#rrggbb``."""
+    return bool(_CUSTOM_RE.match(normalize_color_id(color_id)))
+
+
+def parse_hex(text):
+    """A typed color as a stored custom id (``#rrggbb``), or ``None``.
+
+    Takes what a person types into a hex field: with or without the ``#``,
+    either case, and the three-digit shorthand.
+    """
+    match = _HEX_INPUT_RE.match((text or "").strip())
+    if not match:
+        return None
+    digits = match.group(1).lower()
+    if len(digits) == 3:
+        digits = "".join(ch * 2 for ch in digits)
+    return f"#{digits}"
+
+
+def hex_to_rgb(color_hex):
+    """``#rrggbb`` as three 0-255 ints."""
+    value = parse_hex(color_hex)
+    if value is None:
+        raise ValueError(f"not a hex color: {color_hex!r}")
+    return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
+
+
+def hex_to_hsv(color_hex):
+    """``#rrggbb`` as (hue in degrees 0-360, saturation 0-1, value 0-1)."""
+    r, g, b = (channel / 255 for channel in hex_to_rgb(color_hex))
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    return h * 360.0, s, v
+
+
+def hsv_to_hex(hue, saturation, value):
+    """(hue in degrees, saturation 0-1, value 0-1) as a stored custom id."""
+    hue = (float(hue) % 360.0) / 360.0
+    saturation = min(1.0, max(0.0, float(saturation)))
+    value = min(1.0, max(0.0, float(value)))
+    r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+    return "#" + "".join(f"{round(channel * 255):02x}" for channel in (r, g, b))
+
+
 def color_name_key(color_id):
     """The i18n key for a color id, or ``None`` for an id not in the table."""
     entry = _TABLE_BY_ID.get(normalize_color_id(color_id))
-    return entry[1] if entry else None
+    if entry:
+        return entry[1]
+    return CUSTOM_COLOR_KEY if is_custom_color(color_id) else None
 
 
 def color_swatch(color_id):
@@ -87,6 +142,8 @@ def color_swatch(color_id):
     entry = _TABLE_BY_ID.get(normalize_color_id(color_id))
     if entry:
         return entry[2]
+    if is_custom_color(color_id):
+        return normalize_color_id(color_id)
     return UNKNOWN_SWATCH
 
 
@@ -96,6 +153,20 @@ def order_color_ids(color_ids):
     known = [value for value in ids if value in _TABLE_INDEX]
     unknown = sorted(value for value in ids if value not in _TABLE_INDEX)
     return sorted(known, key=_TABLE_INDEX.get) + unknown
+
+
+def _storable(color_id):
+    """A stored value worth keeping: a named id, or a well-formed custom hex.
+
+    A value starting with ``#`` that is not ``#rrggbb`` (a hand edit gone
+    wrong) is dropped, so the renderer is never handed a malformed color.
+    """
+    value = normalize_color_id(color_id)
+    if value == DEFAULT_COLOR_ID:
+        return None
+    if value.startswith("#") and not is_custom_color(value):
+        return None
+    return value
 
 
 class CartridgeColorStore:
@@ -166,8 +237,8 @@ class CartridgeColorStore:
                 canonical = resolve_system_id(key)
                 if canonical not in SYSTEM_IDS:
                     continue
-                color = normalize_color_id(value)
-                if color != DEFAULT_COLOR_ID:
+                color = _storable(value)
+                if color is not None:
                     defaults[canonical] = color
             data["console_defaults"] = defaults
 
@@ -175,8 +246,8 @@ class CartridgeColorStore:
             for key, value in (raw.get("rom_overrides") or {}).items():
                 if not key:
                     continue
-                color = normalize_color_id(value)
-                if color != DEFAULT_COLOR_ID:
+                color = _storable(value)
+                if color is not None:
                     overrides[from_stored_path(str(key))] = color
             data["rom_overrides"] = overrides
             return data

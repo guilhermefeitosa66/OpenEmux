@@ -2,6 +2,7 @@ import os
 import subprocess
 import logging
 import time
+import weakref
 from datetime import datetime
 from threading import Event, Thread
 from pathlib import Path
@@ -71,6 +72,7 @@ from openemux.core.console_order import (
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.gamepad_backend import make_navigator
+from openemux.ui.cartridge_color_dialog import open_cartridge_color_dialog
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
@@ -115,6 +117,17 @@ MAX_INPUT_HINTS = 8
 #: them; the couch scale (``bigpicture.theme``) makes everything else bigger.
 BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
 
+
+
+def _custom_frame_listener(window_ref):
+    """The cartridge_render listener for one window, called off the main thread."""
+
+    def listener(console, color):
+        window = window_ref()
+        if window is not None:
+            GLib.idle_add(window.custom_frame_ready, console, color)
+
+    return listener
 
 
 class OpenEmuxWindow(Adw.ApplicationWindow):
@@ -311,6 +324,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # per-navigation write is what survives a crash or a session logout;
         # this one catches a view changed by something other than the sidebar.
         self.connect("close-request", self._on_close_remember_view)
+        # Custom cartridge shells are made in the background (issue 983);
+        # the cards wearing one redraw when it is ready. A weak reference,
+        # since the listener outlives nothing it should keep alive.
+        self._custom_frame_listener = _custom_frame_listener(weakref.ref(self))
+        cartridge_render.add_custom_frame_listener(self._custom_frame_listener)
+        self.connect("close-request", self._on_close_drop_frame_listener)
 
         self._install_escape_handler()
 
@@ -2656,6 +2675,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             return
         self.config_manager.session.set_last_view(view)
 
+    def _on_close_drop_frame_listener(self, *_args):
+        cartridge_render.remove_custom_frame_listener(self._custom_frame_listener)
+        return False
+
+    def custom_frame_ready(self, console, color):
+        """A custom shell finished in the background: redraw who wears it."""
+        for grid in self.pages.grids():
+            grid.custom_frame_ready(console, color)
+        return GLib.SOURCE_REMOVE
+
     def _on_close_remember_view(self, *_args):
         self._remember_current_view()
         return False
@@ -2920,6 +2949,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
         for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
+
+    def open_cartridge_color_dialog(self, rom):
+        """The Custom Color dialog for one game's shell (issue 983)."""
+        return open_cartridge_color_dialog(self, rom)
 
     def sync_rom_artwork(self, rom, art_kind, on_finished=None):
         """Fetch one ROM's artwork of ``art_kind`` right away, in the background.

@@ -514,3 +514,22 @@ button.controller-target.current.lit {
 .big-picture .bp-osk-key:disabled {
     opacity: 0.45;
 }
+
+/* The Custom Color dialog (issue 983): the hue slider's track is the hue
+   circle itself, unrolled, so the slider reads as "which color". */
+.hue-slider trough {
+  min-height: 12px;
+  border-radius: 6px;
+  background-image: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff,
+                                    #0000ff, #ff00ff, #ff0000);
+}
+
+.hue-slider highlight {
+  background: none;
+}
+
+.color-swatch {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
