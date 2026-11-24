@@ -27,7 +27,7 @@ from gi.repository import Adw, GdkPixbuf, GLib, Gtk, Pango, PangoCairo
 from openemux.core import cartridge_colors, theme_images
 from openemux.core.contrast import WCAG_AA
 from openemux.core.custom_themes import (
-    DENSITY_PRESETS,
+    DENSITIES,
     FONT_NAME,
     IMAGE_AREAS,
     KEYS_BY_NAME,
@@ -85,9 +85,9 @@ def installed_fonts():
 
 
 def value_text(t, spec, value):
-    """"12 px", "110%": a number with its unit."""
+    """"12 px", "110%": a number with its unit (a fraction shown in %)."""
     if spec.unit == "%":
-        return t("theme_editor.unit.percent", value=value)
+        return t("theme_editor.unit.percent", value=int(round(value * 100)))
     return t("theme_editor.unit.px", value=value)
 
 
@@ -246,10 +246,12 @@ class NumberRow(SettingRow):
         self.spec = KEYS_BY_NAME[key]
         self.add_suffix(self.reset_button)
         low, high = self.spec.minimum, self.spec.maximum
-        if high - low <= self.SPIN_SPAN:
+        if not self.spec.fraction and high - low <= self.SPIN_SPAN:
             self.control = Gtk.SpinButton.new_with_range(low, high, 1)
         else:
-            self.control = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, low, high, 1)
+            self.control = Gtk.Scale.new_with_range(
+                Gtk.Orientation.HORIZONTAL, low, high, self.spec.step
+            )
             self.control.set_draw_value(False)
             self.control.set_size_request(SCALE_WIDTH, -1)
         self.control.set_valign(Gtk.Align.CENTER)
@@ -258,13 +260,17 @@ class NumberRow(SettingRow):
         self.control.connect("value-changed", self._on_value_changed)
         self.add_suffix(self.control)
 
-    def _on_value_changed(self, control):
-        self._pick(int(round(control.get_value())))
+    def _value(self):
+        value = self.control.get_value()
+        return round(value, 2) if self.spec.fraction else int(round(value))
+
+    def _on_value_changed(self, _control):
+        self._pick(self._value())
 
     def refresh(self, problems):
         super().refresh(problems)
         value = self.editor.draft.effective(self.key)
-        if int(round(self.control.get_value())) != value:
+        if self._value() != value:
             self._sync(lambda: self.control.set_value(value))
         self._same_as_base(value_text(self.editor.t, self.spec, value))
 
@@ -307,54 +313,64 @@ class ChoiceRow(SettingRow):
 
 
 class DensityRow(Adw.PreferencesRow):
-    """Compact / Default / Comfortable: presets of the density setting.
+    """Compact / Default / Comfortable, under its title rather than beside it.
 
-    The title above, the three presets across the row under it (beside the
-    title they squeezed it in a narrow column). The exact value is the
-    "Fine adjustment" row below; a preset reads as active only while the
-    value is exactly its own.
+    Beside the title the three buttons squeezed it in a narrow column. Like
+    every row it has its reset; the fine adjustment is a row of its own.
     """
 
-    def __init__(self, editor):
-        super().__init__(title=editor.t("theme_editor.key.density"))
+    def __init__(self, editor, key):
+        super().__init__(title=editor.t(f"theme_editor.key.{key}"))
         self.editor = editor
+        self.key = key
         self._syncing = False
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         for side in ("top", "bottom", "start", "end"):
             getattr(column, f"set_margin_{side}")(12)
+        top = Gtk.Box(spacing=8)
         label = Gtk.Label(label=self.get_title(), xalign=0)
-        column.append(label)
+        label.set_hexpand(True)
+        top.append(label)
+        self.reset_button = Gtk.Button(icon_name="edit-undo-symbolic")
+        self.reset_button.add_css_class("flat")
+        self.reset_button.set_tooltip_text(editor.t("theme_editor.reset"))
+        self.reset_button.update_property(
+            [Gtk.AccessibleProperty.LABEL], [editor.t("theme_editor.reset")]
+        )
+        self.reset_button.connect("clicked", lambda _b: editor.reset_value(key))
+        top.append(self.reset_button)
+        column.append(top)
         box = Gtk.Box(homogeneous=True)
         box.add_css_class("linked")
         box.update_property([Gtk.AccessibleProperty.LABEL], [self.get_title()])
         self.buttons = {}
-        for name, value in DENSITY_PRESETS:
+        first = None
+        for name in DENSITIES:
             button = Gtk.ToggleButton(label=editor.t(f"theme_editor.density.{name}"))
-            button.connect("toggled", self._on_toggled, value)
+            if first is None:
+                first = button
+            else:
+                button.set_group(first)
+            button.connect("toggled", self._on_toggled, name)
             box.append(button)
-            self.buttons[value] = button
+            self.buttons[name] = button
         column.append(box)
         self.set_child(column)
         self.set_activatable(False)
+        self.refresh(None)
 
-    def _on_toggled(self, button, value):
-        if self._syncing:
-            return
-        if button.get_active():
-            self.editor.set_value("density", value)
-        else:
-            # Not a radio group (none is active off the presets): a click on
-            # the active one keeps it on.
-            self.refresh(None)
+    def _on_toggled(self, button, name):
+        if not self._syncing and button.get_active():
+            self.editor.set_value(self.key, name)
 
     def refresh(self, problems):
-        current = self.editor.draft.effective("density")
+        current = self.editor.draft.effective(self.key)
         self._syncing = True
         try:
-            for value, button in self.buttons.items():
-                button.set_active(value == current)
+            self.buttons[current].set_active(True)
         finally:
             self._syncing = False
+        self.reset_button.set_sensitive(self.editor.draft.is_changed(self.key))
 
 
 class FontRow(SettingRow):
@@ -454,7 +470,7 @@ class ImageRow(SettingRow):
         """Copy ``path`` into the staging folder, off the main thread."""
         self.error = None
         self.choose_button.set_sensitive(False)
-        name = f"{self.area}.png"
+        name = f"images/{self.area}.png"
         target = self.editor.staging / name
 
         def work():
@@ -527,7 +543,7 @@ class ThemeEditorDialog(Adw.Dialog):
         self.draft = theme.copy()
         # The images the editor changes live in a copy until Save.
         self.staging = store.stage(theme)
-        self.draft.image_dir = self.staging
+        self.draft.folder = self.staging
         self.live = False
         self.closed = False
         self._paint_source = None
@@ -537,7 +553,6 @@ class ThemeEditorDialog(Adw.Dialog):
         self.saved = False
         self.narrow = False
         self.rows = {}
-        self.extra_rows = []
         self.section_rows = {}
         self.section_icons = {}
 
@@ -596,11 +611,7 @@ class ThemeEditorDialog(Adw.Dialog):
         if spec.kind == KIND_CHOICE:
             if spec.key.endswith("_fit"):
                 return [ChoiceRow(self, spec.key, lambda c: t(f"theme_editor.fit.{c}"))]
-            return [ChoiceRow(self, spec.key, str)]
-        if spec.key == "density":
-            # The presets row, then the exact value under it.
-            return [DensityRow(self),
-                    NumberRow(self, spec.key, title=t("theme_editor.density_fine"))]
+            return [DensityRow(self, spec.key)]
         return [NumberRow(self, spec.key)]
 
     def _build_body(self):
@@ -678,10 +689,7 @@ class ThemeEditorDialog(Adw.Dialog):
                     page.append(group)
                 for row in self._make_rows(spec):
                     group.add(row)
-                    if isinstance(row, SettingRow):
-                        self.rows[spec.key] = row
-                    else:
-                        self.extra_rows.append(row)
+                    self.rows[spec.key] = row
             self.stack.add_named(page, section)
         self.controls.append(self.stack)
         self.controls_scroller.set_child(self.controls)
@@ -891,8 +899,6 @@ class ThemeEditorDialog(Adw.Dialog):
         )
         problems = contrast_problems(self.draft, self._image_colors(backgrounds))
         for row in self.rows.values():
-            row.refresh(problems)
-        for row in self.extra_rows:
             row.refresh(problems)
         for area in IMAGE_AREAS:
             has_image = self.draft.image_path(area) is not None

@@ -4,8 +4,15 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import yaml
+
 from openemux.core import ready_themes, theme_images
-from openemux.core.custom_themes import ThemeStore, contrast_problems
+from openemux.core.custom_themes import (
+    THEME_FILE,
+    ThemeStore,
+    contrast_problems,
+    validate_values,
+)
 from openemux.core.theme import (
     READY_MADE,
     is_custom_theme_id,
@@ -22,22 +29,43 @@ class ReadyThemeTests(unittest.TestCase):
     def test_each_has_its_picture_and_a_valid_base(self):
         for theme in ready_themes.all_themes():
             self.assertIn(theme.base, ("light", "dark"))
+            self.assertEqual(theme.folder, ready_themes.ASSETS_DIR / theme.id)
+            # The value as Android writes it, with the desktop's PNG.
+            self.assertEqual(theme.values["library_image"], "images/library.png")
             path = theme.image_path("library")
             self.assertIsNotNone(path, theme.id)
+            self.assertEqual(path, theme.folder / "images" / "library.png")
             self.assertEqual(theme_images.sniff(path), "png")
-            self.assertTrue((path.parent / "library.svg").is_file())
+            self.assertTrue((theme.folder / "library.svg").is_file())
             # Lightweight: the package should barely grow.
             self.assertLess(path.stat().st_size, 200_000)
 
-    def test_every_value_survives_validation(self):
+    def test_loaded_from_the_shipped_yaml_with_nothing_dropped(self):
         for theme_id in READY_MADE:
-            _name, _base, values = ready_themes._DEFINITIONS[theme_id]
-            self.assertEqual(ready_themes.get(theme_id).values, values, theme_id)
+            raw = yaml.safe_load(
+                (ready_themes.ASSETS_DIR / theme_id / THEME_FILE).read_text(encoding="utf-8")
+            )
+            settings = {k: v for k, v in raw.items() if k not in ("version", "name", "base")}
+            theme = ready_themes.get(theme_id)
+            # Every key is one the desktop knows, every value in range.
+            self.assertEqual(theme.values, validate_values(raw), theme_id)
+            self.assertEqual(theme.values, settings, theme_id)
+            self.assertEqual((theme.id, theme.name, theme.base),
+                             (theme_id, raw["name"], raw["base"]))
+
+    def test_the_names_shared_with_android(self):
+        names = {theme.id: (theme.name, theme.base) for theme in ready_themes.all_themes()}
+        self.assertEqual(names, {
+            "pastel": ("Pastel", "light"), "dracula": ("Dracula", "dark"),
+            "kitty": ("Kitty", "dark"), "neon": ("Neon", "dark"),
+            "tokyo-night": ("Tokyo Night", "dark"),
+        })
 
     def test_contrast_passes_with_the_picture_at_its_default_dim(self):
         with TemporaryDirectory() as cache:
             for theme in ready_themes.all_themes():
-                dim = theme.effective("library_image_dim")
+                # A fraction in the theme, a percentage for the renderer.
+                dim = int(round(theme.effective("library_image_dim") * 100))
                 blur = theme.effective("library_image_blur")
                 out = theme_images.render(theme.image_path("library"), dim, blur,
                                           theme.effective("library_bg"), cache)
@@ -48,7 +76,10 @@ class ReadyThemeTests(unittest.TestCase):
         first = ready_themes.get("neon")
         first.values["card_bg"] = "#000000"
         self.assertNotEqual(ready_themes.get("neon").values["card_bg"], "#000000")
-        self.assertIsNone(ready_themes.get("nope"))
+
+    def test_any_other_id_is_none(self):
+        for theme_id in ("nope", "dark", "system", "../neon", ""):
+            self.assertIsNone(ready_themes.get(theme_id), theme_id)
 
 
 class ReservedIdTests(unittest.TestCase):

@@ -52,9 +52,10 @@ class _Case(unittest.TestCase):
         tmp = TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
-        self.images = self.tmp / "images"
-        self.images.mkdir()
-        write_png(self.images / "library.png")
+        # The folder image values are relative to: they read images/<name>.
+        self.images = self.tmp / "theme"
+        (self.images / "images").mkdir(parents=True)
+        write_png(self.images / "images" / "library.png")
         self.cache = self.tmp / "cache"
         theming.set_cache_dir(self.cache)
         spawn = mock.patch.object(theming, "_spawn", _now)
@@ -81,49 +82,49 @@ class _Case(unittest.TestCase):
 @needs_display
 class BackgroundTests(_Case):
     def test_a_background_lands_after_its_render_and_then_shows(self):
-        theming.paint("dark", {"library_image": "library.png"}, self.images)
+        theming.paint("dark", {"library_image": "images/library.png"}, self.images)
         self.assertNotIn("background-image", self.css())
         self.run_idle()
         self.assertIn(".library-area { background-image: url(\"file://", self.css())
         self.assertIn("library", theming.current_paint().backgrounds)
 
     def test_a_cached_background_shows_at_once(self):
-        theming.paint("dark", {"library_image": "library.png"}, self.images)
+        theming.paint("dark", {"library_image": "images/library.png"}, self.images)
         self.run_idle()
-        theming.paint("light", {"library_image": "library.png"}, self.images)
+        theming.paint("light", {"library_image": "images/library.png"}, self.images)
         self.run_idle()
-        theming.paint("light", {"library_image": "library.png"}, self.images)
+        theming.paint("light", {"library_image": "images/library.png"}, self.images)
         self.assertIn("background-image", self.css())
         self.assertEqual(self.idle, [])
 
     def test_a_late_background_does_not_paint_over_a_newer_theme(self):
-        theming.paint("dark", {"library_image": "library.png"}, self.images)
+        theming.paint("dark", {"library_image": "images/library.png"}, self.images)
         theming.paint("dark", {"card_bg": "#101010"})
         self.run_idle()
         self.assertNotIn("background-image", self.css())
 
     def test_failed_render_lands_nothing(self):
         with mock.patch.object(theming.theme_images, "render", return_value=None):
-            theming.paint("dark", {"library_image": "library.png"}, self.images)
+            theming.paint("dark", {"library_image": "images/library.png"}, self.images)
         self.assertEqual(self.idle, [])
 
     def test_no_cache_dir_no_image_dir_or_missing_file_no_background(self):
-        self.assertEqual(theming.prepare_backgrounds("dark", {"library_image": "library.png"}, None), {})
-        self.assertEqual(theming.prepare_backgrounds("dark", {"sidebar_image": "sidebar.png"},
+        self.assertEqual(theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, None), {})
+        self.assertEqual(theming.prepare_backgrounds("dark", {"sidebar_image": "images/sidebar.png"},
                                                      self.images), {})
         theming.set_cache_dir(None)
-        self.assertEqual(theming.prepare_backgrounds("dark", {"library_image": "library.png"},
+        self.assertEqual(theming.prepare_backgrounds("dark", {"library_image": "images/library.png"},
                                                      self.images), {})
 
     def test_without_on_ready_the_render_still_happens(self):
-        theming.prepare_backgrounds("dark", {"library_image": "library.png"}, self.images)
+        theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, self.images)
         self.assertEqual(self.idle, [])
-        ready = theming.prepare_backgrounds("dark", {"library_image": "library.png"}, self.images)
+        ready = theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, self.images)
         self.assertEqual(ready["library"]["fit"], "cover")
 
     def test_background_settings_take_the_bases_defaults(self):
         self.assertEqual(theming.background_settings("dark", {}, "library"),
-                         (40, 0, "#1e1e1e", "cover"))
+                         (0.4, 0, "#1e1e1e", "cover"))
         self.assertEqual(
             theming.background_settings("light", {"sidebar_image_fit": "tile",
                                                   "sidebar_image_dim": 0}, "sidebar"),
@@ -132,7 +133,7 @@ class BackgroundTests(_Case):
 
     def test_restore_brings_back_the_images(self):
         store = ThemeStore(self.tmp / "themes")
-        theme = store.create("Pics", "dark", {"library_image": "library.png"},
+        theme = store.create("Pics", "dark", {"library_image": "images/library.png"},
                              images_from=self.images)
         theming.apply_theme(theme.id, store=store)
         self.run_idle()
@@ -141,7 +142,7 @@ class BackgroundTests(_Case):
         self.assertIn("background-image", self.css())
 
     def test_suspension_keeps_backgrounds_for_after(self):
-        theming.paint("dark", {"library_image": "library.png"}, self.images)
+        theming.paint("dark", {"library_image": "images/library.png"}, self.images)
         self.run_idle()
         theming.set_suspended(True)
         self.assertEqual(self.css(), "")
@@ -226,13 +227,13 @@ class WindowSizeTests(WindowCase):
         with mock.patch.object(self.win, "_reload_current_page") as reload:
             theming.paint("dark", {"card_bg": "#101010"})
             reload.assert_not_called()
-            theming.paint("dark", {"grid_gap": 8, "card_scale": 150})
+            theming.paint("dark", {"grid_gap": 8, "card_scale": 1.5})
             reload.assert_called_once()
-            theming.paint("dark", {"grid_gap": 8, "card_scale": 150, "window_bg": "#000000"})
+            theming.paint("dark", {"grid_gap": 8, "card_scale": 1.5, "window_bg": "#000000"})
             reload.assert_called_once()
 
     def test_the_grid_reads_the_themes_sizes(self):
-        theming.paint("dark", {"grid_gap": 8, "card_scale": 150})
+        theming.paint("dark", {"grid_gap": 8, "card_scale": 1.5})
         self.win.pages.ensure_loaded("SFC")
         self.pump()
         grid = self.win.pages.grid_for("SFC")
@@ -244,7 +245,7 @@ class WindowSizeTests(WindowCase):
 
     def test_a_mixed_page_scales_its_slot(self):
         from openemux.ui.grid import RomGrid
-        theming.paint("dark", {"card_scale": 150})
+        theming.paint("dark", {"card_scale": 1.5})
         grid = RomGrid(
             "SFC", [], None, None, None, None, None, None, None, lambda k, **kw: k, "/tmp",
             ui_settings=self.win.display_settings_for("SFC"), mixed_consoles=True,
@@ -275,7 +276,7 @@ class BigPictureThemeTests(BigPictureCase):
 
     def test_a_custom_theme_gives_its_palette_font_background_and_size(self):
         base_scale = self.shell.scale()
-        theming.paint("light", {"font_family": "Sans", "font_scale": 150,
+        theming.paint("light", {"font_family": "Sans", "font_scale": 1.3,
                                 "library_bg": "#fafafa"})
         theming._paint.backgrounds = {"library": {"uri": "file:///x.png", "fit": "tile",
                                                   "path": Path("/x.png")}}
@@ -332,13 +333,14 @@ class PreviewDrawingTests(unittest.TestCase):
         pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 50, 30)
         pixbuf.fill(0xFF0000FF)
         for fit in ("cover", "contain", "tile"):
-            self.draw(640, self.colors(border_width=2, corner_radius=24, shadow_strength=80,
-                                       font_family="Sans", font_scale=150, density=60,
-                                       grid_gap=4, card_scale=150, sidebar_width=420),
+            self.draw(640, self.colors(border_width=2, corner_radius=24, shadow_strength=0.8,
+                                       font_family="Sans", font_scale=1.3, density="compact",
+                                       density_fine=0.8, icon_scale=1.5,
+                                       grid_gap=4, card_scale=1.5, sidebar_width=420),
                       {"library": (pixbuf, fit), "sidebar": (pixbuf, fit)})
 
     def test_no_shadow_and_a_narrow_preview(self):
-        self.draw(300, self.colors(shadow_strength=0, card_scale=70, sidebar_width=200))
+        self.draw(300, self.colors(shadow_strength=0, card_scale=0.75, sidebar_width=200))
 
     def test_part_one_callers_give_only_colors(self):
         colors = {spec.key: spec.default("light") for spec in THEME_KEYS if spec.kind == "color"}

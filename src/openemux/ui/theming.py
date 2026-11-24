@@ -69,7 +69,7 @@ class Paint:
 
     base: str = None
     values: dict = field(default_factory=dict)
-    image_dir: Path = None
+    folder: Path = None
     #: area -> {"uri", "fit", "path"} for the backgrounds ready to show.
     backgrounds: dict = field(default_factory=dict)
 
@@ -138,7 +138,7 @@ def background_settings(base, values, area):
     )
 
 
-def prepare_backgrounds(base, values, image_dir, on_ready=None):
+def prepare_backgrounds(base, values, folder, on_ready=None):
     """The processed backgrounds of a theme that are ready now, by area.
 
     Each one not yet in the cache is rendered on a worker thread, and
@@ -146,14 +146,16 @@ def prepare_backgrounds(base, values, image_dir, on_ready=None):
     ``{area: {"path", "uri", "fit"}}``.
     """
     ready = {}
-    if image_dir is None or _cache_dir is None:
+    if folder is None or _cache_dir is None:
         return ready
     for area in IMAGE_AREAS:
         name = values.get(f"{area}_image")
-        source = Path(image_dir) / name if name else None
+        source = Path(folder) / name if name else None
         if source is None or not source.is_file():
             continue
         dim, blur, surface, fit = background_settings(base, values, area)
+        # The format stores the dim as a fraction; the renderer takes percent.
+        dim = int(round(dim * 100))
         target = theme_images.processed_path(source, dim, blur, surface, _cache_dir)
         if target.is_file():
             ready[area] = {"path": target, "uri": target.as_uri(), "fit": fit}
@@ -206,7 +208,7 @@ def _stylesheet():
     )
 
 
-def paint(base, values, image_dir=None):
+def paint(base, values, folder=None):
     """Paint ``values`` over ``base`` (light or dark) right now."""
     global _paint, _generation
     _generation += 1
@@ -216,11 +218,11 @@ def paint(base, values, image_dir=None):
     def landed():
         # A background finished: paint again, unless something newer did.
         if generation == _generation:
-            _paint.backgrounds = prepare_backgrounds(base, values, image_dir)
+            _paint.backgrounds = prepare_backgrounds(base, values, folder)
             _refresh()
 
-    _paint = Paint(base, values, image_dir,
-                   prepare_backgrounds(base, values, image_dir, on_ready=landed))
+    _paint = Paint(base, values, folder,
+                   prepare_backgrounds(base, values, folder, on_ready=landed))
     Adw.StyleManager.get_default().set_color_scheme(_COLOR_SCHEMES[base])
     _refresh()
 
@@ -246,8 +248,8 @@ def apply_theme(theme, store=None):
             logger.info("Theme %s is not available; using System", theme)
             theme = THEME_SYSTEM
     if custom is not None:
-        _applied = (theme, custom.base, dict(custom.values), custom.image_dir)
-        paint(custom.base, custom.values, custom.image_dir)
+        _applied = (theme, custom.base, dict(custom.values), custom.folder)
+        paint(custom.base, custom.values, custom.folder)
         return theme
     _applied = (theme, None, {}, None)
     _paint_builtin(theme)
@@ -267,11 +269,11 @@ def _paint_builtin(theme):
 
 def restore():
     """Put back what the last ``apply_theme`` painted (after a live preview)."""
-    theme, base, values, image_dir = _applied
+    theme, base, values, folder = _applied
     if base is None:
         _paint_builtin(theme)
     else:
-        paint(base, values, image_dir)
+        paint(base, values, folder)
 
 
 def set_suspended(suspended):

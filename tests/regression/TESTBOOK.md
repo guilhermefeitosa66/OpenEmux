@@ -20028,11 +20028,11 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Preconditions:** a custom theme in use ("Midnight", RT-1239).
 - **Steps:**
   1. Edit it; "Borders and Shadows": "Corner radius" 24, "Border width" 2, "Shadow strength" 80.
-  2. "Icons": "Sidebar icons" 24, "Toolbar icons" 24, change "Icon color".
-  3. "Typography": "Text size" 150%, pick another family in "Font".
+  2. "Icons": "Icon size" 150%, change "Icon color".
+  3. "Typography": "Text size" 130%, pick another family in "Font".
   4. "Save"; then narrow the window until the sidebar collapses.
 - **Expected:** 1–3: the preview follows each change; changed rows show their value ("24 px",
-  "150%") and an active reset button. 4: cards, boxed lists and buttons are rounder with a border
+  "130%") and an active reset button. 4: cards, boxed lists and buttons are rounder with a border
   and a stronger shadow; the sidebar's and header bar's symbolic icons are larger and in the picked
   color; all text is larger and in the picked font; the narrow layout still fits and scrolls.
 - **Check:** human only (`tests/test_theme_css.py` and `tests/test_theme_editor_rows.py` cover the
@@ -20044,10 +20044,10 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Preconditions:** a custom theme in use.
 - **Steps:**
   1. Edit it; "Spacing": click "Compact", then "Comfortable"; move "Fine adjustment".
-  2. "Grid gap" 4, then 48; "Card size" 70, then 150; "Sidebar width" 200, then 420. "Save".
+  2. "Grid gap" 0, then 32; "Card size" 75%, then 150%; "Sidebar width" 200, then 420. "Save".
   3. Make the window narrow, then wide again.
-- **Expected:** 1: a preset button is highlighted only while the fine value equals it (80, 100,
-  120); rows and the header grow and shrink. 2: after Save the library rebuilds with the new gaps
+- **Expected:** 1: the picked density stays highlighted and its row gets an active reset; rows and
+  the header grow and shrink with the density and, finer, with "Fine adjustment". 2: after Save the library rebuilds with the new gaps
   and card sizes; the sidebar takes the chosen width when the window has room. 3: a narrow window
   still shares the width and collapses the sidebar at its usual breakpoint.
 - **Check:** human only (`tests/test_theme_layout_ui.py` `WindowSizeTests`).
@@ -20170,8 +20170,8 @@ import replaced. Save states are not part of it. The runner has no Android devic
   2. Click each card in turn: "Pastel", "Dracula", "Kitty", "Neon", "Tokyo Night".
   3. With "Kitty" picked, quit and start the app again; open Big Picture.
 - **Expected:** 1: five cards, each a small drawing of the app in that theme with its picture.
-  2: each click applies the theme at once (colors and its background picture; Kitty's sleeping cat
-  sits in the library's lower right), the card in use is outlined and "Theme" names it; no contrast
+  2: each click applies the theme at once (colors and its background picture; Kitty's cat sits by
+  a ball of yarn in the library's lower right), the card in use is outlined and "Theme" names it; no contrast
   warning would apply to any of them. 3: Kitty is still in use; Big Picture follows it.
 - **Check:** human only (`tests/test_ready_themes.py` holds the contrast; `tests/test_theme_picker_share.py`
   `ReadyMadeTests` the cards).

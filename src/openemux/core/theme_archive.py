@@ -6,10 +6,12 @@ for this app and for the Android one.
 
 A theme file comes from somebody else, so importing one treats every byte as
 hostile. The zip is checked from its central directory before anything is
-read: a short list of entry names (``theme.yaml``, ``images/<name>``), no
-absolute paths, ``..``, backslashes, links, other folders or duplicates, and
-sizes and compression ratios a theme can sensibly have, so a zip bomb is
-turned away unopened. Since a header can lie, the same limits are enforced
+read: an absolute path, a ``..`` segment or a backslash anywhere refuses the
+file; of the rest only ``theme.yaml`` and ``images/<name>`` are ever read (a
+single top folder around them is allowed, ``__MACOSX/`` and anything else is
+skipped unread, as the shared format says); links, duplicates and sizes or
+compression ratios no theme has refuse the file, so a zip bomb is turned
+away unopened. Since a header can lie, the same limits are enforced
 again on the bytes actually read. ``theme.yaml`` is parsed with
 ``yaml.safe_load`` and goes through the same whitelist as a theme on disk
 (unknown keys dropped, numbers clamped); every image is decoded and written
@@ -50,26 +52,24 @@ logger = logging.getLogger(__name__)
 
 EXTENSION = ".openemux-theme"
 
-#: Entries a theme file may have, all told.
-MAX_ENTRIES = 16
-#: ``theme.yaml``, uncompressed.
+#: The limits of the shared format (``docs/THEME_FORMAT.md``), the same as
+#: the Android app's: the file, its entries, ``theme.yaml``, one image, and
+#: everything read, uncompressed.
+MAX_FILE_BYTES = 48 * 1024 * 1024
+MAX_ENTRIES = 32
 MAX_THEME_BYTES = 64 * 1024
-#: Each image, uncompressed.
-MAX_IMAGE_BYTES = 20 * 1024 * 1024
-#: Every entry together, uncompressed.
-MAX_TOTAL_BYTES = 40 * 1024 * 1024
+MAX_IMAGE_BYTES = 16 * 1024 * 1024
+MAX_TOTAL_BYTES = 48 * 1024 * 1024
 #: Uncompressed size over compressed size, for entries larger than
 #: :data:`RATIO_FLOOR`; real pictures and YAML never come close.
 MAX_RATIO = 100
 RATIO_FLOOR = 1024 * 1024
 
-_IMAGES_PREFIX = IMAGES_DIR + "/"
 _CHUNK = 64 * 1024
 
 _FILE_TYPE = 0o170000
 _SYMLINK = 0o120000
 _REGULAR = 0o100000
-_DIRECTORY = 0o040000
 #: Bit 0 of the general purpose flags: the entry is encrypted.
 _ENCRYPTED = 0x1
 
@@ -94,12 +94,12 @@ def _image_keys():
 
 
 def _stored_name(key):
-    """The file an image key's picture is stored as: ``library_image`` -> ``library.png``.
+    """An image key's value once imported: ``library_image`` -> ``images/library.png``.
 
     One file per key, named by this module, so two archive names that would
     both become ``<stem>.png`` can never collide.
     """
-    return key[: -len("_image")] + ".png"
+    return f"{IMAGES_DIR}/{key[: -len('_image')]}.png"
 
 
 # -- export ----------------------------------------------------------------
@@ -134,7 +134,7 @@ def export_theme(store, theme_id, destination):
                 if path is None:
                     logger.warning("Theme %s: image %s is missing, not exported", theme_id, name)
                     continue
-                archive.write(path, _IMAGES_PREFIX + name)
+                archive.write(path, name)
                 written.add(name)
         os.replace(temp, destination)
     except BaseException:
@@ -146,26 +146,29 @@ def export_theme(store, theme_id, destination):
 # -- import ----------------------------------------------------------------
 
 
-def _check_entry(info):
-    """Reject one central-directory entry that a theme file cannot have."""
+def _unsafe(name):
+    """A name no theme file may hold, wherever it is: the whole file is refused."""
+    return name.startswith("/") or "\\" in name or ".." in name.split("/")
+
+
+def _top_folder(names):
+    """The single folder every entry sits in (``Midnight/theme.yaml``), or ''."""
+    tops = {name.split("/", 1)[0] for name in names}
+    if len(tops) != 1 or all("/" not in name for name in names):
+        return ""
+    return tops.pop() + "/"
+
+
+def _check_entry(info, name):
+    """Reject one entry this module will read; ``name`` is its name within the theme."""
     mode = (info.external_attr >> 16) & _FILE_TYPE
     if mode == _SYMLINK:
         raise ThemeImportError("symlink", info.filename)
-    if mode not in (0, _REGULAR, _DIRECTORY):
+    if mode not in (0, _REGULAR):
         raise ThemeImportError("bad-entry", f"special file {info.filename!r}")
     if info.flag_bits & _ENCRYPTED:
         raise ThemeImportError("bad-entry", f"encrypted {info.filename!r}")
-    name = info.filename
-    # The list of names is all there is: an absolute path, "..", a
-    # backslash or a nested folder simply is not on it.
-    if name == _IMAGES_PREFIX:
-        return
-    if name == THEME_FILE:
-        limit = MAX_THEME_BYTES
-    elif name.startswith(_IMAGES_PREFIX) and IMAGE_NAME.fullmatch(name[len(_IMAGES_PREFIX):]):
-        limit = MAX_IMAGE_BYTES
-    else:
-        raise ThemeImportError("bad-entry", repr(name))
+    limit = MAX_THEME_BYTES if name == THEME_FILE else MAX_IMAGE_BYTES
     if info.file_size > limit:
         raise ThemeImportError("too-large", f"{name}: {info.file_size} bytes")
     if info.file_size > RATIO_FLOOR and (
@@ -175,17 +178,32 @@ def _check_entry(info):
 
 
 def _check_directory(archive):
-    """Every entry by name, after checking the central directory as a whole."""
+    """The entries this module will read, by their name within the theme.
+
+    Checks the central directory as a whole first: the entry count, any
+    unsafe name, duplicates. Entries that are neither ``theme.yaml`` nor an
+    image are skipped without being read.
+    """
     infos = archive.infolist()
     if len(infos) > MAX_ENTRIES:
         raise ThemeImportError("too-many-entries", str(len(infos)))
+    seen = set()
+    for info in infos:
+        if _unsafe(info.filename):
+            raise ThemeImportError("bad-entry", repr(info.filename))
+        if info.filename in seen:
+            raise ThemeImportError("bad-entry", f"duplicate {info.filename!r}")
+        seen.add(info.filename)
+    kept = [info for info in infos if not info.filename.startswith("__MACOSX/")]
+    top = _top_folder([info.filename for info in kept])
     entries = {}
     total = 0
-    for info in infos:
-        if info.filename in entries:
-            raise ThemeImportError("bad-entry", f"duplicate {info.filename!r}")
-        _check_entry(info)
-        entries[info.filename] = info
+    for info in kept:
+        name = info.filename[len(top):]
+        if name != THEME_FILE and not IMAGE_NAME.fullmatch(name):
+            continue
+        _check_entry(info, name)
+        entries[name] = info
         total += info.file_size
     if total > MAX_TOTAL_BYTES:
         raise ThemeImportError("too-large", f"{total} bytes in all")
@@ -253,23 +271,23 @@ def _extract_images(archive, entries, theme, work, budget):
         name = values.get(key)
         if not name:
             continue
-        info = entries.get(_IMAGES_PREFIX + name)
+        info = entries.get(name)
         if info is None:
             logger.warning("Imported theme: image %s is not in the file; %s dropped", name, key)
             del values[key]
             continue
         if name not in extracted:
-            raw = raw_dir / name
+            raw = raw_dir / Path(name).name
             with archive.open(info) as source, open(raw, "wb") as target:
                 copy_bounded(source, target, MAX_IMAGE_BYTES, budget)
             extracted[name] = raw
         stored = _stored_name(key)
         try:
-            theme_images.import_image(extracted[name], images / stored)
+            theme_images.import_image(extracted[name], work / stored)
         except theme_images.ThemeImageError as exc:
             raise ThemeImportError("bad-image", f"{name}: {exc}") from exc
         values[key] = stored
-    return values, images
+    return values, work
 
 
 def import_theme(store, path):
@@ -280,6 +298,8 @@ def import_theme(store, path):
     it was.
     """
     try:
+        if os.path.getsize(path) > MAX_FILE_BYTES:
+            raise ThemeImportError("too-large", "the file")
         if not zipfile.is_zipfile(path):
             raise ThemeImportError("not-a-zip")
         archive = zipfile.ZipFile(path)

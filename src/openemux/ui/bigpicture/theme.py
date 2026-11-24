@@ -396,13 +396,13 @@ def palette_for(values, base):
 
 
 def font_scale_factor(theme_font_scale):
-    """How much a theme's text size (a %) grows Big Picture: 1.0 to 1.5.
+    """How much a theme's text size (a factor, 1.1) grows Big Picture: 1.0 to 1.5.
 
     Big Picture only scales up: a theme that shrinks the desktop's text
     leaves the couch sizes alone.
     """
     try:
-        factor = float(theme_font_scale) / 100.0
+        factor = float(theme_font_scale)
     except (TypeError, ValueError):
         return 1.0
     return clamp(factor, 1.0, MAX_FONT_SCALE_FACTOR)

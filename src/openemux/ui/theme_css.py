@@ -21,8 +21,10 @@ exactly like its base.
 
 from openemux.core.cartridge_colors import hex_to_rgb
 from openemux.core.custom_themes import (
+    DENSITY_FACTORS,
     KEYS_BY_NAME,
     THEME_DARK,
+    readable_on,
     validate_value,
 )
 
@@ -72,9 +74,11 @@ _OPAQUE = {"text_secondary", "sidebar_text_secondary"}
 #: keys that are no CSS at all (read by the widgets: ``layout_metrics``).
 SHAPE_KEYS = (
     "border_width", "corner_radius", "shadow_color", "shadow_strength",
-    "sidebar_icon_size", "toolbar_icon_size", "icon_color", "font_scale",
-    "font_family", "density",
+    "icon_scale", "icon_color", "font_scale", "font_family", "density",
+    "density_fine",
 )
+#: The symbolic icons' size at ``icon_scale`` 1, in px.
+ICON_SIZE = 16
 LAYOUT_KEYS = ("grid_gap", "card_scale", "sidebar_width")
 #: Keys only Big Picture paints (``bigpicture.theme``), never the desktop.
 BIG_PICTURE_KEYS = ("console_list_bg",)
@@ -120,8 +124,8 @@ def _rgba(color, alpha):
     return f"rgba({r}, {g}, {b}, {alpha:.2f})"
 
 
-def _scaled(length, percent):
-    return max(0, int(round(length * percent / 100)))
+def _scaled(length, factor):
+    return max(0, int(round(length * factor)))
 
 
 def _shape_rules(clean, effective):
@@ -143,28 +147,27 @@ def _shape_rules(clean, effective):
     if "shadow_color" in clean or "shadow_strength" in clean:
         strength = effective("shadow_strength")
         if strength:
-            color = _rgba(effective("shadow_color"), strength / 100)
-            blur = 4 + strength // 8
+            color = _rgba(effective("shadow_color"), strength)
+            blur = 4 + int(strength * 12)
             rules.append(
-                f"{_SHADOW_SELECTORS} {{ box-shadow: 0 {2 + strength // 25}px {blur}px {color}; }}"
+                f"{_SHADOW_SELECTORS} {{ box-shadow: 0 {2 + int(strength * 4)}px {blur}px {color}; }}"
             )
         else:
             rules.append(f"{_SHADOW_SELECTORS} {{ box-shadow: none; }}")
-    if "sidebar_icon_size" in clean:
-        rules.append(f"{_SIDEBAR_ICONS} {{ -gtk-icon-size: {clean['sidebar_icon_size']}px; }}")
-    if "toolbar_icon_size" in clean:
-        rules.append(f"{_TOOLBAR_ICONS} {{ -gtk-icon-size: {clean['toolbar_icon_size']}px; }}")
+    if "icon_scale" in clean:
+        size = _scaled(ICON_SIZE, clean["icon_scale"])
+        rules.append(f"{_TOOLBAR_ICONS}, {_SIDEBAR_ICONS} {{ -gtk-icon-size: {size}px; }}")
     if "icon_color" in clean:
         rules.append(f"{_TOOLBAR_ICONS}, {_SIDEBAR_ICONS} {{ color: {clean['icon_color']}; }}")
     window = []
     if "font_family" in clean and clean["font_family"]:
         window.append(f'font-family: "{clean["font_family"]}";')
     if "font_scale" in clean:
-        window.append(f"font-size: {clean['font_scale']}%;")
+        window.append(f"font-size: {int(round(clean['font_scale'] * 100))}%;")
     if window:
         rules.append("window { " + " ".join(window) + " }")
-    if "density" in clean:
-        density = clean["density"]
+    if "density" in clean or "density_fine" in clean:
+        density = DENSITY_FACTORS[effective("density")] * effective("density_fine")
         rules.append(f".boxed-list > row, list.boxed-list > row {{ min-height: {_scaled(50, density)}px; }}")
         rules.append(
             f".navigation-sidebar > row {{ min-height: {_scaled(36, density)}px; "
@@ -173,6 +176,20 @@ def _shape_rules(clean, effective):
         rules.append(f".rom-card {{ padding: {_scaled(8, density)}px; }}")
         rules.append(f"headerbar {{ min-height: {_scaled(47, density)}px; }}")
     return rules
+
+
+def _selected_row_rules(clean, effective):
+    """The selected sidebar row's text, readable on the selection.
+
+    Themes (Android's ready-made ones among them) pick the sidebar's text for
+    the sidebar; on the desktop the selected row also sits on the selection,
+    so its text is taken toward black or white until it reads there.
+    """
+    if "sidebar_text_primary" not in clean and "selection_bg" not in clean:
+        return []
+    color = readable_on(effective("sidebar_text_primary"), effective("selection_bg"))
+    return [f".navigation-sidebar > row:selected, .navigation-sidebar > row:selected label "
+            f"{{ color: {color}; }}"]
 
 
 def _background_rules(backgrounds):
@@ -230,6 +247,7 @@ def stylesheet(values, css_variables=False, base=THEME_DARK, backgrounds=None):
                 extra = " opacity: 1;" if key in _OPAQUE else ""
                 lines.append(f"{selector} {{ {prop}: {clean[key]};{extra} }}")
     lines.extend(_shape_rules(clean, effective))
+    lines.extend(_selected_row_rules(clean, effective))
     lines.extend(_background_rules(backgrounds))
     return "\n".join(lines) + ("\n" if lines else "")
 

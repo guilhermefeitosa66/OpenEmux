@@ -19,6 +19,7 @@ import cairo
 from gi.repository import Gdk, Gtk, Pango, PangoCairo
 
 from openemux.core.cartridge_colors import hex_to_rgb
+from openemux.core.custom_themes import DENSITY_FACTORS
 
 PREVIEW_HEIGHT = 300
 NARROW_PREVIEW_HEIGHT = 170
@@ -29,11 +30,10 @@ REFERENCE_WIDTH = 1100
 
 #: Starting values for a drawing given only colors (part 1's callers).
 _SHAPE_DEFAULTS = {
-    "border_width": 0, "corner_radius": 12, "shadow_strength": 35,
+    "border_width": 0, "corner_radius": 12, "shadow_strength": 0.35,
     "shadow_color": "#000000", "border_color": "#454545", "icon_color": "#ffffff",
-    "sidebar_icon_size": 16, "toolbar_icon_size": 16, "font_scale": 100,
-    "font_family": "", "density": 100, "grid_gap": 24, "card_scale": 100,
-    "sidebar_width": None,
+    "icon_scale": 1.0, "font_scale": 1.0, "font_family": "", "density": "default",
+    "density_fine": 1.0, "grid_gap": 24, "card_scale": 1.0, "sidebar_width": None,
 }
 
 
@@ -118,9 +118,9 @@ def draw_preview(cr, width, height, colors, labels, images=None):
     c = dict(_SHAPE_DEFAULTS)
     c.update(colors)
     images = images or {}
-    text_scale = c["font_scale"] / 100
+    text_scale = c["font_scale"]
     family = c["font_family"] or None
-    density = c["density"] / 100
+    density = DENSITY_FACTORS.get(c["density"], 1.0) * c["density_fine"]
     radius = c["corner_radius"] * MINIATURE * 1.5
 
     def text(x, y, words, color, size, **kw):
@@ -129,7 +129,8 @@ def draw_preview(cr, width, height, colors, labels, images=None):
     _rect(cr, 0, 0, width, height, c["window_bg"])
     header = round(30 * max(0.8, density))
     _rect(cr, 0, 0, width, header, c["headerbar_bg"])
-    toolbar_icon = c["toolbar_icon_size"] * MINIATURE * 1.4
+    icon = 16 * c["icon_scale"] * MINIATURE * 1.4
+    toolbar_icon = icon
     _icon(cr, width - toolbar_icon - 10, (header - toolbar_icon) / 2, toolbar_icon, c["icon_color"])
     text(10, 8, labels["title"], c["text_primary"], 8, bold=True, max_width=width - 40)
 
@@ -144,7 +145,7 @@ def draw_preview(cr, width, height, colors, labels, images=None):
     if "sidebar" in images:
         _image(cr, 0, body_y, sidebar, body_h, images["sidebar"])
     row_h = 22 * density
-    sidebar_icon = c["sidebar_icon_size"] * MINIATURE * 1.4
+    sidebar_icon = icon
     y = body_y + 8
     for index, name in enumerate(labels["consoles"]):
         if index == 0:
@@ -161,13 +162,13 @@ def draw_preview(cr, width, height, colors, labels, images=None):
     if "library" in images:
         _image(cr, library_x, body_y, library_w, body_h, images["library"])
     gap = max(2, c["grid_gap"] * MINIATURE)
-    card_scale = c["card_scale"] / 100
+    card_scale = c["card_scale"]
     want = 72 * card_scale
     columns = max(1, min(3, int((library_w - gap) // (want + gap))))
     card_w = max(20, min(want * 1.25, (library_w - gap * (columns + 1)) / columns))
     cover_h = min(70 * card_scale, card_w * 1.1)
     pad = 5 * density
-    shadow = c["shadow_strength"] / 100
+    shadow = c["shadow_strength"]
     for index, title in enumerate(labels["games"][:columns]):
         x = library_x + gap + index * (card_w + gap)
         y = body_y + gap

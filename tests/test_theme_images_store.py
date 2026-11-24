@@ -84,7 +84,7 @@ class SeedTests(unittest.TestCase):
 
 class ImageContrastTests(unittest.TestCase):
     def test_warnings_for_with_problems_given(self):
-        theme = Theme("x", "x", "dark", {"library_image": "library.png"})
+        theme = Theme("x", "x", "dark", {"library_image": "images/library.png"})
         problems = contrast_problems(theme, {"library": "#f0f0f0"})
         found = custom_themes.warnings_for(theme, "library_image", problems)
         self.assertIn("text_primary", [other for other, _ratio in found])
@@ -100,7 +100,7 @@ class ImageContrastTests(unittest.TestCase):
         self.assertGreater(relative_luminance(values["window_bg"]), 0.75)
 
     def test_text_is_checked_against_the_dimmed_image_too(self):
-        theme = Theme("x", "x", "dark", {"library_image": "library.png"})
+        theme = Theme("x", "x", "dark", {"library_image": "images/library.png"})
         problems = contrast_problems(theme, {"library": "#f0f0f0"})
         self.assertIn(("text_primary", "library_image"),
                       [(fg, bg) for fg, bg, _ratio in problems])
@@ -110,25 +110,28 @@ class ImageContrastTests(unittest.TestCase):
         self.assertEqual(contrast_problems(theme, {"library": "#f0f0f0"}), [])
 
     def test_unknown_areas_and_bad_colors_are_ignored(self):
-        theme = Theme("x", "x", "dark", {"library_image": "library.png"})
+        theme = Theme("x", "x", "dark", {"library_image": "images/library.png"})
         self.assertEqual(contrast_problems(theme, {"elsewhere": "#ffffff", "library": "x"}), [])
 
     def test_a_readable_image_warns_nothing(self):
-        theme = Theme("x", "x", "dark", {"sidebar_image": "sidebar.png"})
+        theme = Theme("x", "x", "dark", {"sidebar_image": "images/sidebar.png"})
         self.assertEqual(contrast_problems(theme, {"sidebar": "#202020"}), [])
 
 
 class ThemeImagePathTests(unittest.TestCase):
     def test_image_path(self):
         with TemporaryDirectory() as tmp:
-            write_png(Path(tmp) / "library.png")
-            theme = Theme("x", "x", "dark", {"library_image": "library.png",
-                                              "sidebar_image": "sidebar.png"}, image_dir=Path(tmp))
-            self.assertEqual(theme.image_path("library"), Path(tmp) / "library.png")
+            # The values are relative to the theme's folder: images/<name>.
+            (Path(tmp) / "images").mkdir()
+            write_png(Path(tmp) / "images" / "library.png")
+            theme = Theme("x", "x", "dark", {"library_image": "images/library.png",
+                                              "sidebar_image": "images/sidebar.png"},
+                          folder=Path(tmp))
+            self.assertEqual(theme.image_path("library"), Path(tmp) / "images" / "library.png")
             self.assertIsNone(theme.image_path("sidebar"))  # named but missing
-            self.assertIsNone(theme.copy(image_dir=None).image_path("library"))
-            self.assertIsNone(Theme("x", "x", "dark", image_dir=Path(tmp)).image_path("library"))
-            self.assertEqual(theme.copy().image_dir, Path(tmp))
+            self.assertIsNone(theme.copy(folder=None).image_path("library"))
+            self.assertIsNone(Theme("x", "x", "dark", folder=Path(tmp)).image_path("library"))
+            self.assertEqual(theme.copy().folder, Path(tmp))
 
 
 class StoreImageTests(unittest.TestCase):
@@ -139,32 +142,33 @@ class StoreImageTests(unittest.TestCase):
         self.store = ThemeStore(self.tmp / "themes")
 
     def staged(self, *names):
+        """A folder as ``stage()`` makes one: the pictures in its ``images/``."""
         folder = self.tmp / "staged"
-        folder.mkdir(exist_ok=True)
+        (folder / "images").mkdir(parents=True, exist_ok=True)
         for name in names:
-            write_png(folder / name)
+            write_png(folder / "images" / name)
         return folder
 
     def test_create_copies_the_named_images_only(self):
         source = self.staged("library.png", "stray.png")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                   images_from=source)
         images = self.store.images_dir(theme.id)
         self.assertEqual(sorted(p.name for p in images.iterdir()), ["library.png"])
-        self.assertEqual(theme.image_dir, images)
+        self.assertEqual(theme.folder, images.parent)
         self.assertEqual(self.store.get(theme.id).image_path("library"), images / "library.png")
 
     def test_a_named_image_that_is_missing_is_logged_and_skipped(self):
         source = self.staged()
         with self.assertLogs("openemux.core.custom_themes", level="WARNING"):
-            theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+            theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                       images_from=source)
         self.assertFalse(any(self.store.images_dir(theme.id).iterdir()))
 
     def test_saving_without_images_keeps_them_and_dropping_one_removes_it(self):
         source = self.staged("library.png", "sidebar.png")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png",
-                                                    "sidebar_image": "sidebar.png"},
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png",
+                                                    "sidebar_image": "images/sidebar.png"},
                                   images_from=source)
         theme.values["card_bg"] = "#123456"
         self.store.save(theme)
@@ -184,14 +188,14 @@ class StoreImageTests(unittest.TestCase):
         leftover = self.store._folder(theme.id) / ".images.tmp"
         leftover.mkdir()
         (leftover / "junk").write_text("x")
-        theme.values["library_image"] = "library.png"
+        theme.values["library_image"] = "images/library.png"
         self.store.save(theme, images_from=source)
         self.assertFalse(leftover.exists())
         self.assertTrue((self.store.images_dir(theme.id) / "library.png").is_file())
 
     def test_a_failed_image_swap_leaves_the_old_images(self):
         source = self.staged("library.png")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                   images_from=source)
         with mock.patch.object(custom_themes.os, "replace", side_effect=OSError("disk")):
             with self.assertRaises(OSError):
@@ -200,7 +204,7 @@ class StoreImageTests(unittest.TestCase):
 
     def test_duplicate_copies_the_images(self):
         source = self.staged("library.png")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                   images_from=source)
         copy = self.store.duplicate(theme.id, "Pics copy")
         self.assertTrue((self.store.images_dir(copy.id) / "library.png").is_file())
@@ -221,13 +225,16 @@ class StoreImageTests(unittest.TestCase):
 
     def test_staging_copies_images_and_discard_removes_only_staging(self):
         source = self.staged("library.png")
-        (source / "notes.txt").write_text("not an image")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+        (source / "images" / "notes.txt").write_text("not an image")
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                   images_from=source)
         staging = self.store.stage(self.store.get(theme.id))
         self.assertEqual(staging.parent, self.store.root)
         self.assertTrue(staging.name.startswith(ThemeStore.STAGING_PREFIX))
-        self.assertTrue((staging / "library.png").is_file())
+        self.assertEqual([p.name for p in staging.iterdir()], ["images"])
+        self.assertEqual([p.name for p in (staging / "images").iterdir()], ["library.png"])
+        # The staging folder is what save() takes, and what the values are relative to.
+        self.assertTrue(theme.copy(folder=staging).image_path("library").is_file())
         self.store.discard(self.tmp / "staged")  # not a staging folder: kept
         self.assertTrue((self.tmp / "staged").is_dir())
         self.store.discard(self.store._folder(theme.id))  # a theme: kept
@@ -237,16 +244,18 @@ class StoreImageTests(unittest.TestCase):
 
     def test_staging_a_new_theme_is_empty(self):
         staging = self.store.stage(Theme("", "New", "dark"))
-        self.assertEqual(list(staging.iterdir()), [])
-        staging2 = self.store.stage(Theme("", "New", "dark", image_dir=self.tmp / "nowhere"))
-        self.assertEqual(list(staging2.iterdir()), [])
+        self.assertEqual(list((staging / "images").iterdir()), [])
+        staging2 = self.store.stage(Theme("", "New", "dark", folder=self.tmp / "nowhere"))
+        self.assertEqual(list((staging2 / "images").iterdir()), [])
 
     def test_staging_skips_what_is_not_an_image_file(self):
         folder = self.tmp / "odd"
-        (folder / "sub.png").mkdir(parents=True)
-        write_png(folder / "ok.png")
-        staging = self.store.stage(Theme("", "New", "dark", image_dir=folder))
-        self.assertEqual([p.name for p in staging.iterdir()], ["ok.png"])
+        (folder / "images" / "sub.png").mkdir(parents=True)
+        write_png(folder / "images" / "ok.png")
+        write_png(folder / "images" / "Upper.PNG")
+        write_png(folder / "outside.png")
+        staging = self.store.stage(Theme("", "New", "dark", folder=folder))
+        self.assertEqual([p.name for p in (staging / "images").iterdir()], ["ok.png"])
 
     def test_purge_leftovers(self):
         self.store.purge_leftovers()  # no folder yet: nothing to do
@@ -285,6 +294,9 @@ class ImportImageTests(unittest.TestCase):
         out = theme_images.import_image(source, self.tmp / "out.png")
         self.assertEqual(theme_images.image_size(out), (30, 10))
         self.assertEqual(theme_images.sniff(out), "png")
+
+    def test_the_stored_copy_is_at_most_2048_px(self):
+        self.assertEqual(theme_images.MAX_SIDE, 2048)
 
     def test_a_large_picture_is_scaled_down(self):
         with mock.patch.object(theme_images, "MAX_SIDE", 20):

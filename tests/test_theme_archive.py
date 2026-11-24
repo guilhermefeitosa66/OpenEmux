@@ -86,13 +86,14 @@ class ArchiveTestCase(unittest.TestCase):
 class ExportTests(ArchiveTestCase):
     def _theme_with_images(self):
         source = self.tmp / "staging"
-        source.mkdir()
-        make_picture(source / "library.png", 64, 48)
-        make_picture(source / "sidebar.png", 20, 50)
+        (source / "images").mkdir(parents=True)
+        make_picture(source / "images" / "library.png", 64, 48)
+        make_picture(source / "images" / "sidebar.png", 20, 50)
         return self.store.create(
             "Midnight", "dark",
-            {"library_bg": "#24283b", "corner_radius": 6, "library_image": "library.png",
-             "library_image_dim": 55, "sidebar_image": "sidebar.png", "font_family": "Cantarell"},
+            {"library_bg": "#24283b", "corner_radius": 6, "library_image": "images/library.png",
+             "library_image_dim": 0.55, "sidebar_image": "images/sidebar.png",
+             "font_family": "Cantarell"},
             images_from=source,
         )
 
@@ -108,7 +109,9 @@ class ExportTests(ArchiveTestCase):
             data = yaml.safe_load(archive.read(THEME_FILE))
             self.assertEqual(archive.getinfo(THEME_FILE).compress_type, zipfile.ZIP_DEFLATED)
         self.assertEqual(data["name"], "Midnight")
-        self.assertEqual(data["library_image"], "library.png")
+        # The entries are written under the values that name them.
+        self.assertEqual(data["library_image"], "images/library.png")
+        self.assertEqual(data["library_image_dim"], 0.55)
         # No temp file is left beside it.
         self.assertEqual(sorted(p.name for p in self.tmp.iterdir()),
                          ["staging", "theme.openemux-theme", "themes"])
@@ -129,10 +132,11 @@ class ExportTests(ArchiveTestCase):
 
     def test_an_image_shared_by_two_keys_is_written_once(self):
         source = self.tmp / "staging"
-        source.mkdir()
-        make_picture(source / "bg.png")
+        (source / "images").mkdir(parents=True)
+        make_picture(source / "images" / "bg.png")
         theme = self.store.create(
-            "Shared", "light", {"library_image": "bg.png", "sidebar_image": "bg.png"},
+            "Shared", "light",
+            {"library_image": "images/bg.png", "sidebar_image": "images/bg.png"},
             images_from=source,
         )
         export_theme(self.store, theme.id, self.file)
@@ -140,14 +144,15 @@ class ExportTests(ArchiveTestCase):
             self.assertEqual(archive.namelist(), [THEME_FILE, "images/bg.png"])
         imported = import_theme(ThemeStore(self.tmp / "other"), self.file)
         # Each key gets a file of its own on import.
-        self.assertEqual(imported.values["library_image"], "library.png")
-        self.assertEqual(imported.values["sidebar_image"], "sidebar.png")
+        self.assertEqual(imported.values["library_image"], "images/library.png")
+        self.assertEqual(imported.values["sidebar_image"], "images/sidebar.png")
         self.assertIsNotNone(imported.image_path("library"))
         self.assertIsNotNone(imported.image_path("sidebar"))
 
     def test_a_missing_image_is_left_out(self):
-        theme = self.store.create("Plain", "light", {"library_image": "library.png"},
-                                  images_from=self.tmp)
+        with self.assertLogs("openemux.core.custom_themes", "WARNING"):
+            theme = self.store.create("Plain", "light", {"library_image": "images/library.png"},
+                                      images_from=self.tmp)
         with self.assertLogs("openemux.core.theme_archive", "WARNING"):
             export_theme(self.store, theme.id, self.file)
         with zipfile.ZipFile(self.file) as archive:
@@ -192,10 +197,13 @@ class ImportTests(ArchiveTestCase):
     def test_unknown_keys_dropped_and_ranges_clamped(self):
         build_zip(self.file, [(THEME_FILE, theme_yaml(
             evil="rm -rf /", corner_radius=999, border_width=-5, density=61.6,
-            library_bg="not a color", android_only_key=3,
+            library_bg="not a color", android_only_key=3, shadow_strength=0.333,
+            font_scale=2, icon_scale=1.1,
         ))])
         theme = import_theme(self.store, self.file)
-        self.assertEqual(theme.values, {"corner_radius": 24, "border_width": 0, "density": 62})
+        self.assertEqual(theme.values, {"corner_radius": 28, "border_width": 0,
+                                        "shadow_strength": 0.33, "icon_scale": 1.1,
+                                        "font_scale": 1.3})
 
     def test_a_newer_version_still_imports(self):
         build_zip(self.file, [(THEME_FILE, theme_yaml(version=7, accent="#ff0000"))])
@@ -204,13 +212,13 @@ class ImportTests(ArchiveTestCase):
     def test_images_are_re_encoded_as_png(self):
         jpeg = picture_bytes(self.tmp, "jpeg", 50, 20)
         build_zip(self.file, [
-            (THEME_FILE, theme_yaml(library_image="bg.jpg")),
+            (THEME_FILE, theme_yaml(library_image="images/bg.jpg")),
             ("images/", b""),
             ("images/bg.jpg", jpeg),
             ("images/unused.png", b"never read"),
         ])
         theme = import_theme(self.store, self.file)
-        self.assertEqual(theme.values, {"library_image": "library.png"})
+        self.assertEqual(theme.values, {"library_image": "images/library.png"})
         path = theme.image_path("library")
         self.assertEqual(theme_images.sniff(path), "png")
         self.assertEqual(theme_images.image_size(path), (50, 20))
@@ -218,12 +226,68 @@ class ImportTests(ArchiveTestCase):
 
     def test_missing_image_drops_the_key(self):
         build_zip(self.file, [(THEME_FILE, theme_yaml(
-            library_image="gone.png", library_image_dim=50, sidebar_image="",
+            library_image="images/gone.png", library_image_dim=0.5, sidebar_image="",
         ))])
         with self.assertLogs("openemux.core.theme_archive", "WARNING"):
             theme = import_theme(self.store, self.file)
-        self.assertEqual(theme.values, {"library_image_dim": 50})
+        self.assertEqual(theme.values, {"library_image_dim": 0.5})
         self.assertFalse((self.store.root / theme.id / "images").exists())
+
+    def test_a_single_top_folder_is_stripped(self):
+        build_zip(self.file, [
+            ("Midnight/", b""),
+            ("Midnight/theme.yaml", theme_yaml(library_image="images/bg.png")),
+            ("Midnight/images/", b""),
+            ("Midnight/images/bg.png", picture_bytes(self.tmp)),
+        ])
+        theme = import_theme(self.store, self.file)
+        self.assertEqual(theme.values, {"library_image": "images/library.png"})
+        self.assertIsNotNone(theme.image_path("library"))
+
+    def test_two_top_folders_are_not_stripped(self):
+        build_zip(self.file, [
+            ("a/theme.yaml", theme_yaml()), ("b/theme.yaml", theme_yaml()),
+        ])
+        self.assertRejected("bad-theme")
+
+    def test_macosx_is_ignored(self):
+        build_zip(self.file, [
+            ("__MACOSX/", b""),
+            ("__MACOSX/Midnight/._theme.yaml", b"\0\5\x16\x07 resource fork"),
+            ("__MACOSX/theme.yaml", "base: light\n"),
+            ("Midnight/theme.yaml", theme_yaml(accent="#ff0000")),
+        ])
+        theme = import_theme(self.store, self.file)
+        self.assertEqual((theme.base, theme.values), ("dark", {"accent": "#ff0000"}))
+
+    def test_a_theme_yaml_only_under_macosx_is_no_theme(self):
+        build_zip(self.file, [("__MACOSX/theme.yaml", theme_yaml())])
+        self.assertRejected("bad-theme")
+
+    def test_other_entries_are_skipped_unread(self):
+        link = zipfile.ZipInfo("notes/link")
+        link.external_attr = (0o120777 << 16)
+        build_zip(self.file, [
+            (THEME_FILE, theme_yaml(library_image="images/bg.png")),
+            ("images/bg.png", picture_bytes(self.tmp)),
+            ("readme.txt", os.urandom(300)),
+            ("images/BIG.PNG", b"x"), ("images/a.gif", b"x"),
+            ("images/sub/", b""), ("images/sub/a.png", b"x"), ("other/", b""),
+            (link, "/etc/passwd"),
+        ])
+        opened = []
+        real_open = zipfile.ZipFile.open
+
+        def recording_open(archive, name, *args, **kwargs):
+            opened.append(getattr(name, "filename", name))
+            return real_open(archive, name, *args, **kwargs)
+
+        # Larger than an image may be, but never read, so never refused.
+        with mock.patch.object(theme_archive, "MAX_IMAGE_BYTES", 2000), \
+                mock.patch.object(zipfile.ZipFile, "open", recording_open):
+            theme = import_theme(self.store, self.file)
+        self.assertEqual(sorted(opened), ["images/bg.png", THEME_FILE])
+        self.assertEqual(theme.values, {"library_image": "images/library.png"})
 
 
 class RejectionTests(ArchiveTestCase):
@@ -241,9 +305,19 @@ class RejectionTests(ArchiveTestCase):
 
     def test_too_many_entries(self):
         entries = [(THEME_FILE, theme_yaml())]
-        entries += [(f"images/a{n}.png", b"x") for n in range(16)]
+        entries += [(f"images/a{n}.png", b"x") for n in range(theme_archive.MAX_ENTRIES - 1)]
         build_zip(self.file, entries)
+        self.assertEqual(import_theme(self.store, self.file).name, "Midnight")
+        # Skipped entries count too.
+        build_zip(self.file, entries + [("__MACOSX/x", b"x")])
         self.assertRejected("too-many-entries")
+
+    def test_file_too_big_is_refused_before_it_is_opened(self):
+        self.file.write_bytes(b"x" * 200)
+        with mock.patch.object(theme_archive, "MAX_FILE_BYTES", 100), \
+                mock.patch.object(zipfile, "is_zipfile") as is_zip:
+            self.assertRejected("too-large")
+        is_zip.assert_not_called()
 
     def _bad_name(self, name):
         build_zip(self.file, [(THEME_FILE, theme_yaml()), (name, b"x")])
@@ -258,16 +332,15 @@ class RejectionTests(ArchiveTestCase):
 
     def test_backslash(self):
         self._bad_name("images\\a.png")
+        self._bad_name("notes\\readme.txt")
 
-    def test_unknown_entry(self):
-        self._bad_name("readme.txt")
-        self._bad_name("images/BIG.PNG")
-        self._bad_name("images/a.gif")
-
-    def test_nested_and_other_directories(self):
-        self._bad_name("images/sub/a.png")
-        self._bad_name("other/")
-        self._bad_name("images/sub/")
+    def test_unsafe_names_refuse_wherever_they_are(self):
+        # Even where nothing would be read: in __MACOSX/, an unknown folder.
+        self._bad_name("__MACOSX/../x")
+        self._bad_name("other/../../x")
+        self._bad_name("/__MACOSX/x")
+        build_zip(self.file, [("Midnight/theme.yaml", theme_yaml()), ("Midnight/../x", b"x")])
+        self.assertRejected("bad-entry")
 
     def test_duplicate_entry(self):
         build_zip(self.file, [(THEME_FILE, theme_yaml()), (THEME_FILE, theme_yaml())])
@@ -330,7 +403,7 @@ class RejectionTests(ArchiveTestCase):
         info = SimpleNamespace(filename="images/a.png", external_attr=0, flag_bits=0,
                                file_size=theme_archive.RATIO_FLOOR + 1, compress_size=0)
         with self.assertRaises(ThemeImportError) as caught:
-            theme_archive._check_entry(info)
+            theme_archive._check_entry(info, "images/a.png")
         self.assertEqual(caught.exception.reason, "ratio")
 
     def test_lying_header(self):
@@ -372,7 +445,7 @@ class RejectionTests(ArchiveTestCase):
 
     def test_image_not_a_picture(self):
         build_zip(self.file, [
-            (THEME_FILE, theme_yaml(library_image="a.png")),
+            (THEME_FILE, theme_yaml(library_image="images/a.png")),
             ("images/a.png", b"#!/bin/sh\necho hi\n"),
         ])
         self.assertRejected("bad-image")
@@ -380,7 +453,7 @@ class RejectionTests(ArchiveTestCase):
     def test_a_bad_image_after_a_good_one_leaves_nothing(self):
         good = picture_bytes(self.tmp)
         build_zip(self.file, [
-            (THEME_FILE, theme_yaml(library_image="a.png", sidebar_image="b.png")),
+            (THEME_FILE, theme_yaml(library_image="images/a.png", sidebar_image="images/b.png")),
             ("images/a.png", good), ("images/b.png", b"nope"),
         ])
         self.assertRejected("bad-image")
@@ -392,7 +465,7 @@ class RejectionTests(ArchiveTestCase):
 
     def test_write_error_while_extracting(self):
         build_zip(self.file, [
-            (THEME_FILE, theme_yaml(library_image="a.png")),
+            (THEME_FILE, theme_yaml(library_image="images/a.png")),
             ("images/a.png", picture_bytes(self.tmp)),
         ])
         with mock.patch.object(theme_images, "import_image", side_effect=OSError("full")):

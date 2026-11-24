@@ -246,7 +246,7 @@ class RomGrid(Gtk.GridView):
         metrics = {} if self.ui_settings.get("big_picture") else theme_css.layout_metrics(
             theming.current_paint().values
         )
-        self._card_scale = 1.0 if self.compact else metrics.get("card_scale", 100) / 100
+        self._card_scale = 1.0 if self.compact else metrics.get("card_scale", 1.0)
         self._spacing = scale_spacing(
             LIST_ROW_SPACING if self.compact else metrics.get("grid_gap", GRID_SPACING),
             self.zoom,

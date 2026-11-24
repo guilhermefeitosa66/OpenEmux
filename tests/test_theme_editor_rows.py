@@ -74,11 +74,14 @@ class RowKindTests(_RowsCase):
         self.assertIsInstance(dialog.rows["corner_radius"], NumberRow)
         self.assertIsInstance(dialog.rows["corner_radius"].control, Gtk.Scale)
         self.assertIsInstance(dialog.rows["border_width"].control, Gtk.SpinButton)
-        self.assertIsInstance(dialog.rows["sidebar_icon_size"], ChoiceRow)
+        # A fraction never gets a spin button, however short its range.
+        self.assertIsInstance(dialog.rows["shadow_strength"].control, Gtk.Scale)
+        self.assertIsInstance(dialog.rows["icon_scale"], NumberRow)
         self.assertIsInstance(dialog.rows["library_image_fit"], ChoiceRow)
         self.assertIsInstance(dialog.rows["font_family"], FontRow)
         self.assertIsInstance(dialog.rows["library_image"], ImageRow)
-        self.assertTrue(any(isinstance(row, DensityRow) for row in dialog.extra_rows))
+        self.assertIsInstance(dialog.rows["density"], DensityRow)
+        self.assertIsInstance(dialog.rows["density_fine"], NumberRow)
 
     def test_a_number_moves_shows_its_unit_and_resets(self):
         dialog = self.editor()
@@ -86,36 +89,42 @@ class RowKindTests(_RowsCase):
         row.control.set_value(20)
         self.assertEqual(dialog.draft.values["corner_radius"], 20)
         self.assertEqual(row.get_subtitle(), self.said("theme_editor.unit.px", value=20))
-        dialog.rows["font_scale"].control.set_value(120)
+        # A fraction is stored as one and shown in percent.
+        dialog.rows["font_scale"].control.set_value(1.2)
+        self.assertEqual(dialog.draft.values["font_scale"], 1.2)
         self.assertEqual(dialog.rows["font_scale"].get_subtitle(),
                          self.said("theme_editor.unit.percent", value=120))
         dialog.reset_value("corner_radius")
+        dialog.reset_value("font_scale")
         self.assertEqual(row.control.get_value(), 12)
+        self.assertEqual(dialog.rows["font_scale"].control.get_value(), 1.0)
         self.assertEqual(row.get_subtitle(), self.said("theme_editor.same_as_base"))
 
     def test_a_choice_picks_and_follows_a_reset(self):
         dialog = self.editor()
-        row = dialog.rows["sidebar_icon_size"]
-        row.buttons[24].set_active(True)
-        self.assertEqual(dialog.draft.values["sidebar_icon_size"], 24)
-        self.assertEqual(row.get_subtitle(), "")
-        dialog.reset_all()
-        self.assertTrue(row.buttons[16].get_active())
-        self.assertEqual(row.buttons[16].get_label(), "16")
         fit = dialog.rows["library_image_fit"]
+        fit.buttons["tile"].set_active(True)
+        self.assertEqual(dialog.draft.values["library_image_fit"], "tile")
+        self.assertEqual(fit.get_subtitle(), "")
+        dialog.reset_all()
+        self.assertTrue(fit.buttons["cover"].get_active())
         self.assertEqual(fit.buttons["tile"].get_label(), self.said("theme_editor.fit.tile"))
 
-    def test_density_presets_and_the_fine_slider(self):
+    def test_density_choice_with_its_reset_and_the_fine_slider(self):
         dialog = self.editor()
-        presets = next(row for row in dialog.extra_rows if isinstance(row, DensityRow))
-        presets.buttons[80].set_active(True)
-        self.assertEqual(dialog.draft.values["density"], 80)
-        self.assertEqual(dialog.rows["density"].control.get_value(), 80)
-        # Clicking the active preset keeps it on.
-        presets.buttons[80].set_active(False)
-        self.assertTrue(presets.buttons[80].get_active())
-        dialog.rows["density"].control.set_value(90)
-        self.assertFalse(any(button.get_active() for button in presets.buttons.values()))
+        density = dialog.rows["density"]
+        self.assertTrue(density.buttons["default"].get_active())
+        self.assertFalse(density.reset_button.get_sensitive())
+        density.buttons["compact"].set_active(True)
+        self.assertEqual(dialog.draft.values["density"], "compact")
+        self.assertTrue(density.reset_button.get_sensitive())
+        self.assertEqual(density.buttons["comfortable"].get_label(),
+                         self.said("theme_editor.density.comfortable"))
+        density.reset_button.emit("clicked")
+        self.assertNotIn("density", dialog.draft.values)
+        self.assertTrue(density.buttons["default"].get_active())
+        dialog.rows["density_fine"].control.set_value(0.9)
+        self.assertEqual(dialog.draft.values["density_fine"], 0.9)
 
     def test_the_font_list_and_a_family_from_elsewhere(self):
         dialog = self.editor(Theme("", "X", "dark", {"font_family": "Elsewhere Sans"}))
@@ -170,8 +179,8 @@ class ImageRowTests(_RowsCase):
         self.assertFalse(dialog.rows["library_image_dim"].get_sensitive())
         row.take(str(self.picture()))
         self.pump()
-        self.assertEqual(dialog.draft.values["library_image"], "library.png")
-        self.assertTrue((dialog.staging / "library.png").is_file())
+        self.assertEqual(dialog.draft.values["library_image"], "images/library.png")
+        self.assertTrue((dialog.staging / "images" / "library.png").is_file())
         self.assertEqual(row.get_subtitle(), self.said("theme_editor.image.size", width=40, height=20))
         self.assertTrue(dialog.rows["library_image_dim"].get_sensitive())
         self.assertTrue(row.remove_button.get_sensitive())
@@ -207,9 +216,9 @@ class ImageRowTests(_RowsCase):
 
     def test_editing_keeps_the_themes_images_until_save(self):
         images = self.tmp / "src"
-        images.mkdir()
-        write_png(images / "library.png")
-        theme = self.store.create("Pics", "dark", {"library_image": "library.png"},
+        (images / "images").mkdir(parents=True)
+        write_png(images / "images" / "library.png")
+        theme = self.store.create("Pics", "dark", {"library_image": "images/library.png"},
                                   images_from=images)
         dialog = self.editor(self.store.get(theme.id), is_new=False)
         dialog.rows["library_image"].remove()

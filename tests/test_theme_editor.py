@@ -53,6 +53,9 @@ class LayoutTests(_EditorCase):
     def test_nothing_changed_reads_same_as_base(self):
         dialog = self.editor()
         for row in dialog.rows.values():
+            self.assertFalse(row.reset_button.get_sensitive())
+            if not hasattr(row, "get_subtitle"):
+                continue  # the density row: its choice is shown by its buttons
             # An image row says "None" rather than "Same as base" (issue 1012).
             expected = "theme_editor.image.none" if row.key.endswith("_image") else "theme_editor.same_as_base"
             self.assertEqual(row.get_subtitle(), self.said(expected))

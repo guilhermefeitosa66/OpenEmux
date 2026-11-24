@@ -3,8 +3,16 @@
 
 Every picture is drawn here, from shapes, for OpenEmux: no image from another
 project, wallpaper site or desktop is used or traced. The script writes an SVG
-(the source, kept beside the result) and renders it to the PNG the app paints,
-both under ``src/openemux/ui/assets/themes/<id>/``. Licensed as the app (MIT).
+(the source, kept beside the result) and renders it to the PNG the app paints:
+``src/openemux/ui/assets/themes/<id>/library.svg`` and ``images/library.png``.
+Licensed as the app (MIT).
+
+The scenes are the Android app's (``openemux-android``,
+``pkg/android/openemux/art/themes/``, drawn for a phone held upright), laid out
+again for a desktop window, which is wide: the same motifs -- Pastel's clouds
+and pastel waves, Dracula's moon, bats and pines, Kitty's cat by a ball of
+yarn, Neon's striped sun and grid, Tokyo Night's skyline -- where a wide
+window shows them.
 
     PYTHONPATH=src python3 tools/theme_backgrounds.py
 
@@ -61,9 +69,10 @@ def pastel():
             '<ellipse cx="45" cy="-30" rx="70" ry="56"/></g>'
         )
     hills = (
-        '<path d="M0 760 Q300 640 620 740 T1240 720 T1600 700 V1000 H0Z" fill="#CDEFD9"/>'
-        '<path d="M0 840 Q360 740 760 830 T1600 800 V1000 H0Z" fill="#FFE0C7"/>'
-        '<path d="M0 920 Q420 850 900 910 T1600 900 V1000 H0Z" fill="#FBCFE8"/>'
+        '<path d="M0 700 Q400 620 800 700 T1600 690 V1000 H0Z" fill="#DDD6FE"/>'
+        '<path d="M0 770 Q420 690 820 770 T1600 760 V1000 H0Z" fill="#BFDBFE"/>'
+        '<path d="M0 840 Q380 770 800 840 T1600 830 V1000 H0Z" fill="#BBF7D0"/>'
+        '<path d="M0 910 Q420 850 900 910 T1600 900 V1000 H0Z" fill="#FED7AA"/>'
     )
     flowers = []
     for _ in range(26):
@@ -86,16 +95,14 @@ def dracula():
         '<path d="M0 820 Q260 700 520 790 T1040 760 T1600 780 V1000 H0Z" fill="#44475A"/>'
         '<path d="M0 900 Q400 820 820 890 T1600 870 V1000 H0Z" fill="#21222C"/>'
     )
-    castle = (
-        '<g fill="#191A21">'
-        '<rect x="300" y="610" width="60" height="230"/><rect x="360" y="680" width="140" height="160"/>'
-        '<rect x="500" y="560" width="70" height="280"/>'
-        '<polygon points="300,610 330,540 360,610"/><polygon points="500,560 535,470 570,560"/>'
-        '</g>'
-        '<g fill="#FFB86C" opacity="0.85">'
-        '<rect x="322" y="660" width="14" height="22" rx="7"/><rect x="522" y="610" width="16" height="26" rx="8"/>'
-        '<rect x="410" y="730" width="16" height="24" rx="8"/></g>'
-    )
+    pines = []
+    for i in range(22):
+        x = 30 + i * 74 + rng.uniform(-14, 14)
+        h = rng.uniform(70, 150)
+        base_y = 820 + 30 * math.sin(i / 3.0)
+        pines.append(f'<polygon points="{x - h / 5:.0f},{base_y:.0f} {x:.0f},{base_y - h:.0f} '
+                     f'{x + h / 5:.0f},{base_y:.0f}" fill="#191A21"/>')
+    castle = "".join(pines)
     bats = []
     for _ in range(7):
         x, y, s = rng.uniform(700, 1150), rng.uniform(220, 520), rng.uniform(0.6, 1.2)
@@ -122,36 +129,40 @@ def kitty():
             f'<path transform="translate({x} {y}) scale({s})" fill="#F5C2E7" opacity="0.5" '
             'd="M0 12 C-20 -8 -40 12 0 44 C40 12 20 -8 0 12Z"/>'
         )
-    # The cat, curled on a cushion in the lower right corner: our own shapes.
+    # The cat, sitting beside a ball of yarn in the lower right: our shapes.
     cat = (
-        '<ellipse cx="1190" cy="905" rx="260" ry="62" fill="#4A3B5C"/>'
-        '<g transform="translate(1190 820)">'
+        '<ellipse cx="1210" cy="910" rx="300" ry="50" fill="#4A3B5C"/>'
+        '<g transform="translate(1250 760)">'
         # tail
-        '<path d="M150 40 Q250 30 230 -40 Q215 -90 175 -70" fill="none" stroke="#F2CDCD" '
-        'stroke-width="34" stroke-linecap="round"/>'
+        '<path d="M110 120 Q200 110 190 30 Q182 -10 150 0" fill="none" stroke="#F2CDCD" '
+        'stroke-width="30" stroke-linecap="round"/>'
         # body
-        '<ellipse cx="20" cy="30" rx="190" ry="105" fill="#F2CDCD"/>'
-        '<ellipse cx="0" cy="55" rx="120" ry="55" fill="#FFE4E1"/>'
+        '<ellipse cx="20" cy="80" rx="120" ry="95" fill="#F2CDCD"/>'
+        '<ellipse cx="20" cy="105" rx="70" ry="60" fill="#FFE4E1"/>'
         # head
-        '<circle cx="-150" cy="-20" r="92" fill="#F2CDCD"/>'
-        '<polygon points="-225,-70 -235,-160 -165,-100" fill="#F2CDCD"/>'
-        '<polygon points="-130,-105 -75,-160 -80,-70" fill="#F2CDCD"/>'
-        '<polygon points="-218,-85 -224,-135 -180,-100" fill="#F5C2E7"/>'
-        '<polygon points="-122,-100 -88,-135 -92,-82" fill="#F5C2E7"/>'
-        # sleeping eyes, nose, mouth, blush
-        '<path d="M-200 -20 Q-185 -8 -170 -20" stroke="#45475A" stroke-width="6" fill="none" stroke-linecap="round"/>'
-        '<path d="M-135 -20 Q-120 -8 -105 -20" stroke="#45475A" stroke-width="6" fill="none" stroke-linecap="round"/>'
-        '<path d="M-160 5 L-146 5 L-153 14Z" fill="#E78284"/>'
-        '<path d="M-153 14 Q-160 26 -170 22 M-153 14 Q-146 26 -136 22" stroke="#45475A" stroke-width="4" fill="none" stroke-linecap="round"/>'
-        '<ellipse cx="-205" cy="10" rx="16" ry="9" fill="#F5C2E7" opacity="0.8"/>'
-        '<ellipse cx="-100" cy="10" rx="16" ry="9" fill="#F5C2E7" opacity="0.8"/>'
-        # paws
-        '<ellipse cx="-90" cy="95" rx="34" ry="20" fill="#FFE4E1"/>'
-        '<ellipse cx="-20" cy="105" rx="34" ry="20" fill="#FFE4E1"/>'
-        # little "z"s
-        '<text x="-60" y="-120" font-family="sans-serif" font-size="46" font-weight="700" fill="#B4BEFE" opacity="0.8">z</text>'
-        '<text x="-20" y="-170" font-family="sans-serif" font-size="34" font-weight="700" fill="#B4BEFE" opacity="0.6">z</text>'
+        '<circle cx="20" cy="-40" r="85" fill="#F2CDCD"/>'
+        '<polygon points="-50,-90 -60,-175 5,-118" fill="#F2CDCD"/>'
+        '<polygon points="35,-118 100,-175 90,-90" fill="#F2CDCD"/>'
+        '<polygon points="-42,-100 -48,-150 -10,-115" fill="#F5C2E7"/>'
+        '<polygon points="50,-115 88,-150 82,-100" fill="#F5C2E7"/>'
+        # eyes open, nose, mouth, blush, whiskers
+        '<circle cx="-12" cy="-45" r="10" fill="#45475A"/><circle cx="52" cy="-45" r="10" fill="#45475A"/>'
+        '<circle cx="-9" cy="-49" r="3" fill="#FFFFFF"/><circle cx="55" cy="-49" r="3" fill="#FFFFFF"/>'
+        '<path d="M13 -22 L27 -22 L20 -13Z" fill="#E78284"/>'
+        '<path d="M20 -13 Q13 -2 3 -6 M20 -13 Q27 -2 37 -6" stroke="#45475A" stroke-width="4" fill="none" stroke-linecap="round"/>'
+        '<ellipse cx="-38" cy="-18" rx="15" ry="8" fill="#F5C2E7" opacity="0.8"/>'
+        '<ellipse cx="78" cy="-18" rx="15" ry="8" fill="#F5C2E7" opacity="0.8"/>'
+        '<path d="M-60 -25 L-110 -35 M-60 -15 L-110 -12 M100 -25 L150 -35 M100 -15 L150 -12" '
+        'stroke="#C9B8D6" stroke-width="3" stroke-linecap="round"/>'
+        # front paws
+        '<ellipse cx="-20" cy="165" rx="30" ry="18" fill="#FFE4E1"/>'
+        '<ellipse cx="55" cy="165" rx="30" ry="18" fill="#FFE4E1"/>'
         '</g>'
+        # the ball of yarn and its loose thread
+        '<circle cx="1030" cy="880" r="46" fill="#94E2D5"/>'
+        '<path d="M995 860 Q1030 840 1065 870 M990 885 Q1030 865 1072 893 M1000 905 Q1030 890 1060 912" '
+        'stroke="#6CBFB2" stroke-width="5" fill="none"/>'
+        '<path d="M1074 890 Q1110 930 1150 905" stroke="#94E2D5" stroke-width="5" fill="none"/>'
     )
     paws = []
     for x, y, a in ((180, 900, -20), (330, 860, -10), (480, 905, -25)):
@@ -242,11 +253,12 @@ def render(svg_path, png_path):
 def main():
     for theme_id, draw in DRAWINGS.items():
         folder = OUT / theme_id
-        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "images").mkdir(parents=True, exist_ok=True)
         source = folder / "library.svg"
         source.write_text(draw(), encoding="utf-8")
-        render(source, folder / "library.png")
-        print(folder / "library.png", (folder / "library.png").stat().st_size)
+        png = folder / "images" / "library.png"
+        render(source, png)
+        print(png, png.stat().st_size)
     return 0
 
 

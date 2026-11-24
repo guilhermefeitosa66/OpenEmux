@@ -37,9 +37,9 @@ MAX_FILE_BYTES = 40 * 1024 * 1024
 #: The largest picture taken in, in pixels on either side, checked from the
 #: file's header before anything is decoded.
 MAX_PIXELS_SIDE = 8192
-#: The long side of the stored copy: a background wider than a 1440p screen
+#: The long side of the stored copy (the shared format's 2048 px): wider
 #: only costs memory.
-MAX_SIDE = 2560
+MAX_SIDE = 2048
 #: Processed backgrounds kept in the cache; older ones are removed.
 CACHE_KEEP = 24
 

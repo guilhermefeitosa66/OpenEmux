@@ -266,12 +266,13 @@ class ScaleTest(unittest.TestCase):
 
 class FontScaleTest(unittest.TestCase):
     def test_bounds(self):
-        self.assertEqual(theme.font_scale_factor(80), 1.0)
-        self.assertEqual(theme.font_scale_factor(100), 1.0)
-        self.assertEqual(theme.font_scale_factor(120), 1.2)
-        self.assertEqual(theme.font_scale_factor(150), 1.5)
-        self.assertEqual(theme.font_scale_factor(400), 1.5)
-        self.assertEqual(theme.font_scale_factor("130"), 1.3)
+        # A factor, as the shared format stores font_scale (1.1 is 110%).
+        self.assertEqual(theme.font_scale_factor(0.85), 1.0)
+        self.assertEqual(theme.font_scale_factor(1.0), 1.0)
+        self.assertEqual(theme.font_scale_factor(1.2), 1.2)
+        self.assertEqual(theme.font_scale_factor(1.5), 1.5)
+        self.assertEqual(theme.font_scale_factor(4), 1.5)
+        self.assertEqual(theme.font_scale_factor("1.3"), 1.3)
         self.assertEqual(theme.font_scale_factor(None), 1.0)
         self.assertEqual(theme.font_scale_factor("big"), 1.0)
 

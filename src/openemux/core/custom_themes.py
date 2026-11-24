@@ -86,7 +86,10 @@ SECTIONS = (
 #: lower-case name and a picture extension. The editor only ever writes
 #: ``library.png`` and ``sidebar.png``; an imported file may name others.
 IMAGES_DIR = "images"
-IMAGE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,40}\.(png|jpg|jpeg|webp)")
+#: An image key's value, as the shared format writes it (the Android
+#: contract, ``docs/THEME_FORMAT.md``): ``images/<name>.<ext>``.
+IMAGE_FILE = re.compile(r"[a-z0-9_-]{1,40}\.(png|jpg|jpeg|webp)")
+IMAGE_NAME = re.compile(r"images/[a-z0-9_-]{1,40}\.(png|jpg|jpeg|webp)")
 #: A font family as stored: letters, digits, spaces and a little punctuation,
 #: never a quote, a backslash or a brace, so it cannot leave a CSS string.
 FONT_NAME = re.compile(r"[\w .&+()-]{1,64}")
@@ -94,9 +97,10 @@ FONT_NAME = re.compile(r"[\w .&+()-]{1,64}")
 #: The background areas, and the keys each one has.
 IMAGE_AREAS = ("library", "sidebar")
 FITS = ("cover", "contain", "tile")
-ICON_SIZES = (16, 20, 24)
-#: Density presets on the Spacing section's toggle group, as percentages.
-DENSITY_PRESETS = (("compact", 80), ("default", 100), ("comfortable", 120))
+#: The density choices and the factor each one scales rows and paddings by
+#: (the same as Android's).
+DENSITY_FACTORS = {"compact": 0.85, "default": 1.0, "comfortable": 1.15}
+DENSITIES = tuple(DENSITY_FACTORS)
 
 
 @dataclass(frozen=True)
@@ -118,8 +122,15 @@ class ThemeKey:
     minimum: float = None
     maximum: float = None
     choices: tuple = ()
-    #: What a number is shown in: "px" or "%".
+    #: How a number is shown: "px" (stored as px), or "%" (stored as a
+    #: fraction, 0.3, and shown as 30%), as the shared format stores them.
     unit: str = ""
+    #: The editor's step; a fraction steps by 0.05.
+    step: float = 1
+
+    @property
+    def fraction(self):
+        return self.kind == KIND_NUMBER and self.unit == "%"
 
     def default(self, base):
         return self.dark if base == THEME_DARK else self.light
@@ -131,7 +142,8 @@ def _color(key, section, group, light, dark):
 
 def _number(key, section, group, default, minimum, maximum, unit):
     return ThemeKey(key, section, group, KIND_NUMBER, default, default,
-                    minimum=minimum, maximum=maximum, unit=unit)
+                    minimum=minimum, maximum=maximum, unit=unit,
+                    step=0.05 if unit == "%" else 1)
 
 
 def _choice(key, section, group, default, choices):
@@ -145,8 +157,8 @@ def _image_keys(area):
         _choice(f"{area}_image_fit", SECTION_BACKGROUNDS, group, "cover", FITS),
         # Dimmed by default: an image picked as it is would sit under the
         # text at full strength, and readable by default is the rule.
-        _number(f"{area}_image_dim", SECTION_BACKGROUNDS, group, 40, 0, 90, "%"),
-        _number(f"{area}_image_blur", SECTION_BACKGROUNDS, group, 0, 0, 30, "px"),
+        _number(f"{area}_image_dim", SECTION_BACKGROUNDS, group, 0.4, 0, 0.9, "%"),
+        _number(f"{area}_image_blur", SECTION_BACKGROUNDS, group, 0, 0, 24, "px"),
     )
 
 
@@ -172,20 +184,23 @@ THEME_KEYS = (
     _color("selection_bg", SECTION_ACCENT, "accent", "#d6d6d6", "#474747"),
     _color("accent_button_bg", SECTION_ACCENT, "accent", "#3584e4", "#3584e4"),
     _color("accent_button_fg", SECTION_ACCENT, "accent", "#ffffff", "#ffffff"),
-    # Issue 1012: shapes and sizes. Defaults are what libadwaita 1.5 draws.
+    # Issue 1012: shapes and sizes. Defaults are what libadwaita 1.5 draws;
+    # names and ranges are the shared format's (the Android contract), and
+    # the desktop-only ones (font family, sidebar width, the fine density)
+    # are named so Android ignores them.
     _color("border_color", SECTION_BORDERS, "borders", "#dcdcdc", "#454545"),
-    _number("border_width", SECTION_BORDERS, "borders", 0, 0, 3, "px"),
-    _number("corner_radius", SECTION_BORDERS, "borders", 12, 0, 24, "px"),
+    _number("border_width", SECTION_BORDERS, "borders", 0, 0, 4, "px"),
+    _number("corner_radius", SECTION_BORDERS, "borders", 12, 0, 28, "px"),
     _color("shadow_color", SECTION_BORDERS, "shadows", "#000000", "#000000"),
-    _number("shadow_strength", SECTION_BORDERS, "shadows", 35, 0, 100, "%"),
-    _choice("sidebar_icon_size", SECTION_ICONS, "icons", 16, ICON_SIZES),
-    _choice("toolbar_icon_size", SECTION_ICONS, "icons", 16, ICON_SIZES),
+    _number("shadow_strength", SECTION_BORDERS, "shadows", 0.35, 0, 1, "%"),
+    _number("icon_scale", SECTION_ICONS, "icons", 1.0, 0.75, 1.5, "%"),
     _color("icon_color", SECTION_ICONS, "icons", "#323232", "#ffffff"),
-    _number("font_scale", SECTION_TYPOGRAPHY, "typography", 100, 80, 150, "%"),
+    _number("font_scale", SECTION_TYPOGRAPHY, "typography", 1.0, 0.85, 1.3, "%"),
     ThemeKey("font_family", SECTION_TYPOGRAPHY, "typography", KIND_FONT, "", ""),
-    _number("density", SECTION_SPACING, "spacing", 100, 60, 140, "%"),
-    _number("grid_gap", SECTION_SPACING, "spacing", 24, 4, 48, "px"),
-    _number("card_scale", SECTION_SPACING, "spacing", 100, 70, 150, "%"),
+    _choice("density", SECTION_SPACING, "spacing", "default", DENSITIES),
+    _number("density_fine", SECTION_SPACING, "spacing", 1.0, 0.8, 1.2, "%"),
+    _number("grid_gap", SECTION_SPACING, "spacing", 24, 0, 32, "px"),
+    _number("card_scale", SECTION_SPACING, "spacing", 1.0, 0.75, 1.5, "%"),
     _number("sidebar_width", SECTION_SPACING, "spacing", 300, 200, 420, "px"),
     *_image_keys("library"),
     *_image_keys("sidebar"),
@@ -200,12 +215,23 @@ CONTRAST_PAIRS = (
                       "details_bg", "headerbar_bg", "console_list_bg")),
     ("text_secondary", ("window_bg", "library_bg", "card_bg", "popover_bg",
                         "details_bg", "console_list_bg")),
-    ("sidebar_text_primary", ("sidebar_bg", "selection_bg")),
+    # On the selected row the desktop takes this text further until it reads
+    # on the selection (``theme_css``), so only the sidebar itself is checked.
+    ("sidebar_text_primary", ("sidebar_bg",)),
     ("sidebar_text_secondary", ("sidebar_bg",)),
     ("accent", ("window_bg",)),
     ("accent_button_fg", ("accent_button_bg",)),
     ("icon_color", ("headerbar_bg", "sidebar_bg")),
 )
+
+#: Icons are not text: WCAG 2.1 (1.4.11) asks 3:1 of them.
+NON_TEXT_CONTRAST = 3.0
+_NON_TEXT_KEYS = ("icon_color",)
+
+
+def needed_contrast(fg):
+    """The ratio ``fg`` must reach: 4.5:1 for text, 3:1 for icons."""
+    return NON_TEXT_CONTRAST if fg in _NON_TEXT_KEYS else WCAG_AA
 
 #: The background each image sits on, for the contrast check: text read on
 #: the library is also read on its image, dimmed into that color.
@@ -256,7 +282,9 @@ def validate_value(spec, value):
         value = max(spec.minimum, value)
     if spec.maximum is not None:
         value = min(spec.maximum, value)
-    # Every number setting is whole pixels or whole percent.
+    # Pixels are whole; a fraction keeps two decimals (0.35).
+    if spec.unit == "%":
+        return round(float(value), 2)
     return int(round(value))
 
 
@@ -302,9 +330,10 @@ class Theme:
     name: str
     base: str
     values: dict = field(default_factory=dict)
-    #: Where this theme's images are read from: its folder's ``images/``, or
-    #: the editor's staging copy while it is being edited. Never written.
-    image_dir: Path = field(default=None, compare=False)
+    #: The folder its image values are relative to (they read
+    #: ``images/<name>``): the theme's own folder, a ready-made theme's assets,
+    #: or the editor's staging copy while it is edited. Never written.
+    folder: Path = field(default=None, compare=False)
 
     def effective(self, key):
         """What the key paints with: the theme's value, else the base's."""
@@ -321,14 +350,14 @@ class Theme:
     def image_path(self, area):
         """The file of ``area``'s background (``library``/``sidebar``), or None."""
         name = self.values.get(f"{area}_image")
-        if not name or self.image_dir is None:
+        if not name or self.folder is None:
             return None
-        path = Path(self.image_dir) / name
+        path = Path(self.folder) / name
         return path if path.is_file() else None
 
     def copy(self, **changes):
         fields = {"id": self.id, "name": self.name, "base": self.base,
-                  "values": dict(self.values), "image_dir": self.image_dir}
+                  "values": dict(self.values), "folder": self.folder}
         fields.update(changes)
         return Theme(**fields)
 
@@ -351,12 +380,12 @@ def contrast_problems(theme, image_colors=None):
         for bg in backgrounds:
             if theme.is_changed(fg) or theme.is_changed(bg):
                 ratio = contrast_ratio(theme.effective(fg), theme.effective(bg))
-                if ratio < WCAG_AA:
+                if ratio < needed_contrast(fg):
                     problems.append((fg, bg, ratio))
             if bg in surfaces:
                 image_key, color = surfaces[bg]
                 ratio = contrast_ratio(theme.effective(fg), color)
-                if ratio < WCAG_AA:
+                if ratio < needed_contrast(fg):
                     problems.append((fg, image_key, ratio))
     problems.sort(key=lambda problem: problem[2])
     return problems
@@ -532,7 +561,7 @@ class ThemeStore:
         except (OSError, UnicodeDecodeError, yaml.YAMLError, ThemeError) as exc:
             logger.warning("Skipping theme %s: %s", theme_id, exc)
             return None
-        theme.image_dir = self.images_dir(theme_id)
+        theme.folder = self._folder(theme_id)
         return theme
 
     def list(self):
@@ -586,11 +615,12 @@ class ThemeStore:
     def _write_images(self, folder, theme, images_from):
         """Make ``folder/images`` hold exactly the images ``theme`` names.
 
-        The files come from ``images_from`` (or the folder's own images);
+        The files come from ``images_from``, the folder their ``images/...``
+        values are relative to (or the theme's own folder);
         the new set is built beside the old one and swapped in, so a failure
         halfway leaves the old images as they were.
         """
-        source = Path(images_from) if images_from is not None else folder / IMAGES_DIR
+        source = Path(images_from) if images_from is not None else folder
         wanted = [
             theme.values[spec.key] for spec in THEME_KEYS
             if spec.kind == KIND_IMAGE and theme.values.get(spec.key)
@@ -607,7 +637,7 @@ class ThemeStore:
         try:
             for name in wanted:
                 if (source / name).is_file():
-                    shutil.copyfile(source / name, fresh / name)
+                    shutil.copyfile(source / name, fresh / Path(name).name)
                 else:
                     logger.warning("Theme %s: image %s is missing", theme.id, name)
             if target.is_dir():
@@ -637,7 +667,7 @@ class ThemeStore:
         except OSError:
             temp.unlink(missing_ok=True)
             raise
-        theme.image_dir = folder / IMAGES_DIR
+        theme.folder = folder
         return theme
 
     def create(self, name, base, values=None, images_from=None):
@@ -653,7 +683,7 @@ class ThemeStore:
         source = self.get(theme_id)
         if source is None:
             raise KeyError(theme_id)
-        return self.create(name, source.base, source.values, images_from=source.image_dir)
+        return self.create(name, source.base, source.values, images_from=source.folder)
 
     def rename(self, theme_id, name):
         theme = self.get(theme_id)
@@ -676,11 +706,12 @@ class ThemeStore:
         """A private copy of ``theme``'s images for the editor to change."""
         self.root.mkdir(parents=True, exist_ok=True)
         staging = Path(tempfile.mkdtemp(prefix=self.STAGING_PREFIX, dir=self.root))
-        source = theme.image_dir
-        if source is not None and Path(source).is_dir():
-            for entry in Path(source).iterdir():
-                if entry.is_file() and IMAGE_NAME.fullmatch(entry.name):
-                    shutil.copyfile(entry, staging / entry.name)
+        (staging / IMAGES_DIR).mkdir()
+        source = Path(theme.folder) / IMAGES_DIR if theme.folder is not None else None
+        if source is not None and source.is_dir():
+            for entry in source.iterdir():
+                if entry.is_file() and IMAGE_FILE.fullmatch(entry.name):
+                    shutil.copyfile(entry, staging / IMAGES_DIR / entry.name)
         return staging
 
     def discard(self, staging):
