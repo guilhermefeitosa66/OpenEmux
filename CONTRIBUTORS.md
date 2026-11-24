@@ -221,6 +221,11 @@ taking clicks after a few minutes of use
 right-click menu's submenus had flickered. The logs narrowed it down to the nested submenus and the
 order their popups came down in: a menu now always closes its submenus innermost first.
 
+Asked in issue 983 for a way to pick any cartridge color, because none of the named shells
+matched some of their Pokémon carts. That became the "Pick a Color…" entry and the Custom Color
+dialog: a saturation and brightness plane, a hue slider and a hex field with a live preview of
+the game's own cartridge, on every cartridge console.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

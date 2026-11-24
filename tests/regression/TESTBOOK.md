@@ -19432,6 +19432,60 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   and in `OpeningASubmenuOnHoverTests` the unmapped-row and held-off-handler tests); on Wayland,
   the manual steps above.
 
+### RT-1226 — Any cartridge color, picked in the Custom Color dialog
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, the library in the
+  cartridge view.
+- **Steps:**
+  1. Right-click a Game Boy game ▸ "Cartridge color". `make devbox-shot`.
+  2. Pick "Pick a Color…". `make devbox-shot`.
+  3. Type `#F2C12E` in "Hex"; then click the "Blue" swatch under "Start from"; then drag in the
+     colored plane and move the "Hue" slider, taking a `make devbox-shot` after each.
+  4. Type `zz` in "Hex". `make devbox-shot`. Type `#D23C2A` and click "Apply".
+  5. Right-click the same game ▸ "Cartridge color". `make devbox-shot`.
+  6. Restart the app (`make devbox-app ACTION=restart`) and look at the same card; then
+     "Cartridge color" ▸ "Default".
+  7. `make devbox-res RES=480x900`, open the dialog again, `make devbox-shot`; restore the size.
+- **Expected:** 1: after the named colors, a separator and "Pick a Color…". 2: a "Custom Color"
+  dialog with "Cancel" and "Apply", the game's cartridge on the left (its own label) in the shell it
+  has now, and on the right the plane, "Hue", "Hex" and twelve swatches. 3: the preview, the plane's
+  knob, the slider and the hex field follow each change at once; only the shell changes color,
+  never the label or the shadow. 4: `zz` marks the field red and "Apply" turns insensitive, the
+  preview keeping the last good color; after "Apply" the card's shell is that red. 5: a "Custom"
+  row with a red swatch, checked, above "Pick a Color…". 6: the color survives the restart;
+  "Default" brings the authored shell back. 7: the preview sits above the controls.
+- **Check:** the screenshots show the above; `tests/test_cartridge_color_dialog.py`,
+  `tests/test_rom_context.py` (`CustomCartridgeColorEntriesTests`).
+
+### RT-1227 — A custom cartridge color on every console, in details, Big Picture and Share
+- **Area:** View modes & layout
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: give a game of each cartridge console a custom color — including
+  pure `#FF0000`, `#00FF00`, `#FFFFFF` and `#000000` on a few — and look at the cards; open a game's
+  details ("Cartridge color" lists "Custom" and has a color button beside the reset arrow); open
+  the same game in Big Picture ("Cartridge color" lists "Custom"; picking "Red" replaces it); share
+  a game with a custom color to another desktop.
+- **Expected:** every cartridge console draws the shell in the chosen color with the label window,
+  its shadow and any metal contacts as they are in the named colors, no halo around the window;
+  the details page and Big Picture show "Custom"; the shared game arrives with the same color.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile
+  from pathlib import Path
+  from openemux.core import cartridge_render as cr
+  d = Path(tempfile.mkdtemp())
+  for c in cr.consoles_with_frames():
+      for color in ('#ff0000', '#00ff00', '#ffffff', '#000000', '#d23c2a'):
+          p = cr.custom_frame_for(c, color, frames_dir=d)
+          assert p is not None and cr.load_frame(p) is not None, (c, color)
+  print('RT-1227 OK')"
+  ```
+  plus `tests/test_cartridge_custom_colors.py`, `tests/test_game_details.py`,
+  `tests/test_bigpicture_details.py`.
+
 ## Android — Recent tab
 
 The Android app's "Recent" tab (openemux-android, `pkg/android/openemux`, `RecentScreen` in

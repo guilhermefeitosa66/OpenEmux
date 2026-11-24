@@ -294,6 +294,7 @@ class CartridgeColorDialog(Adw.Dialog):
             button = Gtk.Button()
             button.add_css_class("flat")
             button.add_css_class("color-swatch")
+            button.set_halign(Gtk.Align.CENTER)
             button.set_child(_swatch_widget(cartridge_colors.color_swatch(color_id)))
             button.set_tooltip_text(t(key))
             button.update_property([Gtk.AccessibleProperty.LABEL], [t(key)])
