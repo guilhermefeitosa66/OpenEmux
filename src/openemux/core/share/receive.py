@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 from openemux.core.atomic_write import stage_stream
-from openemux.core.cartridge_colors import color_name_key
+from openemux.core.cartridge_colors import color_name_key, is_custom_color
 from openemux.core.scraper import is_image_file
 from openemux.core.share.placement import ROM_EXISTING, ROM_PLACED
 from openemux.core.share.protocol import (
@@ -399,7 +399,8 @@ class IncomingTransfer:
 
     def _apply_overrides(self, game, path, metadata):
         color = metadata.get("cartridge_color")
-        if isinstance(color, str) and color_name_key(color) is not None:
+        # A named shell, or a custom one (issue 983) from another desktop.
+        if isinstance(color, str) and (color_name_key(color) is not None or is_custom_color(color)):
             self.hooks.set_cartridge_color(path, game.console, color)
         core_name = metadata.get("core")
         core = self.catalog.find_by_name(core_name) if isinstance(core_name, str) else None
