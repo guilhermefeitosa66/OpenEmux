@@ -2,6 +2,7 @@ import os
 import subprocess
 import logging
 import time
+import weakref
 from datetime import datetime
 from threading import Event, Thread
 from pathlib import Path
@@ -116,6 +117,17 @@ MAX_INPUT_HINTS = 8
 #: them; the couch scale (``bigpicture.theme``) makes everything else bigger.
 BIG_PICTURE_ZOOM = ZOOM_LEVELS[-1]
 
+
+
+def _custom_frame_listener(window_ref):
+    """The cartridge_render listener for one window, called off the main thread."""
+
+    def listener(console, color):
+        window = window_ref()
+        if window is not None:
+            GLib.idle_add(window.custom_frame_ready, console, color)
+
+    return listener
 
 
 class OpenEmuxWindow(Adw.ApplicationWindow):
@@ -312,6 +324,12 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         # per-navigation write is what survives a crash or a session logout;
         # this one catches a view changed by something other than the sidebar.
         self.connect("close-request", self._on_close_remember_view)
+        # Custom cartridge shells are made in the background (issue 983);
+        # the cards wearing one redraw when it is ready. A weak reference,
+        # since the listener outlives nothing it should keep alive.
+        self._custom_frame_listener = _custom_frame_listener(weakref.ref(self))
+        cartridge_render.add_custom_frame_listener(self._custom_frame_listener)
+        self.connect("close-request", self._on_close_drop_frame_listener)
 
         self._install_escape_handler()
 
@@ -2656,6 +2674,16 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
             # the console the user was on before the drive went missing.
             return
         self.config_manager.session.set_last_view(view)
+
+    def _on_close_drop_frame_listener(self, *_args):
+        cartridge_render.remove_custom_frame_listener(self._custom_frame_listener)
+        return False
+
+    def custom_frame_ready(self, console, color):
+        """A custom shell finished in the background: redraw who wears it."""
+        for grid in self.pages.grids():
+            grid.custom_frame_ready(console, color)
+        return GLib.SOURCE_REMOVE
 
     def _on_close_remember_view(self, *_args):
         self._remember_current_view()

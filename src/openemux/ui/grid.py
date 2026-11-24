@@ -755,6 +755,24 @@ class RomGrid(Gtk.GridView):
             self._frame_by_color[key] = path
             return path
 
+    def custom_frame_ready(self, console, color):
+        """A custom shell made in the background (issue 983) can be drawn now.
+
+        The default shell that stood in for it was cached under its color;
+        drop that and re-resolve the bound cards wearing the color.
+        """
+        self._frame_by_color.pop(color, None)
+        self._frame_by_color.pop((console, color), None)
+        if not self._base_frame_path or self._frame_color_for_rom is None:
+            return 0
+        redrawn = 0
+        for entry, card in list(self._bound.items()):
+            rom = entry.rom
+            if rom.get("console") == console and self._frame_color_for_rom(rom) == color:
+                card.set_cartridge_frame(self._frame_path_for_rom(rom))
+                redrawn += 1
+        return redrawn
+
     def refresh_rom_frame(self, rom):
         """Re-resolve one card's shell after its cartridge color changed.
 

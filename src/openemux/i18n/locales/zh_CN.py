@@ -722,6 +722,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "从此颜色开始",
     "cartridge_color.dialog.plane": "饱和度和亮度",
     "cartridge_color.dialog.tooltip": "选择自定义颜色",
+    "cartridge_color.dialog.failed": "无法生成此颜色。请重试。",
     "context.core": "内核",
     "context.core.automatic": "自动（{core}）",
     "context.console.core": "默认内核",

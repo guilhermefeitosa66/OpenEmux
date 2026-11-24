@@ -9,7 +9,7 @@ so the plane is drawn here, the way GNOME's color editor lays it out.
 
 The preview is a mix of the game's composites in the black and white shells
 (`cartridge_render.mix_shell`): rendered once when the dialog opens, then a
-few milliseconds per change. "Apply" generates the full-size shell off the
+worker-thread mix per change, the latest color winning. "Apply" generates the full-size shell off the
 main thread and only then stores the color, so the card re-draws at once.
 """
 
@@ -183,7 +183,8 @@ class CartridgeColorDialog(Adw.Dialog):
         self.rom = rom
         self._spawn = spawn or _spawn
         self._syncing = False
-        self._preview_pending = False
+        self._preview_busy = False
+        self._preview_color = None
         self._sources = None
         self.applied = False
         self.color = start_color(win.config_manager, rom)
@@ -212,6 +213,8 @@ class CartridgeColorDialog(Adw.Dialog):
         narrow.add_setter(self.preview, "width-request", NARROW_PREVIEW_WIDTH)
         self.add_breakpoint(narrow)
 
+        # Read here: a worker thread must not touch the widget.
+        self._scale = max(1, self.get_scale_factor())
         self._sync_controls()
         self._spawn(self._load_sources)
 
@@ -303,17 +306,21 @@ class CartridgeColorDialog(Adw.Dialog):
             self.swatch_buttons[color_id] = button
         start_box.append(swatches)
         controls.append(start_box)
+        self.error_label = Gtk.Label(label=t("cartridge_color.dialog.failed"), xalign=0, wrap=True)
+        self.error_label.add_css_class("error")
+        self.error_label.set_visible(False)
+        controls.append(self.error_label)
         self.body.append(controls)
         return self.body
 
     # -- the color -------------------------------------------------------
 
-    def set_color(self, color_hex, keep_hue=False):
+    def set_color(self, color_hex):
         """Make ``color_hex`` the picked color, every control following it."""
         self.color = color_hex
         hue, saturation, value = cartridge_colors.hex_to_hsv(color_hex)
         # A grey has no hue of its own: keep the slider where it was.
-        if not (keep_hue or saturation == 0):
+        if saturation != 0:
             self.hue = hue
         self.saturation, self.value = saturation, value
         self._sync_controls()
@@ -369,8 +376,7 @@ class CartridgeColorDialog(Adw.Dialog):
         """Worker thread: the game's black and white composites."""
         label = resolve_local_art(self.rom, self.win.roms_path, kinds=(LABEL_ART,))
         sources = cartridge_render.custom_preview_sources(
-            label, self.rom["console"], self.rom["name"], PREVIEW_WIDTH,
-            scale=max(1, self.get_scale_factor()),
+            label, self.rom["console"], self.rom["name"], PREVIEW_WIDTH, scale=self._scale,
         )
         GLib.idle_add(self._sources_ready, sources)
 
@@ -380,17 +386,26 @@ class CartridgeColorDialog(Adw.Dialog):
         return GLib.SOURCE_REMOVE
 
     def _schedule_preview(self):
-        # Coalesced: a drag fires many changes between two frames.
-        if self._preview_pending or self._sources is None:
+        # One mix at a time, off the main thread; a drag fires many changes
+        # while one runs, and only the latest color is mixed next.
+        if self._preview_busy or self._sources is None:
             return
-        self._preview_pending = True
-        GLib.idle_add(self._render_preview)
-
-    def _render_preview(self):
-        self._preview_pending = False
+        self._preview_busy = True
+        color = self.color
         dark, light = self._sources
-        mixed = cartridge_render.mix_shell(dark, light, self.color)
-        self.preview.set_paintable(surface_texture(mixed))
+
+        def work():
+            texture = surface_texture(cartridge_render.mix_shell(dark, light, color))
+            GLib.idle_add(self._preview_ready, color, texture)
+
+        self._spawn(work)
+
+    def _preview_ready(self, color, texture):
+        self._preview_busy = False
+        self._preview_color = color
+        self.preview.set_paintable(texture)
+        if color != self.color:
+            self._schedule_preview()
         return GLib.SOURCE_REMOVE
 
     # -- apply -----------------------------------------------------------
@@ -399,19 +414,32 @@ class CartridgeColorDialog(Adw.Dialog):
         if not self.apply_button.get_sensitive() or self.applied:
             return
         self.applied = True
+        # Nothing else to press while the shell is made: a Cancel here
+        # would close the dialog and the color would land anyway.
         self.apply_button.set_sensitive(False)
+        self.cancel_button.set_sensitive(False)
+        self.set_can_close(False)
+        self.error_label.set_visible(False)
         color = self.color
         console = self.rom["console"]
 
         def work():
             # The full-size shell, generated here rather than on the first
             # card draw, which runs on the main thread.
-            cartridge_render.custom_frame_for(console, color)
-            GLib.idle_add(self._applied, color)
+            made = cartridge_render.custom_frame_for(console, color)
+            GLib.idle_add(self._applied, color, made is not None)
 
         self._spawn(work)
 
-    def _applied(self, color):
+    def _applied(self, color, made):
+        self.set_can_close(True)
+        self.cancel_button.set_sensitive(True)
+        if not made:
+            # Storing it would draw the default shell under a "Custom" check.
+            self.applied = False
+            self.apply_button.set_sensitive(True)
+            self.error_label.set_visible(True)
+            return GLib.SOURCE_REMOVE
         self.win.set_rom_cartridge_color(self.rom, color)
         self.close()
         return GLib.SOURCE_REMOVE

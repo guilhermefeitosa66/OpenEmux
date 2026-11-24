@@ -722,6 +722,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "Ausgehend von",
     "cartridge_color.dialog.plane": "Sättigung und Helligkeit",
     "cartridge_color.dialog.tooltip": "Eigene Farbe wählen",
+    "cartridge_color.dialog.failed": "Diese Farbe konnte nicht erstellt werden. Versuche es noch einmal.",
     "context.core": "Kern",
     "context.core.automatic": "Automatisch ({core})",
     "context.console.core": "Standardkern",

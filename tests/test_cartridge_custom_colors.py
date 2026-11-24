@@ -167,7 +167,7 @@ class CustomFrameTests(unittest.TestCase):
 
     def test_a_custom_shell_is_a_usable_frame(self):
         path = custom_frame_for("X", "#D23C2A", assets_dir=self.assets, frames_dir=self.frames)
-        self.assertEqual(path, self.frames / "X-d23c2a.svg")
+        self.assertEqual(path, self.frames / "X-d23c2a.v1.svg")
         frame = load_frame(path)
         self.assertIsNotNone(frame)
         self.assertEqual((frame.width, frame.height), (40, 20))
@@ -222,16 +222,49 @@ class CustomFrameTests(unittest.TestCase):
         # Rasterizing it is fine: there is simply no marker to leave out.
         self.assertEqual(cartridge_render._shell_raster(bare, 4, 4).get_width(), 4)
 
-    def test_frame_asset_for_resolves_a_custom_color(self):
-        with mock.patch.object(cartridge_render, "CUSTOM_FRAMES_DIR", self.frames):
+    def test_frame_asset_for_never_makes_a_shell_itself(self):
+        """It runs on the main thread: a missing shell is asked for, not made."""
+        with mock.patch.object(cartridge_render, "CUSTOM_FRAMES_DIR", self.frames), \
+                mock.patch.object(cartridge_render, "request_custom_frame") as request:
             path = cartridge_render.frame_asset_for("X", self.assets, color="#abcdef")
-            self.assertEqual(path, self.frames / "X-abcdef.svg")
-            with mock.patch.object(cartridge_render, "custom_frame_for", return_value=None):
-                # A shell that cannot be made falls back to the authored one.
-                self.assertEqual(
-                    cartridge_render.frame_asset_for("X", self.assets, color="#abcdef"),
-                    self.assets / "X.svg",
-                )
+            self.assertEqual(path, self.assets / "X.svg")
+            request.assert_called_once_with("X", "#abcdef", assets_dir=self.assets)
+            made = custom_frame_for("X", "#abcdef", assets_dir=self.assets, frames_dir=self.frames)
+            request.reset_mock()
+            self.assertEqual(cartridge_render.frame_asset_for("X", self.assets, color="#abcdef"), made)
+            request.assert_not_called()
+
+    def test_generate_false_only_answers_with_a_current_shell(self):
+        self.assertIsNone(
+            custom_frame_for("X", "#abcdef", assets_dir=self.assets, frames_dir=self.frames, generate=False)
+        )
+        self.assertFalse((self.frames / "X-abcdef.v1.svg").exists())
+
+    def test_a_request_makes_the_shell_once_and_tells_the_listeners(self):
+        heard = []
+        listener = lambda console, color: heard.append((console, color))  # noqa: E731
+        cartridge_render.add_custom_frame_listener(listener)
+        self.addCleanup(cartridge_render.remove_custom_frame_listener, listener)
+        queued = []
+        with mock.patch.object(cartridge_render, "CUSTOM_FRAMES_DIR", self.frames):
+            self.assertTrue(cartridge_render.request_custom_frame("X", "#ABCDEF", self.assets, spawn=queued.append))
+            # Asked again while the first is pending: the same request.
+            self.assertFalse(cartridge_render.request_custom_frame("X", "#abcdef", self.assets, spawn=queued.append))
+            queued[0]()
+        self.assertEqual(heard, [("X", "#abcdef")])
+        self.assertTrue((self.frames / "X-abcdef.v1.svg").is_file())
+        with mock.patch.object(cartridge_render, "custom_frame_for", return_value=None):
+            self.assertTrue(cartridge_render.request_custom_frame("X", "#abcdef", self.assets, spawn=lambda w: w()))
+        self.assertEqual(len(heard), 1)
+        cartridge_render.remove_custom_frame_listener(listener)
+        cartridge_render.remove_custom_frame_listener(listener)  # twice is harmless
+
+    def test_the_default_worker_runs_on_a_thread(self):
+        import threading
+
+        done = threading.Event()
+        cartridge_render._spawn_worker(done.set)
+        self.assertTrue(done.wait(5))
 
     def test_preview_sources_are_the_two_composites(self):
         cache = Path(self._tmp.name) / "cache"

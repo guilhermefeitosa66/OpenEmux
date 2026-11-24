@@ -724,6 +724,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "Começar de",
     "cartridge_color.dialog.plane": "Saturação e brilho",
     "cartridge_color.dialog.tooltip": "Escolher uma cor personalizada",
+    "cartridge_color.dialog.failed": "Não foi possível criar esta cor. Tente de novo.",
     "context.core": "Núcleo",
     "context.core.automatic": "Automático ({core})",
     "context.console.core": "Núcleo padrão",

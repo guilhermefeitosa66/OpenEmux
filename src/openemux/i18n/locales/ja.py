@@ -722,6 +722,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "ベースにする色",
     "cartridge_color.dialog.plane": "彩度と明るさ",
     "cartridge_color.dialog.tooltip": "カスタムカラーを選択",
+    "cartridge_color.dialog.failed": "この色を作成できませんでした。もう一度お試しください。",
     "context.core": "コア",
     "context.core.automatic": "自動 ({core})",
     "context.console.core": "既定のコア",

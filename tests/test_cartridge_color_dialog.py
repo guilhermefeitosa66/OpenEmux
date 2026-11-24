@@ -123,6 +123,23 @@ class PreviewTests(_DialogCase):
         self.pump()
         self.assertIsNot(dialog.preview.get_paintable(), first)
 
+    def test_a_change_during_a_mix_is_mixed_next(self):
+        queued = []
+        dialog = CartridgeColorDialog(self.win, self.game, spawn=queued.append)
+        self.addCleanup(dialog.force_close)
+        queued.pop(0)()  # the sources
+        self.pump()
+        self.assertTrue(dialog._preview_busy)
+        dialog.set_color("#00ff00")  # while the first mix is out
+        self.assertEqual(len(queued), 1)
+        queued.pop(0)()
+        self.pump()
+        self.assertEqual(len(queued), 1)  # the newer color, queued after
+        queued.pop(0)()
+        self.pump()
+        self.assertEqual(dialog._preview_color, "#00ff00")
+        self.assertFalse(dialog._preview_busy)
+
     def test_no_preview_when_the_shells_cannot_be_rendered(self):
         with mock.patch.object(dialog_module.cartridge_render, "custom_preview_sources", return_value=None):
             dialog = self.dialog()
@@ -152,6 +169,31 @@ class ApplyTests(_DialogCase):
         set_color.assert_called_once_with(self.game, "#2e7dd1")
         close.assert_called_once()
 
+    def test_a_shell_that_cannot_be_made_is_not_stored(self):
+        dialog = self.dialog()
+        with mock.patch.object(dialog_module.cartridge_render, "custom_frame_for", return_value=None), \
+                mock.patch.object(self.win, "set_rom_cartridge_color") as set_color:
+            dialog._on_apply(None)
+            self.pump()
+        set_color.assert_not_called()
+        self.assertTrue(dialog.error_label.get_visible())
+        self.assertTrue(dialog.apply_button.get_sensitive())
+        self.assertTrue(dialog.cancel_button.get_sensitive())
+        self.assertFalse(dialog.applied)
+
+    def test_nothing_can_close_it_while_the_shell_is_made(self):
+        queued = []
+        dialog = CartridgeColorDialog(self.win, self.game, spawn=queued.append)
+        self.addCleanup(dialog.force_close)
+        dialog._on_apply(None)
+        self.assertFalse(dialog.cancel_button.get_sensitive())
+        self.assertFalse(dialog.get_can_close())
+        with mock.patch.object(dialog_module.cartridge_render, "custom_frame_for", return_value="x"), \
+                mock.patch.object(self.win, "set_rom_cartridge_color"):
+            queued[-1]()
+            self.pump()
+        self.assertTrue(dialog.get_can_close())
+
     def test_enter_in_the_hex_field_applies(self):
         dialog = self.dialog()
         with mock.patch.object(dialog, "_on_apply") as apply:
@@ -165,6 +207,31 @@ class ApplyTests(_DialogCase):
             dialog.cancel_button.emit("clicked")
         close.assert_called_once()
         set_color.assert_not_called()
+
+    def test_the_window_redraws_cards_when_a_shell_is_ready(self):
+        grid = mock.Mock()
+        with mock.patch.object(self.win.pages, "grids", return_value=[grid]):
+            self.win._custom_frame_listener("SFC", "#d23c2a")
+            self.pump()
+        grid.custom_frame_ready.assert_called_once_with("SFC", "#d23c2a")
+        self.assertIn(self.win._custom_frame_listener, dialog_module.cartridge_render._CUSTOM_FRAME_LISTENERS)
+        self.win._on_close_drop_frame_listener()
+        self.assertNotIn(self.win._custom_frame_listener, dialog_module.cartridge_render._CUSTOM_FRAME_LISTENERS)
+
+    def test_a_closed_window_ignores_the_listener(self):
+        import weakref
+
+        from openemux.ui import window as window_module
+
+        class _Gone:
+            pass
+
+        gone = _Gone()
+        listener = window_module._custom_frame_listener(weakref.ref(gone))
+        del gone
+        with mock.patch.object(window_module.GLib, "idle_add") as idle:
+            listener("SFC", "#d23c2a")
+        idle.assert_not_called()
 
     def test_the_window_presents_it(self):
         with mock.patch.object(dialog_module, "_spawn", _now):

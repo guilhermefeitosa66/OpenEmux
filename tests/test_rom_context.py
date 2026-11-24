@@ -391,6 +391,12 @@ class CustomCartridgeColorEntriesTests(unittest.TestCase):
         _window, submenu = self._submenu(supported=False)
         labels = [entry[0] for entry in submenu.entries if entry is not SEPARATOR]
         self.assertNotIn("cartridge_color.pick", labels)
+        self.assertIsNot(submenu.entries[-1], SEPARATOR)
+
+    def test_the_game_s_custom_color_is_listed_even_without_the_picker(self):
+        _window, submenu = self._submenu(override="#d23c2a", supported=False)
+        self.assertEqual(submenu.entries[-1][0], "cartridge_color.custom")
+        self.assertEqual(_checked(submenu), ["cartridge_color.custom"])
 
 
 class CollectionEntriesTests(unittest.TestCase):

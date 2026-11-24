@@ -436,6 +436,30 @@ class RefreshingOneCardTests(_GridCase):
                 self.assertTrue(self.grid.refresh_rom_frame(card.rom))
         set_frame.assert_called_once()
 
+    def test_a_custom_shell_made_in_the_background_redraws_its_cards(self):
+        """Issue 983: the stand-in default is dropped, the wearers redrawn."""
+        card = self.card()
+        rom = card.rom
+        self.grid._frame_by_color["#d23c2a"] = "/tmp/stand-in.svg"
+        self.grid._frame_by_color[(rom["console"], "#d23c2a")] = "/tmp/stand-in.svg"
+        wears = {rom["path"]: "#d23c2a"}
+        with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"), \
+                mock.patch.object(self.grid, "_frame_color_for_rom", lambda r: wears.get(r["path"], "default")), \
+                mock.patch.object(self.grid, "_frame_path_for_rom", return_value="/tmp/made.svg"), \
+                mock.patch.object(card, "set_cartridge_frame") as set_frame:
+            self.assertEqual(self.grid.custom_frame_ready(rom["console"], "#d23c2a"), 1)
+            self.assertEqual(self.grid.custom_frame_ready("OTHER", "#d23c2a"), 0)
+        set_frame.assert_called_once_with("/tmp/made.svg")
+        self.assertNotIn("#d23c2a", self.grid._frame_by_color)
+        self.assertNotIn((rom["console"], "#d23c2a"), self.grid._frame_by_color)
+
+    def test_a_custom_shell_on_a_page_with_no_shell_redraws_nothing(self):
+        with mock.patch.object(self.grid, "_base_frame_path", None):
+            self.assertEqual(self.grid.custom_frame_ready("SFC", "#d23c2a"), 0)
+        with mock.patch.object(self.grid, "_base_frame_path", "/tmp/base.svg"), \
+                mock.patch.object(self.grid, "_frame_color_for_rom", None):
+            self.assertEqual(self.grid.custom_frame_ready("SFC", "#d23c2a"), 0)
+
     def test_a_page_with_no_shell_resolves_no_frame(self):
         with mock.patch.object(self.grid, "_base_frame_path", None):
             self.assertIsNone(self.grid._frame_path_for_rom(self.entries[0].rom))

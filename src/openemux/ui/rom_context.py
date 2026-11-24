@@ -275,18 +275,23 @@ class RomContextMenuServices:
                     cartridge_colors.color_swatch(color_id),
                 )
             )
-        if cartridge_render.supports_custom_color(console):
-            # Any color (issue 983): the one this game has, then the picker.
+        # Any color (issue 983): the one this game has -- listed even where
+        # no new one can be made, so the menu still says what is in use --
+        # then the picker.
+        custom = cartridge_colors.is_custom_color(override)
+        can_pick = cartridge_render.supports_custom_color(console)
+        if custom or can_pick:
             entries.append(SEPARATOR)
-            if cartridge_colors.is_custom_color(override):
-                entries.append(
-                    (
-                        t(cartridge_colors.CUSTOM_COLOR_KEY),
-                        (lambda r=rom, c=override: self.win.set_rom_cartridge_color(r, c)),
-                        "emblem-ok-symbolic",
-                        override,
-                    )
+        if custom:
+            entries.append(
+                (
+                    t(cartridge_colors.CUSTOM_COLOR_KEY),
+                    (lambda r=rom, c=override: self.win.set_rom_cartridge_color(r, c)),
+                    "emblem-ok-symbolic",
+                    override,
                 )
+            )
+        if can_pick:
             entries.append(
                 (
                     t("cartridge_color.pick"),

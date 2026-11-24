@@ -87,6 +87,10 @@ CUSTOM_FRAME_PX = 800
 #: The two shipped shells every custom one is reconstructed from.
 MIX_SOURCES = ("black", "white")
 
+#: Bump when the way a custom shell is made changes, so every shell made
+#: the old way is made again (it is part of the file name).
+CUSTOM_FRAME_VERSION = 1
+
 #: Below this many pixels the mix computes each value directly; above it, a
 #: 64 K lookup table per channel is cheaper than one call per value.
 _MIX_LUT_MIN_PIXELS = 65536
@@ -125,9 +129,13 @@ def frame_asset_for(console, assets_dir=None, color=None) -> Path | None:
     """
     directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
     if color and is_custom_color(color):
-        custom = custom_frame_for(console, color, assets_dir=directory)
+        # Never made here: this runs on the main thread when a card binds,
+        # and a shell takes a good part of a second. A missing or stale one
+        # is made in the background and the default stands in until then.
+        custom = custom_frame_for(console, color, assets_dir=directory, generate=False)
         if custom is not None:
             return custom
+        request_custom_frame(console, color, assets_dir=directory)
     elif color and color != DEFAULT_FRAME_COLOR:
         variant = directory / f"{console}-{color}.svg"
         if variant.is_file():
@@ -316,7 +324,8 @@ def _custom_lock(target):
 def custom_frame_path(console, color_hex, frames_dir=None) -> Path:
     """Where the generated shell for a console and a custom color lives."""
     directory = Path(frames_dir) if frames_dir is not None else CUSTOM_FRAMES_DIR
-    return directory / f"{console}-{normalize_color_id(color_hex)[1:]}.svg"
+    name = f"{console}-{normalize_color_id(color_hex)[1:]}.v{CUSTOM_FRAME_VERSION}.svg"
+    return directory / name
 
 
 def custom_frame_sources(console, assets_dir=None):
@@ -331,14 +340,17 @@ def supports_custom_color(console, assets_dir=None) -> bool:
     return rsvg_available() and custom_frame_sources(console, assets_dir) is not None
 
 
-def custom_frame_for(console, color_hex, assets_dir=None, frames_dir=None) -> Path | None:
+def custom_frame_for(
+    console, color_hex, assets_dir=None, frames_dir=None, generate=True
+) -> Path | None:
     """The shell SVG for ``console`` in a custom color, generated on first use.
 
     None when the color is not a custom one, the console has no black and
     white shells to make it from, librsvg is missing, or generation fails --
     callers then fall back to the default shell, like a stale named color.
     Regenerated when a shipped source is newer than the file, so new art
-    reaches custom shells too.
+    reaches custom shells too. With ``generate=False`` only a shell already
+    made and current is returned: the main thread's way of asking.
     """
     if not is_custom_color(color_hex) or not rsvg_available():
         return None
@@ -351,6 +363,8 @@ def custom_frame_for(console, color_hex, assets_dir=None, frames_dir=None) -> Pa
             newest = max(source.stat().st_mtime_ns for source in sources)
             if target.is_file() and target.stat().st_mtime_ns >= newest:
                 return target
+            if not generate:
+                return None
             ok, width, height = Rsvg.Handle.new_from_file(
                 str(sources[0])
             ).get_intrinsic_size_in_pixels()
@@ -371,6 +385,53 @@ def custom_frame_for(console, color_hex, assets_dir=None, frames_dir=None) -> Pa
             logger.warning("cartridge: custom shell %s %s failed: %s", console, color_hex, exc)
             return None
     return target
+
+
+#: Called as ``listener(console, color_hex)``, from a worker thread, when a
+#: shell asked for by `request_custom_frame` is ready. The window turns that
+#: into a redraw of the cards wearing it.
+_CUSTOM_FRAME_LISTENERS = []
+_REQUESTED = set()
+_REQUESTED_LOCK = threading.Lock()
+
+
+def add_custom_frame_listener(listener):
+    _CUSTOM_FRAME_LISTENERS.append(listener)
+
+
+def remove_custom_frame_listener(listener):
+    if listener in _CUSTOM_FRAME_LISTENERS:
+        _CUSTOM_FRAME_LISTENERS.remove(listener)
+
+
+def _spawn_worker(target):
+    threading.Thread(target=target, daemon=True).start()
+
+
+def request_custom_frame(console, color_hex, assets_dir=None, spawn=None):
+    """Make a custom shell in the background, then tell the listeners.
+
+    One request per console and color at a time: every card wearing the
+    color asks while it waits, and they all get the one shell.
+    """
+    key = (console, normalize_color_id(color_hex), str(assets_dir))
+    with _REQUESTED_LOCK:
+        if key in _REQUESTED:
+            return False
+        _REQUESTED.add(key)
+
+    def work():
+        try:
+            made = custom_frame_for(console, color_hex, assets_dir=assets_dir)
+        finally:
+            with _REQUESTED_LOCK:
+                _REQUESTED.discard(key)
+        if made is not None:
+            for listener in list(_CUSTOM_FRAME_LISTENERS):
+                listener(console, normalize_color_id(color_hex))
+
+    (spawn or _spawn_worker)(work)
+    return True
 
 
 def custom_preview_sources(cover_path, console, rom_name, width, scale=1, cache_dir=None):

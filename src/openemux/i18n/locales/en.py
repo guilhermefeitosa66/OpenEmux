@@ -724,6 +724,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "Start from",
     "cartridge_color.dialog.plane": "Saturation and brightness",
     "cartridge_color.dialog.tooltip": "Pick a custom color",
+    "cartridge_color.dialog.failed": "This color could not be made. Try again.",
     "context.core": "Core",
     "context.core.automatic": "Automatic ({core})",
     "context.console.core": "Default core",

@@ -724,6 +724,7 @@ TRANSLATIONS = {
     "cartridge_color.dialog.start_from": "இதிலிருந்து தொடங்கு",
     "cartridge_color.dialog.plane": "செறிவு மற்றும் ஒளிர்வு",
     "cartridge_color.dialog.tooltip": "தனிப்பயன் நிறத்தைத் தேர்ந்தெடு",
+    "cartridge_color.dialog.failed": "இந்த நிறத்தை உருவாக்க முடியவில்லை. மீண்டும் முயலவும்.",
     "context.core": "கோர்",
     "context.core.automatic": "தானியங்கி ({core})",
     "context.console.core": "இயல்புக் கோர்",
