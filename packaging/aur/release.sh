@@ -97,7 +97,8 @@ for pkg in "${PACKAGES[@]}"; do
   echo "$NAMCAP"
   for finding in 'Missing custom license directory' 'Package contains reference to \$srcdir' \
                  'Invalid syntax' 'No ELF files and not an "any" package' \
-                 'Directory (usr/share/doc) is empty'; do
+                 'Directory (usr/share/doc) is empty' \
+                 'Dependency hicolor-icon-theme detected and not included'; do
     if grep -qi "$finding" <<< "$NAMCAP"; then
       echo "FAIL: namcap reports for $pkg: $finding" >&2
       exit 1

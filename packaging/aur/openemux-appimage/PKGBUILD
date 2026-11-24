@@ -21,8 +21,9 @@ pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu (AppI
 arch=('x86_64')
 url="https://openemux.libre-apps.org/"
 license=('MIT')
-# The AppImage runtime mounts the image through FUSE 2.
-depends=('fuse2')
+# The AppImage runtime mounts the image through FUSE 2; the icon goes into
+# the hicolor theme, which owns that hierarchy.
+depends=('fuse2' 'hicolor-icon-theme')
 provides=("$_pkgname")
 conflicts=("$_pkgname")
 

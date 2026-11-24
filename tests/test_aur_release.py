@@ -148,9 +148,10 @@ class ReleaseRecipeTests(unittest.TestCase):
                 "retroarch: use the distribution RetroArch instead of the bundled one",
             ],
         )
-        # The AppImage carries its own stack; the runtime mounts it via FUSE 2.
+        # The AppImage carries its own stack; the runtime mounts it via FUSE 2,
+        # and the icon it installs lives in the hicolor hierarchy (namcap).
         self.assertEqual(_names(_array(self.recipes["openemux-appimage"], "depends")),
-                         ["fuse2"])
+                         ["fuse2", "hicolor-icon-theme"])
 
     def test_the_source_build_uses_the_shared_install_layout(self):
         pkgbuild = self.recipes["openemux"]
@@ -395,6 +396,8 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("PACKAGES=(openemux openemux-bin openemux-appimage)", self.script)
         self.assertIn("makepkg --printsrcinfo > .SRCINFO", self.script)
         self.assertIn("namcap", self.script)
+        # A missing icon-theme dependency is a namcap error: it blocks the run.
+        self.assertIn("'Dependency hicolor-icon-theme detected and not included'", self.script)
         self.assertIn('pacman -U --noconfirm --ask=4 "${PKG_PATH[$pkg]}"', self.script)
         for swap in ("swap_to openemux-bin openemux", "swap_to openemux-appimage openemux-bin",
                      "swap_to openemux openemux-appimage"):
