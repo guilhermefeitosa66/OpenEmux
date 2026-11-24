@@ -20022,7 +20022,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   "Apply", Enter in "Hex" applies.
 - **Check:** suite files `tests/test_cartridge_color_dialog.py`, `tests/test_color_picker.py`.
 
-### RT-1248 — Borders and Shadows, Icons and Typography change the whole app
+### RT-1265 — Borders and Shadows, Icons and Typography change the whole app
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme in use ("Midnight", RT-1239).
@@ -20038,7 +20038,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_theme_css.py` and `tests/test_theme_editor_rows.py` cover the
   rules and the rows).
 
-### RT-1249 — Spacing: density, grid gap, card size and sidebar width
+### RT-1266 — Spacing: density, grid gap, card size and sidebar width
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme in use.
@@ -20052,7 +20052,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   still shares the width and collapses the sidebar at its usual breakpoint.
 - **Check:** human only (`tests/test_theme_layout_ui.py` `WindowSizeTests`).
 
-### RT-1250 — Background images for the library and the sidebar
+### RT-1267 — Background images for the library and the sidebar
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme in use; a large photo (JPEG or PNG) on disk.
@@ -20069,7 +20069,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_theme_editor_rows.py` `ImageRowTests`,
   `tests/test_theme_layout_ui.py` `BackgroundTests`).
 
-### RT-1251 — A file that is not a usable picture is refused
+### RT-1268 — A file that is not a usable picture is refused
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a text file renamed `fake.png`; an image larger than 8192 px on a side.
@@ -20078,7 +20078,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   large." in red; nothing else changes and the app keeps working.
 - **Check:** human only (`tests/test_theme_images_store.py` `ImportImageTests`).
 
-### RT-1252 — Images are never left behind
+### RT-1269 — Images are never left behind
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme with a library image.
@@ -20091,7 +20091,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   theme's folder, images included, is gone.
 - **Check:** human only (`tests/test_theme_images_store.py` `StoreImageTests`).
 
-### RT-1253 — Export a theme and import it back
+### RT-1270 — Export a theme and import it back
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme with images and shape settings.
@@ -20105,7 +20105,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_theme_archive.py` round trip,
   `tests/test_theme_picker_share.py`).
 
-### RT-1254 — A hostile theme file is refused and touches nothing
+### RT-1271 — A hostile theme file is refused and touches nothing
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** test files prepared by QA: not a zip, a zip with `../evil.txt`, a zip with a
@@ -20116,7 +20116,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   the numbers clamped.
 - **Check:** suite file `tests/test_theme_archive.py` (one test per attack).
 
-### RT-1255 — Start from a Palette
+### RT-1272 — Start from a Palette
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a dark-base theme and a light-base theme; one palette of your own made in the
@@ -20127,7 +20127,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   for the presets; your palette is listed after the presets; "Reset All" and "Cancel" undo it.
 - **Check:** suite file `tests/test_theme_images_store.py` (`SeedTests`).
 
-### RT-1256 — The editor's color popovers share Saved colors and palettes
+### RT-1273 — The editor's color popovers share Saved colors and palettes
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a saved custom cartridge color and a palette of your own (issue 983).
@@ -20139,7 +20139,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   swatch sets the row's color.
 - **Check:** suite file `tests/test_theme_editor_rows.py` (`PaletteTests`).
 
-### RT-1257 — Big Picture follows a custom theme
+### RT-1274 — Big Picture follows a custom theme
 - **Area:** Custom themes, Big Picture
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme with a library image and "Text size" 130%.
@@ -20153,7 +20153,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_bigpicture_theme.py` checks the floors;
   `tests/test_theme_layout_ui.py` `BigPictureThemeTests`).
 
-### RT-1258 — Themes saved before keep loading
+### RT-1275 — Themes saved before keep loading
 - **Area:** Custom themes
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a `theme.yaml` from part 1 (colors only).
@@ -20161,7 +20161,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Expected:** it paints as before; every new setting reads "Same as base".
 - **Check:** suite file `tests/test_custom_themes.py`.
 
-### RT-1259 — Ready-made themes: preview cards, one click, a restart
+### RT-1276 — Ready-made themes: preview cards, one click, a restart
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** none.
@@ -20176,7 +20176,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_ready_themes.py` holds the contrast; `tests/test_theme_picker_share.py`
   `ReadyMadeTests` the cards).
 
-### RT-1260 — Ready-made themes are read-only; Duplicate makes an editable copy
+### RT-1277 — Ready-made themes are read-only; Duplicate makes an editable copy
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** "Dracula" picked.
@@ -20188,7 +20188,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   it can be edited, renamed and deleted; "Dracula" itself is unchanged.
 - **Check:** suite file `tests/test_theme_picker_share.py` (`ReadyMadeTests`).
 
-### RT-1261 — Big Picture's console list follows the theme
+### RT-1278 — Big Picture's console list follows the theme
 - **Area:** Custom themes, Big Picture
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme in use.
