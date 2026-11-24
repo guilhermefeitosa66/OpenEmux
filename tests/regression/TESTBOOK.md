@@ -19497,6 +19497,49 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
 - **Restore:** `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 24h'`.
 
+### RT-1226 — Big Picture: the focused item is drawn whole at the ends of a row and at the bottom
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. `make devbox-res RES=1280x720`, start the app (`make devbox-app ACTION=restart`), press F11.
+     On the Shelf, with "All games" focused (the first card of the first row),
+     `make devbox-shot OUT=$SCRATCH/bp-edge-first.png`.
+  2. Press Right until the last card of the row is focused, `make devbox-shot OUT=$SCRATCH/bp-edge-last.png`;
+     press Down until the last row, `make devbox-shot OUT=$SCRATCH/bp-edge-bottom.png`.
+  3. Open "Super Nintendo" (Enter). Press Down until the last game,
+     `make devbox-shot OUT=$SCRATCH/bp-edge-grid.png`. Press Up until a console chip is focused,
+     then Left until "All" and Right until the last chip, a `make devbox-shot` at each end.
+  4. Switch the view to the grid and to the list (the switch right of "Cartridges") and repeat the
+     Down-to-the-end shot of step 3 in each.
+  5. `make devbox-res RES=1920x1080` and repeat steps 1–4.
+- **Expected:** the focused card's purple plate (the mat around a console card or a game's art) and
+  a focused chip's purple fill are whole: rounded on every corner, nothing cut straight at the left
+  end, the right end or the bottom of the area that scrolls. The cards and the chips still start
+  on the page margin, in line with the page title.
+- **Check:** the screenshots show the above; `tests/test_bigpicture_scrollers.py`
+  (`test_the_focus_mat_of_a_card_at_the_row_end_is_inside_the_clip`,
+  `test_the_gutter_is_the_focus_mat_at_scale`).
+
+### RT-1227 — Big Picture never shows a scrollbar; the desktop keeps its own
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. Start the app, press F11. On the Shelf, "Super Nintendo" (all three views), a game's details,
+     "Recent", "Import" and its file browser, "Settings" and its "Input" section: move the mouse
+     over the right edge and the bottom edge of the page, scroll with the wheel, and take a
+     `make devbox-shot` while the pointer is still over the edge.
+  2. With the pad (or the arrow keys), walk down each of those pages to the end.
+  3. Press F11 to leave Big Picture, open a console with more games than fit, move the mouse over the
+     grid.
+- **Expected:** 1–2: no scrollbar is drawn anywhere in Big Picture, not even while the pointer
+  moves or the wheel turns; the wheel still scrolls the page and the focus still brings the next
+  item into view. 3: the desktop library shows its scrollbar as before.
+- **Check:** the screenshots show the above; `tests/test_bigpicture_scrollers.py`
+  (`test_no_scroller_in_the_mode_takes_room_for_a_bar`, `test_the_desktop_keeps_its_scrollbars`,
+  `test_scrollbars_are_hidden_only_in_the_mode`).
+
 ## Desktop — Context menus
 
 ### RT-1222 — A context submenu opens once and stays steady under the pointer

@@ -628,6 +628,85 @@ def button(label, on_click=None, suggested=False, destructive=False):
     return widget
 
 
+def bp_scroller(child, horizontal=False):
+    """Every Big Picture scroller: ``child`` in one, edge-safe and barless.
+
+    Issue 999. The ``bp-scroller`` class gives the content a gutter of the
+    focus mat inside the clip (``theme.stylesheet``), so the focused item at
+    either end of the row, or at the bottom of a list, is drawn whole; the
+    stylesheet also hides every scrollbar in the mode, so the policy here only
+    says which way the content may scroll.
+    """
+    widget = Gtk.ScrolledWindow()
+    widget.add_css_class("bp-scroller")
+    if horizontal:
+        widget.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        widget.set_propagate_natural_height(True)
+        # With no bar to drag, a plain wheel has to move the row sideways:
+        # GTK only does that with Shift held.
+        wheel = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.VERTICAL)
+        wheel.connect("scroll", lambda _c, _dx, dy: wheel_sideways(widget, dy))
+        widget.add_controller(wheel)
+    else:
+        widget.add_css_class("bp-scroller-vertical")
+        widget.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        widget.set_vexpand(True)
+    widget.set_child(child)
+    return widget
+
+
+#: How far one wheel notch moves a row sideways, as a share of what shows.
+WHEEL_STEP = 0.25
+
+
+def wheel_sideways(scroller, dy):
+    """Turn the wheel's vertical turn into a sideways scroll of ``scroller``."""
+    adjustment = scroller.get_hadjustment()
+    if not dy or adjustment is None:
+        return False
+    page = adjustment.get_page_size()
+    top = max(adjustment.get_lower(), adjustment.get_upper() - page)
+    value = adjustment.get_value() + dy * page * WHEEL_STEP
+    adjustment.set_value(max(adjustment.get_lower(), min(value, top)))
+    return True
+
+
+def reveal_whole(widget, room):
+    """Scroll ``widget``'s scroller so ``room`` px around it show too (issue 999).
+
+    A scroller following the focus brings the item's own edge to its edge,
+    while the focus mat is drawn ``room`` px outside it: in the middle of a
+    long shelf or grid that cut the mat straight. Returns whether it moved.
+    """
+    scroller = widget.get_ancestor(Gtk.ScrolledWindow)
+    if scroller is None:
+        return False
+    ok, bounds = widget.compute_bounds(scroller)
+    if not ok:
+        return False
+    moved = False
+    spans = (
+        (scroller.get_hadjustment(), bounds.get_x(), bounds.get_width(), scroller.get_width()),
+        (scroller.get_vadjustment(), bounds.get_y(), bounds.get_height(), scroller.get_height()),
+    )
+    for adjustment, start, length, visible in spans:
+        if adjustment is None or visible <= 0 or length + 2 * room > visible:
+            continue
+        shift = 0.0
+        if start < room:
+            shift = start - room
+        elif start + length > visible - room:
+            shift = start + length - (visible - room)
+        if not shift:
+            continue
+        top = max(adjustment.get_lower(), adjustment.get_upper() - adjustment.get_page_size())
+        value = max(adjustment.get_lower(), min(adjustment.get_value() + shift, top))
+        if value != adjustment.get_value():
+            adjustment.set_value(value)
+            moved = True
+    return moved
+
+
 class BigPage(Adw.NavigationPage):
     """A Big Picture page: the safe inset, a top bar, a body, no header bar.
 
@@ -672,11 +751,7 @@ class BigPage(Adw.NavigationPage):
 
     def scrolled(self, child):
         """``child`` in a vertical scroller that fills the body."""
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_vexpand(True)
-        scroller.set_child(child)
-        return scroller
+        return bp_scroller(child)
 
     def focus_default(self):
         """Put the focus on the first thing the pad should land on."""

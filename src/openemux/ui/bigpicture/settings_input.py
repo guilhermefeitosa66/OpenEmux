@@ -56,6 +56,7 @@ from openemux.ui.bigpicture.widgets import (
     ROW_NUMBER,
     ROW_SWITCH,
     Row,
+    bp_scroller,
     eyebrow,
     note,
 )
@@ -276,10 +277,7 @@ class InputSection:
         )
         rows.append(self.save_row)
 
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_vexpand(True)
-        scroller.set_child(self.list)
+        scroller = bp_scroller(self.list)
         self.widget = Gtk.Overlay()
         self.widget.set_vexpand(True)
         self.widget.set_child(scroller)

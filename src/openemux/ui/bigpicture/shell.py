@@ -33,7 +33,7 @@ from openemux.ui.bigpicture.rail import (
     TAB_SETTINGS,
     NavRail,
 )
-from openemux.ui.bigpicture.widgets import HintBar, once
+from openemux.ui.bigpicture.widgets import HintBar, once, reveal_whole
 from openemux.ui.scopes import ALL_CONSOLES_ID, FAVORITES_ID, RECENT_ID, collection_slug, is_collection_scope
 
 logger = logging.getLogger(__name__)
@@ -198,11 +198,22 @@ class BigPictureShell(Gtk.Box):
         banner.connect("notify::revealed", lambda *_: self.sync_status())
         win.connect("notify::default-height", lambda *_: self.apply_scale())
         win.connect("notify::fullscreened", lambda *_: GLib.idle_add(self._apply_scale_idle))
+        win.connect("notify::focus-widget", self._on_focus_moved)
 
     def _sync_animations(self, *_args):
         settings = Gtk.Settings.get_default()
         animate = bool(settings.get_property("gtk-enable-animations")) if settings is not None else True
         self.nav.set_animate_transitions(animate)
+
+    def _on_focus_moved(self, win, _pspec):
+        """After the scroller followed the focus, show the focus mat whole too."""
+        widget = win.get_focus()
+        if self._active and widget is not None:
+            GLib.idle_add(once(self._reveal_focus, widget))
+
+    def _reveal_focus(self, widget):
+        if self._active and self.win.get_focus() is widget:
+            reveal_whole(widget, theme.px("focus_mat", self._scale or self.scale()))
 
     # -- in and out --------------------------------------------------------------
     @property

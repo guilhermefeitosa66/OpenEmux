@@ -32,6 +32,7 @@ from openemux.ui.bigpicture.widgets import (
     Row,
     icon_button,
     make_badge,
+    bp_scroller,
     note,
     once,
 )
@@ -248,11 +249,8 @@ class GameDetail(Gtk.Box):
         self.states_empty.add_css_class("bp-pane-meta")
         self.states_empty.set_wrap(True)
         info.append(self.states_empty)
-        states_scroller = Gtk.ScrolledWindow()
-        states_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
-        states_scroller.set_propagate_natural_height(True)
         self.states_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        states_scroller.set_child(self.states_box)
+        states_scroller = bp_scroller(self.states_box, horizontal=True)
         self.states_scroller = states_scroller
         info.append(states_scroller)
 
