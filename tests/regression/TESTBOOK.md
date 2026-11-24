@@ -19388,3 +19388,25 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
   `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
 - **Restore:** `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 24h'`.
+
+## Desktop — Context menus
+
+### RT-1222 — A context submenu opens once and stays steady under the pointer
+- **Area:** Library
+- **Mode:** MANUAL
+- **Preconditions:** a Wayland session (KDE Plasma reproduced the bug; GNOME too if at hand), a
+  console with at least one game and an installed core, locale English.
+- **Steps:**
+  1. Right-click a game and point at "Load state"; keep the pointer on that row for a few
+     seconds, moving it slightly.
+  2. Point at "Core", then move into its submenu and over its rows.
+  3. Point at "Game details…".
+  4. Repeat steps 1–3 in the devbox (X11): `make devbox-app`, then the same with `make devbox-xdo`.
+- **Expected:** 1: the "Load state" submenu opens next to the row and stays open, with no
+  flicker, for as long as the pointer is on the row or inside the submenu. 2: "Load state" closes,
+  "Core" opens and stays open while the pointer travels into it. 3: "Core" closes. 4: the same on
+  X11 — one submenu at a time, opened by pointing, never by clicking.
+- **Check:** human on Wayland; on X11 the loop reproduced too (the menu gives the focus back to
+  its focused row when a submenu maps, which closed the submenu) and is covered by
+  `tests/test_context_menu_rows.py` (`OpeningASubmenuOnHoverTests`, including
+  `test_the_focused_row_getting_focus_back_does_not_close_the_submenu`).

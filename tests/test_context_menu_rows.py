@@ -207,6 +207,66 @@ class OpeningASubmenuOnHoverTests(unittest.TestCase):
         child.popup.assert_not_called()
         child.popdown.assert_not_called()
 
+    def _focus(self, button=None):
+        button = button or self.button
+        controllers = button.observe_controllers()
+        return [
+            controllers.get_item(index)
+            for index in range(controllers.get_n_items())
+            if isinstance(controllers.get_item(index), Gtk.EventControllerFocus)
+        ][0]
+
+    def test_focusing_a_row_opens_its_submenu(self):
+        child = mock.Mock()
+        child.get_visible.return_value = False
+        hover = {"open": None}
+        context_menu._reveal_on_hover(self.button, hover, child)
+        self._focus().emit("enter")
+        child.popup.assert_called_once()
+        self.assertIs(hover["focused"], self.button)
+
+    def test_the_focused_row_getting_focus_back_does_not_close_the_submenu(self):
+        # Opening a submenu takes the focus and the menu gets it straight
+        # back: GTK re-emits enter on the row that already had it. Acting on
+        # it closed the submenu, and the pointer reopened it (issue 985).
+        hover = {"open": None}
+        context_menu._reveal_on_hover(self.button, hover, None)
+        self._focus().emit("enter")
+        opened = mock.Mock()
+        opened.get_visible.return_value = True
+        hover["open"] = opened
+        self._focus().emit("enter")
+        opened.popdown.assert_not_called()
+        self.assertIs(hover["open"], opened)
+
+    def test_focus_moving_to_another_row_still_closes_the_submenu(self):
+        other = Gtk.Button()
+        self.addCleanup(other.unparent)
+        previous = mock.Mock()
+        hover = {"open": previous, "focused": other}
+        context_menu._reveal_on_hover(self.button, hover, None)
+        self._focus().emit("enter")
+        previous.popdown.assert_called_once()
+        self.assertIs(hover["focused"], self.button)
+
+    def test_focus_coming_back_while_a_submenu_closes_does_not_reopen_it(self):
+        # Closing the open submenu can put focus back on its row; the focus
+        # path runs inside the popdown and must not undo it.
+        other = Gtk.Button()
+        self.addCleanup(other.unparent)
+        previous = mock.Mock()
+        previous.get_visible.return_value = False
+        hover = {"open": previous}
+        context_menu._reveal_on_hover(other, hover, previous)
+        refocus = self._focus(other)
+        previous.popdown.side_effect = lambda: refocus.emit("enter")
+        context_menu._reveal_on_hover(self.button, hover, None)
+        self._controllers(Gtk.EventControllerMotion)[0].emit("enter", 0.0, 0.0)
+        previous.popdown.assert_called_once()
+        previous.popup.assert_not_called()
+        self.assertIsNone(hover["open"])
+        self.assertFalse(hover["busy"])
+
 
 @needs_display
 class ActivatingARowTests(unittest.TestCase):

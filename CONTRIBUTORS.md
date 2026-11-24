@@ -210,6 +210,11 @@ one command instead of downloading each release. That request became
 `packaging/aur/`, built from the repository with the distribution's RetroArch, and `make aur-git`
 to build, test and prepare it for the AUR.
 
+Reported, with a screen recording, that the submenus of a game's right-click menu ("Load state",
+"Core") flickered open and closed on a KDE Plasma Wayland session
+([#985](https://github.com/guilhermefeitosa66/OpenEmux/issues/985)). The menu gave the focus back to
+its focused row each time a submenu appeared, which closed the submenu; that refocus is now ignored.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
