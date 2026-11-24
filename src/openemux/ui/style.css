@@ -533,3 +533,16 @@ button.controller-target.current.lit {
   min-height: 28px;
   padding: 4px;
 }
+
+/* Saved colors and palettes (issue 983): the "+" that adds the current color
+   to a palette of the user's reads as an empty slot, not as another color. */
+.palette-add {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px;
+  border: 1px dashed alpha(currentColor, 0.5);
+}
+
+.palette-dots {
+  opacity: 0.9;
+}

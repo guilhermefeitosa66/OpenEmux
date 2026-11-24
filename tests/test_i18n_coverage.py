@@ -27,6 +27,7 @@ SOURCE_ROOTS = ("src/openemux", "tools", "scripts", "tests")
 #: of these prefixes is reachable even though no literal spells it out.
 DYNAMIC_PREFIXES = (
     "artwork.current.",
+    "cartridge_color.palette.",
     "artwork.provider.",
     "artwork.reset.",
     "context.cover.",

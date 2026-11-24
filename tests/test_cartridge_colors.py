@@ -228,3 +228,180 @@ class WhatTheStoreRefusesToKeepTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class PresetPaletteTests(unittest.TestCase):
+    """The presets are the Android skin editor's, value for value (issue 983)."""
+
+    ANDROID = {
+        "basic": "#F472B6 #EF4444 #F97316 #FACC15 #22C55E #3B82F6 #8B5CF6",
+        "dracula": "#282A36 #44475A #BD93F9 #FF79C6 #8BE9FD #50FA7B #FFB86C",
+        "pastel": "#FBCFE8 #FECACA #FED7AA #FEF08A #BBF7D0 #BFDBFE #DDD6FE",
+        "nord": "#2E3440 #4C566A #88C0D0 #81A1C1 #A3BE8C #EBCB8B #BF616A",
+        "gruvbox": "#282828 #504945 #CC241D #D79921 #98971A #458588 #B16286",
+        "neon": "#0D0221 #FF2A6D #05D9E8 #D1F7FF #F9C80E #7B2FF7 #01FF89",
+        "earth": "#3E2C23 #6B4F3A #A47148 #D4A373 #E9EDC9 #CCD5AE #606C38",
+        "green-screen": "#0F380F #306230 #8BAC0F #9BBC0F",
+    }
+
+    def test_presets_match_android(self):
+        self.assertEqual([pid for pid, _ in cartridge_colors.PRESET_PALETTES], list(self.ANDROID))
+        for palette_id, colors in self.ANDROID.items():
+            self.assertEqual(
+                cartridge_colors.builtin_palette_colors(palette_id),
+                [color.lower() for color in colors.split()],
+            )
+
+    def test_shell_palette_is_the_named_swatches(self):
+        colors = cartridge_colors.builtin_palette_colors(cartridge_colors.SHELL_PALETTE_ID)
+        self.assertEqual(len(colors), 12)
+        self.assertEqual(colors[0], "#26262a")
+
+    def test_custom_color_choices(self):
+        choices = cartridge_colors.custom_color_choices
+        self.assertEqual(choices(["#111111"], "#222222"), ["#222222", "#111111"])
+        self.assertEqual(choices(["#111111", "#222222"], "#222222"), ["#111111", "#222222"])
+        self.assertEqual(choices(None, "red"), [])
+
+    def test_unknown_builtin_and_name_keys(self):
+        self.assertIsNone(cartridge_colors.builtin_palette_colors("nope"))
+        self.assertEqual(cartridge_colors.palette_name_key("green-screen"),
+                         "cartridge_color.palette.green_screen")
+        self.assertTrue(cartridge_colors.is_user_palette("user-0123abcd"))
+        self.assertFalse(cartridge_colors.is_user_palette("basic"))
+        self.assertFalse(cartridge_colors.is_user_palette(None))
+
+
+class SavedColorsAndPalettesTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "cartridge_colors.config"
+        self.store = CartridgeColorStore(self.path)
+
+    def reload(self):
+        return CartridgeColorStore(self.path)
+
+    def test_remember_puts_the_color_first_without_repeats_and_caps(self):
+        self.store.remember_color("#AA0000")
+        self.store.remember_color("#00aa00")
+        self.store.remember_color("#aa0000")
+        self.assertEqual(self.store.saved_colors(), ["#aa0000", "#00aa00"])
+        for index in range(12):
+            self.store.remember_color(f"#0000{index:02x}")
+        saved = self.reload().saved_colors()
+        self.assertEqual(len(saved), cartridge_colors.SAVED_COLORS_MAX)
+        self.assertEqual(saved[0], "#00000b")
+
+    def test_remember_ignores_named_ids_and_repeats_at_the_front(self):
+        self.store.remember_color("red")
+        self.assertEqual(self.store.saved_colors(), [])
+        self.store.remember_color("#123456")
+        with mock.patch.object(self.store, "save") as save:
+            self.store.remember_color("#123456")
+        save.assert_not_called()
+
+    def test_forget_saved_color_keeps_the_games(self):
+        self.store.set_rom_color(ROM, "SFC", "#123456")
+        self.store.remember_color("#123456")
+        self.store.forget_saved_color("#123456")
+        self.store.forget_saved_color("#654321")
+        self.assertEqual(self.reload().saved_colors(), [])
+        self.assertEqual(self.reload().get_rom_color(ROM), "#123456")
+
+    def test_saved_colors_survive_other_writes(self):
+        self.store.remember_color("#123456")
+        self.store.set_rom_color(ROM, "SFC", "red")
+        self.store.set_console_color("SFC", "blue")
+        self.assertEqual(self.reload().saved_colors(), ["#123456"])
+
+    def test_palette_lifecycle(self):
+        self.assertEqual(self.store.selected_palette(), "shell")
+        palette_id = self.store.create_palette("  Pokémon   carts ", ["#AA0000", "red", "#aa0000"])
+        self.assertTrue(cartridge_colors.is_user_palette(palette_id))
+        store = self.reload()
+        self.assertEqual(store.selected_palette(), palette_id)
+        self.assertEqual(store.user_palettes(),
+                         [{"id": palette_id, "name": "Pokémon carts", "colors": ["#aa0000"]}])
+        self.assertTrue(store.add_palette_color(palette_id, "#00AA00"))
+        self.assertTrue(store.add_palette_color(palette_id, "#0000aa"))
+        self.assertFalse(store.add_palette_color(palette_id, "#00aa00"))
+        self.assertFalse(store.add_palette_color(palette_id, "blue"))
+        self.assertTrue(store.move_palette_color(palette_id, "#0000aa", -1))
+        self.assertEqual(store.palette_colors(palette_id), ["#aa0000", "#0000aa", "#00aa00"])
+        self.assertFalse(store.move_palette_color(palette_id, "#aa0000", -1))
+        self.assertFalse(store.move_palette_color(palette_id, "#00aa00", 1))
+        self.assertFalse(store.move_palette_color(palette_id, "#999999", 1))
+        self.assertTrue(store.remove_palette_color(palette_id, "#aa0000"))
+        self.assertFalse(store.remove_palette_color(palette_id, "#aa0000"))
+        self.assertTrue(store.rename_palette(palette_id, "Mine"))
+        self.assertFalse(store.rename_palette(palette_id, "Mine"))
+        self.assertFalse(store.rename_palette(palette_id, "   "))
+        self.assertFalse(store.rename_palette("user-ffffffff", "Other"))
+        self.assertEqual(self.reload().user_palette(palette_id)["name"], "Mine")
+        self.assertIsNone(store.user_palette("user-ffffffff"))
+        self.assertTrue(store.delete_palette(palette_id))
+        self.assertFalse(store.delete_palette(palette_id))
+        self.assertEqual(self.reload().selected_palette(), "shell")
+
+    def test_full_palette_refuses_a_color(self):
+        palette_id = self.store.create_palette(
+            "Full", [f"#0000{i:02x}" for i in range(cartridge_colors.PALETTE_COLORS_MAX + 3)]
+        )
+        self.assertEqual(len(self.store.palette_colors(palette_id)),
+                         cartridge_colors.PALETTE_COLORS_MAX)
+        self.assertFalse(self.store.add_palette_color(palette_id, "#ffffff"))
+
+    def test_create_refuses_blank_names_and_too_many(self):
+        self.assertIsNone(self.store.create_palette("  "))
+        with mock.patch.object(cartridge_colors, "USER_PALETTES_MAX", 1):
+            self.assertIsNotNone(self.store.create_palette("One"))
+            self.assertIsNone(self.store.create_palette("Two"))
+
+    def test_duplicate_builtin_and_user_palettes(self):
+        copy_id = self.store.duplicate_palette("nord", "Nord copy")
+        self.assertEqual(self.store.palette_colors(copy_id),
+                         cartridge_colors.builtin_palette_colors("nord"))
+        again = self.store.duplicate_palette(copy_id, "Again")
+        self.assertEqual(self.store.palette_colors(again), self.store.palette_colors(copy_id))
+        self.assertIsNone(self.store.duplicate_palette("nope", "x"))
+
+    def test_select_palette(self):
+        self.store.select_palette("dracula")
+        self.assertEqual(self.reload().selected_palette(), "dracula")
+        with mock.patch.object(self.store, "save") as save:
+            self.store.select_palette("dracula")
+            self.store.select_palette("nope")
+        save.assert_not_called()
+
+    def test_a_remembered_palette_that_is_gone_falls_back_to_shell(self):
+        self.path.write_text("palette: user-00000000\n", encoding="utf-8")
+        self.assertEqual(self.reload().selected_palette(), "shell")
+
+    def test_loader_filters_junk(self):
+        self.path.write_text(
+            "saved_colors: ['#ABCDEF', 'red', '#zzz', 5, '#abcdef']\n"
+            "palette: 7\n"
+            "palettes:\n"
+            "  - {id: user-0000000a, name: '  A  ', colors: ['#111111', bad, '#111111']}\n"
+            "  - {id: user-0000000a, name: dup, colors: []}\n"
+            "  - {id: basic, name: preset id, colors: []}\n"
+            "  - {id: user-0000000b, name: '', colors: []}\n"
+            "  - {id: user-0000000c, name: no colors, colors: oops}\n"
+            "  - just a string\n",
+            encoding="utf-8",
+        )
+        store = self.reload()
+        self.assertEqual(store.saved_colors(), ["#abcdef"])
+        self.assertEqual(store.selected_palette(), "shell")
+        self.assertEqual(store.user_palettes(), [
+            {"id": "user-0000000a", "name": "A", "colors": ["#111111"]},
+            {"id": "user-0000000c", "name": "no colors", "colors": []},
+        ])
+
+    def test_loader_ignores_non_list_values(self):
+        self.path.write_text("saved_colors: '#123456'\npalettes: {a: 1}\n", encoding="utf-8")
+        store = self.reload()
+        self.assertEqual(store.saved_colors(), [])
+        self.assertEqual(store.user_palettes(), [])
+        self.assertTrue(self.path.exists())
