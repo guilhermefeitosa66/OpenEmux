@@ -115,6 +115,10 @@ class GroupedScroll(Gtk.Widget, Gtk.Scrollable):
         grid.set_vadjustment(Gtk.Adjustment())
         self._sections.append((header, grid))
 
+    def grids(self):
+        """Every group's grid, top to bottom."""
+        return [grid for _header, grid in self._sections]
+
     def _children(self):
         for header, grid in self._sections:
             yield header

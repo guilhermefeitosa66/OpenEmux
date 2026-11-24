@@ -19078,8 +19078,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
      row until the last game of the row.
   3. Scroll down with the wheel, or D-pad down, to the last game.
   4. Press LB and RB.
-- **Expected:** 1: the games fill the screen width in rows; no horizontal scrollbar, and a long
-  title is cut short (it ends in an ellipsis) instead of widening its card. 2: the page does not
+- **Expected:** 1: the games fill the screen width in rows, the last column as far from the right
+  edge as the first is from the left (RT-1235); no horizontal scrollbar, and a long title is cut
+  short (it ends in an ellipsis) instead of widening its card. 2: the page does not
   move sideways; D-pad right walks along the row. 3: every game is reachable by scrolling down.
   4: the previous and next console open, as before.
 - **Check:** suite file `tests/test_bigpicture_pages.py`
@@ -19743,3 +19744,43 @@ import replaced. Save states are not part of it. The runner has no Android devic
   and B comes back to the page with the focus on the row. 2: the "Restore the previous save?"
   dialog opens and B closes it without restoring. 3: each row is read with its value or subtitle.
 - **Check:** human only.
+
+### RT-1235 — Big Picture's games fill the row with large cards
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox; a library with games for NES, Super Nintendo,
+  Nintendo 64, Game Boy Advance and PlayStation (the devbox's synthetic library), a dozen or more
+  for at least one of them.
+- **Steps:**
+  1. `make devbox-res RES=1920x1200`; open Super Nintendo from the Shelf in "Cartridges";
+     `make devbox-shot OUT=$SCRATCH/bp-fit-sfc-1200.png`.
+  2. Repeat for NES, Nintendo 64, Game Boy Advance and PlayStation, in "Cartridges" and in
+     "Covers", at `RES=1280x720`, `RES=1920x1080` and `RES=1920x1200`.
+  3. Open "All" (the first console chip) and scroll through its sections.
+  4. Switch to "List".
+- **Expected:** 1–2: in every screenshot the last column of games ends as far from the right edge
+  of the window as the first one starts from the left (give or take the gap between two cards);
+  there is no empty strip on the right. The cards are at least as large as they were before this
+  change (an SFC cartridge at 1920x1080 is about 400 px wide or more). 3: every console section
+  fills its row the same way; a section with fewer games than fit on a row keeps the same card size
+  as that console's own page and starts at the left. 4: the rows span the width, as before.
+- **Check:** suite file `tests/test_grid_fit.py` (`FillingTheRowTests`, `AllGamesTests`); the
+  screenshots for a human look.
+
+### RT-1236 — Resizing Big Picture keeps the focused game
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox, Super Nintendo open with a dozen games or more.
+- **Steps:**
+  1. With the D-pad (`make devbox-xdo CMD='key Down'`, `key Right`), move the focus to a game in
+     the second or third row.
+  2. `make devbox-res RES=1280x720`, wait a second; `make devbox-shot OUT=$SCRATCH/bp-fit-720.png`.
+  3. `make devbox-res RES=1920x1200`, wait a second; `make devbox-shot OUT=$SCRATCH/bp-fit-1200.png`.
+  4. Press D-pad up, down, left and right.
+  5. Leave Big Picture (F11) and look at the desktop library.
+- **Expected:** 2–3: the columns change to fill the new width, and the same game still has the
+  focus ring and is on screen; the page does not jump to the top. 4: the focus walks the rows and
+  columns as laid out on screen. 5: the desktop grid is exactly as before Big Picture, at its own
+  zoom, with its usual space on the right.
+- **Check:** suite file `tests/test_grid_fit.py` (`RefittingTests`,
+  `test_the_desktop_grid_is_never_fitted`); the screenshots for a human look.

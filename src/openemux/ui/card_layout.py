@@ -107,12 +107,26 @@ CONSOLE_COVER_ASPECTS = {
 }
 
 
-def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
-    """Card size for a console when no cartridge frame is drawn."""
-    width = scale_length(FIXED_ITEM_WIDTH, zoom)
+def cover_size_for_width(console, width, mixed_consoles=False):
+    """The box-art size for an artwork ``width``, at the console's proportions.
+
+    A page mixing consoles has no single shape to follow, so it gets the
+    uniform slot's proportions (issue 996). Big Picture asks for widths the
+    zoom levels never give (issue 1000); the desktop goes through
+    ``cover_size_for_console`` and ``uniform_slot_size``.
+    """
+    width = max(1, int(width))
+    if mixed_consoles:
+        slot_w, slot_h = UNIFORM_SLOT_SIZE
+        return width, max(1, int(round(width * slot_h / slot_w)))
     aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
     height = int(round(width / aspect)) if aspect > 0 else width
     return width, max(1, height)
+
+
+def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
+    """Card size for a console when no cartridge frame is drawn."""
+    return cover_size_for_width(console, scale_length(FIXED_ITEM_WIDTH, zoom))
 
 
 def default_item_size(zoom=DEFAULT_ZOOM):
@@ -154,6 +168,34 @@ def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
     columns = max(1, available // cell)
     filled = max(1, min(columns, item_count))
     return columns, max(0, available - filled * cell)
+
+
+#: Big Picture grows its cards in steps of this many pixels (issue 1000).
+#: Cartridge composites are cached on disk per width, so a card that took
+#: every width a window drag passes through would write a set of files per
+#: pixel; what a step leaves over is a few pixels per column, which
+#: GtkGridView spreads evenly over the gaps.
+FIT_WIDTH_STEP = 4
+
+
+def fit_card_width(available, min_card_width, spacing=GRID_SPACING, step=FIT_WIDTH_STEP):
+    """Big Picture's columns: as many large cards as fit, grown to fill the row.
+
+    ``min_card_width`` is the card at Big Picture's own size, CSS padding
+    included -- the floor, so the cards are never smaller than that. As many
+    cells of it (card plus gap) as fit in ``available`` make the columns, and
+    the width the last one left over is shared between the cards, in whole
+    steps of ``step`` pixels. Returns ``(columns, growth)``: the column count, and how many
+    pixels wider than ``min_card_width`` every card is drawn.
+
+    The growth depends on the width only, never on how many games there are:
+    a console with two games draws them at the size forty would get.
+    """
+    cell = max(1, min_card_width + spacing)
+    columns = max(1, available // cell)
+    spare = available // columns - cell
+    step = max(1, int(step))
+    return columns, max(0, spare) // step * step
 
 
 def cartridge_frame_svg(console, color=None):
