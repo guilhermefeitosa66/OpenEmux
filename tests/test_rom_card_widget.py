@@ -1016,6 +1016,11 @@ class OnASingleConsoleCoverPageTests(_CardCase):
         )
         self.assertIsNotNone(card._backdrop)
 
+    def test_swapping_the_cover_widget_twice_leaves_the_backdrop_alone(self):
+        self.card._set_cover_widget(self.card.cover_image)
+        self.card._set_cover_widget(self.card.cover_image)
+        self.assertIs(self.card._backdrop.get_first_child(), self.card.cover_image)
+
     def test_on_a_single_console_page_the_badges_stay_on_the_cell(self):
         # The art is the cell there; nothing moves (issue 996).
         self.assertIs(self.card._art_host, self.card.cover_overlay)
