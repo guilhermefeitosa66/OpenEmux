@@ -153,6 +153,10 @@ class OpeningASubmenuOnHoverTests(unittest.TestCase):
     def setUp(self):
         self.button = Gtk.Button()
         self.addCleanup(self.button.unparent)
+        # A row is mapped while its menu is up; a test widget never is.
+        self.mapped = mock.patch.object(self.button, "get_mapped", return_value=True)
+        self.mapped.start()
+        self.addCleanup(self.mapped.stop)
 
     def _controllers(self, kind):
         controllers = self.button.observe_controllers()
@@ -266,6 +270,131 @@ class OpeningASubmenuOnHoverTests(unittest.TestCase):
         previous.popup.assert_not_called()
         self.assertIsNone(hover["open"])
         self.assertFalse(hover["busy"])
+
+    def test_a_row_that_is_no_longer_mapped_opens_nothing(self):
+        # Crossings still arrive while a closing menu unmaps.
+        self.mapped.stop()
+        child = mock.Mock()
+        child.get_visible.return_value = False
+        hover = {"open": None}
+        context_menu._reveal_on_hover(self.button, hover, child)
+        self._controllers(Gtk.EventControllerMotion)[0].emit("enter", 0.0, 0.0)
+        child.popup.assert_not_called()
+        self.assertIsNone(hover["open"])
+        self.mapped.start()
+
+    def test_switching_rows_closes_the_previous_branch_with_the_handlers_held_off(self):
+        # Its own row gets the keyboard back as it closes, and must neither
+        # find it still recorded as open nor open it again (issue 984).
+        previous = mock.Mock()
+        hover = {"open": previous}
+        seen = []
+        previous.popdown.side_effect = lambda: seen.append(
+            (context_menu._closing_submenus, hover["open"])
+        )
+        context_menu._reveal_on_hover(self.button, hover, None)
+        self._controllers(Gtk.EventControllerMotion)[0].emit("enter", 0.0, 0.0)
+        self.assertEqual(seen, [(True, None)])
+        self.assertFalse(context_menu._closing_submenus)
+
+    def test_nothing_opens_while_submenus_are_coming_down(self):
+        child = mock.Mock()
+        child.get_visible.return_value = False
+        context_menu._reveal_on_hover(self.button, {"open": None}, child)
+        context_menu._closing_submenus = True
+        self.addCleanup(setattr, context_menu, "_closing_submenus", False)
+        self._controllers(Gtk.EventControllerMotion)[0].emit("enter", 0.0, 0.0)
+        child.popup.assert_not_called()
+
+
+def _popovers_under(widget):
+    return [w for w in _walk(widget) if isinstance(w, Gtk.Popover)]
+
+
+@needs_display
+class ClosingSubmenusInnermostFirstTests(unittest.TestCase):
+    """Issue 984: a menu's submenus come down before the menu does."""
+
+    def _nested_menu(self):
+        popover = build_context_popover(
+            [Submenu("Outer", [Submenu("Inner", [("A", lambda: None, None)])])]
+        )
+        self.addCleanup(popover.unparent)
+        outer, inner = _popovers_under(popover)
+        return popover, outer, inner
+
+    def test_open_submenus_close_innermost_first(self):
+        popover, outer, inner = self._nested_menu()
+        order = []
+        for name, sub in (("outer", outer), ("inner", inner)):
+            mock.patch.object(sub, "get_visible", return_value=True).start()
+            mock.patch.object(sub, "popdown", side_effect=lambda n=name: order.append(n)).start()
+        self.addCleanup(mock.patch.stopall)
+        with self.assertLogs("openemux.ui.context_menu", "INFO") as logs:
+            context_menu._close_submenus(popover)
+        self.assertEqual(order, ["inner", "outer"])
+        self.assertIn("2 open submenu(s)", logs.output[0])
+
+    def test_a_row_regaining_focus_while_its_submenu_closes_does_not_reopen_it(self):
+        popover = build_context_popover([Submenu("Core", [("A", lambda: None, None)])])
+        self.addCleanup(popover.unparent)
+        row = _rows(popover)[0]
+        (child,) = _popovers_under(row)
+        focus = [
+            c for c in list(row.observe_controllers()) if isinstance(c, Gtk.EventControllerFocus)
+        ][0]
+        visible = [True]
+
+        def _popdown():
+            visible[0] = False
+            # GTK hands the keyboard back to the row as its submenu comes down.
+            focus.emit("enter")
+
+        mock.patch.object(row, "get_mapped", return_value=True).start()
+        mock.patch.object(child, "get_visible", side_effect=lambda: visible[0]).start()
+        popup = mock.patch.object(child, "popup").start()
+        mock.patch.object(child, "popdown", side_effect=_popdown).start()
+        self.addCleanup(mock.patch.stopall)
+        with self.assertLogs("openemux.ui.context_menu", "INFO"):
+            context_menu._close_submenus(popover)
+        popup.assert_not_called()
+        self.assertFalse(context_menu._closing_submenus)
+
+    def test_a_menu_and_its_submenus_close_their_submenus_as_they_unmap(self):
+        popover, outer, inner = self._nested_menu()
+        for menu in (popover, outer, inner):
+            self.assertIsInstance(menu, context_menu._MenuPopover)
+        order = []
+        with mock.patch.object(
+            context_menu, "_close_submenus", side_effect=lambda p: order.append(("submenus", p))
+        ), mock.patch.object(
+            Gtk.Popover, "do_unmap", lambda p: order.append(("unmap", p))
+        ):
+            popover.do_unmap()
+        self.assertEqual(order, [("submenus", popover), ("unmap", popover)])
+
+    def test_a_nested_close_leaves_the_outer_one_holding_the_handlers_off(self):
+        inner = mock.Mock()
+        outer = mock.Mock()
+        seen = []
+        outer.popdown.side_effect = lambda: (
+            context_menu._pop_down_quietly([inner]),
+            seen.append(context_menu._closing_submenus),
+        )
+        context_menu._pop_down_quietly([outer])
+        inner.popdown.assert_called_once()
+        self.assertEqual(seen, [True])
+        self.assertFalse(context_menu._closing_submenus)
+
+    def test_hidden_submenus_are_left_alone(self):
+        popover, outer, _inner = self._nested_menu()
+        with mock.patch.object(outer, "popdown") as popdown:
+            context_menu._close_submenus(popover)
+        popdown.assert_not_called()
+
+    def test_a_stand_in_for_a_popover_has_nothing_to_walk(self):
+        context_menu._close_submenus(mock.Mock())  # no AttributeError, no call
+
 
 
 @needs_display
