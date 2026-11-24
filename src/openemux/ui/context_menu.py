@@ -243,23 +243,54 @@ def _reveal_on_hover(button, hover, child=None):
 
     Deliberately no close-on-leave: reaching a submenu means leaving the row
     that opened it, and closing there would make it unreachable.
+
+    Focus counts only when it *moves* to this row. A popover that opens takes
+    the keyboard focus, and the menu under it gets it back right away: GTK
+    then emits the focus ``enter`` again on the row that already had it --
+    usually the first one, "Game details…", which has no submenu and so
+    closed the submenu that had just opened. The pointer, still on the
+    submenu's row, crossed into it again when the popup went away, reopened
+    it, and the submenu flickered open and shut for as long as the pointer
+    stayed there (issue 985). A refocus of the row that already held the
+    focus is therefore ignored; ``hover["focused"]`` remembers which one that
+    is. The same rule keeps a submenu closed with Escape closed, as focus
+    returns to its own row.
+
+    Closing a submenu can also move focus into this menu while ``_reveal`` is
+    still running, and the focus path would then reopen what was just closed;
+    a nested call is ignored. Such a focus still counts as the row that holds
+    the focus, on purpose: if it did not, the next refocus of that row would
+    read as a move and reopen the submenu the pointer had just closed. The
+    keyboard reopens it by moving away and back.
     """
 
-    def _enter(*_args):
-        current = hover.get("open")
-        if current is not None and current is not child:
-            current.popdown()
-            hover["open"] = None
-        if child is not None and not child.get_visible():
-            child.popup()
-            hover["open"] = child
+    def _reveal(*_args):
+        if hover.get("busy"):
+            return
+        hover["busy"] = True
+        try:
+            current = hover.get("open")
+            if current is not None and current is not child:
+                hover["open"] = None
+                current.popdown()
+            if child is not None and not child.get_visible():
+                child.popup()
+                hover["open"] = child
+        finally:
+            hover["busy"] = False
+
+    def _focus_entered(*_args):
+        if hover.get("focused") is button:
+            return
+        hover["focused"] = button
+        _reveal()
 
     motion = Gtk.EventControllerMotion()
-    motion.connect("enter", _enter)
+    motion.connect("enter", _reveal)
     button.add_controller(motion)
 
     focus = Gtk.EventControllerFocus()
-    focus.connect("enter", _enter)
+    focus.connect("enter", _focus_entered)
     button.add_controller(focus)
 
 
