@@ -19882,3 +19882,141 @@ import replaced. Save states are not part of it. The runner has no Android devic
   zoom, with its usual space on the right.
 - **Check:** suite file `tests/test_grid_fit.py` (`RefittingTests`,
   `test_the_desktop_grid_is_never_fitted`); the screenshots for a human look.
+
+## Desktop — Custom themes
+
+### RT-1237 — System, Light and Dark stay as they were and cannot be edited
+- **Area:** Custom themes
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running (`make devbox-app`), no custom theme.
+- **Steps:**
+  1. Open "Settings" ▸ "System"; in "Interface", open the "Theme" list.
+  2. Pick "Light", then "Dark", then "System"; `make devbox-shot OUT=$SCRATCH/RT-1237.png WIN=1`
+     after each.
+- **Expected:** 1: the list reads "System", "Light", "Dark" and nothing else; a "New Theme…" row
+  sits under it. 2: the app paints light, dark, then the desktop's appearance, as before; with any
+  of the three picked there is no edit (pencil) button and no "More Theme Actions" (⋮) menu beside
+  the row.
+- **Check:** suite file `tests/test_theme_picker.py` (`ListTests`); the screenshots for a human look.
+- **Restore:** pick the theme that was in use before step 2.
+
+### RT-1238 — A new theme is made in the editor, saved, picked, and survives a restart
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a throwaway home (the devbox's is one).
+- **Steps:**
+  1. "Settings" ▸ "System" ▸ "New Theme…"; type "Midnight", pick "Dark", "Create".
+  2. In the editor, "Colors": click the swatch of "Library" and drag in the picker; then
+     "Sidebar" and "Cards".
+  3. "Save".
+  4. Quit the app and start it again.
+- **Expected:** 1: the editor opens, titled "New Theme" with "Midnight · dark base", "Colors"
+  selected, every row reading "Same as base" and its reset button greyed out. 2: the preview on the
+  right follows the picker while dragging; each changed row shows its hex and its reset button
+  becomes active. 3: the editor closes, "Theme" reads "Midnight", and the main window paints with
+  the new colors. 4: still "Midnight", same colors; `~/.openemux/themes/midnight/theme.yaml` holds
+  `version: 1`, `name: Midnight`, `base: dark` and only the three changed colors.
+- **Check:** human only (`tests/test_theme_editor.py` `SaveTests` and
+  `tests/test_theme_picker.py` `NewThemeTests` cover the logic).
+
+### RT-1239 — Cancel throws away every change, the live preview included
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1238 done ("Midnight" exists and is in use).
+- **Steps:**
+  1. With "Midnight" picked, click the edit (pencil) button beside "Theme".
+  2. Turn on "Apply to the whole app while editing"; change "Window background" and "Accent and
+     focus".
+  3. "Cancel".
+  4. Repeat steps 1–3 from "New Theme…" with a new name.
+- **Expected:** 2: the main window behind the editor repaints as the colors change. 3: the window
+  is back to Midnight exactly as before; reopening the editor shows the old values. 4: after
+  Cancel, no theme with the new name is in the "Theme" list and no folder for it exists under
+  `~/.openemux/themes/`.
+- **Check:** human only (`tests/test_theme_editor.py` `LiveTests`).
+
+### RT-1240 — Text below WCAG AA warns next to its row, without blocking Save
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme on the Light base.
+- **Steps:**
+  1. Edit the theme; open "Text"; set "Secondary text" to `#D0D0D0` in the picker's "Hex" field.
+  2. Set it back with its reset button.
+  3. Set "Library" (in "Colors") to `#303030`.
+- **Expected:** 1: the row's subtitle becomes "Low contrast with …: N:1 (needs 4.5:1)" with a
+  warning icon, and the "Text" entry of the section list shows a warning icon too; "Save" stays
+  available. 2: the warning disappears. 3: "Library" warns about its text, and "Text" shows the
+  icon again.
+- **Check:** human only (`tests/test_theme_editor.py` `ValueTests`,
+  `tests/test_custom_themes.py` contrast tests).
+
+### RT-1241 — Reset a row, reset all
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** In the editor change three colors, reset one with its reset button, then press
+  "Reset All".
+- **Expected:** the reset row reads "Same as base" with its button greyed out; after "Reset All"
+  every row does, "Reset All" greys out, and the preview is the base's look.
+- **Check:** suite file `tests/test_theme_editor.py` (`ValueTests`).
+
+### RT-1242 — Duplicate, rename and delete; deleting the theme in use falls back to System
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. "More Theme Actions" (⋮) ▸ "Duplicate".
+  2. ⋮ ▸ "Rename…", type a new name, "Rename".
+  3. ⋮ ▸ "Delete…", "Delete".
+- **Expected:** 1: "<name> (copy)" appears, is picked and paints the same colors. 2: the list shows
+  the new name, still picked. 3: a confirmation first; after it the copy is gone from the list and
+  from `~/.openemux/themes/`, and "Theme" reads "System".
+- **Check:** human only (`tests/test_theme_picker.py` `DuplicateRenameDeleteTests`).
+
+### RT-1243 — A hand-broken theme.yaml never crashes the app
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: break a theme's `theme.yaml` by hand (invalid YAML; a list instead of
+  a mapping; `base: purple`; `card_bg: 12`; an unknown key `raw_css: "*{}"`), starting the app after
+  each.
+- **Expected:** the app always opens. Invalid YAML, a list or a bad base: the theme is left out of
+  the list (and, if it was in use, the app paints System) with a "Skipping theme" line in the log.
+  A wrong type or an unknown key: the theme loads without that key. Nothing from the file reaches
+  the stylesheet except validated `#rrggbb` colors.
+- **Check:** suite files `tests/test_custom_themes.py` (`ParseTests`, `StoreTests`),
+  `tests/test_theme_css.py`, `tests/test_custom_theming.py`.
+
+### RT-1244 — The header toggle leaves a custom theme for built-in Light or Dark
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a custom theme in use.
+- **Steps:** Click the sun/moon button in the header bar.
+- **Expected:** the app switches to built-in "Light" from a dark-based theme ("Dark" from a light
+  one), the custom colors go away, and "Settings" ▸ "Theme" reads that built-in.
+- **Check:** suite file `tests/test_custom_theming.py` (`WindowThemeTests`).
+
+### RT-1245 — The theme editor in a narrow window
+- **Area:** Custom themes
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running.
+- **Steps:**
+  1. `make devbox-res RES=520x900`; "Settings" ▸ "System" ▸ "New Theme…", any name, "Create".
+  2. `make devbox-shot OUT=$SCRATCH/RT-1245.png`; pick "Text" in the "Section" row.
+  3. "Cancel"; `make devbox-res RES=1280x800`.
+- **Expected:** 2: the preview sits above the controls, the section list is replaced by a
+  "Section" row, and "Reset All" is under the rows; picking "Text" shows its rows. 3: nothing was
+  saved.
+- **Check:** suite file `tests/test_theme_editor.py` (`test_narrow_stacks_the_preview_over_the_controls`);
+  the screenshot for a human look.
+- **Restore:** step 3.
+
+### RT-1246 — The Custom Color dialog keeps working on the shared picker
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** A game's card ▸ "Cartridge color" ▸ the custom color item; drag the plane, move "Hue",
+  type in "Hex", "Apply".
+- **Expected:** exactly as in issue 983: the cartridge preview follows, an invalid hex greys out
+  "Apply", Enter in "Hex" applies.
+- **Check:** suite files `tests/test_cartridge_color_dialog.py`, `tests/test_color_picker.py`.

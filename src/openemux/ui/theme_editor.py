@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 NARROW_BREAKPOINT = "max-width: 760sp"
 SECTION_ICONS = {
     "colors": "applications-graphics-symbolic",
-    "text": "format-text-bold-symbolic",
+    "text": "text-x-generic-symbolic",
     "accent": "starred-symbolic",
 }
 SWATCH_WIDTH, SWATCH_HEIGHT = 40, 26
@@ -191,10 +191,12 @@ class ThemeEditorDialog(Adw.Dialog):
         self.set_child(view)
         self.set_default_widget(self.save_button)
 
-        narrow = Adw.Breakpoint.new(Adw.BreakpointCondition.parse(NARROW_BREAKPOINT))
-        narrow.connect("apply", lambda _b: self.set_narrow(True))
-        narrow.connect("unapply", lambda _b: self.set_narrow(False))
-        self.add_breakpoint(narrow)
+        self.narrow_breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse(NARROW_BREAKPOINT)
+        )
+        self.narrow_breakpoint.connect("apply", lambda _b: self.set_narrow(True))
+        self.narrow_breakpoint.connect("unapply", lambda _b: self.set_narrow(False))
+        self.add_breakpoint(self.narrow_breakpoint)
 
         self.connect("closed", self._on_closed)
         self.show_section(SECTIONS[0])
