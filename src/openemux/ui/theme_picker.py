@@ -4,12 +4,20 @@ The "Theme" row lists System, Light and Dark, then the user's own themes by
 name. While one of the user's themes is picked, an Edit button and a menu
 (Duplicate, Rename, Delete) sit beside it; the built-ins have neither. A
 "New Theme…" row under it asks for a name and a base, then opens the editor.
+
+Issue 1012: a theme travels as one ``.openemux-theme`` file
+(``core.theme_archive``). "Export…" sits in the theme's menu; "Import
+Theme…" under "New Theme…" adds the file's theme and selects it. A file the
+app cannot use is refused whole, with a toast, and nothing is written.
 """
 
 import logging
 
-from gi.repository import Adw, Gio, Gtk
+import threading
 
+from gi.repository import Adw, Gio, GLib, Gtk
+
+from openemux.core import theme_archive
 from openemux.core.custom_themes import MAX_NAME_LENGTH, Theme
 from openemux.core.theme import THEMES, THEME_SYSTEM
 from openemux.ui import theming
@@ -33,6 +41,16 @@ def theme_label(t, store, theme_id):
     return theme.name if theme is not None else t(f"theme.{THEME_SYSTEM}")
 
 
+def _spawn(target):
+    threading.Thread(target=target, daemon=True).start()
+
+
+def export_name(name):
+    """The file name an export suggests: the theme's name, made file-safe."""
+    safe = "".join(c for c in name if c not in '/\\:*?"<>|').strip(" .") or "theme"
+    return safe + theme_archive.EXTENSION
+
+
 def copy_name(t, name):
     """"<name> (copy)", the name shortened so the suffix always fits."""
     wanted = t("theme.custom.copy_name", name=name)
@@ -43,8 +61,9 @@ def copy_name(t, name):
 
 
 class ThemePicker:
-    def __init__(self, prefs):
+    def __init__(self, prefs, spawn=None):
         self.prefs = prefs
+        self.spawn = spawn or _spawn
         self.win = prefs.win
         self.config = prefs.config
         self.store = self.config.themes
@@ -69,7 +88,7 @@ class ThemePicker:
 
         self.actions = actions = Gio.SimpleActionGroup()
         for name, handler in (("duplicate", self.duplicate), ("rename", self.ask_rename),
-                              ("delete", self.ask_delete)):
+                              ("export", self.ask_export), ("delete", self.ask_delete)):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, h=handler: h())
             actions.add_action(action)
@@ -77,6 +96,7 @@ class ThemePicker:
         menu = Gio.Menu()
         menu.append(t("theme.custom.duplicate"), "theme.duplicate")
         menu.append(t("theme.custom.rename"), "theme.rename")
+        menu.append(t("theme.custom.export"), "theme.export")
         menu.append(t("theme.custom.delete"), "theme.delete")
         self.menu_button = Gtk.MenuButton(icon_name="view-more-symbolic")
         self.menu_button.set_valign(Gtk.Align.CENTER)
@@ -92,6 +112,11 @@ class ThemePicker:
         self.new_row.add_prefix(Gtk.Image(icon_name="list-add-symbolic"))
         self.new_row.set_activatable(True)
         self.new_row.connect("activated", lambda _r: self.ask_new())
+
+        self.import_row = Adw.ActionRow(title=t("theme.custom.import"))
+        self.import_row.add_prefix(Gtk.Image(icon_name="document-open-symbolic"))
+        self.import_row.set_activatable(True)
+        self.import_row.connect("activated", lambda _r: self.ask_import())
 
         self.reload()
         self.combo.connect("notify::selected", self.on_selected)
@@ -225,6 +250,93 @@ class ThemePicker:
             self._select_and_apply(theme.id)
             return
         self._select_and_apply(self.config.get_ui_settings()["theme"])
+
+    # -- Export / Import (issue 1012) -------------------------------------
+
+    def _file_filters(self):
+        file_filter = Gtk.FileFilter()
+        file_filter.set_name(self.t("theme.custom.file_filter"))
+        file_filter.add_pattern("*" + theme_archive.EXTENSION)
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(file_filter)
+        return filters, file_filter
+
+    def _parent_window(self):
+        root = self.prefs.get_root()
+        return root if isinstance(root, Gtk.Window) else None
+
+    def ask_export(self):
+        theme = self.store.get(self.selected_id())
+        if theme is None:
+            self.reload()
+            return None
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("theme.custom.export_dialog.title"))
+        dialog.set_modal(True)
+        dialog.set_initial_name(export_name(theme.name))
+        filters, default = self._file_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.save(self._parent_window(), None, self._on_export_chosen, theme.id)
+        return dialog
+
+    def _on_export_chosen(self, dialog, result, theme_id):
+        try:
+            target = dialog.save_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if target is None or not target.get_path():
+            return
+        self.export_to(theme_id, target.get_path())
+
+    def export_to(self, theme_id, path):
+        try:
+            theme_archive.export_theme(self.store, theme_id, path)
+        except (OSError, KeyError) as exc:
+            self._failed(exc)
+            return False
+        self.prefs._toast(self.t("theme.custom.exported"))
+        return True
+
+    def ask_import(self):
+        dialog = Gtk.FileDialog()
+        dialog.set_title(self.t("theme.custom.import_dialog.title"))
+        dialog.set_modal(True)
+        filters, default = self._file_filters()
+        dialog.set_filters(filters)
+        dialog.set_default_filter(default)
+        dialog.open(self._parent_window(), None, self._on_import_chosen)
+        return dialog
+
+    def _on_import_chosen(self, dialog, result):
+        try:
+            source = dialog.open_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if source is None or not source.get_path():
+            return
+        self.import_from(source.get_path())
+
+    def import_from(self, path):
+        """Import ``path`` off the main thread (images are re-encoded)."""
+        def work():
+            try:
+                theme = theme_archive.import_theme(self.store, path)
+            except (theme_archive.ThemeImportError, OSError) as exc:
+                logger.info("Theme import refused (%s): %s", path, exc)
+                GLib.idle_add(self._imported, None)
+                return
+            GLib.idle_add(self._imported, theme)
+
+        self.spawn(work)
+
+    def _imported(self, theme):
+        if theme is None:
+            self.prefs._toast(self.t("theme.custom.import_failed"))
+        else:
+            self._select_and_apply(theme.id)
+            self.prefs._toast(self.t("theme.custom.imported", name=theme.name))
+        return GLib.SOURCE_REMOVE
 
     # -- Duplicate / Rename / Delete -------------------------------------
 

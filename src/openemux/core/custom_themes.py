@@ -382,7 +382,8 @@ def _toward_base(color, base, limit):
     it for a light one.
     """
     end = "#000000" if base == THEME_DARK else "#ffffff"
-    for step in range(21):
+    # The end itself (black or white) always meets the limit.
+    for step in range(20):
         candidate = mix(color, end, step / 20)
         luminance = relative_luminance(candidate)
         if (luminance <= limit) if base == THEME_DARK else (luminance >= limit):

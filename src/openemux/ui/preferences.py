@@ -2349,6 +2349,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         self._theme_combo = self.theme_picker.combo
         interface_group.add(self.theme_picker.combo)
         interface_group.add(self.theme_picker.new_row)
+        interface_group.add(self.theme_picker.import_row)
 
         self._tips_row = Adw.SwitchRow(
             title=self.t("settings.system.tips.title"),

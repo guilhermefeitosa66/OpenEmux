@@ -14,7 +14,10 @@ from openemux.core.custom_themes import (
     CONTRAST_PAIRS,
     FORMAT_VERSION,
     KEYS_BY_NAME,
+    KIND_CHOICE,
     KIND_COLOR,
+    KIND_FONT,
+    KIND_IMAGE,
     KIND_NUMBER,
     SECTIONS,
     THEME_FILE,
@@ -40,16 +43,26 @@ class TableTests(unittest.TestCase):
         self.assertEqual(len(KEYS_BY_NAME), len(THEME_KEYS))
         for spec in THEME_KEYS:
             self.assertIn(spec.section, SECTIONS)
-            self.assertEqual(spec.kind, KIND_COLOR)
+            self.assertIn(spec.kind, (KIND_COLOR, KIND_NUMBER, KIND_CHOICE, KIND_FONT, KIND_IMAGE))
 
     def test_each_section_has_rows(self):
         for section in SECTIONS:
             self.assertTrue(keys_in_section(section))
 
-    def test_defaults_are_valid_colors_on_both_bases(self):
+    def test_defaults_are_valid_values_on_both_bases(self):
+        # A font or an image defaults to empty: none, which is no value at all.
         for spec in THEME_KEYS:
             for base in ("light", "dark"):
+                if spec.kind in (KIND_FONT, KIND_IMAGE):
+                    self.assertEqual(spec.default(base), "")
+                    continue
                 self.assertEqual(validate_value(spec, spec.default(base)), spec.default(base))
+
+    def test_numbers_have_a_range_and_a_unit(self):
+        for spec in THEME_KEYS:
+            if spec.kind == KIND_NUMBER:
+                self.assertLess(spec.minimum, spec.maximum, spec.key)
+                self.assertIn(spec.unit, ("px", "%"), spec.key)
 
     def test_the_bases_text_pairs_pass_aa_except_libadwaitas_accent_button(self):
         # The defaults are the base's own look; its text passes AA. Its
@@ -88,9 +101,34 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(validate_value(self.NUMBER, -3), 0)
         self.assertEqual(validate_value(self.NUMBER, 99.5), 24)
 
-    def test_numbers_without_a_range_pass_through(self):
+    def test_numbers_without_a_range_are_whole(self):
         spec = ThemeKey("scale", "typography", "text", KIND_NUMBER, 1, 1)
-        self.assertEqual(validate_value(spec, 7.5), 7.5)
+        self.assertEqual(validate_value(spec, 7.5), 8)
+        self.assertEqual(validate_value(spec, 7), 7)
+
+    def test_choices_are_exact(self):
+        size = KEYS_BY_NAME["sidebar_icon_size"]
+        self.assertEqual(validate_value(size, 20), 20)
+        self.assertIsNone(validate_value(size, 20.0))
+        self.assertIsNone(validate_value(size, 18))
+        self.assertIsNone(validate_value(size, True))
+        fit = KEYS_BY_NAME["library_image_fit"]
+        self.assertEqual(validate_value(fit, "tile"), "tile")
+        self.assertIsNone(validate_value(fit, "stretch"))
+
+    def test_fonts_cannot_leave_a_css_string(self):
+        font = KEYS_BY_NAME["font_family"]
+        self.assertEqual(validate_value(font, "Noto Sans CJK JP"), "Noto Sans CJK JP")
+        self.assertEqual(validate_value(font, "Fira Code (Retina)"), "Fira Code (Retina)")
+        for bad in ('Sans"; } * {', "Sans\\", " Sans", "Sans\n", "", "x" * 65, 12, None):
+            self.assertIsNone(validate_value(font, bad), repr(bad))
+
+    def test_images_are_plain_names_in_the_theme_folder(self):
+        image = KEYS_BY_NAME["library_image"]
+        for good in ("library.png", "bg-2.jpg", "a_b.jpeg", "x.webp"):
+            self.assertEqual(validate_value(image, good), good)
+        for bad in ("../x.png", "/etc/x.png", "a/b.png", "X.png", "x.gif", "x.png\n", ".x.png", 3):
+            self.assertIsNone(validate_value(image, bad), repr(bad))
 
     def test_numbers_of_the_wrong_type_are_dropped(self):
         for value in (True, "12", None, [], math.nan, math.inf):
