@@ -280,6 +280,16 @@ class UserPaletteTests(_PaletteCase):
         self.assertEqual(self.colors(area.palette_buttons), [dialog.color])
         prompt.force_close()
 
+    def test_enter_creates_once_and_only_with_a_name(self):
+        _dialog, area, _palette_id = self.make()
+        prompt = area.new_palette()
+        prompt.entry.emit("activate")
+        self.assertIs(area.prompt, prompt)
+        prompt.entry.set_text("Typed")
+        prompt.entry.emit("activate")
+        prompt.emit("response", "cancel")
+        self.assertEqual([p["name"] for p in self.store.user_palettes()], ["Mine", "Typed"])
+
     def test_a_cancelled_or_refused_name_creates_nothing(self):
         _dialog, area, _palette_id = self.make()
         prompt = area.new_palette()

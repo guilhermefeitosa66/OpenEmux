@@ -229,7 +229,7 @@ class PaletteArea:
         scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroller.set_propagate_natural_height(True)
         scroller.set_max_content_height(PALETTE_LIST_MAX_HEIGHT)
-        scroller.set_min_content_width(240)
+        scroller.set_propagate_natural_width(True)
         self.palette_list = Gtk.ListBox()
         self.palette_list.set_selection_mode(Gtk.SelectionMode.NONE)
         self.palette_list.add_css_class("navigation-sidebar")
@@ -284,6 +284,7 @@ class PaletteArea:
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             label = Gtk.Label(label=name, xalign=0)
             label.set_ellipsize(Pango.EllipsizeMode.END)
+            label.set_width_chars(14)
             label.set_max_width_chars(24)
             label.set_hexpand(True)
             box.append(label)
@@ -426,7 +427,6 @@ class PaletteArea:
         dialog.set_close_response("cancel")
         entry = Gtk.Entry(text=initial)
         entry.set_max_length(cartridge_colors.PALETTE_NAME_MAX)
-        entry.set_activates_default(True)
         entry.update_property(
             [Gtk.AccessibleProperty.LABEL], [t("cartridge_color.dialog.palette_name")]
         )
@@ -439,12 +439,27 @@ class PaletteArea:
         sync()
         dialog.set_extra_child(entry)
 
+        answered = []
+
         def respond(_dialog, response):
+            # Once: Enter answers and then closes, and the close must not
+            # count as a second answer.
+            if answered:
+                return
+            answered.append(response)
             self.prompt = None
             if response == "ok" and entry.get_text().strip():
                 on_done(entry.get_text())
 
+        def activate(_entry):
+            # The default response does not follow a button that was
+            # insensitive when the dialog opened, so Enter is wired here.
+            if dialog.get_response_enabled("ok"):
+                dialog.emit("response", "ok")
+                dialog.force_close()
+
         dialog.connect("response", respond)
+        entry.connect("activate", activate)
         dialog.entry = entry
         self.prompt = dialog
         dialog.present(self.parent)
