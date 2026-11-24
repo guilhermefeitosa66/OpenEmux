@@ -36,7 +36,7 @@ from openemux.core.library_view import (
 from openemux.core.platform import IS_WINDOWS
 from openemux.core import save_states
 from openemux.core.play_history import PlayHistory, format_play_time
-from openemux.core import artwork_sources, cartridge_colors, cartridge_render
+from openemux.core import artwork_sources, cartridge_render
 from openemux.core.config import COVER_ART_TYPE_CARTRIDGE_LABEL
 from openemux.core.screenscraper import PROBLEM_QUOTA, PROBLEM_REFUSED, PROBLEM_UNREACHABLE
 from openemux.core.cover_sync import (
@@ -2947,10 +2947,6 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         page plus Favorites), so every grid gets a chance to refresh it.
         """
         self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
-        if cartridge_colors.is_custom_color(color_id):
-            # Kept for the next game (issue 983): the dialog's "Saved" row
-            # and the "Cartridge color" submenu list it.
-            self.config_manager.cartridge_colors.remember_color(color_id)
         for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
 

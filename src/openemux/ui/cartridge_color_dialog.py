@@ -436,6 +436,10 @@ class CartridgeColorDialog(Adw.Dialog):
             self.apply_button.set_sensitive(True)
             self.error_label.set_visible(True)
             return GLib.SOURCE_REMOVE
+        # Kept for the next game (issue 983): only a color applied here is
+        # saved, so one the user removed from "Saved" stays removed when a
+        # game that wears it is set to it again from a menu.
+        self.win.config_manager.cartridge_colors.remember_color(color)
         self.win.set_rom_cartridge_color(self.rom, color)
         self.close()
         return GLib.SOURCE_REMOVE

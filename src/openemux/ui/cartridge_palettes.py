@@ -39,6 +39,14 @@ def _palette_menu(items):
     return menu
 
 
+def _focus_near(buttons, index, fallback):
+    """Focus the swatch now at ``index`` (or the one before it, or ``fallback``)."""
+    if buttons:
+        buttons[min(index, len(buttons) - 1)][1].grab_focus()
+    elif fallback is not None:
+        fallback.grab_focus()
+
+
 class PaletteArea:
     """The "Saved" row and the palette picker, as one widget for the dialog.
 
@@ -118,12 +126,12 @@ class PaletteArea:
         flow.set_homogeneous(True)
         return flow
 
-    def _swatch(self, color, name, menu=None, step=None):
+    def _swatch(self, color, name, menu=None, step=None, remove=None):
         """A round swatch button picking ``color``; ``menu`` makes it editable.
 
         ``menu`` is a callable returning the menu's items for this color; the
         same menu opens on a right click, the Menu key and Shift+F10. Delete
-        removes, and with ``step`` Alt+Left/Right moves it.
+        runs ``remove``, and with ``step`` Alt+Left/Right moves it.
         """
         button = Gtk.Button()
         button.add_css_class("flat")
@@ -138,13 +146,15 @@ class PaletteArea:
             click.connect("pressed", lambda *_a, b=button, c=color: self.open_menu(b, menu(c)))
             button.add_controller(click)
             keys = Gtk.EventControllerKey()
-            keys.connect("key-pressed", self._on_swatch_key, button, color, menu, step)
+            keys.connect("key-pressed", self._on_swatch_key, button, color, menu, step, remove)
             button.add_controller(keys)
         return button
 
-    def _on_swatch_key(self, _controller, keyval, _keycode, state, button, color, menu, step):
+    def _on_swatch_key(
+        self, _controller, keyval, _keycode, state, button, color, menu, step, remove
+    ):
         if keyval in (Gdk.KEY_Delete, Gdk.KEY_KP_Delete, Gdk.KEY_BackSpace):
-            menu(color)[-1][1]()
+            remove(color)
             return True
         if keyval == Gdk.KEY_Menu or (
             keyval == Gdk.KEY_F10 and state & Gdk.ModifierType.SHIFT_MASK
@@ -193,6 +203,7 @@ class PaletteArea:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, cb=callback: cb())
             palette.add_action(action)
+        self.palette_actions = palette
         self.widget.insert_action_group("palette", palette)
 
     def _on_swatch_action(self, _action, param):
@@ -211,14 +222,19 @@ class PaletteArea:
         saved = self.store.saved_colors()
         self.saved_buttons = []
         for color in saved:
-            button = self._swatch(color, color.upper(), menu=self._saved_menu)
+            button = self._swatch(
+                color, color.upper(), menu=self._saved_menu, remove=self.forget_saved
+            )
             self.saved_flow.append(button)
             self.saved_buttons.append((color, button))
         self.saved_box.set_visible(bool(saved))
 
     def forget_saved(self, color):
+        colors = [value for value, _b in self.saved_buttons]
+        index = colors.index(color) if color in colors else 0
         self.store.forget_saved_color(color)
         self.refresh_saved()
+        _focus_near(self.saved_buttons, index, None)
 
     # -- the palette list ------------------------------------------------
 
@@ -294,11 +310,14 @@ class PaletteArea:
                 dots.append(_swatch_widget(color))
             box.append(dots)
             check = Gtk.Image.new_from_icon_name("object-select-symbolic")
-            check.set_opacity(1 if palette_id == self.palette_id else 0)
+            current = palette_id == self.palette_id
+            check.set_opacity(1 if current else 0)
             box.append(check)
             row = Gtk.ListBoxRow(child=box)
             row.palette_id = palette_id
             row.update_property([Gtk.AccessibleProperty.LABEL], [name])
+            # The check is drawn; a screen reader hears the state instead.
+            row.update_state([Gtk.AccessibleState.SELECTED], [current])
             self.palette_list.append(row)
             self.list_rows[palette_id] = row
 
@@ -344,6 +363,11 @@ class PaletteArea:
                 (t("cartridge_color.dialog.delete_palette"), "palette.delete", None),
             ]
         self.options_button.set_menu_model(_palette_menu(options))
+        # No room for another palette: say so by what can be pressed.
+        room = len(self.store.user_palettes()) < cartridge_colors.USER_PALETTES_MAX
+        for action in ("new", "duplicate"):
+            self.palette_actions.lookup_action(action).set_enabled(room)
+        self.new_button.set_sensitive(room)
 
         self.palette_flow.remove_all()
         self.swatch_buttons = {}
@@ -360,12 +384,14 @@ class PaletteArea:
                 self.palette_buttons.append((cartridge_colors.parse_hex(swatch), button))
             return
         editable = user is not None
-        for color in self.store.palette_colors(palette_id):
+        self._colors = list(self.store.palette_colors(palette_id))
+        for color in self._colors:
             button = self._swatch(
                 color,
                 color.upper(),
                 menu=self._palette_menu_items if editable else None,
                 step=self.move if editable else None,
+                remove=self.remove if editable else None,
             )
             self.palette_flow.append(button)
             self.palette_buttons.append((color, button))
@@ -387,7 +413,9 @@ class PaletteArea:
         """The "+" only adds a color the palette does not have, while it has room."""
         if self.add_button is None:
             return
-        colors = self.store.palette_colors(self.palette_id) or []
+        # Asked on every drag step: the colors kept by refresh_palette, not
+        # a store read per pointer event.
+        colors = self._colors
         self.add_button.set_sensitive(
             self.get_color() not in colors
             and len(colors) < cartridge_colors.PALETTE_COLORS_MAX
@@ -398,8 +426,12 @@ class PaletteArea:
             self.refresh_palette()
 
     def remove(self, color):
+        colors = [value for value, _b in self.palette_buttons]
+        index = colors.index(color) if color in colors else 0
         if self.store.remove_palette_color(self.palette_id, color):
             self.refresh_palette()
+            # Focus stays in the row, so a second Delete removes the next.
+            _focus_near(self.palette_buttons, index, self.add_button)
 
     def move(self, color, step):
         if self.store.move_palette_color(self.palette_id, color, step):
@@ -492,7 +524,11 @@ class PaletteArea:
         )
 
     def duplicate_palette(self):
-        name = self.t("cartridge_color.dialog.palette_copy", name=self._current_name())
+        base = self._current_name()
+        extra = len(self.t("cartridge_color.dialog.palette_copy", name=""))
+        # Shorten the name, not the suffix: a cut "(Copy)" makes a twin.
+        base = base[: max(1, cartridge_colors.PALETTE_NAME_MAX - extra)].rstrip()
+        name = self.t("cartridge_color.dialog.palette_copy", name=base)
         if self.store.duplicate_palette(self.palette_id, name):
             self.refresh_palette()
 

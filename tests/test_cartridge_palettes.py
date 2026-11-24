@@ -64,8 +64,9 @@ class SavedColorsTests(_PaletteCase):
             self.pump()
         self.assertEqual(self.store.saved_colors(), ["#abcdef"])
 
-    def test_a_named_color_is_not_saved(self):
-        self.win.set_rom_cartridge_color(self.game, "red")
+    def test_a_color_set_from_a_menu_is_not_saved_again(self):
+        """Only the dialog saves: a removed color stays removed."""
+        self.win.set_rom_cartridge_color(self.game, "#123456")
         self.assertEqual(self.store.saved_colors(), [])
 
     def test_remove_from_the_menu_keeps_the_game_s_color(self):
@@ -86,10 +87,19 @@ class SavedColorsTests(_PaletteCase):
         area = self.area()
         color, button = area.saved_buttons[0]
         self.assertTrue(
-            area._on_swatch_key(None, Gdk.KEY_Delete, 0, 0, button, color, area._saved_menu, None)
+            area._on_swatch_key(None, Gdk.KEY_Delete, 0, 0, button, color, area._saved_menu, None, area.forget_saved)
         )
         self.assertEqual(self.store.saved_colors(), [])
         self.assertFalse(area.saved_box.get_visible())
+
+    def test_focus_stays_in_the_row_after_a_removal(self):
+        self.store.remember_color("#111111")
+        self.store.remember_color("#222222")
+        area = self.area()
+        with mock.patch.object(Gtk.Widget, "grab_focus") as focus:
+            area.forget_saved("#222222")
+            area.forget_saved("#999999")
+        self.assertEqual(focus.call_count, 2)
 
 
 def dialog_render():
@@ -106,16 +116,16 @@ class SwatchMenuTests(_PaletteCase):
         color, button = area.saved_buttons[0]
         menu = area._saved_menu
         with mock.patch.object(area, "open_menu") as open_menu:
-            self.assertTrue(area._on_swatch_key(None, Gdk.KEY_Menu, 0, 0, button, color, menu, None))
+            self.assertTrue(area._on_swatch_key(None, Gdk.KEY_Menu, 0, 0, button, color, menu, None, None))
             self.assertTrue(area._on_swatch_key(
-                None, Gdk.KEY_F10, 0, Gdk.ModifierType.SHIFT_MASK, button, color, menu, None
+                None, Gdk.KEY_F10, 0, Gdk.ModifierType.SHIFT_MASK, button, color, menu, None, None
             ))
         self.assertEqual(open_menu.call_count, 2)
-        self.assertFalse(area._on_swatch_key(None, Gdk.KEY_F10, 0, 0, button, color, menu, None))
+        self.assertFalse(area._on_swatch_key(None, Gdk.KEY_F10, 0, 0, button, color, menu, None, None))
         self.assertFalse(area._on_swatch_key(
-            None, Gdk.KEY_Left, 0, Gdk.ModifierType.ALT_MASK, button, color, menu, None
+            None, Gdk.KEY_Left, 0, Gdk.ModifierType.ALT_MASK, button, color, menu, None, None
         ))
-        self.assertFalse(area._on_swatch_key(None, Gdk.KEY_a, 0, 0, button, color, menu, None))
+        self.assertFalse(area._on_swatch_key(None, Gdk.KEY_a, 0, 0, button, color, menu, None, None))
 
     def test_a_right_click_opens_the_menu(self):
         self.store.remember_color("#111111")
@@ -255,17 +265,41 @@ class UserPaletteTests(_PaletteCase):
         color, button = area.palette_buttons[1]
         self.assertTrue(area._on_swatch_key(
             None, Gdk.KEY_Left, 0, Gdk.ModifierType.ALT_MASK, button, color,
-            area._palette_menu_items, area.move,
+            area._palette_menu_items, area.move, area.remove,
         ))
         self.assertEqual(self.store.palette_colors(palette_id), ["#111111", "#222222", "#333333"])
         area.move("#111111", -1)
         self.assertFalse(area._on_swatch_key(
             None, Gdk.KEY_Up, 0, Gdk.ModifierType.ALT_MASK, button, color,
-            area._palette_menu_items, area.move,
+            area._palette_menu_items, area.move, area.remove,
         ))
         area._palette_menu_items("#333333")[2][1]()
         area.remove("#333333")
         self.assertEqual(self.colors(area.palette_buttons), ["#111111", "#222222"])
+
+    def test_removing_the_last_color_focuses_the_plus(self):
+        _dialog, area, _palette_id = self.make(["#111111"])
+        with mock.patch.object(Gtk.Widget, "grab_focus") as focus:
+            area.remove("#111111")
+            area.remove("#999999")
+        self.assertEqual(focus.call_count, 1)
+        self.assertEqual(area.palette_buttons, [])
+
+    def test_no_new_palette_once_there_are_too_many(self):
+        with mock.patch.object(cartridge_colors, "USER_PALETTES_MAX", 1):
+            _dialog, area, _palette_id = self.make()
+            self.assertFalse(area.new_button.get_sensitive())
+            self.assertFalse(area.palette_actions.lookup_action("duplicate").get_enabled())
+            self.assertTrue(area.palette_actions.lookup_action("rename").get_enabled())
+
+    def test_a_copy_of_a_long_name_keeps_its_suffix(self):
+        long_name = "x" * cartridge_colors.PALETTE_NAME_MAX
+        self.store.create_palette(long_name)
+        area = self.area()
+        area.duplicate_palette()
+        copy = self.store.user_palette(area.palette_id)["name"]
+        self.assertNotEqual(copy, long_name)
+        self.assertTrue(copy.endswith(self.said("cartridge_color.dialog.palette_copy", name="")))
 
     def test_new_palette_starts_with_the_current_color(self):
         dialog, area, _palette_id = self.make()
