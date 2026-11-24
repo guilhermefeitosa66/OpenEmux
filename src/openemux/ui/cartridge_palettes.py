@@ -165,6 +165,9 @@ class PaletteArea:
             (label, "swatch.run", str(index)) for index, (label, _cb) in enumerate(items)
         )
         self.swatch_menu.set_menu_model(model)
+        if self.widget.get_native() is None:
+            # Not on screen (yet): a popup needs a surface to hang from.
+            return
         ok, bounds = button.compute_bounds(self.widget)
         if ok:
             rect = Gdk.Rectangle()
@@ -310,9 +313,6 @@ class PaletteArea:
         self.refresh_palette()
 
     # -- the selected palette --------------------------------------------
-
-    def _editable(self):
-        return cartridge_colors.is_user_palette(self.palette_id)
 
     def _palette_menu_items(self, color):
         t = self.t

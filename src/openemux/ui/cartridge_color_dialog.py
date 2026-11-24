@@ -323,9 +323,6 @@ class CartridgeColorDialog(Adw.Dialog):
         """The named shells' swatches, while "Shell Colors" is the palette shown."""
         return self.palettes.swatch_buttons
 
-    def pick_named(self, color_id):
-        self.set_color(cartridge_colors.parse_hex(cartridge_colors.color_swatch(color_id)))
-
     def _from_hsv(self):
         self.color = cartridge_colors.hsv_to_hex(self.hue, self.saturation, self.value)
         self._sync_controls()
