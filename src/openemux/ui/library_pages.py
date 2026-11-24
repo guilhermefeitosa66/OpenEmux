@@ -609,7 +609,8 @@ class LibraryPages:
             band_host_is_self=True,
             play_caption=win.play_caption,
             # One grid in play order still draws cartridges, each in its own
-            # console's shell (issue 942).
+            # console's shell (issue 942), every card fitted into the same
+            # slot so a row lines up whatever consoles it mixes (issue 996).
             mixed_cartridges=True,
         )
         header, set_count = self._group_header(scope, len(roms), grid.compact)

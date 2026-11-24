@@ -24,7 +24,7 @@ if HAVE_DISPLAY:
         VIEW_MODE_LIST,
     )
     from openemux.ui import grid as grid_module
-    from openemux.ui.card_layout import cartridge_frame_svg
+    from openemux.ui.card_layout import cartridge_frame_svg, uniform_slot_size
     from openemux.core.systems import get_system_display_name
     from openemux.ui.scopes import (
         ALL_CONSOLES_ID,
@@ -514,6 +514,20 @@ class TheRecentPageTests(WindowCase):
         by_console = {rom["console"]: rom for rom in self.played}
         self.assertEqual(grid._frame_path_for_rom(by_console["FC"]), cartridge_frame_svg("FC"))
         self.assertEqual(grid._frame_path_for_rom(by_console["SFC"]), cartridge_frame_svg("SFC"))
+
+    def test_every_card_gets_the_same_slot_whatever_the_mix(self):
+        # Issue 996: the cell no longer grows to the tallest shell on the page.
+        for mode in (VIEW_MODE_CARTRIDGE, VIEW_MODE_COVER):
+            self.win.config_manager.set_view_mode(mode)
+            self.pages.invalidate_contents()
+            grid = self.grid()
+            pad = grid._shadow_pad
+            slot = uniform_slot_size(grid.zoom)
+            self.assertEqual(
+                (grid._card_ctx.cover_size[0] - 2 * pad, grid._card_ctx.cover_size[1] - 2 * pad),
+                slot,
+                mode,
+            )
 
     def test_a_console_with_no_shell_shows_its_cover_there(self):
         self.win.config_manager.set_view_mode(VIEW_MODE_CARTRIDGE)

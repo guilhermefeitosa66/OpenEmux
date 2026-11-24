@@ -34,6 +34,8 @@ from openemux.ui.card_layout import (
     CARTRIDGE_RENDER_SCALE,
     FixedSizePicture,
     cartridge_frame_svg,
+    cartridge_width_in_slot,
+    fit_in_slot,
 )
 
 #: Gdk.Texture objects are immutable and GTK keeps their upload, so one is
@@ -305,9 +307,10 @@ class RomItem(Gtk.Box):
         # (issue #508).
         self.mixed_consoles = ctx.mixed_consoles
         self._backdrop = None
-        # Where the art sits in the backdrop: centred, except a cartridge on a
-        # page mixing consoles, which stands on the bottom of its cell so the
-        # shells of one row line up over their titles (issue 942).
+        # Where the art sits in the backdrop: centred, except on a page mixing
+        # consoles, where every cartridge and cover stands on the bottom of
+        # the slot so the art of one row lines up over its titles (issues 942
+        # and 996).
         self._cover_valign = Gtk.Align.CENTER
         self.add_css_class("rom-card")
         if compact:
@@ -370,6 +373,10 @@ class RomItem(Gtk.Box):
         # small widget tree and build another one just like it.
         self._placeholder = self._build_placeholder()
         self._showing_placeholder = False
+        # What the star, the badges, the menu button and the play icon sit on.
+        # The cell itself, except on a page mixing consoles, where the art is
+        # smaller than the cell and they follow the art (issue 996).
+        self._art_host = self.cover_overlay
         self._setup_cover_host()
         self._show_placeholder()
 
@@ -407,7 +414,7 @@ class RomItem(Gtk.Box):
         self._launching = False
         self.play_overlay.append(play_center)
 
-        self.cover_overlay.add_overlay(self.play_overlay)
+        self._art_host.add_overlay(self.play_overlay)
 
         # Favouriting is one click away, on the card itself. The star stays
         # visible on a favourite (it is the badge that marks it) and otherwise
@@ -435,7 +442,7 @@ class RomItem(Gtk.Box):
             [Gtk.AccessibleProperty.LABEL], [self.t("context.favorite.add")]
         )
         if not compact:
-            self.cover_overlay.add_overlay(self.favorite_button)
+            self._art_host.add_overlay(self.favorite_button)
 
         # "This ROM has no artwork" must be visible in *every* view mode. In
         # the default cartridge shelf a cover-less ROM renders as a blank
@@ -455,7 +462,7 @@ class RomItem(Gtk.Box):
         if not compact:
             self.artwork_badge.set_margin_bottom(6)
             self.artwork_badge.set_margin_end(6)
-            self.cover_overlay.add_overlay(self.artwork_badge)
+            self._art_host.add_overlay(self.artwork_badge)
 
         # Right-click is not obvious to everyone, so the same menu is one click
         # away from a button that appears on hover.
@@ -478,7 +485,7 @@ class RomItem(Gtk.Box):
         self.menu_button.set_visible(False)
         self.menu_button.connect("clicked", self._on_menu_button_clicked)
         if not compact:
-            self.cover_overlay.add_overlay(self.menu_button)
+            self._art_host.add_overlay(self.menu_button)
 
         # A game with an automatic save state says Play will pick it up
         # where it was left (issue 910). Bottom-left, where nothing else sits.
@@ -495,7 +502,7 @@ class RomItem(Gtk.Box):
         if not compact:
             self.resume_badge.set_margin_bottom(6)
             self.resume_badge.set_margin_start(6)
-            self.cover_overlay.add_overlay(self.resume_badge)
+            self._art_host.add_overlay(self.resume_badge)
 
         # List rows carry the inbox idiom: a checkbox at the start of the row,
         # always visible, reflecting and driving this ROM's selection
@@ -814,6 +821,13 @@ class RomItem(Gtk.Box):
         scale = self.ctx.render_scale
         # The slot holds the shadow margin; the cartridge is drawn between.
         width = self.cover_width - 2 * self.ctx.shadow_pad
+        if self.mixed_consoles:
+            # Fitted into the page's uniform slot: a tall shell is drawn
+            # narrower so its height fits too (issue 996).
+            width = cartridge_width_in_slot(
+                self.cartridge_frame_path,
+                (width, self.cover_height - 2 * self.ctx.shadow_pad),
+            )
         wanted = (str(self.cartridge_frame_path), width, scale)
         for attempt in (0, 1):
             if entry.composite_key != wanted:
@@ -936,9 +950,13 @@ class RomItem(Gtk.Box):
         """
         art_size = (pixbuf.get_width(), pixbuf.get_height())
         card_size = (self.cover_width, self.cover_height)
+        if self.mixed_consoles:
+            self._fit_cover_to_slot(art_size)
+            return
         self._backdrop.add_css_class("rom-cover-backdrop")
         self._set_cover_valign(Gtk.Align.CENTER)
-        if not self.mixed_consoles and cover_fills_box(art_size, card_size):
+        self._set_art_margin(0)
+        if cover_fills_box(art_size, card_size):
             self.cover_image.set_content_fit(Gtk.ContentFit.COVER)
             self._size_cover_image(*card_size)
             return
@@ -948,6 +966,31 @@ class RomItem(Gtk.Box):
         # every other row, and resizing it per cover would stagger the titles.
         self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
         self._size_cover_image(*art_size)
+
+    def _fit_cover_to_slot(self, art_size):
+        """Stand a cover on the bottom of the page's uniform slot (issue 996).
+
+        A page mixing consoles fits every cover into the same slot, the way
+        its cartridges are, and drops the backdrop: around art that stands on
+        the slot's bottom edge it would draw a box. In cartridge view the slot
+        carries the shadow margin of the composites on every side, and the
+        cover keeps the same margin, so a cover and a cartridge of one row
+        stand on the same line.
+        """
+        pad = self.ctx.shadow_pad
+        slot = (max(1, self.cover_width - 2 * pad), max(1, self.cover_height - 2 * pad))
+        self._backdrop.remove_css_class("rom-cover-backdrop")
+        self._set_cover_valign(Gtk.Align.END)
+        self._set_art_margin(pad)
+        self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
+        self._size_cover_image(*fit_in_slot(art_size, slot))
+
+    def _set_art_margin(self, margin):
+        """The transparent margin around the picture inside its slot."""
+        self.cover_image.set_margin_top(margin)
+        self.cover_image.set_margin_bottom(margin)
+        self.cover_image.set_margin_start(margin)
+        self.cover_image.set_margin_end(margin)
 
     def _fit_cartridge_to(self, pixbuf):
         """Centre a cartridge in the card's cell, with nothing behind it.
@@ -961,11 +1004,19 @@ class RomItem(Gtk.Box):
         scale = self.ctx.render_scale
         self._backdrop.remove_css_class("rom-cover-backdrop")
         self._set_cover_valign(Gtk.Align.END)
+        # The composite carries its shadow margin in its own pixels.
+        self._set_art_margin(0)
         self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
         self._size_cover_image(pixbuf.get_width() // scale, pixbuf.get_height() // scale)
 
     def _set_cover_valign(self, align):
         self._cover_valign = align
+        if self._art_host is not self.cover_overlay:
+            # The picture fills the art overlay; the overlay is what stands
+            # in the slot, so the badges on it go wherever the art goes.
+            if self._art_host.get_child() is self.cover_image:
+                self._art_host.set_valign(align)
+            return
         self.cover_image.set_valign(align)
 
     def _size_cover_image(self, width, height):
@@ -995,12 +1046,23 @@ class RomItem(Gtk.Box):
             self._backdrop.set_size_request(self.cover_width, self.cover_height)
             self._backdrop.add_css_class("rom-cover-backdrop")
             self.cover_overlay.set_child(self._backdrop)
+            if self.mixed_consoles:
+                # The art is smaller than the cell on this page: the corner
+                # badges ride on an overlay that is exactly the art (issue 996).
+                self._art_host = Gtk.Overlay()
+                self._art_host.add_css_class("rom-art-host")
+                self._art_host.set_hexpand(True)
+                self._art_host.set_vexpand(True)
+                self._backdrop.append(self._art_host)
             self._set_cover_widget(self.cover_image)
             return
 
         self.cover_overlay.set_child(self.cover_image)
 
     def _set_cover_widget(self, widget):
+        if self._art_host is not self.cover_overlay:
+            self._set_art_host_child(widget)
+            return
         if self._backdrop is not None:
             child = self._backdrop.get_first_child()
             if child is widget:
@@ -1018,6 +1080,27 @@ class RomItem(Gtk.Box):
             self._backdrop.append(widget)
             return
         self.cover_overlay.set_child(widget)
+
+    def _set_art_host_child(self, widget):
+        """Show the picture or the placeholder in the art overlay (issue 996).
+
+        The picture fills the overlay and the overlay hugs it, standing on
+        the slot's bottom edge; the placeholder takes the whole slot, as on
+        every other page. Both set on every swap: the grid recycles cards.
+        """
+        host = self._art_host
+        if host.get_child() is not widget:
+            host.set_child(widget)
+        widget.set_hexpand(False)
+        widget.set_vexpand(False)
+        widget.set_halign(Gtk.Align.FILL)
+        widget.set_valign(Gtk.Align.FILL)
+        if widget is self.cover_image:
+            host.set_halign(Gtk.Align.CENTER)
+            host.set_valign(self._cover_valign)
+        else:
+            host.set_halign(Gtk.Align.FILL)
+            host.set_valign(Gtk.Align.FILL)
 
     def _sync_favorite_button(self, is_favorite):
         self._is_favorite_now = bool(is_favorite)
