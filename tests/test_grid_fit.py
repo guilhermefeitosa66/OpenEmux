@@ -105,6 +105,13 @@ class _FitCase(BigPictureCase):
         RomGrid._fit_viewport = None
         self.addCleanup(setattr, RomGrid, "_fit_viewport", None)
 
+    def show(self):
+        # Wide enough for several columns of the 200% card whatever display
+        # the suite runs on: CI's Xvfb screen is far smaller than a TV.
+        self.win.set_size_request(1920, 1080)
+        self.addCleanup(self.win.set_size_request, -1, -1)
+        super().show()
+
     def open_grid(self, console="SFC"):
         self.show()
         self.shell.open_library(console)
