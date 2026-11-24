@@ -16,7 +16,9 @@ Widget-free on purpose: Rsvg/GdkPixbuf/cairo are drawing libraries, not GTK,
 so this stays in core/ and is testable without a display.
 """
 
+import base64
 import hashlib
+import io
 import logging
 import os
 import re
@@ -31,6 +33,13 @@ import gi
 gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gio, GLib, GdkPixbuf
 
+from openemux.core.atomic_write import atomic_write_bytes
+from openemux.core.cartridge_colors import (
+    color_swatch,
+    hex_to_rgb,
+    is_custom_color,
+    normalize_color_id,
+)
 from openemux.core.paths import store_path
 
 try:
@@ -68,6 +77,24 @@ INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 
 DEFAULT_CACHE_DIR = store_path("cartridge_cache")
 
+#: Shells generated for a custom color (issue 983): ``<CONSOLE>-<rrggbb>.svg``.
+CUSTOM_FRAMES_DIR = store_path("cartridge_frames")
+
+#: Long side, in pixels, of a generated shell. The relief frames are 800 px
+#: rasters, so a custom shell is exactly as sharp as a named one.
+CUSTOM_FRAME_PX = 800
+
+#: The two shipped shells every custom one is reconstructed from.
+MIX_SOURCES = ("black", "white")
+
+#: Bump when the way a custom shell is made changes, so every shell made
+#: the old way is made again (it is part of the file name).
+CUSTOM_FRAME_VERSION = 1
+
+#: Below this many pixels the mix computes each value directly; above it, a
+#: 64 K lookup table per channel is cheaper than one call per value.
+_MIX_LUT_MIN_PIXELS = 65536
+
 # The shipped frame assets. They live under ui/ because that is where the app's
 # image assets are kept, but this module is their only reader, so the lookup
 # belongs here: a console is frame-capable iff its SVG exists, and dropping in
@@ -90,7 +117,9 @@ def frame_asset_for(console, assets_dir=None, color=None) -> Path | None:
 
     ``color`` picks a shell variant (``<CONSOLE>-<color>.svg``); the authored
     default is the bare ``<CONSOLE>.svg``. A color with no file falls back to
-    the default shell, so a stale stored color never breaks rendering.
+    the default shell, so a stale stored color never breaks rendering. A
+    custom color (``#rrggbb``, issue 983) is a shell generated on first use;
+    see `custom_frame_for`.
 
     Existence of the file is the whole test, deliberately: librsvg availability
     is a separate, recoverable concern (a user can install the typelib later),
@@ -99,7 +128,15 @@ def frame_asset_for(console, assets_dir=None, color=None) -> Path | None:
     Rendering paths use `cartridge_frame(...)`, which does check.
     """
     directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
-    if color and color != DEFAULT_FRAME_COLOR:
+    if color and is_custom_color(color):
+        # Never made here: this runs on the main thread when a card binds,
+        # and a shell takes a good part of a second. A missing or stale one
+        # is made in the background and the default stands in until then.
+        custom = custom_frame_for(console, color, assets_dir=directory, generate=False)
+        if custom is not None:
+            return custom
+        request_custom_frame(console, color, assets_dir=directory)
+    elif color and color != DEFAULT_FRAME_COLOR:
         variant = directory / f"{console}-{color}.svg"
         if variant.is_file():
             return variant
@@ -153,6 +190,270 @@ def cartridge_frame(console, assets_dir=None, color=None) -> Path | None:
     if candidate is None or not rsvg_available():
         return None
     return candidate if load_frame(candidate) else None
+
+
+# ---------------------------------------------------------------- custom colors
+#
+# Every shipped shell color is one linear "colorize" of the same render: each
+# pixel is the flood color times a shade of its own, and the label window's
+# shadow and any metal contacts are kept as rendered (the Android generator,
+# render-cartridge-frames.py, and tools/gen_cartridge_colors.py for the
+# filter frames). Linear in the flood color, so any other color follows,
+# exactly, from two of the shipped ones: per channel,
+#
+#     C = A + k * (B - A),   k = (f - f_A) / (f_B - f_A)
+#
+# with A and B the black and white shells and f the flood channel. Kept
+# pixels are equal in A and B, so they come through untouched. The same holds
+# for whole composites (cover, shell and shadow), which is what the custom
+# color dialog previews with.
+
+
+def mix_shell(dark, light, color_hex, byteorder=None):
+    """``dark`` (the black shell) and ``light`` (the white one), repainted in ``color_hex``.
+
+    Both are ARGB32 surfaces of the same size: two shells, or two composites
+    of the same game. Works on premultiplied values -- the formula is linear,
+    so it holds there too -- and clamps each channel to the pixel's alpha, so
+    the result stays a valid premultiplied surface for colors outside the
+    black-white span (a channel's ``k`` below 0 or above 1).
+    """
+    width, height = dark.get_width(), dark.get_height()
+    if (light.get_width(), light.get_height()) != (width, height):
+        raise ValueError("the two shells differ in size")
+    dark.flush()
+    light.flush()
+    stride = dark.get_stride()
+    a = bytes(dark.get_data())
+    b = bytes(light.get_data())
+    target = hex_to_rgb(color_hex)
+    floor = hex_to_rgb(color_swatch(MIX_SOURCES[0]))
+    ceiling = hex_to_rgb(color_swatch(MIX_SOURCES[1]))
+    if (byteorder or sys.byteorder) == "little":
+        rgb_bytes, alpha_byte = (2, 1, 0), 3
+    else:
+        rgb_bytes, alpha_byte = (1, 2, 3), 0
+    alpha = a[alpha_byte::4]
+    use_lut = width * height >= _MIX_LUT_MIN_PIXELS
+    out = bytearray(a)
+    for channel, offset in enumerate(rgb_bytes):
+        k = (target[channel] - floor[channel]) / (ceiling[channel] - floor[channel])
+        plane_a, plane_b = a[offset::4], b[offset::4]
+        if use_lut:
+            lut = bytes(
+                min(255, max(0, round(x + k * (y - x)))) for x in range(256) for y in range(256)
+            )
+            plane = bytes(map(lut.__getitem__, map(int.__or__, map((256).__mul__, plane_a), plane_b)))
+        else:
+            plane = bytes(
+                min(255, max(0, round(x + k * (y - x)))) for x, y in zip(plane_a, plane_b)
+            )
+        out[offset::4] = bytes(map(min, plane, alpha))
+    return cairo.ImageSurface.create_for_data(out, cairo.FORMAT_ARGB32, width, height, stride)
+
+
+def _shell_raster(path, width, height):
+    """A frame SVG drawn at ``width`` x ``height``, label marker left out."""
+    _register_namespaces()
+    # frames are SVG assets shipped with the app, not user input
+    root = ET.fromstring(Path(path).read_bytes())  # nosec B314
+    parent, clip = _find_clip_element(root)
+    if clip is not None:
+        parent.remove(clip)
+    handle = _handle_from_bytes(ET.tostring(root, encoding="utf-8"))
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+    handle.render_document(cairo.Context(surface), CartridgeFrame._viewport(width, height))
+    surface.flush()
+    return surface
+
+
+def _custom_frame_svg(source_path, png_bytes):
+    """The source frame's document with its art swapped for ``png_bytes``.
+
+    Only the label marker is kept, with every group on the way to it (their
+    transforms place it); the raster goes on top of it, over the whole
+    viewBox, as the authoring convention wants (marker below the art).
+    """
+    _register_namespaces()
+    root = ET.fromstring(Path(source_path).read_bytes())  # nosec B314
+    parent, clip = _find_clip_element(root)
+    if clip is None:
+        raise CartridgeFrameError(f"{Path(source_path).name} has no object named '{CLIP_MARKER}'")
+    parents = {child: node for node in root.iter() for child in node}
+    path = [clip]
+    while path[-1] is not root:
+        path.append(parents[path[-1]])
+    keep = set(map(id, path))
+    for node in path[1:]:
+        for child in list(node):
+            if id(child) not in keep:
+                node.remove(child)
+    box = (root.get("viewBox") or "").replace(",", " ").split()
+    if len(box) != 4:
+        box = ["0", "0", _svg_length(root.get("width")), _svg_length(root.get("height"))]
+    image = ET.SubElement(root, f"{{{SVG_NS}}}image")
+    image.set("x", box[0])
+    image.set("y", box[1])
+    image.set("width", box[2])
+    image.set("height", box[3])
+    image.set("preserveAspectRatio", "none")
+    image.set(
+        "{http://www.w3.org/1999/xlink}href",
+        "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii"),
+    )
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _svg_length(value):
+    """A root width/height as a bare number (``"177px"`` -> ``"177"``)."""
+    match = re.match(r"\s*([\d.]+)", value or "")
+    return match.group(1) if match else "0"
+
+
+_CUSTOM_LOCKS = {}
+_CUSTOM_LOCKS_GUARD = threading.Lock()
+
+
+def _custom_lock(target):
+    # Grid cards resolve their frames from several threads: one generation
+    # per file, the others wait for it and then find it on disk.
+    with _CUSTOM_LOCKS_GUARD:
+        return _CUSTOM_LOCKS.setdefault(str(target), threading.Lock())
+
+
+def custom_frame_path(console, color_hex, frames_dir=None) -> Path:
+    """Where the generated shell for a console and a custom color lives."""
+    directory = Path(frames_dir) if frames_dir is not None else CUSTOM_FRAMES_DIR
+    name = f"{console}-{normalize_color_id(color_hex)[1:]}.v{CUSTOM_FRAME_VERSION}.svg"
+    return directory / name
+
+
+def custom_frame_sources(console, assets_dir=None):
+    """The shipped black and white shells of a console, or None without both."""
+    directory = Path(assets_dir) if assets_dir is not None else CARTRIDGE_ASSETS_DIR
+    sources = [directory / f"{console}-{color}.svg" for color in MIX_SOURCES]
+    return sources if all(source.is_file() for source in sources) else None
+
+
+def supports_custom_color(console, assets_dir=None) -> bool:
+    """Whether a custom shell color can be made for this console."""
+    return rsvg_available() and custom_frame_sources(console, assets_dir) is not None
+
+
+def custom_frame_for(
+    console, color_hex, assets_dir=None, frames_dir=None, generate=True
+) -> Path | None:
+    """The shell SVG for ``console`` in a custom color, generated on first use.
+
+    None when the color is not a custom one, the console has no black and
+    white shells to make it from, librsvg is missing, or generation fails --
+    callers then fall back to the default shell, like a stale named color.
+    Regenerated when a shipped source is newer than the file, so new art
+    reaches custom shells too. With ``generate=False`` only a shell already
+    made and current is returned: the main thread's way of asking.
+    """
+    if not is_custom_color(color_hex) or not rsvg_available():
+        return None
+    sources = custom_frame_sources(console, assets_dir)
+    if sources is None:
+        return None
+    target = custom_frame_path(console, color_hex, frames_dir)
+    with _custom_lock(target):
+        try:
+            newest = max(source.stat().st_mtime_ns for source in sources)
+            if target.is_file() and target.stat().st_mtime_ns >= newest:
+                return target
+            if not generate:
+                return None
+            ok, width, height = Rsvg.Handle.new_from_file(
+                str(sources[0])
+            ).get_intrinsic_size_in_pixels()
+            if not ok or width <= 0 or height <= 0:
+                raise CartridgeFrameError(f"{sources[0].name} has no intrinsic size")
+            factor = CUSTOM_FRAME_PX / max(width, height)
+            out_w = max(1, round(width * factor))
+            out_h = max(1, round(height * factor))
+            mixed = mix_shell(
+                _shell_raster(sources[0], out_w, out_h),
+                _shell_raster(sources[1], out_w, out_h),
+                color_hex,
+            )
+            png = io.BytesIO()
+            mixed.write_to_png(png)
+            atomic_write_bytes(target, _custom_frame_svg(sources[0], png.getvalue()))
+        except (CartridgeFrameError, GLib.Error, ET.ParseError, OSError, ValueError) as exc:
+            logger.warning("cartridge: custom shell %s %s failed: %s", console, color_hex, exc)
+            return None
+    return target
+
+
+#: Called as ``listener(console, color_hex)``, from a worker thread, when a
+#: shell asked for by `request_custom_frame` is ready. The window turns that
+#: into a redraw of the cards wearing it.
+_CUSTOM_FRAME_LISTENERS = []
+_REQUESTED = set()
+_REQUESTED_LOCK = threading.Lock()
+
+
+def add_custom_frame_listener(listener):
+    _CUSTOM_FRAME_LISTENERS.append(listener)
+
+
+def remove_custom_frame_listener(listener):
+    if listener in _CUSTOM_FRAME_LISTENERS:
+        _CUSTOM_FRAME_LISTENERS.remove(listener)
+
+
+def _spawn_worker(target):
+    threading.Thread(target=target, daemon=True).start()
+
+
+def request_custom_frame(console, color_hex, assets_dir=None, spawn=None):
+    """Make a custom shell in the background, then tell the listeners.
+
+    One request per console and color at a time: every card wearing the
+    color asks while it waits, and they all get the one shell.
+    """
+    key = (console, normalize_color_id(color_hex), str(assets_dir))
+    with _REQUESTED_LOCK:
+        if key in _REQUESTED:
+            return False
+        _REQUESTED.add(key)
+
+    def work():
+        try:
+            made = custom_frame_for(console, color_hex, assets_dir=assets_dir)
+        finally:
+            with _REQUESTED_LOCK:
+                _REQUESTED.discard(key)
+        if made is not None:
+            for listener in list(_CUSTOM_FRAME_LISTENERS):
+                listener(console, normalize_color_id(color_hex))
+
+    (spawn or _spawn_worker)(work)
+    return True
+
+
+def custom_preview_sources(cover_path, console, rom_name, width, scale=1, cache_dir=None):
+    """A game's composites in the black and white shells, as surfaces.
+
+    What the custom color dialog mixes on every change (`mix_shell`): the
+    composites carry the cover and the shadow, which come through the mix
+    untouched. None when either cannot be rendered.
+    """
+    sources = custom_frame_sources(console)
+    if sources is None or not rsvg_available():
+        return None
+    surfaces = []
+    for source in sources:
+        path = render_cartridge(
+            cover_path, source, console, rom_name, width=width, scale=scale,
+            cache_dir=cache_dir or DEFAULT_CACHE_DIR,
+        )
+        if path is None:
+            return None
+        surfaces.append(cairo.ImageSurface.create_from_png(str(path)))
+    return tuple(surfaces)
 
 
 def _register_namespaces():

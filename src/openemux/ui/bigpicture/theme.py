@@ -11,9 +11,17 @@ product (issue 957): its dark surfaces whatever the desktop's theme, its
 purple accent, its per-console shelf colors, and its controller focus --
 the item's background turns a deeper purple, nothing drawn around it
 (issue 951).
+
+A custom theme (issue 1012) brings its own palette instead
+(:func:`palette_for`), with floors so a couch can still read it, and may add
+its font and its library image; the shelf's console colors stay as they are.
 """
 
 from openemux.core.big_picture_shelf import ALL_GAMES_COLOR, SHELF_COLORS, css_class
+from openemux.core.cartridge_colors import hex_to_rgb, parse_hex
+from openemux.core.contrast import WCAG_AA, contrast_ratio
+from openemux.core.custom_themes import FONT_NAME, mix, readable_on
+from openemux.core.theme import THEME_DARK
 from openemux.core.config import (
     BIG_PICTURE_TEXT_SIZE_STEP,
     DEFAULT_BIG_PICTURE_TEXT_SIZE,
@@ -160,6 +168,62 @@ PALETTE = {
     "game_bg": "#0B0B0E",
 }
 
+#: Every color the stylesheet draws with, by name: :data:`PALETTE` plus the
+#: accent family, the focus tones and the inks that sit on them. A custom
+#: theme replaces it wholesale (:func:`palette_for`, issue 1012); with no
+#: theme the sheet is the Android app's, exactly as before.
+DEFAULT_PALETTE = {
+    **PALETTE,
+    "accent": ACCENT,
+    "accent_bright": ACCENT_BRIGHT,
+    "accent_text": ACCENT_TEXT,
+    "accent_soft": ACCENT_SOFT,
+    "accent_on_soft": ACCENT_ON_SOFT,
+    # Text on the accent (Play, Import ROMs, the A key, a primary row).
+    "on_accent": "#ffffff",
+    "danger": DANGER,
+    "star": STAR,
+    "focus_fill": FOCUS_FILL,
+    "focus_accent": FOCUS_ACCENT,
+    "focus_selected": FOCUS_SELECTED,
+    # Text on a focused item, and the washes of it under a focused row's
+    # number and switch.
+    "on_focus": "#ffffff",
+    "focus_wash": "rgba(255, 255, 255, 0.22)",
+    "focus_track": "rgba(255, 255, 255, 0.28)",
+    # The current console chip: the text color, inverted.
+    "chip_current_bg": "#F3F3F6",
+    "chip_current_fg": "#17171C",
+    # The pause menu's slider knob.
+    "slider": "#ffffff",
+    # What is read straight on the game's black (the launch splash).
+    "game_text": PALETTE["text"],
+    "game_muted": PALETTE["muted"],
+}
+
+#: Couch readability (issue 1012): whatever a theme says, a focused item
+#: stands at least this far (WCAG ratio) from the background and from the
+#: plain surface around it...
+FOCUS_MIN_CONTRAST = 1.6
+#: ...and text, on anything, stays at WCAG AA.
+TEXT_MIN_CONTRAST = WCAG_AA
+#: Icons (the favourite star) need the WCAG non-text ratio.
+ICON_MIN_CONTRAST = 3.0
+
+BLACK = "#000000"
+WHITE = "#ffffff"
+
+#: How far a theme's text size may push Big Picture: up only, to 150 %.
+MAX_FONT_SCALE_FACTOR = 1.5
+
+#: A theme's background-image fit, as CSS: (background-size, background-repeat).
+BACKGROUND_FITS = {
+    "cover": ("cover", "no-repeat"),
+    "contain": ("contain", "no-repeat"),
+    "tile": ("auto", "repeat"),
+}
+_URI_FORBIDDEN = ('"', "\\", ")", "\n", "\r")
+
 
 def clamp(value, low, high):
     return max(low, min(high, value))
@@ -197,14 +261,248 @@ def shelf_rules():
     return "\n".join(rules)
 
 
-def stylesheet(scale=1.0):
+def rgba(color_hex, alpha):
+    """``#rrggbb`` at ``alpha``, as a CSS ``rgba()``."""
+    r, g, b = hex_to_rgb(color_hex)
+    return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def nudge(color, ok, fallback):
+    """``color`` moved the least toward black or white until ``ok`` holds.
+
+    Twenty steps each way, the smaller move first; ``fallback`` when no
+    step satisfies ``ok``.
+    """
+    for step in range(21):
+        for end in (BLACK, WHITE):
+            candidate = mix(color, end, step / 20)
+            if ok(candidate):
+                return candidate
+    return fallback
+
+
+def best_end(backgrounds):
+    """Black or white, whichever stands farther from every one of ``backgrounds``."""
+    return max(
+        (BLACK, WHITE),
+        key=lambda end: min(contrast_ratio(end, bg) for bg in backgrounds),
+    )
+
+
+def apart_from(color, backgrounds, target):
+    return all(contrast_ratio(color, bg) >= target for bg in backgrounds)
+
+
+def readable_on_all(color, backgrounds, target=TEXT_MIN_CONTRAST):
+    """``color``, nudged until it reads at ``target`` on all ``backgrounds``."""
+    return nudge(
+        color,
+        lambda c: apart_from(c, backgrounds, target),
+        best_end(backgrounds),
+    )
+
+
+def readable_or(color, background, fallback):
+    """``color`` when it reads on ``background`` at AA, else ``fallback``."""
+    if contrast_ratio(color, background) >= TEXT_MIN_CONTRAST:
+        return color
+    return fallback
+
+
+def focus_tones(accent, bg, surface, text):
+    """``(fill, selected, ink)``: the focus tones of an accent, and their text.
+
+    Both tones stand :data:`FOCUS_MIN_CONTRAST` from the background and the
+    surface; the ink (the text color pushed until it reads on the fill)
+    reads on both at :data:`TEXT_MIN_CONTRAST`. The selected tone falls back
+    to the fill when no nudge of it satisfies all three.
+    """
+    surfaces = (bg, surface)
+    fill = nudge(
+        mix(accent, surface, 0.55),
+        lambda c: apart_from(c, surfaces, FOCUS_MIN_CONTRAST),
+        best_end(surfaces),
+    )
+    ink = readable_on(text, fill, TEXT_MIN_CONTRAST)
+    selected = nudge(
+        mix(accent, surface, 0.4),
+        lambda c: apart_from(c, surfaces, FOCUS_MIN_CONTRAST)
+        and contrast_ratio(ink, c) >= TEXT_MIN_CONTRAST,
+        fill,
+    )
+    return fill, selected, ink
+
+
+def palette_for(values, base):
+    """The Big Picture palette of a custom theme (issue 1012).
+
+    ``values`` are the theme's effective values (``Theme.effective_values()``)
+    and ``base`` its ``light``/``dark``. The theme's colors map onto Big
+    Picture's roles, then the floors are applied so the couch can still read
+    it: text and secondary text on the background and surfaces, accent text
+    on the background, the focus tones apart from what they sit on.
+    """
+    dark = base == THEME_DARK
+    bg = values["library_bg"]
+    surface = values["card_bg"]
+    accent = values["accent_button_bg"]
+    text = readable_on_all(values["text_primary"], (bg, surface))
+    muted = readable_on_all(values["text_secondary"], (bg, surface))
+    # The theme's own button ink: the editor already warns about it, and
+    # pushing it would turn GNOME's white-on-blue into black-on-blue.
+    on_accent = values["accent_button_fg"]
+    accent_soft = mix(accent, bg, 0.7)
+    fill, selected, on_focus = focus_tones(accent, bg, surface, text)
+    focus_accent = nudge(
+        mix(accent, BLACK if dark else WHITE, 0.25),
+        lambda c: contrast_ratio(on_accent, c) >= TEXT_MIN_CONTRAST,
+        accent,
+    )
+    game_bg = PALETTE["game_bg"]
+    return {
+        "bg": bg,
+        "surface": surface,
+        "surface2": values["popover_bg"],
+        "sheet": values["sidebar_bg"],
+        "raised": mix(surface, values["text_primary"], 0.08),
+        "border": values["border_color"],
+        "divider": values["border_color"],
+        "text": text,
+        "muted": muted,
+        "faint": mix(muted, bg, 0.25),
+        "chevron": mix(muted, bg, 0.4),
+        "scrim": rgba(bg, 0.72),
+        "game_bg": game_bg,
+        "accent": accent,
+        "accent_bright": mix(accent, WHITE if dark else BLACK, 0.15),
+        "accent_text": readable_on(values["accent"], bg, TEXT_MIN_CONTRAST),
+        "accent_soft": accent_soft,
+        "accent_on_soft": readable_on(text, accent_soft, TEXT_MIN_CONTRAST),
+        "on_accent": on_accent,
+        "danger": readable_on_all(DANGER, (bg, surface)),
+        "star": readable_on_all(STAR, (surface,), ICON_MIN_CONTRAST),
+        "focus_fill": fill,
+        "focus_accent": focus_accent,
+        "focus_selected": selected,
+        "on_focus": on_focus,
+        "focus_wash": rgba(on_focus, 0.22),
+        "focus_track": rgba(on_focus, 0.28),
+        "chip_current_bg": text,
+        "chip_current_fg": readable_on(bg, text, TEXT_MIN_CONTRAST),
+        "slider": text,
+        "game_text": readable_or(text, game_bg, PALETTE["text"]),
+        "game_muted": readable_or(muted, game_bg, PALETTE["muted"]),
+    }
+
+
+def font_scale_factor(theme_font_scale):
+    """How much a theme's text size (a factor, 1.1) grows Big Picture: 1.0 to 1.5.
+
+    Big Picture only scales up: a theme that shrinks the desktop's text
+    leaves the couch sizes alone.
+    """
+    try:
+        factor = float(theme_font_scale)
+    except (TypeError, ValueError):
+        return 1.0
+    return clamp(factor, 1.0, MAX_FONT_SCALE_FACTOR)
+
+
+def themed_rules(p):
+    """What only a theme's palette needs: the pause sheet's own ink.
+
+    The pause window's text is the game's (light, on black); its sheet is
+    the theme's, which may be light.
+    """
+    return f"""
+/* A custom theme (issue 1012). */
+.bp-pause-window .bp-pause-sheet {{
+    color: {p['text']};
+}}
+"""
+
+
+def font_rule(font_family):
+    """The theme's font family, or nothing for a name that is not safe."""
+    if not isinstance(font_family, str) or not FONT_NAME.fullmatch(font_family):
+        return ""
+    return f"""
+.big-picture,
+.bp-pause-window {{
+    font-family: "{font_family}";
+}}
+"""
+
+
+def background_rules(background):
+    """The theme's library image behind the content, or nothing.
+
+    ``background`` is ``{"uri": "file:///….png", "fit": "cover"}``; only a
+    ``file://`` URI that cannot close the ``url("…")`` is accepted.
+    """
+    if not isinstance(background, dict):
+        return ""
+    uri = background.get("uri")
+    if not isinstance(uri, str) or not uri.startswith("file://"):
+        return ""
+    if any(ch in uri for ch in _URI_FORBIDDEN):
+        return ""
+    size, repeat = BACKGROUND_FITS.get(background.get("fit"), BACKGROUND_FITS["cover"])
+    return f"""
+.big-picture .bp-content {{
+    background-image: url("{uri}");
+    background-position: center;
+    background-size: {size};
+    background-repeat: {repeat};
+}}
+.big-picture .bp-content navigation-view,
+.big-picture .bp-content navigation-view-page {{
+    background: none;
+}}
+"""
+
+
+def console_list_rules(color, p):
+    """Every console card in one theme color, with the theme's ink on it.
+
+    After ``shelf_rules`` and one class more specific than them, so it wins
+    over each console's own color. ``color`` must be a ``#rrggbb``.
+    """
+    color = parse_hex(color) if isinstance(color, str) else None
+    if color is None:
+        return ""
+    return f"""
+/* The console list in a theme's color (issue 1012). */
+.big-picture .bp-content .bp-shelf-card,
+.big-picture .bp-content .bp-shelf-card.bp-shelf-all {{
+    background-color: {color};
+    color: {p['text']};
+}}
+.big-picture .bp-content .bp-shelf-card .bp-shelf-name {{
+    color: {p['text']};
+}}
+.big-picture .bp-content .bp-shelf-card .bp-shelf-eyebrow,
+.big-picture .bp-content .bp-shelf-card .bp-shelf-count {{
+    color: {p['muted']};
+}}
+"""
+
+
+def stylesheet(scale=1.0, palette=None, font_family=None, background=None, console_list=None):
     """The whole Big Picture stylesheet at ``scale``.
 
     Every rule is scoped under ``.big-picture``, the class the window carries
     while the mode is on, so the desktop layout never sees any of it.
+
+    ``palette`` (from :func:`palette_for`), ``font_family`` and
+    ``background`` (see :func:`background_rules`) come from a custom theme
+    (issue 1012); without them the sheet is the default one.
     """
-    p = PALETTE
+    p = DEFAULT_PALETTE if palette is None else {**DEFAULT_PALETTE, **palette}
     s = lambda name: px(name, scale)  # noqa: E731 - a local shorthand
+    extra = "" if palette is None else themed_rules(p)
+    extra += font_rule(font_family) + background_rules(background)
+    extra += console_list_rules(console_list, p)
     return f"""
 /* Big Picture, generated at scale {scale}. */
 .big-picture .bp-shell,
@@ -250,7 +548,7 @@ def stylesheet(scale=1.0):
     font-size: {s('eyebrow')}px;
     font-weight: 600;
     letter-spacing: 1px;
-    color: {ACCENT_TEXT};
+    color: {p['accent_text']};
 }}
 .big-picture .bp-body {{
     font-size: {s('body')}px;
@@ -306,8 +604,8 @@ def stylesheet(scale=1.0):
     color: {p['text']};
 }}
 .big-picture .bp-tab.bp-current .bp-tab-pill {{
-    background-color: {ACCENT_SOFT};
-    color: {ACCENT_ON_SOFT};
+    background-color: {p['accent_soft']};
+    color: {p['accent_on_soft']};
 }}
 .big-picture .bp-tab.bp-current .bp-tab-label {{
     font-weight: 700;
@@ -348,22 +646,22 @@ def stylesheet(scale=1.0):
     padding: {s('gap') // 6}px {s('gap') // 2}px;
 }}
 .big-picture .bp-tag.bp-tag-accent {{
-    color: {ACCENT_ON_SOFT};
-    background-color: {ACCENT_SOFT};
+    color: {p['accent_on_soft']};
+    background-color: {p['accent_soft']};
 }}
 .big-picture .bp-row.bp-primary {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
+    background-color: {p['accent']};
+    border-color: {p['accent']};
 }}
 .big-picture .bp-row.bp-primary .bp-row-title {{
-    color: #ffffff;
+    color: {p['on_accent']};
 }}
 .big-picture .bp-row.bp-danger .bp-row-title {{
-    color: {DANGER};
+    color: {p['danger']};
 }}
 .big-picture .bp-row.bp-current {{
-    background-color: {ACCENT_SOFT};
-    border-color: {ACCENT_SOFT};
+    background-color: {p['accent_soft']};
+    border-color: {p['accent_soft']};
 }}
 .big-picture .bp-row:disabled,
 .big-picture .bp-row.bp-disabled {{
@@ -433,15 +731,15 @@ def stylesheet(scale=1.0):
 }}
 .big-picture .bp-tile.bp-danger,
 .big-picture .bp-tile.bp-danger .bp-tile-name {{
-    color: {DANGER};
+    color: {p['danger']};
 }}
 .big-picture .bp-tile.bp-on {{
-    background-color: {ACCENT_SOFT};
-    border-color: {ACCENT_SOFT};
+    background-color: {p['accent_soft']};
+    border-color: {p['accent_soft']};
 }}
 .big-picture .bp-tile.bp-on .bp-tile-name,
 .big-picture .bp-tile.bp-on image {{
-    color: {ACCENT_ON_SOFT};
+    color: {p['accent_on_soft']};
 }}
 
 /* The shelf: one card per console, in the console's color. */
@@ -503,8 +801,8 @@ def stylesheet(scale=1.0):
 .big-picture .bp-accent-button {{
     min-height: {s('search_h')}px;
     border-radius: {s('radius_small') + 6}px;
-    background-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent']};
+    color: {p['on_accent']};
     font-size: {s('button')}px;
     font-weight: 600;
     padding: 0 {s('gap') * 2}px;
@@ -533,7 +831,7 @@ def stylesheet(scale=1.0):
     box-shadow: none;
 }}
 .big-picture .bp-icon-button.bp-on {{
-    color: {STAR};
+    color: {p['star']};
 }}
 
 /* The task banners. */
@@ -557,7 +855,7 @@ def stylesheet(scale=1.0):
     background-color: transparent;
 }}
 .big-picture .bp-banner progressbar progress {{
-    background-color: {ACCENT_BRIGHT};
+    background-color: {p['accent_bright']};
 }}
 
 /* Chips: the consoles, the filters, the view switch. */
@@ -588,12 +886,12 @@ def stylesheet(scale=1.0):
     min-height: {s('chip_icon')}px;
 }}
 .big-picture .bp-chip.bp-current {{
-    background-color: #F3F3F6;
-    color: #17171C;
+    background-color: {p['chip_current_bg']};
+    color: {p['chip_current_fg']};
 }}
 .big-picture .bp-chip.bp-on {{
-    background-color: {ACCENT_SOFT};
-    color: {ACCENT_ON_SOFT};
+    background-color: {p['accent_soft']};
+    color: {p['accent_on_soft']};
 }}
 .big-picture .bp-segments {{
     background-color: {p['surface2']};
@@ -630,8 +928,8 @@ def stylesheet(scale=1.0):
 .big-picture .bp-play {{
     min-height: {s('play_h')}px;
     border-radius: {s('radius') + 6}px;
-    background-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent']};
+    color: {p['on_accent']};
     font-size: {s('button') + 2}px;
     font-weight: 600;
     border: none;
@@ -641,7 +939,7 @@ def stylesheet(scale=1.0):
     min-height: {s('chip_h')}px;
     border-radius: 999px;
     background-color: transparent;
-    border: 1px solid {ACCENT_SOFT};
+    border: 1px solid {p['accent_soft']};
     color: {p['text']};
     font-size: {s('row_subtitle') + 2}px;
     padding: 0 {s('gap') + 6}px;
@@ -701,8 +999,8 @@ def stylesheet(scale=1.0):
     font-weight: 700;
 }}
 .big-picture .bp-key.bp-confirm {{
-    background-color: {ACCENT_BRIGHT};
-    color: #ffffff;
+    background-color: {p['accent_bright']};
+    color: {p['on_accent']};
 }}
 
 /* Buttons and dialogs. */
@@ -717,12 +1015,12 @@ def stylesheet(scale=1.0):
     font-weight: 600;
 }}
 .big-picture .bp-button.suggested-action {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent']};
+    border-color: {p['accent']};
+    color: {p['on_accent']};
 }}
 .big-picture .bp-button.destructive-action {{
-    color: {DANGER};
+    color: {p['danger']};
 }}
 .big-picture dialog .alert-dialog,
 .big-picture .bp-dialog {{
@@ -763,15 +1061,15 @@ def stylesheet(scale=1.0):
     padding: 0 {s('gap') // 2}px;
 }}
 .big-picture .bp-osk-key.suggested-action {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent']};
+    border-color: {p['accent']};
+    color: {p['on_accent']};
 }}
 .big-picture .bp-osk-field {{
     min-height: {s('button_height') + 16}px;
     border-radius: {s('radius_small') + 4}px;
     background-color: {p['bg']};
-    border: 2px solid {ACCENT_BRIGHT};
+    border: 2px solid {p['accent_bright']};
     font-size: {s('title') - 6}px;
     font-weight: 600;
     padding: 0 {s('row_padding')}px;
@@ -792,6 +1090,40 @@ def stylesheet(scale=1.0):
 .big-picture gridview {{
     padding: {s('gap')}px 0;
     background: none;
+}}
+
+/* Scrollers (issue 999). The pad drives the mode on a TV: no scrollbar is
+   ever drawn, and none takes room or catches the pointer, while the content
+   still scrolls (focus, wheel, touch). Scoped to the mode's classes, so the
+   desktop keeps its scrollbars. */
+.big-picture scrollbar,
+.big-picture scrollbar trough,
+.big-picture scrollbar slider {{
+    opacity: 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+}}
+/* The focus mat lies outside its item, and a scroller clips at its edge: the
+   content gets a gutter of the mat inside the clip, and the scroller reaches
+   out by as much, so the items stay on the page margins. In the middle of
+   the content the shell scrolls the mat into view as the focus moves
+   (``widgets.reveal_whole``). */
+.big-picture .bp-scroller {{
+    margin-left: -{s('focus_mat')}px;
+    margin-right: -{s('focus_mat')}px;
+    min-width: {2 * s('focus_mat')}px; /* never narrower than its margins: GTK refuses a negative size */
+}}
+.big-picture .bp-scroller > viewport > * {{
+    margin-left: {s('focus_mat')}px;
+    margin-right: {s('focus_mat')}px;
+}}
+.big-picture .bp-scroller-vertical > viewport > * {{
+    margin-bottom: {s('focus_mat')}px;
 }}
 .big-picture .console-group-header label.heading {{
     font-size: {s('section_title')}px;
@@ -848,18 +1180,18 @@ def stylesheet(scale=1.0):
 .big-picture .bp-splash,
 .bp-pause-window {{
     background-color: {p['game_bg']};
-    color: {p['text']};
+    color: {p['game_text']};
 }}
 .big-picture .bp-splash-art {{
     min-height: {s('splash_art_h')}px;
 }}
 .big-picture .bp-splash-caption {{
     font-size: {s('row_title')}px;
-    color: {p['muted']};
+    color: {p['game_muted']};
 }}
 .big-picture .bp-splash-error {{
     font-size: {s('row_title')}px;
-    color: {DANGER};
+    color: {p['danger']};
 }}
 .bp-pause-window .bp-pause-sheet {{
     background-color: {p['sheet']};
@@ -875,21 +1207,21 @@ def stylesheet(scale=1.0):
     -gtk-icon-size: {s('pause_icon')}px;
 }}
 .bp-pause-window .bp-tile.bp-primary {{
-    background-color: {ACCENT};
-    border-color: {ACCENT};
-    color: #ffffff;
+    background-color: {p['accent']};
+    border-color: {p['accent']};
+    color: {p['on_accent']};
 }}
 .bp-pause-window scale trough {{
     min-height: {max(6, s('gap') // 2)}px;
     background-color: {p['raised']};
 }}
 .bp-pause-window scale highlight {{
-    background-color: {ACCENT};
+    background-color: {p['accent']};
 }}
 .bp-pause-window scale slider {{
     min-width: {s('key_height')}px;
     min-height: {s('key_height')}px;
-    background-color: #ffffff;
+    background-color: {p['slider']};
 }}
 
 /* The desktop's dialogs that stay dialogs in the mode -- the confirmations,
@@ -963,9 +1295,9 @@ def stylesheet(scale=1.0):
 .big-picture .bp-back-link:focus,
 .bp-pause-window .bp-tile:focus,
 .bp-pause-window .bp-row:focus {{
-    background-color: {FOCUS_FILL};
-    border-color: {FOCUS_FILL};
-    color: #ffffff;
+    background-color: {p['focus_fill']};
+    border-color: {p['focus_fill']};
+    color: {p['on_focus']};
     outline: none;
     box-shadow: none;
 }}
@@ -975,14 +1307,14 @@ def stylesheet(scale=1.0):
 .big-picture .bp-row.bp-current:focus,
 .big-picture .bp-tab.bp-current:focus .bp-tab-pill,
 .bp-pause-window .bp-tile.bp-on:focus {{
-    background-color: {FOCUS_SELECTED};
-    color: #ffffff;
+    background-color: {p['focus_selected']};
+    color: {p['on_focus']};
 }}
 .big-picture .bp-tab:focus {{
     background: none;
 }}
 .big-picture .bp-tab:focus .bp-tab-pill {{
-    background-color: {FOCUS_FILL};
+    background-color: {p['focus_fill']};
 }}
 .big-picture .bp-accent-button:focus,
 .big-picture .bp-play:focus,
@@ -990,19 +1322,19 @@ def stylesheet(scale=1.0):
 .big-picture .bp-button.suggested-action:focus,
 .big-picture .bp-osk-key.suggested-action:focus,
 .bp-pause-window .bp-tile.bp-primary:focus {{
-    background-color: {FOCUS_ACCENT};
-    border-color: {FOCUS_ACCENT};
+    background-color: {p['focus_accent']};
+    border-color: {p['focus_accent']};
     outline: none;
     box-shadow: none;
 }}
 .big-picture .bp-shelf-card:focus {{
     outline: none;
-    box-shadow: 0 0 0 {s('focus_mat')}px {FOCUS_FILL};
+    box-shadow: 0 0 0 {s('focus_mat')}px {p['focus_fill']};
 }}
 .big-picture gridview > child:focus-within .rom-card {{
-    background-color: {FOCUS_FILL};
+    background-color: {p['focus_fill']};
     border-radius: {s('radius_small')}px;
-    box-shadow: 0 0 0 {s('focus_mat')}px {FOCUS_FILL};
+    box-shadow: 0 0 0 {s('focus_mat')}px {p['focus_fill']};
     outline: none;
 }}
 .big-picture .bp-row:focus label,
@@ -1017,22 +1349,22 @@ def stylesheet(scale=1.0):
 .big-picture .bp-section:focus label,
 .big-picture .bp-banner:focus label,
 .big-picture gridview > child:focus-within .rom-card label {{
-    color: #ffffff;
+    color: {p['on_focus']};
 }}
 .big-picture .bp-row:focus .bp-number {{
-    background-color: rgba(255, 255, 255, 0.22);
+    background-color: {p['focus_wash']};
 }}
 /* Switches in the accent too, not the desktop's accent colour. */
 .big-picture switch:checked {{
-    background-color: {ACCENT};
+    background-color: {p['accent']};
 }}
 .big-picture .bp-row:focus switch {{
-    background-color: rgba(255, 255, 255, 0.28);
+    background-color: {p['focus_track']};
 }}
 .big-picture .bp-row:focus switch:checked {{
-    background-color: #ffffff;
+    background-color: {p['on_focus']};
 }}
 .big-picture .bp-row:focus switch:checked slider {{
-    background-color: {ACCENT};
+    background-color: {p['accent']};
 }}
-"""
+""" + extra

@@ -3073,6 +3073,45 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_arch_package.py`; the container build itself
   (`make arch`) installs, verifies and removes the package as its last steps.
 
+### RT-1221 — The openemux-git AUR recipe builds, installs and removes cleanly
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Docker (the Arch build image); network for pacman.
+- **Steps:** As a QA person: run `make aur-git`. Then, on an Arch machine, build the recipe the way
+  an AUR user would — `makepkg -si` in a copy of `build/aur/openemux-git/` — launch OpenEmux from
+  the menu, play a game, and `sudo pacman -Rns openemux-git`.
+- **Expected:** `make aur-git` ends with "ALL AUR CHECKS PASSED", writes
+  `build/aur/openemux-git/PKGBUILD` and `.SRCINFO` (the `pkgver` is `<app version>.r<N>.g<sha>`,
+  `arch = any`, `provides`/`conflicts = openemux`, `depends = retroarch`, and the `source` is the
+  GitHub URL on `develop`, never a local path), and puts nothing in `dist/`. On the Arch machine,
+  pacman pulls the distribution's `retroarch`, the installed package replaces a release
+  `openemux` if there is one, the game launches through `/usr/bin/retroarch`, and the removal
+  leaves nothing of the package behind.
+- **Check:** suite file `tests/test_aur_package.py`; the container build itself (`make aur-git`)
+  installs, verifies and removes the package and checks the `.SRCINFO` as its last steps.
+
+### RT-1223 — The release AUR recipes build, install, swap and dry-run for a published release
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Docker (the Arch build image); network to GitHub and to `aur.archlinux.org`;
+  no `AUR_SSH_PRIVATE_KEY` in the environment.
+- **Steps:** As a QA person: run `make aur-release TAG=v1.24.0`. Open the three folders under
+  `build/aur/release/`. Run `make aur-publish TAG=v1.24.0 DRY_RUN=1`, then
+  `make aur-publish TAG=v1.24.0` (no dry run). Run
+  `python3 packaging/aur/release.py 1.24 --out /tmp/aur-x` and
+  `python3 packaging/aur/release.py v9.9.9 --out /tmp/aur-x`.
+- **Expected:** `make aur-release` builds `openemux`, `openemux-bin` and `openemux-appimage`, runs
+  namcap on each, installs `openemux`, swaps it for `-bin`, then `-appimage`, then back, and ends
+  with "ALL AUR RELEASE CHECKS PASSED". Each folder holds a `PKGBUILD` and `.SRCINFO` with
+  `pkgver = 1.24.0`, `pkgrel = 1`, and the `-bin` and `-appimage` checksums equal to the lines for
+  `openemux-1.24.0-1-x86_64.pkg.tar.zst` and `OpenEmux-1.24.0-x86_64.AppImage` in the release's
+  `SHA256SUMS`; nothing lands in `dist/`. The dry run prints the diff for each package and ends with
+  "DRY RUN: nothing was pushed to the AUR". Without the dry run it stops at once with
+  "AUR_SSH_PRIVATE_KEY is not set" and a non-zero exit. The generator rejects `1.24` as not a
+  release tag and fails on `v9.9.9` with "could not download", both with exit 1.
+- **Check:** suite file `tests/test_aur_release.py`; `make aur-release TAG=<latest tag>` installs,
+  swaps and removes the three packages as its own steps.
+
 ### RT-279 — The native packages need no FUSE at all
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE
@@ -4316,6 +4355,50 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
   with no message. The reader only reads: it never grabs the pad.
 - **Check:** suite files `tests/test_preferences.py` (`TheDrawingLightsWhatIsPressedTests`,
   `WhetherTheInputPageIsLiveTests`) and `tests/test_gamepad_held.py`.
+
+### RT-1226 — The Flatpak sees a controller the same way the other formats do
+- **Area:** Input
+- **Mode:** MANUAL
+- **Preconditions:** OpenEmux installed as a Flatpak built from this branch or later (`make
+  flatpak`, or the openemux-flatpak repo), RetroArch from Flathub (`org.libretro.RetroArch`), a USB
+  gamepad that the AppImage already recognizes, and a game of any console.
+- **Steps:**
+  1. With the pad plugged in, open OpenEmux from the Flatpak and move around the library with the
+     D-pad; open a game's page with A and go back with B.
+  2. Open "Big Picture" and navigate it with the pad.
+  3. Open "Preferences" → "Input", pick "Gamepad Port 1" and remap one button by pressing it.
+  4. Start the game from the Flatpak and play a few seconds with the pad.
+  5. With the app open, unplug the pad, then plug it back and keep navigating.
+- **Expected:** The "Controller connected" toast shows and the library, Big Picture and the
+  remapping all answer the pad, as in the AppImage. In game the buttons do what they do from the
+  AppImage. Unplugging shows "Controller disconnected"; plugging back shows "Controller
+  connected" and navigation works again without restarting (issue 1001).
+- **Check:** human only for the pad; headless half:
+  `flatpak info --user --show-permissions io.github.guilhermefeitosa66.OpenEmux | grep '^devices='`
+  names `all`, and
+  `flatpak run --user --command=test io.github.guilhermefeitosa66.OpenEmux -d /dev/input && echo ok`
+  prints `ok` (in the test containers: `make flatpak-devices`). Suite file
+  `tests/test_flatpak_sandbox.py` (`TheControllersAreVisibleInsideTests`).
+
+### RT-1227 — A Flatpak without the input devices says so when remapping
+- **Area:** Input
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none (in a real run: OpenEmux as a Flatpak, with
+  `flatpak override --user --nodevice=all io.github.guilhermefeitosa66.OpenEmux`; that also takes
+  the GPU away, so the app renders in software for this run and how it looks is not part of the
+  verdict).
+- **Steps:**
+  1. Open "Preferences" → "Input", pick "Gamepad Port 1" and click a binding to remap it.
+  2. Do the same in "Big Picture" → settings → input.
+- **Expected:** Instead of "No controller detected", a toast says "Can't read controllers: this
+  Flatpak has no access to input devices. Allow "All devices" for OpenEmux in Flatseal." and the
+  capture ends. The app log has one warning per app run with the
+  `flatpak override --user --device=all` command. Outside a Flatpak a missing `/dev/input` still reads as no controller.
+- **Check:** suite files `tests/test_gamepad_capture.py` (`TheSandboxCheckTests`,
+  `test_a_flatpak_without_the_input_devices_says_that_instead`), `tests/test_ui_gamepad.py`,
+  `tests/test_preferences.py`, `tests/test_bigpicture_input.py`.
+- **Restore:** `flatpak override --user --reset io.github.guilhermefeitosa66.OpenEmux` after a real
+  run.
 
 ## Shaders
 
@@ -7245,10 +7328,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   2. Disconnect it (the same broadcast with `false`).
   3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
 - **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
-  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and "L1" and
-  "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
-  Disconnecting removes the hint bar, the highlight and the pills and gives the chips and the toggle
-  their old size, again without a restart. With the controller connected every main tab keeps its
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and the console
+  filter becomes the pager with "L1" and "R1" as its previous/next steps (in portrait it takes the
+  console chips' place, issue 998; RT-1223); the view toggle grows a little.
+  Disconnecting removes the hint bar and the highlight, brings the console chips back in portrait with
+  the same console picked, and gives the toggle its old size, again without a restart. With the controller connected every main tab keeps its
   hint bar. No toast or message announces either change.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
 
@@ -7313,15 +7397,56 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Do 1 to 4 with the D-pad only, in landscape, then in portrait; switch to pt-BR and to one CJK
      language and look at the setting and the hint bar.
   6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
-- **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
+- **Expected:** With the controller the console chips give way to the filter pager (RT-1223), the toggle's buttons are bigger, the
   swatches are larger and every text link is a full-height target with its highlight whole; without it
-  everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
-  the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
+  everything has its old size and the chips are back. The "L1"/"R1" badges are the pager's steps, at
+  the ends of its row in portrait. R1 and L1 switch the console on the shelf and the main tab on the
+  other tabs.
   Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
   nothing on these screens needs touch. The new texts are translated and not cut. The `adb` key
-  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips keep
-  their touch size and the hint bar hides again on the next tap.
+  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips stay
+  and the hint bar hides again on the next tap.
 - **Check:** human only.
+
+### RT-1223 — With a gamepad in portrait the console filter is the one-console pager
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; a library with games in at least four consoles; the phone in
+  portrait; "Interface mode" on "Automatic"; the library open on "All games".
+- **Steps:**
+  1. Without a controller, look at the header under the title.
+  2. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`).
+  3. Press `KEYCODE_BUTTON_R1` (`adb shell input gamepad keyevent ...`) until the last console, then
+     once more; then `KEYCODE_BUTTON_L1` back to "All games", then once more.
+  4. Press UP until the filter name is focused, press A, move in the menu with the D-pad, press A on a
+     console; reopen it and press B.
+  5. With TalkBack on (or `adb shell uiautomator dump`), read the filter row.
+  6. Repeat 2 and 3 in the list view and, on a foldable in tabletop, on the bottom half.
+- **Expected:** 1: the console chips, as before. 2: the chips row is replaced, in the same place, by
+  one row: the "L1" badge (LB/L by the pad family) at its start, the current filter centred (console
+  pixel icon, star for "Favorites", none for "All games", and its name, never cut) and the "R1" badge
+  at its end. The hint bar keeps "L1 R1" "Console" (the pager scrolls away with the header). 3: each press shows the next/previous
+  filter in place (title, games and the label follow), in the shelf's console order; "R1" is dimmed
+  on the last console and "L1" on "All games", and a press there does nothing. 4: the menu lists every
+  filter with its count and the current one highlighted; A picks, B closes. 5: "Filter: <name>, <N>
+  games. Change filter", "Previous filter: <name>", "Next filter: <name>". 6: the same pager in the
+  list view and on the tabletop deck.
+- **Check:** human only (`adb exec-out screencap -p` per step).
+- **Restore:** disconnect (`... --ez clear true`), TalkBack off.
+
+### RT-1224 — Switching between chips and pager keeps the picked console
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1223, a controller connected, the pager on a console other than "All games".
+- **Steps:**
+  1. Disconnect the controller (`... --ez connected false`).
+  2. Connect it again.
+  3. Rotate to landscape (`adb shell settings put system user_rotation 1`), then back to portrait (`0`).
+- **Expected:** 1: the console chips come back with the same console selected and no shoulder pills.
+  2: the pager comes back on that console. 3: landscape shows its one-row header (RT-859) on the same
+  console; back in portrait the pager is still on it. The grid never jumps to another filter.
+- **Check:** human only (a screenshot after each step).
+- **Restore:** `... --ez clear true`, `user_rotation 0`.
 
 ### RT-593 — Left/right crosses console groups in the landscape row with no stop
 - **Area:** Android — Gamepad navigation
@@ -11313,11 +11438,11 @@ keyevent` comes from a virtual device and never changes the family. A release AP
      mode (START) to see SELECT.
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
-- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
-  of the console chips read LB and RB (portrait; in landscape the chips row is gone and the filter
-  pager's previous/next show the same faces, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the
-  pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
-  SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
+- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the filter pager's
+  previous/next steps read LB and RB (portrait, RT-1223; in landscape the same steps and no shoulder
+  hint, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the steps read L and R.
+  Step 3 shows a purple badge with a white cross outline, a triangle outline, SHARE and L1 R1, and the
+  steps read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
   bottom button, labelled B, confirms) and comes back. On a 360dp-wide portrait phone every hint stays
   on screen with PlayStation faces (the row shrinks a little).
@@ -17885,9 +18010,9 @@ has no Android device, so these are `MANUAL`.
      then come back.
   4. Narrow the window to about 520 px wide.
 - **Expected:** 1: one grid in play order, newest first; every game is drawn in its own console's
-  cartridge (in the shell colour chosen for it), the cartridges of a row stand on the same line
-  right above their titles, and the PlayStation game shows its cover; the caption under each title
-  is still when and for how long (issue 942). 2: the page changes at once each time, the same way
+  cartridge (in the shell colour chosen for it), every card has the same slot, the art of a row
+  (cartridges and the PlayStation cover alike) stands on the same line right above the titles,
+  and the caption under each title is still when and for how long (issues 942 and 996). 2: the page changes at once each time, the same way
   "All" does, and keeps its order. 3: "Recently played" shows rows while "All" keeps the global
   layout. 4: the grid reflows to fewer columns, nothing is clipped.
 - **Check:** suite files `tests/test_library_pages.py` (`TheRecentPageTests`),
@@ -18953,8 +19078,9 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
      row until the last game of the row.
   3. Scroll down with the wheel, or D-pad down, to the last game.
   4. Press LB and RB.
-- **Expected:** 1: the games fill the screen width in rows; no horizontal scrollbar, and a long
-  title is cut short (it ends in an ellipsis) instead of widening its card. 2: the page does not
+- **Expected:** 1: the games fill the screen width in rows, the last column as far from the right
+  edge as the first is from the left (RT-1235); no horizontal scrollbar, and a long title is cut
+  short (it ends in an ellipsis) instead of widening its card. 2: the page does not
   move sideways; D-pad right walks along the row. 3: every game is reachable by scrolling down.
   4: the previous and next console open, as before.
 - **Check:** suite file `tests/test_bigpicture_pages.py`
@@ -19371,3 +19497,932 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   (`test_the_hint_bar_fills_its_slots_and_marks_confirm`, `test_a_big_page_frames_its_body`),
   `tests/test_bigpicture_shell.py` (`TheClockFormat`, `test_the_clock_and_the_dark_theme`).
 - **Restore:** `./devbox/devbox.sh exec bash -c 'DBUS_SESSION_BUS_ADDRESS=$(cat ~/.devbox/bus) gsettings set org.gnome.desktop.interface clock-format 24h'`.
+
+### RT-1226 — Big Picture: the focused item is drawn whole at the ends of a row and at the bottom
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. `make devbox-res RES=1280x720`, start the app (`make devbox-app ACTION=restart`), press F11.
+     On the Shelf, with "All games" focused (the first card of the first row),
+     `make devbox-shot OUT=$SCRATCH/bp-edge-first.png`.
+  2. Press Right until the last card of the row is focused, `make devbox-shot OUT=$SCRATCH/bp-edge-last.png`;
+     press Down until the last row, `make devbox-shot OUT=$SCRATCH/bp-edge-bottom.png`.
+  3. Open "Super Nintendo" (Enter). Press Down until the last game,
+     `make devbox-shot OUT=$SCRATCH/bp-edge-grid.png`. Press Up until a console chip is focused,
+     then Left until "All" and Right until the last chip, a `make devbox-shot` at each end.
+  4. Switch the view to the grid and to the list (the switch right of "Cartridges") and repeat the
+     Down-to-the-end shot of step 3 in each.
+  5. `make devbox-res RES=1920x1080` and repeat steps 1–4.
+- **Expected:** the focused card's purple plate (the mat around a console card or a game's art) and
+  a focused chip's purple fill are whole: rounded on every corner, nothing cut straight at the left
+  end, the right end or the bottom of the area that scrolls. The cards and the chips still start
+  on the page margin, in line with the page title.
+- **Check:** the screenshots show the above; `tests/test_bigpicture_scrollers.py`
+  (`test_the_focus_mat_of_a_card_at_the_row_end_is_inside_the_clip`,
+  `test_the_gutter_is_the_focus_mat_at_scale`).
+
+### RT-1227 — Big Picture never shows a scrollbar; the desktop keeps its own
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English.
+- **Steps:**
+  1. Start the app, press F11. On the Shelf, "Super Nintendo" (all three views), a game's details,
+     "Recent", "Import" and its file browser, "Settings" and its "Input" section: move the mouse
+     over the right edge and the bottom edge of the page, scroll with the wheel, and take a
+     `make devbox-shot` while the pointer is still over the edge.
+  2. With the pad (or the arrow keys), walk down each of those pages to the end.
+  3. Press F11 to leave Big Picture, open a console with more games than fit, move the mouse over the
+     grid.
+- **Expected:** 1–2: no scrollbar is drawn anywhere in Big Picture, not even while the pointer
+  moves or the wheel turns; the wheel still scrolls the page and the focus still brings the next
+  item into view. 3: the desktop library shows its scrollbar as before.
+- **Check:** the screenshots show the above; `tests/test_bigpicture_scrollers.py`
+  (`test_no_scroller_in_the_mode_takes_room_for_a_bar`, `test_the_desktop_keeps_its_scrollbars`,
+  `test_scrollbars_are_hidden_only_in_the_mode`).
+
+## Desktop — Context menus
+
+### RT-1222 — A context submenu opens once and stays steady under the pointer
+- **Area:** Library
+- **Mode:** MANUAL
+- **Preconditions:** a Wayland session (KDE Plasma reproduced the bug; GNOME too if at hand), a
+  console with at least one game and an installed core, locale English.
+- **Steps:**
+  1. Right-click a game and point at "Load state"; keep the pointer on that row for a few
+     seconds, moving it slightly.
+  2. Point at "Core", then move into its submenu and over its rows.
+  3. Point at "Game details…".
+  4. Repeat steps 1–3 in the devbox (X11): `make devbox-app`, then the same with `make devbox-xdo`.
+- **Expected:** 1: the "Load state" submenu opens next to the row and stays open, with no
+  flicker, for as long as the pointer is on the row or inside the submenu. 2: "Load state" closes,
+  "Core" opens and stays open while the pointer travels into it. 3: "Core" closes. 4: the same on
+  X11 — one submenu at a time, opened by pointing, never by clicking.
+- **Check:** human on Wayland; on X11 the loop reproduced too (the menu gives the focus back to
+  its focused row when a submenu maps, which closed the submenu) and is covered by
+  `tests/test_context_menu_rows.py` (`OpeningASubmenuOnHoverTests`, including
+  `test_the_focused_row_getting_focus_back_does_not_close_the_submenu`).
+
+### RT-1223 — Context-menu submenus never leave the window deaf to clicks (Wayland)
+- **Area:** Library & scanning
+- **Mode:** MANUAL
+- **Preconditions:** a Wayland session (KDE Plasma reproduces it best), a library with a game whose
+  right-click menu has "Core" and "Load State" submenus.
+- **Steps:**
+  1. Right-click a game and sweep the pointer up and down over "Core", "Load State" and the rows
+     around them for about ten seconds.
+  2. Close the menu each way in turn, reopening it between them: click "Details"; click outside the
+     menu on empty grid space; right-click another game; press Escape.
+  3. Open a submenu by pointing at it, then pick an entry inside it (a core, a save slot).
+  4. Repeat steps 1–3 for five minutes, then left-click a console in the sidebar and a game in the
+     grid.
+- **Expected:** every close takes the whole menu down, submenus included; the entry picked in step 3
+  is applied; in step 4 the sidebar selects the console and the game starts. Hover highlights and
+  clicks keep working throughout — at no point does the window take hover but ignore clicks
+  (issue 984).
+- **Check:** suite file `tests/test_context_menu_rows.py` (`ClosingSubmenusInnermostFirstTests`,
+  and in `OpeningASubmenuOnHoverTests` the unmapped-row and held-off-handler tests); on Wayland,
+  the manual steps above.
+
+### RT-1226 — Any cartridge color, picked in the Custom Color dialog
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, the library in the
+  cartridge view.
+- **Steps:**
+  1. Right-click a Game Boy game ▸ "Cartridge color". `make devbox-shot`.
+  2. Pick "Pick a Color…". `make devbox-shot`.
+  3. Type `#F2C12E` in "Hex"; then click the "Blue" swatch of the "Shell Colors" palette; then drag
+     in the colored plane and move the "Hue" slider, taking a `make devbox-shot` after each.
+  4. Type `zz` in "Hex". `make devbox-shot`. Type `#D23C2A` and click "Apply".
+  5. Right-click the same game ▸ "Cartridge color". `make devbox-shot`.
+  6. Restart the app (`make devbox-app ACTION=restart`) and look at the same card; then
+     "Cartridge color" ▸ "Default".
+  7. `make devbox-res RES=480x900`, open the dialog again, `make devbox-shot`; restore the size.
+  8. Right-click another Game Boy game ▸ "Cartridge color". `make devbox-shot`. Pick
+     "Custom #D23C2A".
+  9. Open "Pick a Color…" on a third game: click the first swatch under "Saved"; then right-click
+     it ▸ "Remove". `make devbox-shot` before and after. Cancel.
+- **Expected:** 1: after the named colors, a separator and "Pick a Color…". 2: a "Custom Color"
+  dialog with "Cancel" and "Apply", the game's cartridge on the left (its own label) in the shell it
+  has now, and on the right the plane, "Hue", "Hex" and twelve swatches. 3: the preview, the plane's
+  knob, the slider and the hex field follow each change at once; only the shell changes color,
+  never the label or the shadow. 4: `zz` marks the field red and "Apply" turns insensitive, the
+  preview keeping the last good color; after "Apply" the card's shell is that red. 5: a "Custom"
+  row with a red swatch, checked, above "Pick a Color…". 6: the color survives the restart;
+  "Default" brings the authored shell back. 7: the game's cartridge preview sits above the
+  controls, never collapsed to an empty gap; scrolling the dialog reaches the last row of swatches.
+  5 (since the saved colors): the row reads "Custom #D23C2A". 8: "Custom #D23C2A" with its swatch
+  is listed (not checked) after the named colors; picking it paints the second game red with no
+  dialog. 9: "Saved" shows `#D23C2A` first and clicking it selects it; after "Remove" it leaves the
+  row (the row hides when empty), and the games already painted keep their red.
+- **Check:** the screenshots show the above; `tests/test_cartridge_color_dialog.py`,
+  `tests/test_cartridge_palettes.py` (`SavedColorsTests`), `tests/test_rom_context.py`
+  (`CustomCartridgeColorEntriesTests`).
+
+### RT-1227 — A custom cartridge color on every console, in details, Big Picture and Share
+- **Area:** View modes & layout
+- **Mode:** AUTO-PROBE
+- **Preconditions:** none.
+- **Steps:** As a QA person: give a game of each cartridge console a custom color — including
+  pure `#FF0000`, `#00FF00`, `#FFFFFF` and `#000000` on a few — and look at the cards; open a game's
+  details ("Cartridge color" lists "Custom #RRGGBB" for the game's color and for every saved one,
+  and has a color button beside the reset arrow; picking a saved one applies it); open
+  the same game in Big Picture ("Cartridge color" lists "Custom"; picking "Red" replaces it); share
+  a game with a custom color to another desktop.
+- **Expected:** every cartridge console draws the shell in the chosen color with the label window,
+  its shadow and any metal contacts as they are in the named colors, no halo around the window;
+  the details page shows "Custom #RRGGBB" and Big Picture "Custom"; the shared game arrives with
+  the same color.
+- **Check:**
+  ```bash
+  PYTHONPATH=src .venv/bin/python -c "
+  import tempfile
+  from pathlib import Path
+  from openemux.core import cartridge_render as cr
+  d = Path(tempfile.mkdtemp())
+  for c in cr.consoles_with_frames():
+      for color in ('#ff0000', '#00ff00', '#ffffff', '#000000', '#d23c2a'):
+          p = cr.custom_frame_for(c, color, frames_dir=d)
+          assert p is not None and cr.load_frame(p) is not None, (c, color)
+  print('RT-1227 OK')"
+  ```
+  plus `tests/test_cartridge_custom_colors.py`, `tests/test_game_details.py`,
+  `tests/test_bigpicture_details.py`.
+
+### RT-1237 — Palettes in the Custom Color dialog: the presets, and the user's own across a restart
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, the library in the
+  cartridge view; no palette of the user's yet.
+- **Steps:**
+  1. Right-click a Game Boy game ▸ "Cartridge color" ▸ "Pick a Color…". Click the palette button
+     (it reads "Shell Colors"). `make devbox-shot`.
+  2. Pick "Nord". `make devbox-shot`. Cancel, open the dialog again.
+  3. Click the palette button ▸ "New Palette…", type `Pokémon carts`, press Enter.
+  4. Type `#8BE9FD` in "Hex" and click the "+" after the swatches; type `#F2C12E` and click "+".
+  5. Focus the last swatch and press Alt+Left; right-click the first swatch ▸ "Remove".
+     `make devbox-shot`.
+  6. Click the "⋮" beside the palette button ▸ "Rename…", type `Pokémon`, Enter. Cancel the dialog.
+  7. Restart the app (`make devbox-app ACTION=restart`) and open the dialog again; open the palette
+     list. `make devbox-shot`.
+  8. Select "Dracula", "⋮" ▸ "Duplicate"; then "⋮" ▸ "Delete Palette" ▸ "Delete".
+- **Expected:** 1: a list with "Shell Colors", a "Presets" heading with Basic, Dracula, Pastel,
+  Nord, Gruvbox, Neon, Earth and Green screen (each with a strip of its colors) and "New
+  Palette…". 2: the row shows Nord's 7 colors (`#2E3440` … `#BF616A`, the Android editor's); the
+  reopened dialog still shows Nord. 3: the palette is created holding the current color and is
+  selected; "Create" is insensitive while the name is blank. 4: each color joins the end of the
+  row; "+" turns insensitive while the current color is already in it. 5: the menu offers "Move
+  Left", "Move Right" and "Remove"; the row ends as `#F2C12E`, `#8BE9FD` (the first color gone,
+  `#F2C12E` moved before `#8BE9FD`). 6: the palette button reads "Pokémon". 7: after the restart the
+  palette, its name and its colors in that order are kept, listed under "Your Palettes". 8: a
+  "Dracula (Copy)" appears under "Your Palettes", selected, with "+" and editable swatches; the
+  delete asks first and the list falls back to "Shell Colors".
+- **Check:** the screenshots show the above; `grep -A8 '^palettes:' ~/.openemux/cartridge_colors.config`
+  inside the devbox lists the palette; `tests/test_cartridge_palettes.py`,
+  `tests/test_cartridge_colors.py` (`PresetPaletteTests`, `SavedColorsAndPalettesTests`).
+
+## Android — Recent tab
+
+The Android app's "Recent" tab (openemux-android, `pkg/android/openemux`, `RecentScreen` in
+`ui/LibraryScreens.kt`) lists the games played last, capped at `RECENT_LIMIT` (12, the desktop's
+"Recently played" size) since issue 997; before, it grew with every game ever played. It is built
+with the same helper as the shelf's "Continue playing" row, so that row is always its head. The
+runner has no Android device, so this is `MANUAL`: a person runs it on a phone or an emulator.
+
+### RT-1225 — "Recent" shows the 12 last played, newest first, without trimming the history
+- **Area:** Android — Recent tab
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with at least 14 games across a few consoles, none played
+  yet (a fresh install, or "Recent" empty); locale English.
+- **Steps:**
+  1. Start and quit 3 different games. Open "Recent".
+  2. Start and quit 11 more different games (14 in all), noting the order. Open "Recent".
+  3. From a console's shelf, open the first game played in step 1 (no longer listed), note its
+     play time on its page, then start and quit it. Open "Recent" again, then that game's page.
+  4. Open the "Library" tab (the shelf), look at "Continue playing", then tap "See recent".
+  5. Open "All games" and sort by "Recent".
+- **Expected:** 1: the 3 games, the last played first, each with "Console · <time ago>". 2:
+  exactly 12 rows, the last played first; the first two games of step 1 are not listed. 3: that
+  game is now first and the list still has 12 rows (the one that was 12th is gone); its page shows
+  the earlier play time plus the new session, nothing reset. 4: the cards in "Continue playing" are
+  the first rows of "Recent", in the same order. 5: every played game (more than 12) is still
+  ordered by when it was last played.
+- **Check:** human only (`adb exec-out screencap -p > recent.png`); the cap and the ordering are
+  covered by `ShelfLayoutTest` (`recentKeepsTheTwelveLastPlayedNewestFirst`,
+  `recentShowsEveryPlayedGameUpToTheLimit`) in openemux-android.
+
+### RT-1228 — Recently played lines up whatever the consoles it mixes
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** games played on NES, SNES, N64, GBA and PlayStation (at least one of them with
+  a cover), three of them favorites on different consoles; the view mode is "Cartridge".
+- **Steps:**
+  1. Open "Recently played" and look at each row.
+  2. Hover a short cartridge (SNES or GBA) and the PlayStation cover.
+  3. Switch to "Cover" view, then to "List" view, then back to "Cartridge".
+  4. Zoom out to the smallest size, then in to the largest.
+- **Expected:** 1: newest first; every card has the same slot, and in each row the art stands on one
+  line with the titles and dates on one line under it; a short cartridge has no tall empty gap
+  above it, and each favorite's star sits on the top-left corner of its own art, never above it in
+  empty space (issue 996). 2: the menu button and the play icon appear on the art itself.
+  3: in "Cover" the covers stand on the bottom of equal slots the same way; "List" rows are
+  unchanged. 4: the same alignment at both ends of the zoom, nothing clipped.
+- **Check:** suite files `tests/test_cartridge_on_mixed_pages.py` (`TheUniformSlotTests`,
+  `OneGridInPlayOrderTests`), `tests/test_rom_card_widget.py` (`OnAPageThatMixesConsolesTests`,
+  `ACartridgeOnAPageThatMixesConsolesTests`), `tests/test_library_pages.py`
+  (`test_every_card_gets_the_same_slot_whatever_the_mix`); human for the look of the page.
+
+## Android — Game files
+
+A game's page in the Android app (openemux-android, `pkg/android/openemux`, `ui/GameFilesCard.kt`
+over `data/GameFiles.kt`) has a "Game files" card since issue 1005: export the game's file and its
+battery save, import a save from a file (another emulator's included) and put back the save an
+import replaced. Save states are not part of it. The runner has no Android device, so these are
+`MANUAL` (the logic is in `GameFilesTest` in openemux-android).
+
+### RT-1229 — "Export game file" writes the game, a disc game as one zip that imports back
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a GBA game and a PlayStation game made of a `.cue` and its
+  `.bin` tracks; locale English.
+- **Steps:**
+  1. Open the GBA game's page and scroll to "GAME FILES". Note the value beside "Export game file".
+  2. Tap "Export game file", pick "Downloads" in the system dialog and tap "Save".
+  3. Open the PlayStation game's page; note the value beside "Export game file", then export it to
+     "Downloads" the same way.
+  4. Remove the PlayStation game from the library, then import the exported `.zip` from "Import".
+- **Expected:** 1: the game's size ("16 MB" or similar). 2: a "Exported “<file name>”" toast;
+  Downloads has the file with the game's name and the same size. 3: the value reads "<N> files ·
+  <size>"; the export is one `<game name>.zip` holding the `.cue` and every `.bin`, and while it runs
+  the row shows "<done> of <total>". 4: the game is back in the library and starts.
+- **Check:** human only (`adb shell ls -l /sdcard/Download/`, `unzip -l` of the zip);
+  `GameFilesTest` (`aSingleFileGameExportsAsItself`, `aDiscGameExportsEveryPartInOneZip`).
+
+### RT-1230 — "Export game save" only when the game has a save, with its companions zipped
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game never played, and a Game Boy game (Gambatte) with a cartridge clock
+  (for example a Pokémon Gold/Silver/Crystal) saved in game at least once; locale English.
+- **Steps:**
+  1. Open the unplayed GBA game's page and look at "GAME FILES".
+  2. Play it, save in game (the game's own save, not a save state), quit, and look again.
+  3. Tap "Export game save" and save it to "Downloads".
+  4. Do the same for the Game Boy game.
+- **Expected:** 1: "Export game file" and "Import game save" only; no "Export game save", no
+  "Restore previous save". 2: "Export game save" appears, its value the date and time of the save.
+  3: Downloads has `<game name>.srm`. 4: Downloads has `<game name> save.zip` holding the `.srm` and
+  the `.rtc`.
+- **Check:** human only; `GameFilesTest` (`noSaveMeansNothingToExport`,
+  `aLoneSaveExportsAsItselfAndCompanionsAsAZip`, `onlyTheGamesOwnBatterySavesCount`).
+
+### RT-1231 — A save from another emulator is imported, and the replaced save comes back
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game and a SNES game, each with an in-game save of its own; a `.sav` made
+  by another emulator for each of them (same game, other progress) in Downloads; locale English.
+- **Steps:**
+  1. On the GBA game's page tap "Import game save" and pick its `.sav`.
+  2. Read the dialog, tap "Replace".
+  3. Start the game (with "Restart" if "Continue" is offered) and load the game's save.
+  4. Back on its page, tap "Restore previous save", then "Restore"; start the game again.
+  5. Tap "Restore previous save" once more and confirm; start the game.
+  6. Repeat steps 1 to 3 with the SNES game.
+- **Expected:** 2: titled "Replace this game's save?", naming the file and the game, saying the
+  current save is kept and "Saves from other emulators usually work, but not always."; then a "Save
+  imported" toast and a "Restore previous save" row dated now. 3: the other emulator's progress.
+  4: "Previous save restored"; the game's own progress is back. 5: the imported progress again (a
+  restore can be undone). 6: as in 2 and 3.
+- **Check:** human only; `GameFilesTest` (`anImportKeepsTheSaveItReplacesAndItsCompanions`,
+  `restoreSwapsAndCanBeUndone`, `theTargetIsTheCoresUsualNameWithoutASave`).
+
+### RT-1232 — An import that doesn't look right asks first, and what can't be a save is refused
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game with a 128 KB save; in Downloads a 64 KB `.sav`, a `.dat` file, an
+  empty file and a save state (`.state1`); a suspended game ("Continue" on the page); English.
+- **Steps:**
+  1. "Import game save" → the 64 KB `.sav`; read the dialog and tap "Cancel".
+  2. "Import game save" → the `.dat`; read the dialog and tap "Cancel".
+  3. "Import game save" → the empty file; then the `.state1`.
+- **Expected:** 1: the dialog adds "This file is 64 kB; the save of this game is 128 kB. It may not
+  be a save of this game." and, because a suspended game exists, "Start the game with Restart:
+  Continue resumes the suspended game with its old progress."; after "Cancel" the save and its date
+  are unchanged and no "Restore previous save" appears. 2: the dialog adds "“<name>.dat” does not
+  have a usual save file extension.". 3: no dialog: "The file is empty", then "This is not a game
+  save: save states, games and images cannot be imported here".
+- **Check:** human only; `GameFilesTest` (`theSizeIsComparedWithTheGamesOwnSave`,
+  `anUnusualExtensionAsksFirst`, `whatCannotBeASaveIsRefused`).
+
+### RT-1233 — Import is refused while the game is running
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game with a save; a `.srm` for it in Downloads; locale English.
+- **Steps:**
+  1. Start the game, then press Home (the game stays open in Recents) and open OpenEmux's library
+     from the launcher.
+  2. Open the same game's page, tap "Import game save" and pick the `.srm`.
+  3. Open another game's page and import a save for it the same way, then tap "Cancel".
+- **Expected:** 2: no dialog; a "Close the game first: it is running" toast, and the save is
+  untouched. 3: the dialog opens normally (only the running game is refused).
+- **Check:** human only; `GameFilesTest` (`theEnginesStatusSaysWhetherThisGameRuns`).
+
+### RT-1234 — The Game files card with a gamepad and with TalkBack
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A game with a save and a kept save (after RT-1231 step 2); a controller
+  connected; then TalkBack on.
+- **Steps:**
+  1. With the controller only, open the game's page and press Down until "GAME FILES" is reached;
+     keep pressing Down through its rows, then press A on "Import game save" and B in the picker.
+  2. Press A on "Restore previous save", then B.
+  3. Turn TalkBack on and swipe through the card.
+- **Expected:** 1: each row ("Export game file", "Export game save", "Import game save", "Restore
+  previous save") takes focus in that order, then "Remove from library"; A opens the system picker
+  and B comes back to the page with the focus on the row. 2: the "Restore the previous save?"
+  dialog opens and B closes it without restoring. 3: each row is read with its value or subtitle.
+- **Check:** human only.
+
+### RT-1235 — Big Picture's games fill the row with large cards
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox; a library with games for NES, Super Nintendo,
+  Nintendo 64, Game Boy Advance and PlayStation (the devbox's synthetic library), a dozen or more
+  for at least one of them.
+- **Steps:**
+  1. `make devbox-res RES=1920x1200`; open Super Nintendo from the Shelf in "Cartridges";
+     `make devbox-shot OUT=$SCRATCH/bp-fit-sfc-1200.png`.
+  2. Repeat for NES, Nintendo 64, Game Boy Advance and PlayStation, in "Cartridges" and in
+     "Covers", at `RES=1280x720`, `RES=1920x1080` and `RES=1920x1200`.
+  3. Open "All" (the first console chip) and scroll through its sections.
+  4. Switch to "List".
+- **Expected:** 1–2: in every screenshot the last column of games ends as far from the right edge
+  of the window as the first one starts from the left (give or take the gap between two cards);
+  there is no empty strip on the right. The cards are at least as large as they were before this
+  change (an SFC cartridge at 1920x1080 is about 400 px wide or more). 3: every console section
+  fills its row the same way; a section with fewer games than fit on a row keeps the same card size
+  as that console's own page and starts at the left. 4: the rows span the width, as before.
+- **Check:** suite file `tests/test_grid_fit.py` (`FillingTheRowTests`, `AllGamesTests`); the
+  screenshots for a human look.
+
+### RT-1236 — Resizing Big Picture keeps the focused game
+- **Area:** Navigation
+- **Mode:** AUTO-UI
+- **Preconditions:** Big Picture on in the devbox, Super Nintendo open with a dozen games or more.
+- **Steps:**
+  1. With the D-pad (`make devbox-xdo CMD='key Down'`, `key Right`), move the focus to a game in
+     the second or third row.
+  2. `make devbox-res RES=1280x720`, wait a second; `make devbox-shot OUT=$SCRATCH/bp-fit-720.png`.
+  3. `make devbox-res RES=1920x1200`, wait a second; `make devbox-shot OUT=$SCRATCH/bp-fit-1200.png`.
+  4. Press D-pad up, down, left and right.
+  5. Leave Big Picture (F11) and look at the desktop library.
+- **Expected:** 2–3: the columns change to fill the new width, and the same game still has the
+  focus ring and is on screen; the page does not jump to the top. 4: the focus walks the rows and
+  columns as laid out on screen. 5: the desktop grid is exactly as before Big Picture, at its own
+  zoom, with its usual space on the right.
+- **Check:** suite file `tests/test_grid_fit.py` (`RefittingTests`,
+  `test_the_desktop_grid_is_never_fitted`); the screenshots for a human look.
+
+## Desktop — Custom themes
+
+### RT-1238 — System, Light and Dark stay as they were and cannot be edited
+- **Area:** Custom themes
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running (`make devbox-app`), no custom theme.
+- **Steps:**
+  1. Open "Settings" ▸ "System"; in "Interface", open the "Theme" list.
+  2. Pick "Light", then "Dark", then "System"; `make devbox-shot OUT=$SCRATCH/RT-1238.png WIN=1`
+     after each.
+- **Expected:** 1: the list reads "System", "Light", "Dark", then the ready-made "Pastel",
+  "Dracula", "Kitty", "Neon", "Tokyo Night" (issue 1012), and nothing else; the "Ready-made Themes"
+  cards, a "New Theme…" row and an "Import Theme…" row sit under it. 2: the app paints light, dark, then the desktop's appearance, as before; with any
+  of the three picked there is no edit (pencil) button and no "More Theme Actions" (⋮) menu beside
+  the row.
+- **Check:** suite file `tests/test_theme_picker.py` (`ListTests`); the screenshots for a human look.
+- **Restore:** pick the theme that was in use before step 2.
+
+### RT-1239 — A new theme is made in the editor, saved, picked, and survives a restart
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a throwaway home (the devbox's is one).
+- **Steps:**
+  1. "Settings" ▸ "System" ▸ "New Theme…"; type "Midnight", pick "Dark", "Create".
+  2. In the editor, "Colors": click the swatch of "Library" and drag in the picker; then
+     "Sidebar" and "Cards".
+  3. "Save".
+  4. Quit the app and start it again.
+- **Expected:** 1: the editor opens, titled "New Theme" with "Midnight · dark base", "Colors"
+  selected, every row reading "Same as base" and its reset button greyed out. 2: the preview on the
+  right follows the picker while dragging; each changed row shows its hex and its reset button
+  becomes active. 3: the editor closes, "Theme" reads "Midnight", and the main window paints with
+  the new colors. 4: still "Midnight", same colors; `~/.openemux/themes/midnight/theme.yaml` holds
+  `version: 1`, `name: Midnight`, `base: dark` and only the three changed colors.
+- **Check:** human only (`tests/test_theme_editor.py` `SaveTests` and
+  `tests/test_theme_picker.py` `NewThemeTests` cover the logic).
+
+### RT-1240 — Cancel throws away every change, the live preview included
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1239 done ("Midnight" exists and is in use).
+- **Steps:**
+  1. With "Midnight" picked, click the edit (pencil) button beside "Theme".
+  2. Turn on "Apply to the whole app while editing"; change "Window background" and "Accent and
+     focus".
+  3. "Cancel".
+  4. Repeat steps 1–3 from "New Theme…" with a new name.
+- **Expected:** 2: the main window behind the editor repaints as the colors change. 3: the window
+  is back to Midnight exactly as before; reopening the editor shows the old values. 4: after
+  Cancel, no theme with the new name is in the "Theme" list and no folder for it exists under
+  `~/.openemux/themes/`.
+- **Check:** human only (`tests/test_theme_editor.py` `LiveTests`).
+
+### RT-1241 — Text below WCAG AA warns next to its row, without blocking Save
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme on the Light base.
+- **Steps:**
+  1. Edit the theme; open "Text"; set "Secondary text" to `#D0D0D0` in the picker's "Hex" field.
+  2. Set it back with its reset button.
+  3. Set "Library" (in "Colors") to `#303030`.
+- **Expected:** 1: the row's subtitle becomes "Low contrast with …: N:1 (needs 4.5:1)" with a
+  warning icon, and the "Text" entry of the section list shows a warning icon too; "Save" stays
+  available. 2: the warning disappears. 3: "Library" warns about its text, and "Text" shows the
+  icon again.
+- **Check:** human only (`tests/test_theme_editor.py` `ValueTests`,
+  `tests/test_custom_themes.py` contrast tests).
+
+### RT-1242 — Reset a row, reset all
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** In the editor change three colors, reset one with its reset button, then press
+  "Reset All".
+- **Expected:** the reset row reads "Same as base" with its button greyed out; after "Reset All"
+  every row does, "Reset All" greys out, and the preview is the base's look.
+- **Check:** suite file `tests/test_theme_editor.py` (`ValueTests`).
+
+### RT-1243 — Duplicate, rename and delete; deleting the theme in use falls back to System
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. "More Theme Actions" (⋮) ▸ "Duplicate".
+  2. ⋮ ▸ "Rename…", type a new name, "Rename".
+  3. ⋮ ▸ "Delete…", "Delete".
+- **Expected:** 1: "<name> (copy)" appears, is picked and paints the same colors. 2: the list shows
+  the new name, still picked. 3: a confirmation first; after it the copy is gone from the list and
+  from `~/.openemux/themes/`, and "Theme" reads "System".
+- **Check:** human only (`tests/test_theme_picker.py` `DuplicateRenameDeleteTests`).
+
+### RT-1244 — A hand-broken theme.yaml never crashes the app
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** As a QA person: break a theme's `theme.yaml` by hand (invalid YAML; a list instead of
+  a mapping; `base: purple`; `card_bg: 12`; an unknown key `raw_css: "*{}"`), starting the app after
+  each.
+- **Expected:** the app always opens. Invalid YAML, a list or a bad base: the theme is left out of
+  the list (and, if it was in use, the app paints System) with a "Skipping theme" line in the log.
+  A wrong type or an unknown key: the theme loads without that key. Nothing from the file reaches
+  the stylesheet except validated `#rrggbb` colors.
+- **Check:** suite files `tests/test_custom_themes.py` (`ParseTests`, `StoreTests`),
+  `tests/test_theme_css.py`, `tests/test_custom_theming.py`.
+
+### RT-1245 — The header toggle leaves a custom theme for built-in Light or Dark
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a custom theme in use.
+- **Steps:** Click the sun/moon button in the header bar.
+- **Expected:** the app switches to built-in "Light" from a dark-based theme ("Dark" from a light
+  one), the custom colors go away, and "Settings" ▸ "Theme" reads that built-in.
+- **Check:** suite file `tests/test_custom_theming.py` (`WindowThemeTests`).
+
+### RT-1246 — The theme editor in a narrow window
+- **Area:** Custom themes
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox app running.
+- **Steps:**
+  1. `make devbox-res RES=520x900`; "Settings" ▸ "System" ▸ "New Theme…", any name, "Create".
+  2. `make devbox-shot OUT=$SCRATCH/RT-1246.png`; pick "Text" in the "Section" row.
+  3. "Cancel"; `make devbox-res RES=1280x800`.
+- **Expected:** 2: the preview sits above the controls, the section list is replaced by a
+  "Section" row, and "Reset All" is under the rows; picking "Text" shows its rows. 3: nothing was
+  saved.
+- **Check:** suite file `tests/test_theme_editor.py` (`test_narrow_stacks_the_preview_over_the_controls`);
+  the screenshot for a human look.
+- **Restore:** step 3.
+
+### RT-1247 — The Custom Color dialog keeps working on the shared picker
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** none.
+- **Steps:** A game's card ▸ "Cartridge color" ▸ the custom color item; drag the plane, move "Hue",
+  type in "Hex", "Apply".
+- **Expected:** exactly as in issue 983: the cartridge preview follows, an invalid hex greys out
+  "Apply", Enter in "Hex" applies.
+- **Check:** suite files `tests/test_cartridge_color_dialog.py`, `tests/test_color_picker.py`.
+
+### RT-1265 — Borders and Shadows, Icons and Typography change the whole app
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use ("Midnight", RT-1239).
+- **Steps:**
+  1. Edit it; "Borders and Shadows": "Corner radius" 24, "Border width" 2, "Shadow strength" 80.
+  2. "Icons": "Icon size" 150%, change "Icon color".
+  3. "Typography": "Text size" 130%, pick another family in "Font".
+  4. "Save"; then narrow the window until the sidebar collapses.
+- **Expected:** 1–3: the preview follows each change; changed rows show their value ("24 px",
+  "130%") and an active reset button. 4: cards, boxed lists and buttons are rounder with a border
+  and a stronger shadow; the sidebar's and header bar's symbolic icons are larger and in the picked
+  color; all text is larger and in the picked font; the narrow layout still fits and scrolls.
+- **Check:** human only (`tests/test_theme_css.py` and `tests/test_theme_editor_rows.py` cover the
+  rules and the rows).
+
+### RT-1266 — Spacing: density, grid gap, card size and sidebar width
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. Edit it; "Spacing": click "Compact", then "Comfortable"; move "Fine adjustment".
+  2. "Grid gap" 0, then 32; "Card size" 75%, then 150%; "Sidebar width" 200, then 420. "Save".
+  3. Make the window narrow, then wide again.
+- **Expected:** 1: the picked density stays highlighted and its row gets an active reset; rows and
+  the header grow and shrink with the density and, finer, with "Fine adjustment". 2: after Save the library rebuilds with the new gaps
+  and card sizes; the sidebar takes the chosen width when the window has room. 3: a narrow window
+  still shares the width and collapses the sidebar at its usual breakpoint.
+- **Check:** human only (`tests/test_theme_layout_ui.py` `WindowSizeTests`).
+
+### RT-1267 — Background images for the library and the sidebar
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use; a large photo (JPEG or PNG) on disk.
+- **Steps:**
+  1. Edit it; "Backgrounds" ▸ "Library" ▸ "Choose…", pick the photo.
+  2. Try "Fit" Cover, Contain, Tile; move "Dim" and "Blur". Same for "Sidebar".
+  3. "Save". Scroll a console with many games.
+  4. Move or delete the original photo; restart the app.
+- **Expected:** 1: the thumbnail and the picture's size appear; "Fit", "Dim" and "Blur" become
+  active. 2: the preview follows; a too-light picture under light text shows a contrast warning on
+  the image row and a warning icon beside "Backgrounds". 3: the images show behind the games and the
+  console list, dimmed into the theme's colors; scrolling stays smooth. 4: the images are still there
+  (they live in `~/.openemux/themes/<id>/images/`).
+- **Check:** human only (`tests/test_theme_editor_rows.py` `ImageRowTests`,
+  `tests/test_theme_layout_ui.py` `BackgroundTests`).
+
+### RT-1268 — A file that is not a usable picture is refused
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a text file renamed `fake.png`; an image larger than 8192 px on a side.
+- **Steps:** In the editor, "Backgrounds" ▸ "Choose…" each of them.
+- **Expected:** the row says "The image could not be used: it is not a picture, or it is too
+  large." in red; nothing else changes and the app keeps working.
+- **Check:** human only (`tests/test_theme_images_store.py` `ImportImageTests`).
+
+### RT-1269 — Images are never left behind
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with a library image.
+- **Steps:**
+  1. Edit it, pick another image, "Cancel".
+  2. "⋮" ▸ "Duplicate"; then delete the original theme.
+  3. Delete the copy.
+- **Expected:** 1: the theme keeps its old image; no `.staging-*` folder stays under
+  `~/.openemux/themes/`. 2: the copy shows the same image after the original is gone. 3: the
+  theme's folder, images included, is gone.
+- **Check:** human only (`tests/test_theme_images_store.py` `StoreImageTests`).
+
+### RT-1270 — Export a theme and import it back
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with images and shape settings.
+- **Steps:**
+  1. "⋮" ▸ "Export…", save `Midnight.openemux-theme`.
+  2. Delete the theme; "Import Theme…", pick the file.
+  3. "Import Theme…" the same file again.
+- **Expected:** 1: a toast "Theme exported"; the file is a zip with `theme.yaml` and `images/`.
+  2: a toast "Imported “Midnight”"; the theme is picked and looks exactly as before, images
+  included. 3: a second theme "Midnight (2)"; nothing is overwritten.
+- **Check:** human only (`tests/test_theme_archive.py` round trip,
+  `tests/test_theme_picker_share.py`).
+
+### RT-1271 — A hostile theme file is refused and touches nothing
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** test files prepared by QA: not a zip, a zip with `../evil.txt`, a zip with a
+  symlink, a zip bomb, a `theme.yaml` with unknown keys and out-of-range numbers.
+- **Steps:** "Import Theme…" each file; list `~/.openemux/themes/` before and after.
+- **Expected:** every bad file shows "This file is not a theme OpenEmux can use." and the folder is
+  unchanged (no new or hidden folder). The unknown-keys file imports with those keys dropped and
+  the numbers clamped.
+- **Check:** suite file `tests/test_theme_archive.py` (one test per attack).
+
+### RT-1272 — Start from a Palette
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a dark-base theme and a light-base theme; one palette of your own made in the
+  Custom Color dialog.
+- **Steps:** In the editor, "Start from a Palette" ▸ "Nord" (dark base), then "Gruvbox" (light
+  base), then your own palette.
+- **Expected:** surfaces, text and accent fill at once; the preview follows; no contrast warning
+  for the presets; your palette is listed after the presets; "Reset All" and "Cancel" undo it.
+- **Check:** suite file `tests/test_theme_images_store.py` (`SeedTests`).
+
+### RT-1273 — The editor's color popovers share Saved colors and palettes
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a saved custom cartridge color and a palette of your own (issue 983).
+- **Steps:** In the editor, click the color swatch of rows in every section that has colors
+  (Colors, Text, Accent, Borders and Shadows, Icons); open the palette list.
+- **Expected:** under the picker of every one of them, the same "Saved" colors and palette picker
+  as card ▸ "Cartridge color" ▸ "Custom…": Shell Colors, the 8 palettes shared with Android
+  (Basic, Dracula, Pastel, Nord, Gruvbox, Neon, Earth, Green screen) and your own; a click on a
+  swatch sets the row's color.
+- **Check:** suite file `tests/test_theme_editor_rows.py` (`PaletteTests`).
+
+### RT-1274 — Big Picture follows a custom theme
+- **Area:** Custom themes, Big Picture
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with a library image and "Text size" 130%.
+- **Steps:**
+  1. Open Big Picture; walk Library, a console, a game's details, Recent, Settings, the pause
+     menu and the on-screen keyboard with a gamepad.
+  2. In Big Picture "Settings", switch to another custom theme, then to "Dark".
+- **Expected:** 1: Big Picture takes the theme's colors and font, the image behind the shelves and
+  larger text; console shelf colors are unchanged; the focused item is always visible. 2: each
+  switch applies at once; under "Dark" (and "System", "Light") Big Picture looks exactly as before.
+- **Check:** human only (`tests/test_bigpicture_theme.py` checks the floors;
+  `tests/test_theme_layout_ui.py` `BigPictureThemeTests`).
+
+### RT-1275 — Themes saved before keep loading
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a `theme.yaml` from part 1 (colors only).
+- **Steps:** Start the app with it in use.
+- **Expected:** it paints as before; every new setting reads "Same as base".
+- **Check:** suite file `tests/test_custom_themes.py`.
+
+### RT-1276 — Ready-made themes: preview cards, one click, a restart
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" ▸ "System" ▸ "Interface": look at the "Ready-made Themes" cards.
+  2. Click each card in turn: "Pastel", "Dracula", "Kitty", "Neon", "Tokyo Night".
+  3. With "Kitty" picked, quit and start the app again; open Big Picture.
+- **Expected:** 1: five cards, each a small drawing of the app in that theme with its picture.
+  2: each click applies the theme at once (colors and its background picture; Kitty's cat sits by
+  a ball of yarn in the library's lower right), the card in use is outlined and "Theme" names it; no contrast
+  warning would apply to any of them. 3: Kitty is still in use; Big Picture follows it.
+- **Check:** human only (`tests/test_ready_themes.py` holds the contrast; `tests/test_theme_picker_share.py`
+  `ReadyMadeTests` the cards).
+
+### RT-1277 — Ready-made themes are read-only; Duplicate makes an editable copy
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** "Dracula" picked.
+- **Steps:**
+  1. Look beside "Theme"; open "⋮".
+  2. "⋮" ▸ "Duplicate"; edit the copy and change its accent; "Save".
+- **Expected:** 1: no edit (pencil) button; in "⋮", "Rename…" and "Delete…" are greyed out,
+  "Duplicate" and "Export…" work. 2: "Dracula (copy)" is created with the same picture and picked;
+  it can be edited, renamed and deleted; "Dracula" itself is unchanged.
+- **Check:** suite file `tests/test_theme_picker_share.py` (`ReadyMadeTests`).
+
+### RT-1278 — Big Picture's console list follows the theme
+- **Area:** Custom themes, Big Picture
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. Open Big Picture; look at the console list (Library).
+  2. Edit the theme ▸ "Colors" ▸ "Big Picture" ▸ "Console list": pick a color; "Save"; open Big
+     Picture again. Then reset the row and save.
+  3. Pick each ready-made theme and open Big Picture.
+  4. Pick a "Console list" color close to the primary text color.
+- **Expected:** 1: as before, each console card in its own color. 2: every card takes the picked
+  color, names and counts in the theme's text colors; after the reset, the per-console colors are
+  back. 3: each ready-made theme gives its own console-list color, all readable. 4: a contrast
+  warning on the "Console list" row (and on the text rows) in the editor.
+- **Check:** suite file `tests/test_bigpicture_theme.py` (`ConsoleListTests`); the ready-made
+  contrast in `tests/test_ready_themes.py`.
+
+## Android — Themes
+
+User themes in the Android app (openemux-android, `pkg/android/openemux`, issue 1018): Settings ▸
+Theme lists System, Light and Dark, then "MY THEMES" with "New theme" and "Import theme file"; a
+full-screen editor (`ui/theme/ThemeEditor.kt`) over `data/theme/`. A theme file is a
+`.openemux-theme` zip shared with the desktop (`pkg/android/openemux/docs/theme-format.md`). The
+runner has no Android device, so these are `MANUAL` (the logic is in the `data/theme` tests of
+openemux-android: `UserThemeTest`, `ThemeYamlTest`, `ThemeStoreTest`, `ResolvedThemeTest`,
+`ThemeDraftTest`, `ThemeBlurTest`, and `ThemePrefTest`, `StringsThemeTest` in `ui`).
+
+### RT-1248 — System, Light and Dark are unchanged and cannot be edited
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a few games; no user theme; locale English.
+- **Steps:**
+  1. Settings ▸ "Theme": pick "Light", then "Dark", then "System" (switch the phone's dark mode).
+  2. Look at the rows of "System", "Light" and "Dark".
+- **Expected:** 1: each looks exactly as before issue 1018. 2: they have no Edit or "⋮" button;
+  "MY THEMES" shows only "New theme" and "Import theme file".
+- **Check:** human only; `ResolvedThemeTest.anUntouchedThemePaintsLikeItsBase`.
+
+### RT-1249 — A new theme: live preview, Save picks it, and it survives a restart
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1248.
+- **Steps:**
+  1. Settings ▸ "Theme" ▸ "New theme", name "Midnight", "Dark", "Create".
+  2. In "Colors" change "Navigation", "Library" and "Cards"; tap the preview.
+  3. "Save". Look at the library, a game's page, Settings and a sheet.
+  4. Force-stop the app and open it again.
+- **Expected:** 1: the editor, title "New theme", subtitle "Midnight · Dark base", every row "Same as
+  base". 2: the preview follows each change at once; the tap switches it to a game's details and
+  back. 3: "Midnight" is picked and the app paints with it, without a restart. 4: still Midnight.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat files/themes/midnight/theme.yaml`
+  lists only the changed keys); `ThemeStoreTest.createListGetRenameDelete`.
+
+### RT-1250 — Cancel and Back throw the changes away
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight".
+- **Steps:**
+  1. Edit "Midnight", change "Background", tap "Cancel".
+  2. Edit again, change "Cards", press Back (or B).
+- **Expected:** 1: "Discard changes?" with "Discard" and "Keep editing"; "Discard" leaves the theme
+  as it was saved. 2: the same question.
+- **Check:** human only; `ThemeDraftTest.editingTracksChangesAgainstTheSavedTheme`.
+
+### RT-1251 — Reset per setting, Reset all and the contrast warning
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight".
+- **Steps:**
+  1. Edit it; in "Text" set "Secondary text" close to the "Cards" color.
+  2. Tap the reset button of "Secondary text".
+  3. Change two settings, then "Reset all" and confirm.
+- **Expected:** 1: under the row "Low contrast on Cards: 1.x:1", a warning card at the top of the
+  section and a warning icon on the "Text" chip (and on "Colors"); "Save" still works. 2: the row
+  reads "Same as base", its reset button greys out, the warnings go. 3: every row "Same as base",
+  pictures removed.
+- **Check:** human only; `UserThemeTest.contrastProblemsOnlyForChangedPairs`,
+  `ThemeDraftTest.warningsPerKeyAndSection`.
+
+### RT-1252 — Shapes, icons and sizes at their extremes keep the app usable
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; a phone, then the same phone in landscape.
+- **Steps:**
+  1. "Shapes": "Corner radius" 0 then 28, "Border width" 3 with a bright "Border color", "Shadow
+     strength" 100%. Save; look at the shelf, Settings and a game's page.
+  2. "Icons": "Icon size" 150%, an "Icon color". "Sizes": "Text size" 130%, "Density" "Compact" then
+     "Comfortable", "Grid spacing" 0 then 32, "Card size" 75% then 150%. Save each time.
+  3. Turn the phone to landscape and repeat the look around; open the editor there too.
+- **Expected:** 1: cards and buttons get square or round corners, a visible border and a shadow. 2:
+  icons and text grow, rows get tighter or looser (never too small to tap), the grid spacing and,
+  where the columns are automatic (landscape), the card width change. No text is cut and nothing
+  overlaps. 3: the same in landscape; the editor shows sections, settings and preview side by side.
+- **Check:** human only; `ResolvedThemeTest.shapesSizesAndPictures`, `ThemePrefTest.gridFollowsTheTheme`.
+
+### RT-1253 — Background pictures are copied in and survive the original
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; two photos in the gallery.
+- **Steps:**
+  1. "Backgrounds" ▸ "Library background" ▸ "Choose", pick a photo; try "Cover", "Contain", "Tile",
+     "Dim" and "Blur". Do the same under "Navigation background". Save.
+  2. Delete both photos from the gallery, force-stop and reopen the app.
+  3. Edit the theme and remove the library picture; Save.
+- **Expected:** 1: the preview and, after Save, the library and the tabs show the pictures as set;
+  text stays readable over them; scrolling the library stays smooth. 2: the pictures are still
+  there. 3: the library goes back to its color; the copy is gone from
+  `files/themes/midnight/images/`.
+- **Check:** human only (`adb shell run-as com.openemux.mobile ls files/themes/midnight/images`);
+  `ThemeStoreTest.picturesAreStagedSavedAndPruned`.
+
+### RT-1254 — Duplicate, Rename and Delete; deleting the active theme goes back to System
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight" with its pictures.
+- **Steps:**
+  1. "⋮" beside "Midnight" ▸ "Duplicate".
+  2. "⋮" beside the copy ▸ "Rename", "Night copy", "Rename".
+  3. "⋮" beside "Night copy" ▸ "Delete".
+- **Expected:** 1: "Midnight (copy)" appears, picked, with the same pictures. 2: renamed in the list
+  and in Settings. 3: "Delete “Night copy”?" saying it is removed for good and the app goes back to
+  System; after "Delete" the app paints as System and "System" is picked.
+- **Check:** human only; `ThemeStoreTest.duplicateCopiesPictures`.
+
+### RT-1255 — Share, Save and Import a theme file; import never overwrites
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight"; a file manager app.
+- **Steps:**
+  1. "⋮" ▸ "Share theme file" and send it somewhere you can open (Files, Drive, a chat with yourself).
+  2. "⋮" ▸ "Save theme file", save `midnight.openemux-theme` to Downloads.
+  3. Delete "Midnight", then "Import theme file" and pick the saved file.
+  4. "Import theme file" with the same file again.
+  5. In the file manager, open the file with OpenEmux; then open a ROM the same way.
+- **Expected:** 1: the share sheet offers the file. 2: "Theme file saved". 3: "Imported
+  “Midnight”"; the theme is back, picked, identical (colors, sizes, pictures). 4: "Imported
+  “Midnight (2)”", the first one untouched. 5: the theme imports as in 4 ("Midnight (3)"); the ROM
+  goes to the library as before.
+- **Check:** human only; `ThemeStoreTest.exportThenImportIsTheSameTheme`, `ThemePrefTest.themeFilesByName`.
+
+### RT-1256 — A theme file moves between the desktop and the phone
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A desktop OpenEmux with theme export (issue 1012) and the Android app.
+- **Steps:**
+  1. On the desktop, make a theme with surface, text and accent colors; export it; import it on the
+     phone.
+  2. Export a phone theme and import it on the desktop.
+- **Expected:** 1: the same colors on the phone; desktop-only settings (sidebar width, font family)
+  are ignored. 2: the shared settings come in identical; Android-only ones are ignored.
+- **Check:** human only; `ThemeStoreTest.importsADesktopFileInATopFolder`, `ThemeYamlTest.readsWhatTheDesktopWrites`.
+
+### RT-1257 — A hostile or broken theme file is refused without a crash
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** In Downloads: a `.txt` renamed to `x.openemux-theme`; a zip renamed the same way
+  with an entry named `../theme.yaml`; one whose `theme.yaml` says `base: sepia`; one whose image is
+  a text file named `images/a.png`.
+- **Steps:** "Import theme file" with each of them.
+- **Expected:** a message each time ("This is not a theme file.", "This theme file is damaged.",
+  "An image in this theme file could not be read."); no crash, nothing new in "MY THEMES", nothing
+  left in `files/themes/` but the themes that were there.
+- **Check:** human only; `ThemeStoreTest.hostileFilesAreRefusedAndWriteNothing`.
+
+### RT-1258 — With a gamepad the focus is visible everywhere under any theme
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad (or a TV remote); a theme whose "Background", "Library", "Cards",
+  "Sheets and dialogs" and "Selection" are all the same color.
+- **Steps:**
+  1. Walk the shelf, the library (grid and list), a game's page, Settings and a sheet with the D-pad.
+  2. Open the editor with the pad: L1/R1 through the sections, ◀▶ on a slider, A on a color row (the
+     picker's square and hue steer with the D-pad), B back, Start saves.
+- **Expected:** 1: the focused item always stands out from what is around it. 2: every control is
+  reachable and works; the hint bar names the buttons.
+- **Check:** human only; `ResolvedThemeTest.theFocusStaysVisibleWhateverTheTheme`.
+
+### RT-1259 — A backup brings the themes back
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight" picked.
+- **Steps:** Settings ▸ "Backup": export with settings; delete "Midnight"; import the backup.
+- **Expected:** "Midnight" is back with its pictures, and picked.
+- **Check:** human only (`unzip -l` of the backup lists `internal/themes/`).
+
+### RT-1260 — Ready-made themes: a preview each, applied in one tap, kept after a restart
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a few games of different consoles; locale English.
+- **Steps:**
+  1. Settings ▸ "Theme": look under "READY-MADE".
+  2. Tap "Pastel", "Dracula", "Kitty", "Neon" and "Tokyo Night" in turn, going back to the shelf after each.
+  3. With one of them picked, force-stop the app and open it again.
+- **Expected:** 1: the five, each with a picture preview, its name and base, a Duplicate button and no Edit or "⋮"; the hint "Read-only. Duplicate one to make it your own.". 2: the app takes each one's colors and library picture at once (Kitty shows a cat in the upper right beside the title); every text stays readable over the picture; buttons with a light accent (Kitty, Pastel) have dark labels. 3: the same theme.
+- **Check:** human only; `ReadyThemesTest` (`theFiveShipWithTheirPictureAndOnlyKnownKeys`, `everyTextPairPassesAA`, `installCopiesOncePerStampAndLoads`); `tools/gen-ready-themes.py --check` in openemux-android exits 0.
+
+### RT-1261 — A ready-made theme is read-only; Duplicate makes an editable copy
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1260.
+- **Steps:**
+  1. Tap the Duplicate button of "Dracula".
+  2. Under "MY THEMES", tap Edit on "Dracula"; change "Background"; "Save".
+  3. Duplicate "Dracula" from "READY-MADE" again.
+  4. "New theme" named "Dracula".
+- **Expected:** 1: "Dracula" appears under "MY THEMES", picked, with the same colors and picture. 2: the copy changes; the ready-made "Dracula" is unchanged. 3: "Dracula (2)". 4: created as a separate theme (its file is `files/themes/dracula-2/` or later), never over the ready-made one.
+- **Check:** human only (`adb shell run-as com.openemux.mobile ls files/themes`); `ReadyThemesTest.readyIdsAreNeverAUserTheme`.
+
+### RT-1262 — The ready-made artwork and palettes are credited
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app.
+- **Steps:** Settings ▸ "About" ▸ "Licenses".
+- **Expected:** "Dracula (colors of the Dracula theme)" (MIT), "Tokyo Night (colors of the Tokyo Night theme)" (MIT) and "Ready-made theme artwork" (original, MIT) are listed and open their pages.
+- **Check:** human only; openemux-android `pkg/android/openemux/art/themes/CREDITS.md` names the source and license of each picture and palette.
+
+### RT-1263 — Every theme color field takes a color from the eight palettes and the saved colors
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A user theme (RT-1249's "Midnight"); a skin edited once in the skin editor with a few colors.
+- **Steps:**
+  1. Edit the theme; tap any color row ("Cards", "Primary text", "Border color"…).
+  2. Tap "Palettes ›" and pick "Nord"; tap one of its colors.
+  3. Look under "Hex"; then open the skin editor's color panel.
+- **Expected:** 1: the sheet shows "Palette" with the palette's name, "Palettes ›" and seven colors, the square, the hue bar and "Hex". 2: the list has Basic, Dracula, Pastel, Nord, Gruvbox, Neon, Earth and Green screen; after picking, the row shows Nord's colors and the tapped one goes to the setting and the preview. 3: "Recent" lists the colors used, the same as the skin editor's, which also shows "Nord".
+- **Check:** human only.
+
+### RT-1264 — The console list background follows the theme
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; games of three consoles.
+- **Steps:**
+  1. Edit "Midnight" ▸ "Colors" ▸ "Console list": pick a color; "Save"; look at the shelf.
+  2. Edit again and set "Console list" close to "Primary text".
+  3. Reset "Console list"; "Save".
+  4. Pick each ready-made theme and look at the shelf.
+- **Expected:** 1: every console card (and All games, Favorites) takes the color, with the theme's text color. 2: a contrast warning naming "Console list". 3: each console's own color is back. 4: each theme gives the console cards its own color, readable.
+- **Check:** human only; `ResolvedThemeTest.everyColorKeyReachesItsTokens`, `UserThemeTest.contrastProblemsOnlyForChangedPairs`, `ReadyThemesTest.theFiveShipWithTheirPictureAndOnlyKnownKeys`.

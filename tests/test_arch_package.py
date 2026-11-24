@@ -114,7 +114,7 @@ class ArchBuildScriptTests(unittest.TestCase):
 class WiringTests(unittest.TestCase):
     def test_the_dispatcher_accepts_the_target(self):
         dispatcher = _read("packaging/build.sh")
-        self.assertIn("appimage|deb|rpm|arch|flatpak|windows)", dispatcher)
+        self.assertIn("appimage|deb|rpm|arch|flatpak|windows|aur|aur-release)", dispatcher)
         # x86_64 bundles the emulator, so the missing-vendors message has to
         # fire for this target too rather than 20 minutes into a container.
         self.assertIn("arch:x86_64", dispatcher)

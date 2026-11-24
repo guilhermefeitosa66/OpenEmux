@@ -42,6 +42,12 @@ def cartridge_render_scale(widget):
 DEFAULT_ITEM_SIZE = (200, 200)
 FIXED_ITEM_WIDTH = 200
 
+#: The one slot every card of a grid mixing consoles is fitted into
+#: ("Recently played", issue 996), at zoom 1. Wide shells fill its width,
+#: tall ones its height, so the cell no longer depends on which consoles the
+#: page happens to mix.
+UNIFORM_SLOT_SIZE = (200, 175)
+
 #: The transparent margin a cartridge composite carries on every side for
 #: its baked shadow (issue 903), in logical pixels. The card's picture slot
 #: grows by it, and the grid gives the same back on the gaps and the edges,
@@ -101,12 +107,26 @@ CONSOLE_COVER_ASPECTS = {
 }
 
 
-def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
-    """Card size for a console when no cartridge frame is drawn."""
-    width = scale_length(FIXED_ITEM_WIDTH, zoom)
+def cover_size_for_width(console, width, mixed_consoles=False):
+    """The box-art size for an artwork ``width``, at the console's proportions.
+
+    A page mixing consoles has no single shape to follow, so it gets the
+    uniform slot's proportions (issue 996). Big Picture asks for widths the
+    zoom levels never give (issue 1000); the desktop goes through
+    ``cover_size_for_console`` and ``uniform_slot_size``.
+    """
+    width = max(1, int(width))
+    if mixed_consoles:
+        slot_w, slot_h = UNIFORM_SLOT_SIZE
+        return width, max(1, int(round(width * slot_h / slot_w)))
     aspect = CONSOLE_COVER_ASPECTS.get(console, DEFAULT_COVER_ASPECT)
     height = int(round(width / aspect)) if aspect > 0 else width
     return width, max(1, height)
+
+
+def cover_size_for_console(console, zoom=DEFAULT_ZOOM):
+    """Card size for a console when no cartridge frame is drawn."""
+    return cover_size_for_width(console, scale_length(FIXED_ITEM_WIDTH, zoom))
 
 
 def default_item_size(zoom=DEFAULT_ZOOM):
@@ -150,6 +170,34 @@ def columns_and_slack(available, card_width, item_count, spacing=GRID_SPACING):
     return columns, max(0, available - filled * cell)
 
 
+#: Big Picture grows its cards in steps of this many pixels (issue 1000).
+#: Cartridge composites are cached on disk per width, so a card that took
+#: every width a window drag passes through would write a set of files per
+#: pixel; what a step leaves over is a few pixels per column, which
+#: GtkGridView spreads evenly over the gaps.
+FIT_WIDTH_STEP = 4
+
+
+def fit_card_width(available, min_card_width, spacing=GRID_SPACING, step=FIT_WIDTH_STEP):
+    """Big Picture's columns: as many large cards as fit, grown to fill the row.
+
+    ``min_card_width`` is the card at Big Picture's own size, CSS padding
+    included -- the floor, so the cards are never smaller than that. As many
+    cells of it (card plus gap) as fit in ``available`` make the columns, and
+    the width the last one left over is shared between the cards, in whole
+    steps of ``step`` pixels. Returns ``(columns, growth)``: the column count, and how many
+    pixels wider than ``min_card_width`` every card is drawn.
+
+    The growth depends on the width only, never on how many games there are:
+    a console with two games draws them at the size forty would get.
+    """
+    cell = max(1, min_card_width + spacing)
+    columns = max(1, available // cell)
+    spare = available // columns - cell
+    step = max(1, int(step))
+    return columns, max(0, spare) // step * step
+
+
 def cartridge_frame_svg(console, color=None):
     """The pre-render frame for a console, when one was authored as SVG.
 
@@ -179,28 +227,60 @@ def cartridge_frame_for(console, view_mode, mixed_consoles=False, compact=False)
     return cartridge_frame_svg(console)
 
 
-def tallest_cartridge_frame(consoles, view_mode, compact=False):
-    """The shell that sizes a grid mixing consoles in cartridge view, or None.
+def any_cartridge_frame(consoles, view_mode, compact=False):
+    """A shell drawn on a grid mixing consoles in cartridge view, or None.
 
     "Recently played" is one grid in play order (issue 910), so it cannot be
-    split per console the way "All" is. Every shell is drawn at the same
-    width, though -- only the heights differ -- so one lattice still holds
-    them all if the cell is as tall as the tallest shell on the page, each
-    cartridge centred in it (issue 942). ``None`` when the page draws no
-    cartridge: not the cartridge view, list view, or no console on it has a
+    split per console the way "All" is; each card draws its own console's
+    shell (issue 942). The cell is the uniform slot (issue 996), so this only
+    answers whether the page draws cartridges at all: ``None`` when it is
+    not the cartridge view, in list view, or when no console on it has a
     shell drawn.
     """
     if compact or not renders_cartridge(view_mode):
         return None
-    tallest, tallest_height = None, -1
     for console in dict.fromkeys(consoles):
         path = cartridge_frame_svg(console)
-        if path is None:
-            continue
-        _width, height = cartridge_render.load_frame(path).size_for_width(FIXED_ITEM_WIDTH)
-        if height > tallest_height:
-            tallest, tallest_height = path, height
-    return tallest
+        if path is not None:
+            return path
+    return None
+
+
+def uniform_slot_size(zoom=DEFAULT_ZOOM):
+    """The slot every card of a grid mixing consoles is fitted into (issue 996)."""
+    return scale_length(UNIFORM_SLOT_SIZE[0], zoom), scale_length(UNIFORM_SLOT_SIZE[1], zoom)
+
+
+def fit_in_slot(art_size, slot_size):
+    """``art_size`` scaled to fit ``slot_size`` whole, keeping its proportions.
+
+    Wide art fills the slot's width, tall art its height. Never below one
+    pixel on either side; art with no size takes the whole slot.
+    """
+    art_w, art_h = art_size
+    slot_w, slot_h = slot_size
+    if art_w <= 0 or art_h <= 0:
+        return max(1, slot_w), max(1, slot_h)
+    scale = min(slot_w / art_w, slot_h / art_h)
+    return max(1, int(round(art_w * scale))), max(1, int(round(art_h * scale)))
+
+
+def cartridge_width_in_slot(frame_path, slot_size):
+    """The width a shell is drawn at so it fits ``slot_size`` whole (issue 996).
+
+    A wide shell gets the slot's width; a tall one is narrowed until its
+    height fits. The slot's width when the frame cannot be read.
+    """
+    frame = cartridge_render.load_frame(frame_path) if frame_path else None
+    if frame is None:
+        return slot_size[0]
+    width = fit_in_slot(frame.size_for_width(slot_size[0]), slot_size)[0]
+    # The fit rounds, and the height is worked out again from the width: a
+    # width rounded up can make a shell a pixel taller than the slot, which
+    # would put that card off the row's line.
+    while width > 1 and frame.size_for_width(width)[1] > slot_size[1]:
+        width -= 1
+    return width
 
 
 class FixedSizePicture(Gtk.Picture):

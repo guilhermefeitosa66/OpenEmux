@@ -4,15 +4,22 @@
 # defined by packaging/docker/<target>.Dockerfile, so the host only needs
 # Docker, and artifacts land in dist/.
 #
+# `aur` is the odd one out: it builds the AUR's openemux-git recipe from a clone
+# of this checkout in the Arch image, and writes the files to publish to
+# build/aur/ -- never dist/, which is what a release uploads (issue #986).
+# `aur-release` does the same for the three recipes that follow a published
+# release (openemux, -bin, -appimage), for the tag in AUR_TAG, and can push
+# them to the AUR (packaging/aur/release.sh, issue #991).
+#
 # The per-target logic lives in packaging/<target>/build.sh, which this script
 # runs *inside* the container.
 set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|arch|flatpak|windows) ;;
+  appimage|deb|rpm|arch|flatpak|windows|aur|aur-release) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows}" >&2
+    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur|aur-release}" >&2
     exit 2
     ;;
 esac
@@ -61,7 +68,7 @@ fi
 # The check is which architectures are *supported*, then, rather than which one
 # the host is.
 case "$TARGET" in
-  appimage|deb|rpm|arch)
+  appimage|deb|rpm|arch|aur|aur-release)
     # The container's architecture, which PLATFORM overrides.
     ARCH="$(uname -m)"
     case "${PLATFORM:-}" in
@@ -80,7 +87,7 @@ case "$TARGET" in
     # a container to build it in: the official `archlinux` image publishes
     # amd64 only (Arch Linux ARM is a separate distribution with its own
     # images). Said here rather than as a confusing `docker build` failure.
-    if [ "$TARGET" = "arch" ]; then
+    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ] || [ "$TARGET" = "aur-release" ]; then
       case "$ARCH" in
         aarch64|arm64)
           echo "The Arch build image (archlinux:base-devel) is amd64-only." >&2
@@ -109,8 +116,9 @@ fi
 # The Linux formats that bundle an emulator. The Flatpak does not -- it
 # launches the host's org.libretro.RetroArch -- and on aarch64 there is nothing
 # to bundle, since libretro publishes no ARM build (issue #119).
-# ARCH is set by the architecture gate above, which only runs for these four
-# targets; ${ARCH:-} keeps `set -u` out of it for the other two.
+# ARCH is set by the architecture gate above, which only runs for appimage,
+# deb, rpm, arch and aur; ${ARCH:-} keeps `set -u` out of it for the others.
+# aur bundles nothing: it uses the distribution's RetroArch.
 case "$TARGET:${ARCH:-}" in
   appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64|arch:x86_64|arch:amd64)
     if [ ! -x vendors/RetroArch-Linux-x86_64/usr/bin/retroarch ]; then
@@ -135,13 +143,27 @@ if [ -n "${PLATFORM:-}" ]; then
   PLATFORM_ARGS=(--platform "$PLATFORM")
 fi
 
-IMAGE="openemux-build-$TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
+# A publish that cannot push says so before the image is built, not after.
+if [ "$TARGET" = "aur-release" ] && [ "${AUR_MODE:-check}" = "publish" ] \
+   && [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]; then
+  echo "FAIL: AUR_SSH_PRIVATE_KEY is not set, so nothing can be pushed to the AUR." >&2
+  echo "Add the AUR account's SSH key as the repository secret AUR_SSH_PRIVATE_KEY," >&2
+  echo "or run with AUR_MODE=dry-run (make aur-publish DRY_RUN=1) to see the diff." >&2
+  exit 1
+fi
+
+# The AUR recipes are Arch packages like any other, built in the same image.
+IMAGE_TARGET="$TARGET"
+[ "$TARGET" = "aur" ] && IMAGE_TARGET=arch
+[ "$TARGET" = "aur-release" ] && IMAGE_TARGET=arch
+
+IMAGE="openemux-build-$IMAGE_TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
 echo "==> building image $IMAGE"
 # --pull: without it a stale local image is reused silently, possibly one
 # cached before a security update. The Dockerfiles pin their base by digest, so
 # this only ever re-fetches the same bytes (issue #255).
 docker build "${PLATFORM_ARGS[@]}" --pull -q -t "$IMAGE" \
-  -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
+  -f "packaging/docker/$IMAGE_TARGET.Dockerfile" packaging/docker
 
 # Artifacts are written as root inside the container; hand them back afterwards.
 HOST_UID="${HOST_UID:-$(id -u)}"
@@ -153,8 +175,14 @@ DOCKER_ARGS=("${PLATFORM_ARGS[@]}" --rm -t -v "$ROOT_DIR:/work" -w /work
 # local .env sourced above, or the shell environment). Unset/empty means no
 # embedded credential -- the injection step is then a no-op and ScreenScraper
 # stays opt-in, so a build without a .env needs nothing here.
-DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
-              -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+# Not for aur-release: it builds code downloaded from a published release,
+# which has no business seeing the credential (nor the AUR key, see below).
+if [ "$TARGET" = "aur-release" ]; then
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID= -e SCREENSCRAPER_DEVPASSWORD=)
+else
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
+                -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+fi
 # Two builds have to mount a filesystem, and --privileged is how they used to
 # get to: full host root, every capability and every device, in a container
 # that also bind-mounts the repository and carries SCREENSCRAPER_DEVPASSWORD --
@@ -179,5 +207,36 @@ elif [ "$TARGET" = "flatpak" ]; then
                 --security-opt seccomp=unconfined)
 fi
 
-echo "==> running packaging/$TARGET/build.sh in $IMAGE"
-docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "packaging/$TARGET/build.sh"
+# The AUR recipe clones a git repository, and the code under test is this
+# checkout's HEAD -- not GitHub's develop, and not the working tree. A bare
+# clone of the current branch is what the container builds from; made here
+# because inside the container a worktree's .git points at a path that is not
+# mounted. Read-only: the build copies it before using it.
+if [ "$TARGET" = "aur" ]; then
+  AUR_SRC="$(mktemp -d)"
+  trap 'rm -rf "$AUR_SRC"' EXIT
+  git -C "$ROOT_DIR" clone -q --bare --no-local --single-branch \
+    "$ROOT_DIR" "$AUR_SRC/openemux.git"
+  # HEAD itself, detached, so a detached checkout works as well as a branch.
+  git --git-dir="$AUR_SRC/openemux.git" fetch -q "$ROOT_DIR" HEAD
+  git --git-dir="$AUR_SRC/openemux.git" update-ref --no-deref HEAD \
+    "$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  DOCKER_ARGS+=(-v "$AUR_SRC:/src:ro")
+fi
+
+# The release recipes download the published release, so what they need from
+# here is the tag, the mode and -- to publish, and only then -- the AUR key.
+# Passed by name (`-e VAR`), so the key's value never appears on a command
+# line; a check or a dry run never sees it at all.
+SCRIPT="packaging/$TARGET/build.sh"
+if [ "$TARGET" = "aur-release" ]; then
+  SCRIPT=packaging/aur/release.sh
+  export AUR_TAG="${AUR_TAG:-}" AUR_MODE="${AUR_MODE:-check}" AUR_PKGREL="${AUR_PKGREL:-1}"
+  DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL)
+  if [ "$AUR_MODE" = "publish" ]; then
+    DOCKER_ARGS+=(-e AUR_SSH_PRIVATE_KEY)
+  fi
+fi
+
+echo "==> running $SCRIPT in $IMAGE"
+docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "$SCRIPT"

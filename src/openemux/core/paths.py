@@ -60,6 +60,15 @@ STORE_FILENAMES = {
     "session": "session.json",
     "artwork_index": "artwork-index",
     "cartridge_cache": "cache/cartridges",
+    # Shells generated for a custom cartridge color (issue 983), one per
+    # console and color. Not under cache/: housekeeping prunes that by age,
+    # and a pruned shell is a fresh render on the main thread.
+    "cartridge_frames": "cartridge_frames",
+    # The user's own themes, one folder each (issue 1011).
+    "themes": "themes",
+    # Theme backgrounds, dimmed and blurred for the screen (issue 1012):
+    # rebuilt from the theme's own image whenever missing, so pruning is safe.
+    "theme_backgrounds": "cache/theme-backgrounds",
     # Custom bezel images, one per console (issue #507).
     "bezels": "bezels",
     # Share nearby's device identity: id, key and certificate (issue #587).

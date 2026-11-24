@@ -8,7 +8,8 @@ walk; the filter chips (Favorites · N, Has save state · N, Missing artwork
 · N, Never played · N); the view's name with the Cartridges / Covers /
 List switch; and the games themselves -- the window's own page for the
 scope, borrowed while the mode is on, so its grids, its per-console
-sections in "All" and its empty states are the desktop's, at 200%.
+sections in "All" and its empty states are the desktop's -- at 200% at
+least, and grown so the columns fill the width (issue 1000).
 
 A game's details are a page of their own (``details.GameDetailsPage``),
 which A opens; B comes back here, to the same game, the scroll kept.
@@ -35,6 +36,7 @@ from openemux.ui.bigpicture.widgets import (
     Chip,
     PixelIcon,
     Segments,
+    bp_scroller,
     icon_button,
     once,
 )
@@ -112,11 +114,8 @@ class GamesPage(BigPage):
         self.banners = TaskBanners(shell)
         left.append(self.banners)
 
-        self.chips_scroller = Gtk.ScrolledWindow()
-        self.chips_scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
-        self.chips_scroller.set_propagate_natural_height(True)
         self.chips_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        self.chips_scroller.set_child(self.chips_box)
+        self.chips_scroller = bp_scroller(self.chips_box, horizontal=True)
         left.append(self.chips_scroller)
 
         # In a scroller of its own, like the console chips: four chips with
@@ -128,10 +127,7 @@ class GamesPage(BigPage):
             chip.facet = facet
             self.facets_box.append(chip)
             self.facet_chips[facet] = chip
-        self.facets_scroller = Gtk.ScrolledWindow()
-        self.facets_scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
-        self.facets_scroller.set_propagate_natural_height(True)
-        self.facets_scroller.set_child(self.facets_box)
+        self.facets_scroller = bp_scroller(self.facets_box, horizontal=True)
         left.append(self.facets_scroller)
 
         self.search_label = Gtk.Label(xalign=0.0)

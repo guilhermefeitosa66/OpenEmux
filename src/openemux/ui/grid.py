@@ -45,14 +45,17 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     LIST_MARGIN,
     LIST_ROW_SPACING,
     FixedSizePicture,
+    any_cartridge_frame,
     card_size_for,
     cartridge_frame_for,
     cartridge_frame_svg,
     columns_and_slack,
     cover_size_for_console,
-    default_item_size,
-    tallest_cartridge_frame,
+    cover_size_for_width,
+    fit_card_width,
+    uniform_slot_size,
 )
+from openemux.ui import theme_css, theming
 from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
 from openemux.ui.grouped_scroll import GroupedScroll
@@ -88,6 +91,12 @@ _cards_built = 0
 def cards_built():
     """The running count of cards built since the process started."""
     return _cards_built
+
+
+#: How long a Big Picture grid waits for its width to settle before it
+#: rebuilds its cards at a new size (issue 1000): a window drag allocates
+#: every frame, and the cards are rebuilt once, at the end of it.
+REFIT_DELAY_MS = 150
 
 
 class RomGrid(Gtk.GridView):
@@ -196,6 +205,23 @@ class RomGrid(Gtk.GridView):
         # Columns are recomputed from the viewport width; see _retune_columns.
         self._column_state = None
         self._measured_card_width = None
+        # Big Picture sizes its cards from the width (issue 1000): how many
+        # pixels wider than the zoom's card they are drawn, the card's width
+        # at zero growth (the floor), and the rebuild waiting for the width
+        # to settle.
+        self._growth = 0
+        self._min_card_width = None
+        self._pending_growth = 0
+        self._refit_source = None
+        self._refitted = False
+        # The game that had the focus when the cards were rebuilt, until its
+        # new card is bound and takes it back.
+        self._refocus_entry = None
+        # The sleeping groups' resize after the page's width changed, waiting
+        # for the width to settle; and whether the grid was torn down, which
+        # the idle callbacks check before touching anything.
+        self._siblings_source = None
+        self._torn_down = False
         # (path, monotonic microseconds) of the last launch this grid started.
         self._last_activation = (None, 0)
         # The cards that exist right now, by the entry each is showing.
@@ -207,22 +233,33 @@ class RomGrid(Gtk.GridView):
 
         self.view_mode = normalize_view_mode(self.ui_settings.get("view_mode"))
         self.compact = not is_grid_view(self.view_mode)
+        # Big Picture's grids fill the width with large cards instead of
+        # leaving what the last column did not take as an empty strip
+        # (issue 1000). A list row already spans the width.
+        self._fit_width = bool(self.ui_settings.get("big_picture")) and not self.compact
         # Zoom scales the artwork and, with it, the gaps: bigger cards further
         # apart, smaller cards packed tighter -- the grid density the user is
         # really asking for when they zoom out.
         self.zoom = normalize_zoom(self.ui_settings.get("zoom", DEFAULT_ZOOM))
+        # A custom theme's grid gap and card size (issue 1012), on top of the
+        # zoom. Big Picture keeps its own couch sizes.
+        metrics = {} if self.ui_settings.get("big_picture") else theme_css.layout_metrics(
+            theming.current_paint().values
+        )
+        self._card_scale = 1.0 if self.compact else metrics.get("card_scale", 1.0)
         self._spacing = scale_spacing(
-            LIST_ROW_SPACING if self.compact else GRID_SPACING, self.zoom
+            LIST_ROW_SPACING if self.compact else metrics.get("grid_gap", GRID_SPACING),
+            self.zoom,
         )
         # A cartridge composite carries its shadow in a transparent margin
         # (issue 903): the card grows by it on every side, and the gaps and
         # the edges give the same back, so the cartridges keep their place.
         # A page that mixes consoles in one grid may still draw cartridges
-        # when it asks to ("Recently played", issue 942): the cell is sized by
-        # the tallest shell and each card draws its own console's.
+        # when it asks to ("Recently played", issue 942): each card draws its
+        # own console's shell, fitted into the page's uniform slot (issue 996).
         self._mixed_cartridges = bool(mixed_consoles and mixed_cartridges)
         if self._mixed_cartridges:
-            cartridge_frame_path = tallest_cartridge_frame(
+            cartridge_frame_path = any_cartridge_frame(
                 (rom.get("console") for rom in roms), self.view_mode, compact=self.compact
             )
         else:
@@ -242,29 +279,10 @@ class RomGrid(Gtk.GridView):
         )
 
         # One fixed card size for the whole page, so the grid lays out on an
-        # even lattice. Per console it follows that console's box-art
-        # proportions; pages mixing consoles have no single shape to follow, so
-        # they use a uniform square box and centre each cover inside it.
-        cover_size = (
-            default_item_size(self.zoom)
-            if mixed_consoles
-            else cover_size_for_console(console, self.zoom)
-        )
-        # The card shape comes from the frame art itself: fixed width, and the
-        # height that keeps the cartridge's own proportions, plus the shadow
-        # margin on every side. Since issue #384 a mixed page is one grid per
-        # console, so this reaches "All", "Favorites" and the collections too
-        # (issue #385).
-        if cartridge_frame_path:
-            frame = cartridge_render.load_frame(cartridge_frame_path)
-            width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
-            cover_size = (width + 2 * self._shadow_pad, height + 2 * self._shadow_pad)
-
-        if self.compact:
-            # Rows show the box art itself, never a cartridge: a frame drawn at
-            # thumbnail size is an unreadable smudge.
-            cover_size = list_thumb_size(cover_size, self.zoom)
-
+        # even lattice. The artwork is FIXED_ITEM_WIDTH at the zoom; Big
+        # Picture may draw it wider, see _size_cards.
+        self._base_artwork_width = scale_length(FIXED_ITEM_WIDTH * self._card_scale, self.zoom)
+        cover_size = self._cover_size_for(cartridge_frame_path, self._base_artwork_width)
         self._card_size = card_size_for(cover_size, mixed_consoles, compact=self.compact)
         # The console's authored shell; per-ROM colors swap in a variant of it.
         self._base_frame_path = cartridge_frame_path
@@ -328,13 +346,7 @@ class RomGrid(Gtk.GridView):
         self._count_listeners = []
         self._filtered.connect("items-changed", self._on_filtered_changed)
 
-        factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self._on_factory_setup)
-        factory.connect("bind", self._on_factory_bind)
-        factory.connect("unbind", self._on_factory_unbind)
-        factory.connect("teardown", self._on_factory_teardown)
-
-        self.set_factory(factory)
+        self.set_factory(self._new_factory())
         self._awake = not dormant
         if self._awake:
             self.set_model(Gtk.NoSelection(model=self._filtered))
@@ -350,6 +362,11 @@ class RomGrid(Gtk.GridView):
         # screenful of cards for that shape first.
         self.set_max_columns(1)
         self.set_min_columns(1)
+        # Big Picture: the cards are built at the size the last width called
+        # for, so entering a console does not draw them small and then grow
+        # them (issue 1000). A wrong guess is put right by the first layout.
+        if self._fit_width and RomGrid._fit_viewport:
+            self._size_cards(self._growth_for(RomGrid._fit_viewport - 2 * self._margin)[1])
 
         # Menu key / Shift+F10 opens the focused card's context menu, and
         # Return launches it: the keyboard counterparts of the pointer. Both
@@ -430,6 +447,9 @@ class RomGrid(Gtk.GridView):
         if dormant == (not self._awake):
             return
         if dormant:
+            # A card that never came back before the grid slept must not take
+            # the focus whenever it is bound again.
+            self._refocus_entry = None
             vadj = self.get_vadjustment()
             self._sleep_scroll = vadj.get_value() if vadj is not None else None
             self._awake = False
@@ -437,6 +457,7 @@ class RomGrid(Gtk.GridView):
             # fetches still queued for them return before doing any work.
             self.set_model(None)
             return
+        self._fit_while_asleep()
         self._awake = True
         self.set_model(Gtk.NoSelection(model=self._filtered))
         if not self._in_grouped_page() and self._sleep_scroll:
@@ -487,13 +508,21 @@ class RomGrid(Gtk.GridView):
         if self.compact:
             return 1
         if for_size is None or for_size < 0:
-            return self._column_state[0] if self._column_state else 1
+            if self._column_state:
+                return self._column_state[0]
+            if self._fit_width and RomGrid._fit_viewport:
+                columns = self._growth_for(RomGrid._fit_viewport - 2 * self._margin)[0]
+                return max(1, min(columns, len(self._entries) or 1))
+            return 1
         available = self._available_width(for_size)
         if available <= 0:
             return 1
-        columns, _slack = columns_and_slack(
-            available, self._card_allocation_width(), len(self._entries), spacing=self._spacing
-        )
+        if self._fit_width:
+            columns = self._growth_for(available)[0]
+        else:
+            columns, _slack = columns_and_slack(
+                available, self._card_allocation_width(), len(self._entries), spacing=self._spacing
+            )
         return max(1, min(columns, len(self._entries) or 1))
 
     def _dormant_height(self, for_size):
@@ -516,6 +545,14 @@ class RomGrid(Gtk.GridView):
         if self._restore_source is not None:
             GLib.source_remove(self._restore_source)
             self._restore_source = None
+        if self._refit_source is not None:
+            GLib.source_remove(self._refit_source)
+            self._refit_source = None
+        if self._siblings_source is not None:
+            GLib.source_remove(self._siblings_source)
+            self._siblings_source = None
+        self._refocus_entry = None
+        self._torn_down = True
         self._bound.clear()
         self._store.remove_all()
         self._entries = []
@@ -610,6 +647,14 @@ class RomGrid(Gtk.GridView):
 
     # -- the factory -------------------------------------------------------
 
+    def _new_factory(self):
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._on_factory_setup)
+        factory.connect("bind", self._on_factory_bind)
+        factory.connect("unbind", self._on_factory_unbind)
+        factory.connect("teardown", self._on_factory_teardown)
+        return factory
+
     def _on_factory_setup(self, _factory, list_item):
         global _cards_built
         _cards_built += 1
@@ -641,6 +686,9 @@ class RomGrid(Gtk.GridView):
         # filtered model, which is the order on screen.
         card.set_position_in_set(list_item.get_position(), self._filtered.get_n_items())
         self._bound[entry] = card
+        if entry is self._refocus_entry:
+            # Bound mid-layout: the grab waits for the layout to end.
+            GLib.idle_add(self._finish_refocus, entry)
         if self._focused_card is card:
             # It kept the focus through the rebind, so this is where the user
             # stands now.
@@ -706,6 +754,9 @@ class RomGrid(Gtk.GridView):
         self._focused_card = card
         if card is None:
             return
+        if card.entry is not self._refocus_entry:
+            # The user moved on before the rebuilt card came back.
+            self._refocus_entry = None
         if card.entry is not None:
             self._focused_entry = card.entry
         card.set_focus_visual(True)
@@ -741,8 +792,9 @@ class RomGrid(Gtk.GridView):
     def _mixed_frame_path_for_rom(self, rom):
         """The ROM's own console shell on a grid mixing consoles (issue 942).
 
-        Never the grid's base frame, which is only the tallest console's: a
-        console with no shell drawn gets ``None`` and its card shows the cover.
+        Never the grid's base frame, which is only the first console with a
+        shell (issue 996): a console with no shell drawn gets ``None`` and its
+        card shows the cover.
         """
         console = rom.get("console")
         color = self._frame_color_for_rom(rom) if self._frame_color_for_rom else None
@@ -754,6 +806,24 @@ class RomGrid(Gtk.GridView):
             path = path or cartridge_frame_svg(console)
             self._frame_by_color[key] = path
             return path
+
+    def custom_frame_ready(self, console, color):
+        """A custom shell made in the background (issue 983) can be drawn now.
+
+        The default shell that stood in for it was cached under its color;
+        drop that and re-resolve the bound cards wearing the color.
+        """
+        self._frame_by_color.pop(color, None)
+        self._frame_by_color.pop((console, color), None)
+        if not self._base_frame_path or self._frame_color_for_rom is None:
+            return 0
+        redrawn = 0
+        for entry, card in list(self._bound.items()):
+            rom = entry.rom
+            if rom.get("console") == console and self._frame_color_for_rom(rom) == color:
+                card.set_cartridge_frame(self._frame_path_for_rom(rom))
+                redrawn += 1
+        return redrawn
 
     def refresh_rom_frame(self, rom):
         """Re-resolve one card's shell after its cartridge color changed.
@@ -913,12 +983,15 @@ class RomGrid(Gtk.GridView):
         available = self._available_width(width)
         if available <= 0:
             return
-        columns, slack = columns_and_slack(
-            available,
-            self._card_allocation_width(),
-            len(self._entries),
-            spacing=self._spacing,
-        )
+        if self._fit_width:
+            columns, slack = self._fit_columns(available)
+        else:
+            columns, slack = columns_and_slack(
+                available,
+                self._card_allocation_width(),
+                len(self._entries),
+                spacing=self._spacing,
+            )
         filled = max(1, min(columns, len(self._entries) or 1))
         if self._column_state == (filled, slack):
             return
@@ -968,6 +1041,261 @@ class RomGrid(Gtk.GridView):
                 self._card_size[0], card.measure(Gtk.Orientation.HORIZONTAL, -1)[0]
             )
         return self._measured_card_width
+
+    # -- Big Picture: cards sized from the width (issue 1000) ---------------
+
+    #: The viewport width Big Picture's grids were last laid out in, so the
+    #: next one is built at the size it will keep.
+    _fit_viewport = None
+
+    def _cover_size_for(self, frame_path, artwork_width):
+        """The card's artwork slot for an artwork ``artwork_width`` wide.
+
+        Per console it follows that console's box-art proportions; pages
+        mixing consoles have no single shape to follow, so every card gets
+        the same slot (issue 996). A cartridge's
+        shape comes from the frame art itself, plus the shadow margin on
+        every side -- since issue #384 a mixed page is one grid per console,
+        so this reaches "All", "Favorites" and the collections too (#385).
+        """
+        if self.mixed_consoles:
+            # Every card gets the same slot and its art, cover or cartridge,
+            # is fitted into it standing on the slot's bottom edge (issue
+            # 996); the cell no longer grows to the tallest shell.
+            if artwork_width == self._base_artwork_width:
+                slot_w, slot_h = uniform_slot_size(self.zoom)
+                cover_size = (
+                    max(1, round(slot_w * self._card_scale)),
+                    max(1, round(slot_h * self._card_scale)),
+                )
+            else:
+                cover_size = cover_size_for_width(self.console, artwork_width, mixed_consoles=True)
+            if frame_path:
+                cover_size = (
+                    cover_size[0] + 2 * self._shadow_pad,
+                    cover_size[1] + 2 * self._shadow_pad,
+                )
+        elif frame_path:
+            frame = cartridge_render.load_frame(frame_path)
+            width, height = frame.size_for_width(artwork_width)
+            cover_size = (width + 2 * self._shadow_pad, height + 2 * self._shadow_pad)
+        else:
+            cover_size = cover_size_for_width(self.console, artwork_width)
+        if self.compact:
+            # Rows show the box art itself, never a cartridge: a frame drawn at
+            # thumbnail size is an unreadable smudge.
+            cover_size = list_thumb_size(cover_size, self.zoom)
+        return cover_size
+
+    def _min_card_allocation_width(self):
+        """The card at the zoom's own size, padding included: Big Picture's floor."""
+        if self._min_card_width is None:
+            self._min_card_width = self._card_allocation_width() - self._growth
+        return self._min_card_width
+
+    def _growth_for(self, available):
+        """``(columns, growth)`` for ``available`` pixels of cells."""
+        return fit_card_width(
+            max(0, available), self._min_card_allocation_width(), spacing=self._spacing
+        )
+
+    def _fit_columns(self, available):
+        """Big Picture's ``(columns, slack)``, and the cards resized to match.
+
+        A full row parks nothing on the end margin: GtkGridView splits the
+        width evenly between its columns, so the few pixels the growth's
+        step leaves over go to the gaps, and the last column ends a margin
+        away from the edge, like the first starts. A page with fewer games
+        than columns keeps its cards at the size a full one would have and
+        parks the rest, as the desktop does.
+        """
+        columns, growth = self._growth_for(available)
+        viewport = available + 2 * self._margin
+        if viewport != RomGrid._fit_viewport:
+            RomGrid._fit_viewport = viewport
+            self._schedule_siblings()
+        if growth != self._growth:
+            self._schedule_refit(growth)
+        elif self._refit_source is not None:
+            # Back to the size the cards already have: nothing to rebuild.
+            GLib.source_remove(self._refit_source)
+            self._refit_source = None
+        # Until the rebuild, the cards are as wide as they are now: a window
+        # that shrank lays them out in the columns they still fit in, never
+        # in more than the width has room for.
+        cell = self._min_card_allocation_width() + max(growth, self._growth) + self._spacing
+        columns = max(1, min(columns, available // cell))
+        count = len(self._entries) or 1
+        if count >= columns:
+            return columns, 0
+        return columns, max(0, available - count * cell)
+
+    def _fit_while_asleep(self):
+        """Size a sleeping grid's cards for the page's width, with none to rebuild.
+
+        The groups of "All" below the window sleep, and are measured with no
+        width to go by; they share the page's, though, so they take the size
+        the last laid-out grid found, and wake at it.
+        """
+        if not self._fit_width or self._awake or not RomGrid._fit_viewport:
+            return
+        growth = self._growth_for(RomGrid._fit_viewport - 2 * self._margin)[1]
+        if growth != self._growth:
+            self._size_cards(growth)
+
+    def _schedule_siblings(self):
+        """Resize the page's sleeping groups once the width stops changing.
+
+        Debounced like the rebuild: a window drag changes the width every
+        frame, and each pass re-measures and re-lays out the whole page.
+        """
+        if self._siblings_source is not None:
+            GLib.source_remove(self._siblings_source)
+        self._siblings_source = GLib.timeout_add(
+            REFIT_DELAY_MS if self._refitted else 0, self._fit_sleeping_siblings
+        )
+
+    def _fit_sleeping_siblings(self):
+        """The page's width changed: its sleeping groups take the new size.
+
+        Here and not while the page measures them: a measure must only read.
+        """
+        self._siblings_source = None
+        if self._torn_down:
+            return GLib.SOURCE_REMOVE
+        parent = self.get_parent()
+        if isinstance(parent, GroupedScroll):
+            for grid in parent.grids():
+                if grid is not self and isinstance(grid, RomGrid):
+                    grid._fit_while_asleep()
+            parent.queue_resize()
+        return GLib.SOURCE_REMOVE
+
+    def _schedule_refit(self, growth):
+        """Rebuild the cards at ``growth`` once the width stops changing.
+
+        Deferred in any case: this runs from size-allocate, and rebuilding
+        the cards there re-enters the allocation. The first one runs on the
+        next idle -- a grid built at a guessed size should not linger at it
+        -- the later ones wait for a window drag to end.
+        """
+        self._pending_growth = growth
+        if self._refit_source is not None:
+            GLib.source_remove(self._refit_source)
+        self._refit_source = GLib.timeout_add(
+            REFIT_DELAY_MS if self._refitted else 0, self._run_refit
+        )
+
+    def _run_refit(self):
+        self._refit_source = None
+        self._refitted = True
+        self.refit(self._pending_growth)
+        return GLib.SOURCE_REMOVE
+
+    def _size_cards(self, growth):
+        """Size every card ``growth`` pixels wider than the zoom's card.
+
+        The context is changed in place: a card tells this grid's cards from
+        another page's by it (_on_root_focus_changed).
+        """
+        min_width = self._min_card_allocation_width()
+        self._growth = growth
+        cover_size = self._cover_size_for(self._base_frame_path, self._base_artwork_width + growth)
+        self._card_size = card_size_for(cover_size, self.mixed_consoles, compact=self.compact)
+        self._card_ctx.cover_size = cover_size
+        self._card_ctx.card_size = self._card_size
+        # Measured again off the new size, the floor kept.
+        self._min_card_width = min_width
+        self._measured_card_width = None
+        self._measured_row_height = None
+        self._probe = None
+
+    def refit(self, growth):
+        """Rebuild the cards ``growth`` pixels wider, the user kept in place.
+
+        The cards pin their size when they are built, so a new size means
+        new cards: a new factory makes GtkGridView build them again. The
+        focused game gets the focus back, and a page with nothing focused
+        keeps the row at the top of the window.
+        """
+        if growth == self._growth:
+            return False
+        had_focus = self._focused_card is not None
+        anchor = None if self._in_grouped_page() else self._scroll_anchor()
+        self._size_cards(growth)
+        self.set_factory(self._new_factory())
+        self._column_state = None
+        self.queue_resize()
+        if had_focus and self._focused_entry is not None:
+            self._refocus_entry = self._focused_entry
+            GLib.idle_add(self._refocus_after_refit, self._focused_entry)
+        elif anchor is not None:
+            GLib.idle_add(self._restore_anchor, anchor)
+        return True
+
+    def _scroll_anchor(self):
+        """``(first visible position, fraction of its row scrolled past)``."""
+        vadj = self.get_vadjustment()
+        if vadj is None or vadj.get_value() <= 0:
+            return None
+        row = self._row_height()
+        if row <= 0:
+            return None
+        rows, fraction = divmod(vadj.get_value(), row)
+        columns = self._column_state[0] if self._column_state else 1
+        return int(rows) * columns, fraction / row
+
+    def _restore_anchor(self, anchor):
+        if self._torn_down:
+            return GLib.SOURCE_REMOVE
+        position, fraction = anchor
+        vadj = self.get_vadjustment()
+        if vadj is not None:
+            # The relayout that sets the columns again may not have run yet:
+            # then they are the ones the width calls for, not one.
+            columns = (
+                self._column_state[0] if self._column_state
+                else self._columns_for(self.get_width())
+            )
+            target = (position // columns + fraction) * self._row_height()
+            vadj.set_value(max(0.0, min(target, vadj.get_upper() - vadj.get_page_size())))
+        return GLib.SOURCE_REMOVE
+
+    def _refocus_after_refit(self, entry):
+        """Give the focus back to ``entry``'s card, once there is one.
+
+        The new factory builds the cards on the next layout, which may come
+        after this idle: then the card takes the focus when it is bound.
+        """
+        position = None if self._torn_down else self._position_of(entry)
+        if position is None:
+            self._refocus_entry = None
+            return GLib.SOURCE_REMOVE
+        if self._take_focus_back(entry):
+            self._refocus_entry = None
+        else:
+            self._refocus_entry = entry
+            self.scroll_to(position, Gtk.ListScrollFlags.NONE, None)
+        return GLib.SOURCE_REMOVE
+
+    def _finish_refocus(self, entry):
+        if self._refocus_entry is entry:
+            self._refocus_entry = None
+            self._take_focus_back(entry)
+        return GLib.SOURCE_REMOVE
+
+    def _take_focus_back(self, entry):
+        """Focus ``entry``'s card and follow it, as if the user had moved there.
+
+        GTK keeps the focus on the cell when its card is replaced, so the
+        window may not announce a change: the card that wears the focus ring
+        is looked up again here.
+        """
+        if not self._grab_focus_on(entry):
+            return False
+        if self._focus_root is not None:
+            self._on_root_focus_changed(self._focus_root, None)
+        return True
 
     # -- keyboard / gamepad focus -----------------------------------------
 

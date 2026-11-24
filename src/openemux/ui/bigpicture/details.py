@@ -32,6 +32,7 @@ from openemux.ui.bigpicture.widgets import (
     Row,
     icon_button,
     make_badge,
+    bp_scroller,
     note,
     once,
 )
@@ -248,11 +249,8 @@ class GameDetail(Gtk.Box):
         self.states_empty.add_css_class("bp-pane-meta")
         self.states_empty.set_wrap(True)
         info.append(self.states_empty)
-        states_scroller = Gtk.ScrolledWindow()
-        states_scroller.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
-        states_scroller.set_propagate_natural_height(True)
         self.states_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        states_scroller.set_child(self.states_box)
+        states_scroller = bp_scroller(self.states_box, horizontal=True)
         self.states_scroller = states_scroller
         info.append(states_scroller)
 
@@ -570,6 +568,11 @@ class GameDetail(Gtk.Box):
             for color_id in cartridge_colors.order_color_ids(cartridge_render.frame_colors_for(console))
             if color_id != cartridge_colors.DEFAULT_COLOR_ID
         ]
+        override = config.get_rom_cartridge_color_override(self.rom["path"])
+        if cartridge_colors.is_custom_color(override):
+            # A custom color (issue 983) is picked on the desktop; here it
+            # is only kept, or replaced by a named one.
+            ordered.append(override)
         console_label = self._color_label(config.get_cartridge_color_for_console(console))
         options = [{"id": CONSOLE_DEFAULT, "label": t("details.console_default", value=console_label)}]
         options += [{"id": color_id, "label": self._color_label(color_id)} for color_id in ordered]

@@ -33,7 +33,7 @@ from openemux.core.config import (
 )
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader, make_held_reader
-from openemux.core.gamepad_reader import describe_token
+from openemux.core.gamepad_reader import GAMEPAD_ERROR_KEYS, describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
@@ -59,8 +59,7 @@ from openemux.core.input_held import HeldKeys, key_token, lit_actions
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.share.identity import default_device_name
-from openemux.core.theme import THEMES
-from openemux.ui import theming
+from openemux.ui.theme_picker import ThemePicker
 from openemux.ui.console_icons import console_icon
 from openemux.ui.controller_drawing import ControllerDrawing
 from openemux.ui.portable_import_dialog import PortableImportGroup
@@ -1722,11 +1721,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return False
         self._gamepad_reader = None
         self._cancel_capture()
-        key = (
-            "input.capture.permission_denied"
-            if reason == "permission_denied"
-            else "input.capture.no_gamepad"
-        )
+        key = GAMEPAD_ERROR_KEYS.get(reason, "input.capture.no_gamepad")
         self._toast(self.t(key), timeout=6)
         return False
 
@@ -2346,21 +2341,16 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
 
         interface_group = Adw.PreferencesGroup(title=self.t("prefs.group.interface"))
 
-        # First row of the group: it is the setting that changes the most on
+        # First rows of the group: it is the setting that changes the most on
         # screen. "System" is the default and keeps following the desktop --
-        # the header's toggle only ever picks light or dark.
-        self._themes = list(THEMES)
-        self._theme_combo = Adw.ComboRow(
-            title=self.t("settings.system.theme.title"),
-            subtitle=self.t("settings.system.theme.subtitle"),
-        )
-        self._theme_combo.set_model(
-            Gtk.StringList.new([self.t(f"theme.{name}") for name in self._themes])
-        )
-        current_theme = self.config.get_ui_settings()["theme"]
-        self._theme_combo.set_selected(self._themes.index(current_theme))
-        self._theme_combo.connect("notify::selected", self._on_theme_changed)
-        interface_group.add(self._theme_combo)
+        # the header's toggle only ever picks light or dark. The user's own
+        # themes follow the built-ins (issue 1011).
+        self.theme_picker = ThemePicker(self)
+        self._theme_combo = self.theme_picker.combo
+        interface_group.add(self.theme_picker.combo)
+        interface_group.add(self.theme_picker.cards)
+        interface_group.add(self.theme_picker.new_row)
+        interface_group.add(self.theme_picker.import_row)
 
         self._tips_row = Adw.SwitchRow(
             title=self.t("settings.system.tips.title"),
@@ -2769,15 +2759,12 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
         )
         return False
 
+    @property
+    def _themes(self):
+        return self.theme_picker.ids
+
     def _on_theme_changed(self, row, *_a):
-        idx = row.get_selected()
-        if not (0 <= idx < len(self._themes)):
-            return
-        theme = self.config.set_theme(self._themes[idx])
-        theming.apply_theme(theme)
-        # "System" that lands on the same appearance emits no notify::dark,
-        # so the header icon is refreshed here rather than left to that.
-        self.win._sync_theme_button()
+        self.theme_picker.on_selected(row)
 
     def _on_download_all_cores_changed(self, row, *_a):
         enabled = row.get_active()

@@ -34,6 +34,7 @@ if HAVE_DISPLAY:
     from openemux.core.scraper import COVER_ART, LABEL_ART
     from openemux.ui import context_menu
     from openemux.ui import rom_card as rom_card_module
+    from openemux.ui.card_layout import fit_in_slot
     from openemux.ui.rom_card import RomEntry, RomItem, entry_matches, item_for_widget
     from openemux.ui.scopes import RECENT_ID
     from openemux.core.systems import get_system_display_name
@@ -864,21 +865,84 @@ class OnAPageThatMixesConsolesTests(_CardCase):
     def test_swapping_the_cover_widget_twice_leaves_the_backdrop_alone(self):
         self.card._set_cover_widget(self.card.cover_image)
         self.card._set_cover_widget(self.card.cover_image)
-        self.assertIs(self.card._backdrop.get_first_child(), self.card.cover_image)
+        self.assertIs(self.card._backdrop.get_first_child(), self.card._art_host)
+        self.assertIs(self.card._art_host.get_child(), self.card.cover_image)
 
     def test_going_back_to_the_placeholder_replaces_what_is_in_the_backdrop(self):
         self.card._show_cover_image()
         self.card._show_placeholder()
-        self.assertIsNot(self.card._backdrop.get_first_child(), self.card.cover_image)
+        self.assertIsNot(self.card._art_host.get_child(), self.card.cover_image)
 
-    def test_even_a_cover_of_the_box_shape_keeps_its_own_size(self):
-        # There is no one box shape on a page that mixes consoles.
+    def slot(self):
+        pad = self.card.ctx.shadow_pad
+        return self.card.cover_width - 2 * pad, self.card.cover_height - 2 * pad
+
+    def test_even_a_cover_of_the_box_shape_is_fitted_into_the_slot(self):
+        # There is no one box shape on a page that mixes consoles: every
+        # cover is fitted into the same slot (issue 996).
         art = (self.card.cover_width, self.card.cover_height - 1)
         self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(*art), False)
         self.assertEqual(
             self.card.cover_image.get_content_fit(), Gtk.ContentFit.CONTAIN
         )
-        self.assertEqual(self.card.cover_image.get_size_request(), art)
+        self.assertEqual(
+            self.card.cover_image.get_size_request(), fit_in_slot(art, self.slot())
+        )
+
+    def test_a_cover_stands_on_the_bottom_of_the_slot_with_nothing_behind(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(30, 44), False)
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_halign(), Gtk.Align.CENTER)
+        self.assertFalse(self.card._backdrop.has_css_class("rom-cover-backdrop"))
+        pad = self.card.ctx.shadow_pad
+        # Around the art overlay, so the badges stay on the cover's corners.
+        self.assertEqual(self.card._art_host.get_margin_bottom(), pad)
+        self.assertEqual(self.card._art_host.get_margin_start(), pad)
+        self.assertEqual(self.card.cover_image.get_margin_bottom(), 0)
+
+    def test_the_margin_leaves_with_the_art_and_comes_back_with_it(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(30, 44), False)
+        self.card._show_placeholder()
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        # A margin set while the placeholder shows waits for the art.
+        self.card._set_art_margin(self.card.ctx.shadow_pad)
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        self.card._show_cover_image()
+        self.assertEqual(self.card._art_host.get_margin_top(), self.card.ctx.shadow_pad)
+
+    def test_the_hover_layer_follows_the_art_not_the_cell(self):
+        self.assertEqual(self.card.play_overlay.get_size_request(), (-1, -1))
+
+    def test_the_badges_ride_on_the_art_not_on_the_cell(self):
+        for badge in (
+            self.card.favorite_button,
+            self.card.menu_button,
+            self.card.resume_badge,
+            self.card.artwork_badge,
+            self.card.play_overlay,
+        ):
+            self.assertIs(badge.get_parent(), self.card._art_host)
+        self.assertIsNot(self.card._art_host, self.card.cover_overlay)
+
+    def test_the_placeholder_takes_the_whole_slot(self):
+        self.card._show_cover_image()
+        self.card._show_placeholder()
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.FILL)
+        self.assertEqual(self.card._art_host.get_halign(), Gtk.Align.FILL)
+
+    def test_a_valign_change_under_the_placeholder_waits_for_the_art(self):
+        self.card._show_placeholder()
+        self.card._set_cover_valign(Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.FILL)
+        self.card._show_cover_image()
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
+
+    def test_the_badges_keep_their_place_through_a_recycle(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(30, 44), False)
+        self.card._show_placeholder()
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(30, 44), False)
+        self.assertIs(self.card.favorite_button.get_parent(), self.card._art_host)
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
 
 
 @needs_display
@@ -967,11 +1031,25 @@ class OnASingleConsoleCoverPageTests(_CardCase):
         )
         self.assertIsNotNone(card._backdrop)
 
+    def test_swapping_the_cover_widget_twice_leaves_the_backdrop_alone(self):
+        self.card._set_cover_widget(self.card.cover_image)
+        self.card._set_cover_widget(self.card.cover_image)
+        self.assertIs(self.card._backdrop.get_first_child(), self.card.cover_image)
+
+    def test_on_a_single_console_page_the_badges_stay_on_the_cell(self):
+        # The art is the cell there; nothing moves (issue 996).
+        self.assertIs(self.card._art_host, self.card.cover_overlay)
+        self.assertIs(self.card.favorite_button.get_parent(), self.card.cover_overlay)
+        self.assertEqual(self.card.play_overlay.get_size_request(), self.box)
+        self.apply(*self.mismatched())
+        self.assertEqual(self.card.cover_image.get_margin_top(), 0)
+
 
 @needs_display
 class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
     """Issue 942: "Recently played" draws cartridges of several consoles in
-    one grid; each stands on the bottom of a cell as tall as the tallest."""
+    one grid; each is fitted into the page's uniform slot and stands on its
+    bottom edge (issue 996)."""
 
     def setUp(self):
         super().setUp()
@@ -998,15 +1076,41 @@ class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
         self.apply(self.pixbuf(160, 100), True)
         self.assertEqual(self.card.cover_image.get_size_request(), (80, 50))
         self.assertEqual(self.card.cover_image._slot_size, (80, 50))
-        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_margin_bottom(), 0)
         self.assertFalse(self.has_fill())
 
-    def test_a_cover_after_a_cartridge_gets_the_backdrop_and_the_centre_back(self):
+    def test_a_cover_after_a_cartridge_stands_on_the_same_line(self):
+        # A cover keeps the composites' shadow margin, so its bottom edge is
+        # where a cartridge's shell ends (issue 996).
         self.apply(self.pixbuf(160, 100), True)
         self.apply(self.pixbuf(30, 44), False)
-        self.assertTrue(self.has_fill())
-        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.CENTER)
-        self.assertEqual(self.card.cover_image._slot_size, (30, 44))
+        self.assertFalse(self.has_fill())
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_margin_bottom(), self.card.ctx.shadow_pad)
+        pad = self.card.ctx.shadow_pad
+        slot = (self.card.cover_width - 2 * pad, self.card.cover_height - 2 * pad)
+        self.assertEqual(self.card.cover_image._slot_size, fit_in_slot((30, 44), slot))
+
+    def test_a_cartridge_after_a_cover_drops_the_covers_margin(self):
+        self.apply(self.pixbuf(30, 44), False)
+        self.apply(self.pixbuf(160, 100), True)
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        self.assertEqual(self.card._art_host.get_margin_end(), 0)
+
+    def test_the_shell_is_drawn_at_its_width_in_the_slot(self):
+        pad = self.card.ctx.shadow_pad
+        slot = (self.card.cover_width - 2 * pad, self.card.cover_height - 2 * pad)
+        self.card.cartridge_frame_path = "/tmp/tall-shell.svg"
+        self.entry.composite_key = None
+        with mock.patch.object(
+            rom_card_module, "cartridge_width_in_slot", return_value=77
+        ) as fitted, mock.patch.object(
+            rom_card_module.cartridge_render, "render_cartridge", return_value=None
+        ) as render:
+            self.assertIsNone(self.card._cartridge_pixbuf(self.entry, self.entry.rom, None))
+        fitted.assert_called_once_with("/tmp/tall-shell.svg", slot)
+        self.assertEqual(render.call_args.kwargs["width"], 77)
 
     def test_the_placeholder_gets_the_backdrop_back(self):
         self.apply(self.pixbuf(160, 100), True)
@@ -1017,7 +1121,7 @@ class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
         self.apply(self.pixbuf(160, 100), True)
         self.card._show_placeholder()
         self.card._show_cover_image()
-        self.assertEqual(self.card.cover_image.get_valign(), Gtk.Align.END)
+        self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
 
     def test_the_label_is_only_looked_for_on_a_game_with_a_shell(self):
         kinds = []

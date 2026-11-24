@@ -74,8 +74,26 @@ class ActivatingTheApplicationTests(_ApplicationCase):
         with mock.patch("openemux.ui.theming.apply_theme") as apply_theme:
             self.app.do_activate()
         apply_theme.assert_called_once_with(
-            self.config.get_ui_settings()["theme"]
+            self.config.get_ui_settings()["theme"], store=self.config.themes
         )
+
+    def test_theme_leftovers_are_tidied_once_per_process(self):
+        # A second activation must not delete the staging folder of a theme
+        # editor that is open right now (issue 1012).
+        with mock.patch("openemux.ui.theming.apply_theme"), \
+             mock.patch.object(self.config.themes, "purge_leftovers") as purge:
+            self.app.do_activate()
+            self.app.do_activate()
+        purge.assert_called_once()
+
+    def test_a_theme_on_a_now_reserved_id_keeps_being_the_one_in_use(self):
+        folder = self.config.themes.root / "neon"
+        folder.mkdir(parents=True)
+        (folder / "theme.yaml").write_text("version: 1\nname: Neon\nbase: dark\n")
+        self.config.set_theme("neon")
+        with mock.patch("openemux.ui.theming.apply_theme"):
+            self.app.do_activate()
+        self.assertEqual(self.config.get_ui_settings()["theme"], "neon-2")
 
     def test_the_bundled_icons_are_registered_before_any_window_exists(self):
         with mock.patch("openemux.ui.icons.register_bundled_icons") as register:

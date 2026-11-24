@@ -202,6 +202,33 @@ Asked on Reddit for a way to rename a game inside the Android app. That request 
 screen renames its file and carries its save states, battery saves, playtime, artwork and per-game
 settings along, so the game resumes where it was under its new name.
 
+### mtesseracttech ([@mtesseracttech](https://github.com/mtesseracttech))
+
+Asked for an `openemux-git` package on the AUR, so Arch users can install and update OpenEmux with
+one command instead of downloading each release. That request became
+[#986](https://github.com/guilhermefeitosa66/OpenEmux/issues/986): the `openemux-git` recipe in
+`packaging/aur/`, built from the repository with the distribution's RetroArch, and `make aur-git`
+to build, test and prepare it for the AUR. Then suggested the release-based packages most apps
+offer, bumped on every release:
+[#991](https://github.com/guilhermefeitosa66/OpenEmux/issues/991) added `openemux`, `openemux-bin`
+and `openemux-appimage`, with a workflow that updates them for each release.
+
+Reported, with a screen recording, that the submenus of a game's right-click menu ("Load state",
+"Core") flickered open and closed on a KDE Plasma Wayland session
+([#985](https://github.com/guilhermefeitosa66/OpenEmux/issues/985)). The menu gave the focus back to
+its focused row each time a submenu appeared, which closed the submenu; that refocus is now ignored.
+
+Also reported, with start-up logs and a screen recording, that on KDE Wayland the window stopped
+taking clicks after a few minutes of use
+([#984](https://github.com/guilhermefeitosa66/OpenEmux/issues/984)), most often after the
+right-click menu's submenus had flickered. The logs narrowed it down to the nested submenus and the
+order their popups came down in: a menu now always closes its submenus innermost first.
+
+Asked in issue 983 for a way to pick any cartridge color, because none of the named shells
+matched some of their Pokémon carts. That became the "Pick a Color…" entry and the Custom Color
+dialog: a saturation and brightness plane, a hue slider and a hex field with a live preview of
+the game's own cartridge, on every cartridge console.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,

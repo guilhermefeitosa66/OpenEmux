@@ -60,7 +60,7 @@ FLATPAK_BACKEND := $(if $(filter wayland,$(SESSION)),wayland,x11)
         $(addsuffix -smoke,appimage deb rpm flatpak) \
         $(addsuffix -uninstall,deb rpm flatpak) \
         install-all smoke-all uninstall-all installed report \
-        weston-start weston-stop weston-status system-bus clean
+        weston-start weston-stop weston-status system-bus flatpak-devices clean
 
 help:
 	@printf '\n  \033[1mOpenEmux test container\033[0m -- %s, %s session\n\n' "$(PRETTY)" "$(SESSION)"
@@ -69,7 +69,7 @@ help:
 	@printf '  smoke      %s\n' "$(addsuffix -smoke,$(FORMATS))"
 	@printf '  uninstall  %s\n\n' "$(addsuffix -uninstall,$(filter-out appimage,$(FORMATS)))"
 	@printf '  batch      install-all  smoke-all  uninstall-all\n'
-	@printf '  info       env  installed  report\n'
+	@printf '  info       env  installed  report  flatpak-devices\n'
 	@printf '  session    weston-start  weston-stop  weston-status\n\n'
 	@printf '  artifacts in %s:\n' "$(DIST)"
 	@$(foreach f,$(APPIMAGE) $(DEB) $(RPM) $(BUNDLE),printf '    %s\n' "$(notdir $(f))";)
@@ -227,7 +227,24 @@ flatpak-run: system-bus | $(WORK)
 	@cd $(WORK) && $(LAUNCH) --label flatpak -- \
 	    flatpak run --user --env=GDK_BACKEND=$(FLATPAK_BACKEND) $(APP_ID)
 
-flatpak-smoke: system-bus | $(WORK)
+# The installed Flatpak has to see the controllers the other formats see: its
+# gamepad reader reads /dev/input, which only exists in the sandbox when the
+# manifest grants the devices (issue 1001). No pad is needed to check that:
+# the directory and the granted permission are what a pad would need.
+flatpak-devices: system-bus
+	@flatpak info --user $(APP_ID) >/dev/null 2>&1 \
+	  || { printf '\033[1;31m==> the Flatpak is not installed: run make flatpak-install first\033[0m\n' >&2; exit 1; }
+	@perms=$$(flatpak info --user --show-permissions $(APP_ID)); \
+	devices=$$(printf '%s\n' "$$perms" | sed -n 's/^devices=//p'); \
+	case ";$$devices" in \
+	  *";all;"*|*";input;"*) ;; \
+	  *) printf '\033[1;31m==> the Flatpak is not granted the input devices\033[0m\n' >&2; exit 1 ;; \
+	esac
+	@flatpak run --user --command=test $(APP_ID) -d /dev/input \
+	  || { printf '\033[1;31m==> /dev/input is missing inside the Flatpak: no controller can be read\033[0m\n' >&2; exit 1; }
+	@printf '\033[1;34m==>\033[0m the Flatpak sees /dev/input\n'
+
+flatpak-smoke: system-bus flatpak-devices | $(WORK)
 	@cd $(WORK) && $(LAUNCH) --label flatpak --smoke $(SMOKE_SECONDS) -- \
 	    flatpak run --user --env=GDK_BACKEND=$(FLATPAK_BACKEND) $(APP_ID)
 

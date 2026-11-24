@@ -514,3 +514,47 @@ button.controller-target.current.lit {
 .big-picture .bp-osk-key:disabled {
     opacity: 0.45;
 }
+
+/* The Custom Color dialog (issue 983): the hue slider's track is the hue
+   circle itself, unrolled, so the slider reads as "which color". */
+.hue-slider trough {
+  min-height: 12px;
+  border-radius: 6px;
+  background-image: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff,
+                                    #0000ff, #ff00ff, #ff0000);
+}
+
+.hue-slider highlight {
+  background: none;
+}
+
+.color-swatch {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+}
+
+/* Saved colors and palettes (issue 983): the "+" that adds the current color
+   to a palette of the user's reads as an empty slot, not as another color. */
+.palette-add {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px;
+  border: 1px dashed alpha(currentColor, 0.5);
+}
+
+.palette-dots {
+  opacity: 0.9;
+}
+
+/* Preferences: the ready-made themes' cards (issue 1012). The one in use
+   carries the accent outline, as a selected card in the library does. */
+.ready-theme-card {
+    padding: 6px;
+    border-radius: 12px;
+}
+
+.ready-theme-card.ready-theme-current {
+    outline: 2px solid @accent_bg_color;
+    outline-offset: -2px;
+}

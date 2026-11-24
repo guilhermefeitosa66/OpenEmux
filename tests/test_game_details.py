@@ -159,6 +159,44 @@ class ThePerGameSettingsTests(_DetailsCase):
             dialog.color_row.set_selected(1)
         set_color.assert_called_once_with(self.rom, "black")
 
+    def test_a_custom_colour_is_listed_and_the_picker_opens_the_dialog(self):
+        """Issue 983: the game's own color in the list, the picker beside it."""
+        self.config.set_rom_cartridge_color(self.rom["path"], "SFC", "#d23c2a")
+        with mock.patch.object(details_module.cartridge_render, "supports_custom_color", return_value=True):
+            dialog = self.dialog()
+        self.assertEqual(dialog.color_row.options[-1], "#d23c2a")
+        self.assertEqual(dialog.color_row.get_selected(), len(dialog.color_row.options))
+        self.assertEqual(
+            dialog._color_label("#d23c2a"), self.said("cartridge_color.custom_hex", hex="#D23C2A")
+        )
+        picker = mock.Mock()
+        with mock.patch.object(self.win, "open_cartridge_color_dialog", return_value=picker) as open_it:
+            dialog.color_row.pick_button.emit("clicked")
+        open_it.assert_called_once_with(self.rom)
+        on_closed = picker.connect.call_args.args[1]
+        self.assertEqual(picker.connect.call_args.args[0], "closed")
+        self.config.set_rom_cartridge_color(self.rom["path"], "SFC", "#00ff00")
+        on_closed(picker)
+        self.assertEqual(dialog.color_row.options[-1], "#00ff00")
+
+    def test_no_picker_where_no_custom_shell_can_be_made(self):
+        self.config.cartridge_colors.remember_color("#123456")
+        with mock.patch.object(details_module.cartridge_render, "supports_custom_color", return_value=False):
+            dialog = self.dialog()
+        self.assertFalse(hasattr(dialog.color_row, "pick_button"))
+        self.assertNotIn("#123456", dialog.color_row.options)
+
+    def test_saved_colours_are_listed_and_applied(self):
+        """Issue 983: a color saved on one game is one pick away on another."""
+        self.config.cartridge_colors.remember_color("#222222")
+        self.config.cartridge_colors.remember_color("#111111")
+        with mock.patch.object(details_module.cartridge_render, "supports_custom_color", return_value=True):
+            dialog = self.dialog()
+        self.assertEqual(dialog.color_row.options[-2:], ["#111111", "#222222"])
+        with mock.patch.object(self.win, "set_rom_cartridge_color") as set_color:
+            dialog.color_row.set_selected(len(dialog.color_row.options))
+        set_color.assert_called_once_with(self.rom, "#222222")
+
     def test_an_unknown_colour_is_titled_from_its_id(self):
         dialog = self.dialog()
         self.assertEqual(dialog._color_label("deep-blue"), "Deep Blue")

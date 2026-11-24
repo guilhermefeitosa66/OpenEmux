@@ -45,6 +45,8 @@ class GameDetailsDialog(Adw.Dialog):
         self.set_content_height(720)
 
         toolbar = Adw.ToolbarView()
+        # What a custom theme's "Game details" color paints (issue 1011).
+        toolbar.add_css_class("game-details-view")
         header = Adw.HeaderBar()
         header.set_title_widget(
             Adw.WindowTitle.new(
@@ -167,6 +169,15 @@ class GameDetailsDialog(Adw.Dialog):
             self.color_row = self._combo_row(
                 group, "context.cartridge_color", self._on_color_selected
             )
+            if cartridge_render.supports_custom_color(self.rom["console"]):
+                # Any color (issue 983), beside the reset arrow.
+                pick = Gtk.Button.new_from_icon_name("color-select-symbolic")
+                pick.add_css_class("flat")
+                pick.set_valign(Gtk.Align.CENTER)
+                pick.set_tooltip_text(self.t("cartridge_color.dialog.tooltip"))
+                pick.connect("clicked", self._on_pick_color)
+                self.color_row.add_suffix(pick)
+                self.color_row.pick_button = pick
         self._sync_settings()
         return group
 
@@ -249,6 +260,15 @@ class GameDetailsDialog(Adw.Dialog):
                 for color_id in cartridge_colors.order_color_ids(available)
                 if color_id != cartridge_colors.DEFAULT_COLOR_ID
             ]
+            override = self.config.get_rom_cartridge_color_override(path)
+            # The game's own custom color and the saved ones (issue 983);
+            # saved ones only where a custom shell can be made.
+            saved = (
+                self.config.cartridge_colors.saved_colors()
+                if cartridge_render.supports_custom_color(console)
+                else ()
+            )
+            ordered.extend(cartridge_colors.custom_color_choices(saved, override))
             console_color = self.config.get_cartridge_color_for_console(console)
             self._fill_row(
                 self.color_row,
@@ -258,6 +278,8 @@ class GameDetailsDialog(Adw.Dialog):
             )
 
     def _color_label(self, color_id):
+        if cartridge_colors.is_custom_color(color_id):
+            return self.t("cartridge_color.custom_hex", hex=str(color_id).upper())
         key = cartridge_colors.color_name_key(color_id)
         return self.t(key) if key else str(color_id).replace("-", " ").title()
 
@@ -300,6 +322,12 @@ class GameDetailsDialog(Adw.Dialog):
             return
         self.win.set_rom_cartridge_color(self.rom, chosen)
         self._mark_scope(row, chosen is not None)
+
+    def _on_pick_color(self, _button):
+        dialog = self.win.open_cartridge_color_dialog(self.rom)
+        # The row lists "Custom" only once the game has one: rebuild it when
+        # the dialog is done (never from the row's own notify::selected).
+        dialog.connect("closed", lambda _d: self._sync_settings())
 
     def _reset_row(self, row):
         """Back to the console default in one step: the first item is that."""

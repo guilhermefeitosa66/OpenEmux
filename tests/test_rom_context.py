@@ -65,8 +65,19 @@ class _CollectionManager:
         return (slug, path) in self._members
 
 
+class _SavedColors:
+    """The saved custom colors (issue 983) the submenu reads."""
+
+    def __init__(self, saved):
+        self._saved = list(saved)
+
+    def saved_colors(self):
+        return list(self._saved)
+
+
 class _Config:
     def __init__(self, **overrides):
+        self.cartridge_colors = _SavedColors(overrides.get("saved_colors", ()))
         self._rom_core = overrides.get("rom_core", {})
         self._console_core = overrides.get("console_core", {})
         self._rom_shader = overrides.get("rom_shader", {})
@@ -347,6 +358,73 @@ class CartridgeColorSubmenuTests(unittest.TestCase):
             )
         self.assertIsNotNone(submenu)
         self.assertEqual(len(_checked(submenu)), 1)
+
+
+class CustomCartridgeColorEntriesTests(unittest.TestCase):
+    """Any shell color (issue 983): the game's own, then the picker."""
+
+    def _submenu(self, override=None, supported=True, saved=()):
+        from unittest.mock import patch
+
+        from openemux.core import cartridge_colors, cartridge_render
+
+        window = _Window(
+            view_mode="cartridge",
+            config=_Config(
+                rom_color={ROM["path"]: override} if override else {}, saved_colors=saved
+            ),
+        )
+        services = RomContextMenuServices(window)
+        with patch.object(
+            cartridge_render,
+            "frame_colors_for",
+            return_value=[cartridge_colors.DEFAULT_COLOR_ID, "black"],
+        ), patch.object(cartridge_render, "supports_custom_color", return_value=supported):
+            return window, _by_title(services.build_submenus(ROM), "context.cartridge_color")
+
+    def test_the_picker_closes_the_menu(self):
+        window, submenu = self._submenu()
+        last = submenu.entries[-1]
+        self.assertEqual(last[0], "cartridge_color.pick")
+        self.assertIs(submenu.entries[-2], SEPARATOR)
+        self.assertEqual(_checked(submenu), ["cartridge_color.default"])
+        last[1]()
+        self.assertEqual(window.calls, [("open_cartridge_color_dialog", (ROM,), {})])
+
+    def test_a_custom_color_is_listed_checked_with_its_swatch(self):
+        window, submenu = self._submenu(override="#d23c2a")
+        row = submenu.entries[-2]
+        self.assertEqual(row[0], "cartridge_color.custom_hex(hex)")
+        self.assertEqual(row[3], "#d23c2a")
+        self.assertEqual(_checked(submenu), ["cartridge_color.custom_hex(hex)"])
+        row[1]()
+        self.assertEqual(window.calls, [("set_rom_cartridge_color", (ROM, "#d23c2a"), {})])
+
+    def test_saved_colors_follow_the_game_s_own(self):
+        window, submenu = self._submenu(override="#d23c2a", saved=["#111111", "#222222"])
+        rows = submenu.entries[-4:-1]
+        self.assertEqual([row[3] for row in rows], ["#d23c2a", "#111111", "#222222"])
+        self.assertEqual([row[2] for row in rows], ["emblem-ok-symbolic", None, None])
+        rows[2][1]()
+        self.assertEqual(window.calls, [("set_rom_cartridge_color", (ROM, "#222222"), {})])
+
+    def test_a_saved_game_color_is_listed_once(self):
+        _window, submenu = self._submenu(override="#222222", saved=["#111111", "#222222"])
+        rows = submenu.entries[-3:-1]
+        self.assertEqual([row[3] for row in rows], ["#111111", "#222222"])
+
+    def test_no_picker_where_no_custom_shell_can_be_made(self):
+        _window, submenu = self._submenu(supported=False, saved=["#111111"])
+        labels = [entry[0] for entry in submenu.entries if entry is not SEPARATOR]
+        self.assertNotIn("cartridge_color.pick", labels)
+        self.assertNotIn("cartridge_color.custom_hex(hex)", labels)
+        self.assertIsNot(submenu.entries[-1], SEPARATOR)
+
+    def test_the_game_s_custom_color_is_listed_even_without_the_picker(self):
+        _window, submenu = self._submenu(override="#d23c2a", supported=False, saved=["#111111"])
+        self.assertEqual(submenu.entries[-1][0], "cartridge_color.custom_hex(hex)")
+        self.assertEqual(submenu.entries[-1][3], "#d23c2a")
+        self.assertEqual(_checked(submenu), ["cartridge_color.custom_hex(hex)"])
 
 
 class CollectionEntriesTests(unittest.TestCase):
