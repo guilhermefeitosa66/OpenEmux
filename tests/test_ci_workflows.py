@@ -38,6 +38,11 @@ class PackagesWorkflowTests(unittest.TestCase):
             path.parent.name
             for path in (REPO_ROOT / "packaging").glob("*/build.sh")
         }
+        # The one recipe that is not a release format: the AUR's openemux-git
+        # builds from GitHub, ships nothing in dist/ and is published by hand
+        # (issue #986). Named here so an eighth directory still fails.
+        self.assertIn("aur", formats)
+        formats.discard("aur")
         self.assertEqual(
             formats, {"appimage", "deb", "rpm", "arch", "flatpak", "windows"}
         )
