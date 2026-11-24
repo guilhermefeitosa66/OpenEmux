@@ -160,7 +160,7 @@ def processed_path(source, dim, blur, surface, cache_dir):
     except OSError:
         identity = str(source)
     key = f"{identity}|{int(dim)}|{int(blur)}|{parse_hex(surface) or surface}"
-    digest = hashlib.sha1(key.encode("utf-8", "surrogateescape")).hexdigest()[:20]
+    digest = hashlib.sha1(key.encode("utf-8", "surrogateescape"), usedforsecurity=False).hexdigest()[:20]
     return Path(cache_dir) / f"{digest}.png"
 
 

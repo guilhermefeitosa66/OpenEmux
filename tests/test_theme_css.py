@@ -225,7 +225,7 @@ class ParseTests(unittest.TestCase):
                     continue  # pragma: no cover - depends on the GTK of the run
             errors = []
             provider = Gtk.CssProvider()
-            provider.connect("parsing-error", lambda _p, _s, error: errors.append(error.message))
+            provider.connect("parsing-error", lambda _p, _s, error, found=errors: found.append(error.message))
             provider.load_from_string(stylesheet(values, css_variables=variables,
                                                  backgrounds=backgrounds))
             self.assertEqual(errors, [])

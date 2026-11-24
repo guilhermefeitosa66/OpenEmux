@@ -9,7 +9,7 @@ from unittest import mock
 import gi
 
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import GdkPixbuf, GLib
+from gi.repository import GdkPixbuf
 
 from openemux.core import custom_themes, theme_images
 from openemux.core.cartridge_colors import PRESET_PALETTES
