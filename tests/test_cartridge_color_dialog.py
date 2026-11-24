@@ -10,7 +10,7 @@ from tests.gtk_display import HAVE_DISPLAY, needs_display
 from tests.window_harness import WindowCase
 
 if HAVE_DISPLAY:
-    from gi.repository import Gdk
+    from gi.repository import Gdk, Gtk
 
     from openemux.core import cartridge_colors
     from openemux.ui import cartridge_color_dialog as dialog_module
@@ -151,6 +151,33 @@ class PreviewTests(_DialogCase):
         for order in ("little", "big"):
             texture = surface_texture(surface, byteorder=order)
             self.assertEqual((texture.get_width(), texture.get_height()), (3, 2))
+
+
+@needs_display
+class NarrowWindowTests(_DialogCase):
+    """QA round 2, BUG-1: in a narrow window the preview shrank to nothing."""
+
+    def test_the_preview_stays_and_the_controls_scroll(self):
+        self.win.set_default_size(480, 900)
+        self.show()
+        dialog = CartridgeColorDialog(self.win, self.game, spawn=_now)
+        self.addCleanup(dialog.force_close)
+        dialog.present(self.win)
+        preview = dialog.preview
+        self.assertTrue(self.pump_until(
+            lambda: preview.get_mapped()
+            and dialog.body.get_orientation() == Gtk.Orientation.VERTICAL
+            and preview.get_height() > 0,
+            timeout=8,
+        ))
+        self.assertGreaterEqual(preview.get_height(), dialog_module.NARROW_PREVIEW_HEIGHT)
+        self.assertIs(dialog.body.get_parent().get_parent(), dialog.scroller)
+        policy = dialog.scroller.get_policy()
+        self.assertEqual(policy[1], Gtk.PolicyType.AUTOMATIC)
+        # Everything the body holds is inside the scrollable range.
+        self.assertGreaterEqual(
+            dialog.scroller.get_vadjustment().get_upper(), dialog.body.get_height()
+        )
 
 
 @needs_display

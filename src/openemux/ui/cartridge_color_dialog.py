@@ -26,6 +26,9 @@ from openemux.ui.context_menu import _swatch_widget
 #: Width of the cartridge preview, and of the plane's height, in pixels.
 PREVIEW_WIDTH = 160
 NARROW_PREVIEW_WIDTH = 106
+#: The preview's height when stacked: a picture may shrink to nothing, and
+#: in a short column it would, so it keeps this much.
+NARROW_PREVIEW_HEIGHT = 140
 PLANE_HEIGHT = 180
 
 #: Below this the preview stacks above the controls.
@@ -204,13 +207,20 @@ class CartridgeColorDialog(Adw.Dialog):
         self.apply_button.connect("clicked", self._on_apply)
         header.pack_end(self.apply_button)
         view.add_top_bar(header)
-        view.set_content(self._build_body())
+        # The controls scroll when the dialog is shorter than they are, so the
+        # last row of swatches stays reachable in a narrow, short window.
+        self.scroller = Gtk.ScrolledWindow()
+        self.scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scroller.set_propagate_natural_height(True)
+        self.scroller.set_child(self._build_body())
+        view.set_content(self.scroller)
         self.set_child(view)
         self.set_default_widget(self.apply_button)
 
         narrow = Adw.Breakpoint.new(Adw.BreakpointCondition.parse(NARROW_BREAKPOINT))
         narrow.add_setter(self.body, "orientation", Gtk.Orientation.VERTICAL)
         narrow.add_setter(self.preview, "width-request", NARROW_PREVIEW_WIDTH)
+        narrow.add_setter(self.preview, "height-request", NARROW_PREVIEW_HEIGHT)
         self.add_breakpoint(narrow)
 
         # Read here: a worker thread must not touch the widget.

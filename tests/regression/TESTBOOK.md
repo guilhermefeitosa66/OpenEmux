@@ -19454,7 +19454,8 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   never the label or the shadow. 4: `zz` marks the field red and "Apply" turns insensitive, the
   preview keeping the last good color; after "Apply" the card's shell is that red. 5: a "Custom"
   row with a red swatch, checked, above "Pick a Color…". 6: the color survives the restart;
-  "Default" brings the authored shell back. 7: the preview sits above the controls.
+  "Default" brings the authored shell back. 7: the game's cartridge preview sits above the
+  controls, never collapsed to an empty gap; scrolling the dialog reaches the last row of swatches.
 - **Check:** the screenshots show the above; `tests/test_cartridge_color_dialog.py`,
   `tests/test_rom_context.py` (`CustomCartridgeColorEntriesTests`).
 
