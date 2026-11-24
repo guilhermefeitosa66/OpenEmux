@@ -115,7 +115,7 @@ class ListTests(_PickerCase):
     def test_the_menu_actions_are_wired(self):
         picker = self.picker()
         self.select(picker, "night")
-        group = picker.combo.get_action_group("theme")
+        group = picker.actions
         group.activate_action("rename", None)
         group.activate_action("delete", None)
         self.assertEqual(len(self.dialogs), 2)

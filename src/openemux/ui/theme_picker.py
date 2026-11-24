@@ -43,7 +43,7 @@ class ThemePicker:
         self.edit_button.connect("clicked", lambda _b: self.edit())
         self.combo.add_suffix(self.edit_button)
 
-        actions = Gio.SimpleActionGroup()
+        self.actions = actions = Gio.SimpleActionGroup()
         for name, handler in (("duplicate", self.duplicate), ("rename", self.ask_rename),
                               ("delete", self.ask_delete)):
             action = Gio.SimpleAction.new(name, None)

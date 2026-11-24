@@ -167,6 +167,7 @@ class LiveTests(_EditorCase):
 
     def test_cancel_restores_what_the_switch_painted(self):
         dialog = self.editor()
+        dialog.present(self.win)
         dialog.live_row.set_active(True)
         dialog.cancel_button.emit("clicked")
         self.pump_until(lambda: self.restore.called)
