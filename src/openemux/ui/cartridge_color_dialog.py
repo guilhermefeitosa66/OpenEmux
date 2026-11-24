@@ -3,7 +3,8 @@
 Besides the named shell colors, a game's "Cartridge color" can be any color.
 The dialog shows that game's cartridge -- its own label, in the color being
 picked -- beside a saturation/brightness plane, a hue slider, a hex field and
-the named colors as places to start from. GTK 4 has no color wheel, and its
+places to start from: the colors saved from earlier picks and a palette
+(`cartridge_palettes.PaletteArea`). GTK 4 has no color wheel, and its
 own color chooser can neither show the cartridge nor sit inside this dialog,
 so the plane is drawn here, the way GNOME's color editor lays it out.
 
@@ -21,7 +22,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 
 from openemux.core import cartridge_colors, cartridge_render
 from openemux.core.scraper import LABEL_ART, resolve_local_art
-from openemux.ui.context_menu import _swatch_widget
+from openemux.ui.cartridge_palettes import PaletteArea
 
 #: Width of the cartridge preview, and of the plane's height, in pixels.
 PREVIEW_WIDTH = 160
@@ -292,30 +293,12 @@ class CartridgeColorDialog(Adw.Dialog):
         hex_list.append(hex_row)
         controls.append(hex_list)
 
-        start_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        start_label = Gtk.Label(label=t("cartridge_color.dialog.start_from"), xalign=0)
-        start_label.add_css_class("dim-label")
-        start_box.append(start_label)
-        swatches = Gtk.FlowBox()
-        swatches.set_selection_mode(Gtk.SelectionMode.NONE)
-        swatches.set_max_children_per_line(12)
-        swatches.set_min_children_per_line(6)
-        swatches.set_homogeneous(True)
-        self.swatch_buttons = {}
-        for color_id in _named_ids():
-            key = cartridge_colors.color_name_key(color_id)
-            button = Gtk.Button()
-            button.add_css_class("flat")
-            button.add_css_class("color-swatch")
-            button.set_halign(Gtk.Align.CENTER)
-            button.set_child(_swatch_widget(cartridge_colors.color_swatch(color_id)))
-            button.set_tooltip_text(t(key))
-            button.update_property([Gtk.AccessibleProperty.LABEL], [t(key)])
-            button.connect("clicked", lambda _b, c=color_id: self.pick_named(c))
-            swatches.append(button)
-            self.swatch_buttons[color_id] = button
-        start_box.append(swatches)
-        controls.append(start_box)
+        # Saved colors and palettes (issue 983): where a color can start from.
+        self.palettes = PaletteArea(
+            t, self.win.config_manager.cartridge_colors,
+            lambda: self.color, self.set_color, self,
+        )
+        controls.append(self.palettes.widget)
         self.error_label = Gtk.Label(label=t("cartridge_color.dialog.failed"), xalign=0, wrap=True)
         self.error_label.add_css_class("error")
         self.error_label.set_visible(False)
@@ -335,8 +318,10 @@ class CartridgeColorDialog(Adw.Dialog):
         self.saturation, self.value = saturation, value
         self._sync_controls()
 
-    def pick_named(self, color_id):
-        self.set_color(cartridge_colors.parse_hex(cartridge_colors.color_swatch(color_id)))
+    @property
+    def swatch_buttons(self):
+        """The named shells' swatches, while "Shell Colors" is the palette shown."""
+        return self.palettes.swatch_buttons
 
     def _from_hsv(self):
         self.color = cartridge_colors.hsv_to_hex(self.hue, self.saturation, self.value)
@@ -354,6 +339,7 @@ class CartridgeColorDialog(Adw.Dialog):
             self.apply_button.set_sensitive(True)
         finally:
             self._syncing = False
+        self.palettes.color_changed()
         self._schedule_preview()
 
     def _on_plane_changed(self, saturation, value):
@@ -450,6 +436,10 @@ class CartridgeColorDialog(Adw.Dialog):
             self.apply_button.set_sensitive(True)
             self.error_label.set_visible(True)
             return GLib.SOURCE_REMOVE
+        # Kept for the next game (issue 983): only a color applied here is
+        # saved, so one the user removed from "Saved" stays removed when a
+        # game that wears it is set to it again from a menu.
+        self.win.config_manager.cartridge_colors.remember_color(color)
         self.win.set_rom_cartridge_color(self.rom, color)
         self.close()
         return GLib.SOURCE_REMOVE

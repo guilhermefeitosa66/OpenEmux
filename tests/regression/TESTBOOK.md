@@ -19592,13 +19592,17 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Steps:**
   1. Right-click a Game Boy game ▸ "Cartridge color". `make devbox-shot`.
   2. Pick "Pick a Color…". `make devbox-shot`.
-  3. Type `#F2C12E` in "Hex"; then click the "Blue" swatch under "Start from"; then drag in the
-     colored plane and move the "Hue" slider, taking a `make devbox-shot` after each.
+  3. Type `#F2C12E` in "Hex"; then click the "Blue" swatch of the "Shell Colors" palette; then drag
+     in the colored plane and move the "Hue" slider, taking a `make devbox-shot` after each.
   4. Type `zz` in "Hex". `make devbox-shot`. Type `#D23C2A` and click "Apply".
   5. Right-click the same game ▸ "Cartridge color". `make devbox-shot`.
   6. Restart the app (`make devbox-app ACTION=restart`) and look at the same card; then
      "Cartridge color" ▸ "Default".
   7. `make devbox-res RES=480x900`, open the dialog again, `make devbox-shot`; restore the size.
+  8. Right-click another Game Boy game ▸ "Cartridge color". `make devbox-shot`. Pick
+     "Custom #D23C2A".
+  9. Open "Pick a Color…" on a third game: click the first swatch under "Saved"; then right-click
+     it ▸ "Remove". `make devbox-shot` before and after. Cancel.
 - **Expected:** 1: after the named colors, a separator and "Pick a Color…". 2: a "Custom Color"
   dialog with "Cancel" and "Apply", the game's cartridge on the left (its own label) in the shell it
   has now, and on the right the plane, "Hue", "Hex" and twelve swatches. 3: the preview, the plane's
@@ -19608,8 +19612,13 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   row with a red swatch, checked, above "Pick a Color…". 6: the color survives the restart;
   "Default" brings the authored shell back. 7: the game's cartridge preview sits above the
   controls, never collapsed to an empty gap; scrolling the dialog reaches the last row of swatches.
+  5 (since the saved colors): the row reads "Custom #D23C2A". 8: "Custom #D23C2A" with its swatch
+  is listed (not checked) after the named colors; picking it paints the second game red with no
+  dialog. 9: "Saved" shows `#D23C2A` first and clicking it selects it; after "Remove" it leaves the
+  row (the row hides when empty), and the games already painted keep their red.
 - **Check:** the screenshots show the above; `tests/test_cartridge_color_dialog.py`,
-  `tests/test_rom_context.py` (`CustomCartridgeColorEntriesTests`).
+  `tests/test_cartridge_palettes.py` (`SavedColorsTests`), `tests/test_rom_context.py`
+  (`CustomCartridgeColorEntriesTests`).
 
 ### RT-1227 — A custom cartridge color on every console, in details, Big Picture and Share
 - **Area:** View modes & layout
@@ -19617,12 +19626,14 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Preconditions:** none.
 - **Steps:** As a QA person: give a game of each cartridge console a custom color — including
   pure `#FF0000`, `#00FF00`, `#FFFFFF` and `#000000` on a few — and look at the cards; open a game's
-  details ("Cartridge color" lists "Custom" and has a color button beside the reset arrow); open
+  details ("Cartridge color" lists "Custom #RRGGBB" for the game's color and for every saved one,
+  and has a color button beside the reset arrow; picking a saved one applies it); open
   the same game in Big Picture ("Cartridge color" lists "Custom"; picking "Red" replaces it); share
   a game with a custom color to another desktop.
 - **Expected:** every cartridge console draws the shell in the chosen color with the label window,
   its shadow and any metal contacts as they are in the named colors, no halo around the window;
-  the details page and Big Picture show "Custom"; the shared game arrives with the same color.
+  the details page shows "Custom #RRGGBB" and Big Picture "Custom"; the shared game arrives with
+  the same color.
 - **Check:**
   ```bash
   PYTHONPATH=src .venv/bin/python -c "
@@ -19638,6 +19649,38 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   ```
   plus `tests/test_cartridge_custom_colors.py`, `tests/test_game_details.py`,
   `tests/test_bigpicture_details.py`.
+
+### RT-1237 — Palettes in the Custom Color dialog: the presets, and the user's own across a restart
+- **Area:** View modes & layout
+- **Mode:** AUTO-UI
+- **Preconditions:** the devbox with the synthetic library, locale English, the library in the
+  cartridge view; no palette of the user's yet.
+- **Steps:**
+  1. Right-click a Game Boy game ▸ "Cartridge color" ▸ "Pick a Color…". Click the palette button
+     (it reads "Shell Colors"). `make devbox-shot`.
+  2. Pick "Nord". `make devbox-shot`. Cancel, open the dialog again.
+  3. Click the palette button ▸ "New Palette…", type `Pokémon carts`, press Enter.
+  4. Type `#8BE9FD` in "Hex" and click the "+" after the swatches; type `#F2C12E` and click "+".
+  5. Focus the last swatch and press Alt+Left; right-click the first swatch ▸ "Remove".
+     `make devbox-shot`.
+  6. Click the "⋮" beside the palette button ▸ "Rename…", type `Pokémon`, Enter. Cancel the dialog.
+  7. Restart the app (`make devbox-app ACTION=restart`) and open the dialog again; open the palette
+     list. `make devbox-shot`.
+  8. Select "Dracula", "⋮" ▸ "Duplicate"; then "⋮" ▸ "Delete Palette" ▸ "Delete".
+- **Expected:** 1: a list with "Shell Colors", a "Presets" heading with Basic, Dracula, Pastel,
+  Nord, Gruvbox, Neon, Earth and Green screen (each with a strip of its colors) and "New
+  Palette…". 2: the row shows Nord's 7 colors (`#2E3440` … `#BF616A`, the Android editor's); the
+  reopened dialog still shows Nord. 3: the palette is created holding the current color and is
+  selected; "Create" is insensitive while the name is blank. 4: each color joins the end of the
+  row; "+" turns insensitive while the current color is already in it. 5: the menu offers "Move
+  Left", "Move Right" and "Remove"; the row ends as `#F2C12E`, `#8BE9FD` (the first color gone,
+  `#F2C12E` moved before `#8BE9FD`). 6: the palette button reads "Pokémon". 7: after the restart the
+  palette, its name and its colors in that order are kept, listed under "Your Palettes". 8: a
+  "Dracula (Copy)" appears under "Your Palettes", selected, with "+" and editable swatches; the
+  delete asks first and the list falls back to "Shell Colors".
+- **Check:** the screenshots show the above; `grep -A8 '^palettes:' ~/.openemux/cartridge_colors.config`
+  inside the devbox lists the palette; `tests/test_cartridge_palettes.py`,
+  `tests/test_cartridge_colors.py` (`PresetPaletteTests`, `SavedColorsAndPalettesTests`).
 
 ## Android — Recent tab
 

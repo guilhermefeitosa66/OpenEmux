@@ -259,10 +259,14 @@ class GameDetailsDialog(Adw.Dialog):
                 if color_id != cartridge_colors.DEFAULT_COLOR_ID
             ]
             override = self.config.get_rom_cartridge_color_override(path)
-            if cartridge_colors.is_custom_color(override):
-                # Listed only while the game has one: it is not a choice
-                # of the palette, it is this game's own.
-                ordered.append(override)
+            # The game's own custom color and the saved ones (issue 983);
+            # saved ones only where a custom shell can be made.
+            saved = (
+                self.config.cartridge_colors.saved_colors()
+                if cartridge_render.supports_custom_color(console)
+                else ()
+            )
+            ordered.extend(cartridge_colors.custom_color_choices(saved, override))
             console_color = self.config.get_cartridge_color_for_console(console)
             self._fill_row(
                 self.color_row,
@@ -272,6 +276,8 @@ class GameDetailsDialog(Adw.Dialog):
             )
 
     def _color_label(self, color_id):
+        if cartridge_colors.is_custom_color(color_id):
+            return self.t("cartridge_color.custom_hex", hex=str(color_id).upper())
         key = cartridge_colors.color_name_key(color_id)
         return self.t(key) if key else str(color_id).replace("-", " ").title()
 
