@@ -515,6 +515,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "Esc drücken zum Abbrechen",
     "input.capture.no_gamepad": "Kein Controller erkannt. Schließe einen Controller an und versuche es erneut.",
     "input.capture.permission_denied": "Controller konnte nicht gelesen werden. Dein Benutzer muss möglicherweise in der Gruppe 'input' sein.",
+    "input.capture.sandbox_no_input": "Controller können nicht gelesen werden: Dieses Flatpak hat keinen Zugriff auf Eingabegeräte. Erlaube „Alle Geräte“ für OpenEmux in Flatseal.",
     "input.binding.button": "Taste {index}",
     "input.binding.axis": "Achse {axis}",
     "input.binding.hat": "Steuerkreuz {direction}",

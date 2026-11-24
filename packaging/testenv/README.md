@@ -21,6 +21,7 @@ make deb-install           # install the .deb, resolving Depends with apt
 make deb-run               # launch it in this container's session
 make deb-smoke             # launch it, screenshot it, fail if it dies
 make smoke-all             # every format this distro can take, end to end
+make flatpak-devices       # the installed Flatpak can see /dev/input (controllers)
 make help                  # the full list, tailored to the container
 ```
 

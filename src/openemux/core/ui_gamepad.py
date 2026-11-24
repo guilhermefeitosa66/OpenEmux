@@ -35,6 +35,7 @@ from openemux.core.gamepad_reader import (
     TokenMapper,
     _read_axis_ranges,
     list_gamepads,
+    sandbox_hides_input,
 )
 
 logger = logging.getLogger(__name__)
@@ -444,6 +445,15 @@ class GamepadNavigator(NavigatorCore):
         pads.clear()
 
     def _run(self):
+        if sandbox_hides_input():
+            # Said once, not on every rescan: nothing this reader does can fix
+            # it, and the toast-free library has nowhere else to say it
+            # (issue 1001).
+            logger.warning(
+                "this Flatpak has no access to /dev/input, so no controller can "
+                "be read; allow it with: flatpak override --user --device=all "
+                "io.github.guilhermefeitosa66.OpenEmux"
+            )
         pads = {}
         repeat = RepeatClock()
         hold = HoldClock()

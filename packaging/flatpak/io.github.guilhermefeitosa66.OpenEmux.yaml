@@ -62,7 +62,23 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --share=ipc
-  - --device=dri
+  # The GPU, and the controllers. On Linux the gamepad reader is evdev: it
+  # finds pads in /proc/bus/input/devices and reads /dev/input/event*
+  # (core/gamepad_reader.py). With only --device=dri, /dev/input does not
+  # exist in here, and no pad is ever seen -- not in the library, not in Big
+  # Picture, not in Preferences -> Input -- while the AppImage, .deb and .rpm
+  # see it fine (issue 1001). --device=all binds the host's /dev, so a pad
+  # plugged in after launch shows up, and the node keeps the uaccess ACL that
+  # lets the logged-in user read it.
+  #
+  # Why not the narrower --device=input: it needs Flatpak 1.15.6, and Ubuntu
+  # 24.04 / Linux Mint 22 -- this app's floor -- ship Flatpak 1.14.6, which
+  # refuses it ("Unknown device type input, valid types are: dri, all, kvm,
+  # shm"). Once the floor's Flatpak is 1.15.6 or newer, --device=dri plus
+  # --device=input is the pair to move to. `all` already includes the GPU,
+  # which is why --device=dri is not listed beside it. In-game nothing
+  # changes: RetroArch runs in its own Flatpak, which has devices=all itself.
+  - --device=all
   # Cover-art sync from the libretro thumbnail servers, and the update check
   - --share=network
   # ROM library, artwork, and ~/.openemux -- see the note above

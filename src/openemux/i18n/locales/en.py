@@ -517,6 +517,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "Press Esc to cancel",
     "input.capture.no_gamepad": "No controller detected. Connect a gamepad and try again.",
     "input.capture.permission_denied": "Could not read the controller. Your user may need to be in the 'input' group.",
+    "input.capture.sandbox_no_input": "Can't read controllers: this Flatpak has no access to input devices. Allow \"All devices\" for OpenEmux in Flatseal.",
     "input.binding.button": "Button {index}",
     "input.binding.axis": "Axis {axis}",
     "input.binding.hat": "D-Pad {direction}",

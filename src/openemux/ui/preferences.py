@@ -33,7 +33,7 @@ from openemux.core.config import (
 )
 from openemux.core.console_order import apply_console_order, move_console
 from openemux.core.gamepad_backend import list_gamepads, make_capture_reader, make_held_reader
-from openemux.core.gamepad_reader import describe_token
+from openemux.core.gamepad_reader import GAMEPAD_ERROR_KEYS, describe_token
 from openemux.core.library_view import SORT_ORDERS, VIEW_MODES
 from openemux.core.input_actions import (
     ACTION_ORDER,
@@ -1722,11 +1722,7 @@ class OpenEmuxPreferences(Adw.PreferencesDialog):
             return False
         self._gamepad_reader = None
         self._cancel_capture()
-        key = (
-            "input.capture.permission_denied"
-            if reason == "permission_denied"
-            else "input.capture.no_gamepad"
-        )
+        key = GAMEPAD_ERROR_KEYS.get(reason, "input.capture.no_gamepad")
         self._toast(self.t(key), timeout=6)
         return False
 

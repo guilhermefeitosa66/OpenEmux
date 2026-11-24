@@ -511,6 +511,9 @@ class GamepadCapture(InputSectionCase):
         self.remap("a")
         section._on_gamepad_error("gone")
         self.assertIn(self.said("input.capture.no_gamepad"), self.toasts)
+        self.remap("a")
+        section._on_gamepad_error("sandbox_no_input")
+        self.assertIn(self.said("input.capture.sandbox_no_input"), self.toasts)
 
     def test_a_later_port_listens_on_its_own_pad_or_says_it_is_missing(self):
         section = self.section

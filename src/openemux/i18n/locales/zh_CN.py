@@ -515,6 +515,7 @@ TRANSLATIONS = {
     "input.capture.cancel_hint": "按 Esc 取消",
     "input.capture.no_gamepad": "未检测到手柄。请连接手柄后重试。",
     "input.capture.permission_denied": "无法读取手柄。你的用户可能需要加入 'input' 用户组。",
+    "input.capture.sandbox_no_input": "无法读取手柄：此 Flatpak 没有访问输入设备的权限。请在 Flatseal 中为 OpenEmux 允许“所有设备”。",
     "input.binding.button": "按键 {index}",
     "input.binding.axis": "轴 {axis}",
     "input.binding.hat": "方向键 {direction}",

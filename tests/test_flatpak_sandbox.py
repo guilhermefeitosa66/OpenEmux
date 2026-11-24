@@ -29,7 +29,7 @@ EXPECTED_FINISH_ARGS = [
     "--socket=wayland",
     "--socket=fallback-x11",
     "--share=ipc",
-    "--device=dri",
+    "--device=all",
     "--share=network",
     "--filesystem=home",
     "--filesystem=~/.var/app/org.libretro.RetroArch:ro",
@@ -66,6 +66,40 @@ class ThePermissionSetIsWrittenDownTests(unittest.TestCase):
                            "--talk-name=org.freedesktop.systemd1"):
             with self.subTest(permission=permission):
                 self.assertNotIn(permission, _manifest()["finish-args"])
+
+
+class TheControllersAreVisibleInsideTests(unittest.TestCase):
+    """The evdev reader needs /dev/input; without it no pad is seen (issue 1001)."""
+
+    def setUp(self):
+        self.text = MANIFEST.read_text(encoding="utf-8")
+
+    def test_the_sandbox_is_given_the_input_devices(self):
+        finish_args = _manifest()["finish-args"]
+        self.assertTrue(
+            "--device=all" in finish_args or "--device=input" in finish_args,
+            "the Flatpak lost access to /dev/input: no controller would be "
+            "seen in the library, Big Picture or Preferences (issue 1001)",
+        )
+
+    def test_dri_is_not_listed_beside_all(self):
+        # `all` already carries the GPU; Flathub's linter calls the pair
+        # redundant.
+        finish_args = _manifest()["finish-args"]
+        if "--device=all" in finish_args:
+            self.assertNotIn("--device=dri", finish_args)
+
+    def test_the_manifest_says_why_and_why_not_the_narrower_one(self):
+        for term in ("/dev/input", "gamepad_reader.py", "--device=input",
+                     "1.15.6", "1.14.6", "issue 1001"):
+            with self.subTest(term=term):
+                self.assertIn(term, self.text)
+
+    def test_the_packaging_readme_notes_the_flatpak_version(self):
+        readme = (REPO_ROOT / "packaging/README.md").read_text(encoding="utf-8")
+        for term in ("--device=all", "--device=input", "1.15.6"):
+            with self.subTest(term=term):
+                self.assertIn(term, readme)
 
 
 class EveryWidePermissionCarriesItsRationaleTests(unittest.TestCase):

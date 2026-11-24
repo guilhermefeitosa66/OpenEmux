@@ -349,6 +349,17 @@ class ChoosingWhatToReadTests(unittest.TestCase):
             self.reader._run()
         self.assertEqual(self.errors, ["no_gamepad"])
 
+    def test_a_flatpak_without_the_input_devices_says_that_instead(self):
+        # The pad is still listed through /proc; what is missing is its node,
+        # and "no controller" would send the user looking for the wrong fix
+        # (issue 1001).
+        with mock.patch.object(
+            gamepad_reader, "sandbox_hides_input", return_value=True
+        ), mock.patch.object(gamepad_reader, "list_gamepads") as listed:
+            self.reader._run()
+        self.assertEqual(self.errors, ["sandbox_no_input"])
+        listed.assert_not_called()
+
     def test_with_no_device_named_it_takes_the_first_one(self):
         device = self._device()
         with mock.patch.object(
@@ -494,6 +505,42 @@ class TheCaptureLifecycleTests(unittest.TestCase):
         reader._emit_token("3")
         reader = GamepadCaptureReader(on_token=None)
         reader._emit_error("no_gamepad")
+
+
+
+class TheSandboxCheckTests(unittest.TestCase):
+    """Only a Flatpak that lacks /dev/input is told to fix the sandbox (issue 1001)."""
+
+    def setUp(self):
+        import tempfile
+
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self.root)
+        self.info = os.path.join(self.root, ".flatpak-info")
+        self.dev = os.path.join(self.root, "input")
+
+    def test_a_flatpak_with_no_input_dir_hides_the_pads(self):
+        open(self.info, "w").close()
+        self.assertTrue(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+
+    def test_a_flatpak_that_was_given_the_devices_does_not(self):
+        open(self.info, "w").close()
+        os.mkdir(self.dev)
+        self.assertFalse(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+
+    def test_outside_a_flatpak_a_missing_input_dir_is_not_a_sandbox_problem(self):
+        self.assertFalse(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+
+    def test_every_reason_has_a_message(self):
+        self.assertEqual(
+            gamepad_reader.GAMEPAD_ERROR_KEYS["sandbox_no_input"],
+            "input.capture.sandbox_no_input",
+        )
+        for reason in ("no_gamepad", "permission_denied"):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    gamepad_reader.GAMEPAD_ERROR_KEYS[reason], f"input.capture.{reason}"
+                )
 
 
 if __name__ == "__main__":

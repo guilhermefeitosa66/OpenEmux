@@ -640,6 +640,19 @@ class TheReaderLoopTests(unittest.TestCase):
                 self.nav._run()
         self.assertEqual(self.actions, [])
 
+    def test_a_flatpak_without_the_input_devices_says_so_once_in_the_log(self):
+        # Issue 1001: nothing on screen can say it, so the log does, with the
+        # command that gives the access back.
+        with patch(
+            "openemux.core.ui_gamepad.sandbox_hides_input", return_value=True
+        ), patch.object(GamepadNavigator, "_open_pads", return_value={}):
+            with self._stop_after_one_turn(), self.assertLogs(
+                "openemux.core.ui_gamepad", level="WARNING"
+            ) as logs:
+                self.nav._run()
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("--device=all", logs.output[0])
+
     def test_the_first_pad_found_is_announced_by_name(self):
         pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}
         with self._pads_once(pads), self._select_once([]):
