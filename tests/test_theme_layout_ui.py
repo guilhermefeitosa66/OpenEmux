@@ -243,13 +243,18 @@ class WindowSizeTests(WindowCase):
         self.assertEqual(self.win.pages.grid_for("SFC")._card_scale, 1.0)
 
     def test_a_mixed_page_scales_its_slot(self):
+        from openemux.ui.grid import RomGrid
         theming.paint("dark", {"card_scale": 150})
-        self.win.pages.ensure_all_loaded()
-        self.pump()
-        for grid in self.win.pages.grids():
-            if grid.mixed_consoles:
-                width, _height = grid._cover_size_for(None, grid._base_artwork_width)
-                self.assertGreater(width, 200)
+        grid = RomGrid(
+            "SFC", [], None, None, None, None, None, None, None, lambda k, **kw: k, "/tmp",
+            ui_settings=self.win.display_settings_for("SFC"), mixed_consoles=True,
+        )
+        self.addCleanup(grid.teardown)
+        width, _height = grid._cover_size_for(None, grid._base_artwork_width)
+        self.assertGreater(width, 200)
+        # A width Big Picture asks for is sized by the width alone.
+        wider, _height = grid._cover_size_for(None, grid._base_artwork_width + 40)
+        self.assertGreater(wider, 0)
 
     def test_closing_the_window_stops_listening(self):
         self.win._on_close_disconnect_style_manager()

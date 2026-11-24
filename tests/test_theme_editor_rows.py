@@ -127,6 +127,9 @@ class RowKindTests(_RowsCase):
         row.dropdown.set_selected(0)
         self.assertNotIn("font_family", dialog.draft.values)
         row._on_selected(mock.Mock(get_selected=lambda: 99), None)
+        dialog.draft.values["font_family"] = "Noto Sans"
+        dialog.refresh()
+        self.assertEqual(row.dropdown.get_selected(), 3)
         dialog.draft.values["font_family"] = "Gone"
         dialog.refresh()
         self.assertEqual(row.dropdown.get_selected(), 0)
@@ -135,6 +138,16 @@ class RowKindTests(_RowsCase):
         dialog = self.editor()
         self.assertEqual(dialog.fonts(), ["Cantarell", "Noto Sans"])
         self.assertEqual(editor_module.installed_fonts.call_count, 1)
+
+
+@needs_display
+class SpawnTests(unittest.TestCase):
+    def test_the_default_spawns_run_their_work_in_a_thread(self):
+        import threading
+        for spawn in (editor_module._spawn, editor_module.theming._spawn):
+            done = threading.Event()
+            spawn(done.set)
+            self.assertTrue(done.wait(5))
 
 
 @needs_display
