@@ -265,6 +265,13 @@ class StoreTests(unittest.TestCase):
         self.store.save(theme)
         self.assertEqual(self.store.get("paper").values, {"accent": "#ff7800"})
 
+    def test_a_failed_save_leaves_no_temp_file(self):
+        theme = self.store.create("Paper", "light")
+        with mock.patch.object(custom_themes.os, "replace", side_effect=OSError("full")):
+            with self.assertRaises(OSError):
+                self.store.save(theme)
+        self.assertEqual(sorted(p.name for p in (self.root / "paper").iterdir()), [THEME_FILE])
+
     def test_duplicate_copies_base_and_values_under_a_new_id(self):
         self.store.create("Night", "dark", {"card_bg": "#101010"})
         copy = self.store.duplicate("night", "Night (copy)")

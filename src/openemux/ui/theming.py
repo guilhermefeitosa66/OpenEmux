@@ -36,6 +36,9 @@ _COLOR_SCHEMES = {
 PROVIDER_PRIORITY = Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
 
 _provider = None
+#: Big Picture is on screen: it keeps its own dark palette, so the custom
+#: provider is emptied until it closes (issue 1011; theming it is part 5).
+_suspended = False
 #: What is on screen: (theme id, base, values), for ``restore``.
 _applied = (THEME_SYSTEM, None, {})
 
@@ -69,7 +72,8 @@ def _load_css(text):
 def paint(base, values):
     """Paint ``values`` over ``base`` (light or dark) right now."""
     Adw.StyleManager.get_default().set_color_scheme(_COLOR_SCHEMES[base])
-    _load_css(theme_css.stylesheet(values, css_variables=uses_css_variables()))
+    if not _suspended:
+        _load_css(theme_css.stylesheet(values, css_variables=uses_css_variables()))
 
 
 def apply_theme(theme, store=None):
@@ -109,6 +113,22 @@ def restore():
             _load_css("")
     else:
         paint(base, values)
+
+
+def set_suspended(suspended):
+    """Take the custom colors off while Big Picture is shown, and back after."""
+    global _suspended
+    if suspended == _suspended:
+        return
+    _suspended = suspended
+    if suspended:
+        if _provider is not None:
+            _load_css("")
+        return
+    # The scheme is Big Picture's to give back; only the colors return here.
+    _theme, base, values = _applied
+    if base is not None:
+        _load_css(theme_css.stylesheet(values, css_variables=uses_css_variables()))
 
 
 def applied_theme():

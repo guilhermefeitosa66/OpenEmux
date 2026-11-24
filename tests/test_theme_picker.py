@@ -13,7 +13,7 @@ if HAVE_DISPLAY:
 
     from openemux.core.config import ConfigManager
     from openemux.ui import theme_picker as picker_module
-    from openemux.ui.theme_picker import ThemePicker
+    from openemux.ui.theme_picker import ThemePicker, copy_name, theme_choices, theme_label
 
 
 class _Window:
@@ -129,6 +129,29 @@ class ListTests(_PickerCase):
         self.select(picker, "night")
         picker.edit_button.emit("clicked")
         self.open_editor.assert_called_once()
+
+
+@needs_display
+class HelperTests(_PickerCase):
+    def test_choices_and_labels(self):
+        t = self.prefs.t
+        self.assertEqual(
+            theme_choices(t, self.store),
+            [("system", "theme.system"), ("light", "theme.light"), ("dark", "theme.dark"),
+             ("night", "Night"), ("paper", "Paper")],
+        )
+        self.assertEqual(theme_label(t, self.store, "dark"), "theme.dark")
+        self.assertEqual(theme_label(t, self.store, "night"), "Night")
+        self.assertEqual(theme_label(t, self.store, "gone"), "theme.system")
+
+    def test_a_copys_suffix_always_fits(self):
+        def t(key, name):
+            return f"{name} (copy)"
+        self.assertEqual(copy_name(t, "Night"), "Night (copy)")
+        long_name = "x" * 64
+        made = copy_name(t, long_name)
+        self.assertEqual(len(made), 64)
+        self.assertTrue(made.endswith(" (copy)"))
 
 
 @needs_display

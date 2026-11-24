@@ -14,7 +14,7 @@ the controls and the section list becomes a "Section" row.
 import logging
 import math
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 from openemux.core.contrast import WCAG_AA
 from openemux.core.custom_themes import (
@@ -141,7 +141,8 @@ class ColorRow(Adw.ActionRow):
             self.set_subtitle(t(
                 "theme_editor.contrast_warning",
                 other=t(f"theme_editor.key.{other}"),
-                ratio=f"{ratio:.1f}",
+                # Never rounded up: 4.46 must not read as the 4.5 it misses.
+                ratio=f"{math.floor(ratio * 10) / 10:.1f}",
                 needed=f"{WCAG_AA:.1f}",
             ))
         elif changed:
@@ -160,6 +161,7 @@ class ThemeEditorDialog(Adw.Dialog):
         self.on_saved = on_saved
         self.draft = theme.copy()
         self.live = False
+        self._paint_source = None
         self.saved = False
         self.narrow = False
         self.rows = {}
@@ -395,8 +397,16 @@ class ThemeEditorDialog(Adw.Dialog):
             self.section_icons[section].set_visible(has)
         self.reset_all_button.set_sensitive(bool(self.draft.values))
         self.preview.set_colors(self.draft.effective_values())
+        if self.live and self._paint_source is None:
+            # A drag fires many changes a frame; restyling the whole app for
+            # each would stall it. One repaint per idle, with the latest draft.
+            self._paint_source = GLib.idle_add(self._paint_live)
+
+    def _paint_live(self):
+        self._paint_source = None
         if self.live:
             theming.paint(self.draft.base, self.draft.values)
+        return GLib.SOURCE_REMOVE
 
     def set_live(self, live):
         if live == self.live:

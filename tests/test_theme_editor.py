@@ -158,8 +158,19 @@ class LiveTests(_EditorCase):
         dialog = self.editor()
         dialog.live_row.set_active(True)
         self.paint.assert_called_with("dark", {})
+        # A burst of changes is painted once, with the latest value.
+        self.paint.reset_mock()
+        dialog.set_value("card_bg", "#202020")
         dialog.set_value("card_bg", "#101010")
-        self.paint.assert_called_with("dark", {"card_bg": "#101010"})
+        self.assertTrue(self.pump_until(lambda: self.paint.called))
+        self.paint.assert_called_once_with("dark", {"card_bg": "#101010"})
+        # A change queued just before the switch goes off paints nothing.
+        self.paint.reset_mock()
+        dialog.set_value("card_bg", "#303030")
+        dialog.live = False
+        self.pump()
+        self.paint.assert_not_called()
+        dialog.live = True
         dialog.live_row.set_active(False)
         self.restore.assert_called_once()
         dialog.set_live(False)

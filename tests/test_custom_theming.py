@@ -20,6 +20,7 @@ def _reset_theming():
         display = Gdk.Display.get_default()
         Gtk.StyleContext.remove_provider_for_display(display, theming._provider)
     theming._provider = None
+    theming._suspended = False
     theming._applied = ("system", None, {})
     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 
@@ -104,6 +105,25 @@ class CustomThemeTests(_ThemingCase):
         self.assertEqual(theming.uses_css_variables(), expected)
         theming.paint("dark", {"card_bg": "#2f3549"})
         self.assertEqual("--card-bg-color" in self.css(), expected)
+
+    def test_big_picture_suspends_the_custom_colors(self):
+        theme = self.store.create("Night", "dark", {"card_bg": "#2f3549"})
+        theming.apply_theme(theme.id, store=self.store)
+        theming.set_suspended(True)
+        theming.set_suspended(True)
+        self.assertEqual(self.css(), "")
+        # Applied while suspended: remembered, painted on the way out.
+        other = self.store.create("Paper", "light", {"card_bg": "#ffeedd"})
+        theming.apply_theme(other.id, store=self.store)
+        self.assertEqual(self.css(), "")
+        theming.set_suspended(False)
+        self.assertIn("ffeedd", self.css())
+        theming.set_suspended(False)
+
+    def test_suspending_before_any_custom_theme_needs_no_provider(self):
+        theming.set_suspended(True)
+        theming.set_suspended(False)
+        self.assertIsNone(theming._provider)
 
     def test_no_display_no_provider(self):
         with mock.patch.object(theming.Gdk.Display, "get_default", return_value=None):

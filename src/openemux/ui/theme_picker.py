@@ -10,12 +10,36 @@ import logging
 
 from gi.repository import Adw, Gio, Gtk
 
-from openemux.core.custom_themes import Theme
+from openemux.core.custom_themes import MAX_NAME_LENGTH, Theme
 from openemux.core.theme import THEMES, THEME_SYSTEM
 from openemux.ui import theming
 from openemux.ui.theme_editor import open_theme_editor
 
 logger = logging.getLogger(__name__)
+
+
+def theme_choices(t, store):
+    """Every theme a person can pick, as (id, label): built-ins, then theirs."""
+    return [(name, t(f"theme.{name}")) for name in THEMES] + [
+        (theme.id, theme.name) for theme in store.list()
+    ]
+
+
+def theme_label(t, store, theme_id):
+    """What a stored ``ui.theme`` is called; a missing custom one is System."""
+    if theme_id in THEMES:
+        return t(f"theme.{theme_id}")
+    theme = store.get(theme_id)
+    return theme.name if theme is not None else t(f"theme.{THEME_SYSTEM}")
+
+
+def copy_name(t, name):
+    """"<name> (copy)", the name shortened so the suffix always fits."""
+    wanted = t("theme.custom.copy_name", name=name)
+    overflow = len(wanted) - MAX_NAME_LENGTH
+    if overflow > 0:
+        wanted = t("theme.custom.copy_name", name=name[:len(name) - overflow].rstrip())
+    return wanted
 
 
 class ThemePicker:
@@ -81,9 +105,9 @@ class ThemePicker:
         a model from there re-entered the handler (and crashed GTK 4.22 on
         another combo).
         """
-        themes = self.store.list()
-        self.ids = list(THEMES) + [theme.id for theme in themes]
-        labels = [self.t(f"theme.{name}") for name in THEMES] + [theme.name for theme in themes]
+        choices = theme_choices(self.t, self.store)
+        self.ids = [theme_id for theme_id, _label in choices]
+        labels = [label for _theme_id, label in choices]
         current = self.config.get_ui_settings()["theme"]
         index = self.ids.index(current) if current in self.ids else self.ids.index(THEME_SYSTEM)
         self._syncing = True
@@ -210,9 +234,7 @@ class ThemePicker:
             self.reload()
             return None
         try:
-            copy = self.store.duplicate(
-                source.id, self.t("theme.custom.copy_name", name=source.name)
-            )
+            copy = self.store.duplicate(source.id, copy_name(self.t, source.name))
         except OSError as exc:
             self._failed(exc)
             return None

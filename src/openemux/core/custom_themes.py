@@ -326,11 +326,15 @@ class ThemeStore:
         folder = self._folder(theme.id)
         folder.mkdir(parents=True, exist_ok=True)
         temp = folder / f".{THEME_FILE}.tmp"
-        temp.write_text(
-            yaml.safe_dump(serialize(theme), sort_keys=False, allow_unicode=True),
-            encoding="utf-8",
-        )
-        os.replace(temp, folder / THEME_FILE)
+        try:
+            temp.write_text(
+                yaml.safe_dump(serialize(theme), sort_keys=False, allow_unicode=True),
+                encoding="utf-8",
+            )
+            os.replace(temp, folder / THEME_FILE)
+        except OSError:
+            temp.unlink(missing_ok=True)
+            raise
         return theme
 
     def create(self, name, base, values=None):
