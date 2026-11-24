@@ -3073,6 +3073,23 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_arch_package.py`; the container build itself
   (`make arch`) installs, verifies and removes the package as its last steps.
 
+### RT-1221 — The openemux-git AUR recipe builds, installs and removes cleanly
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Docker (the Arch build image); network for pacman.
+- **Steps:** As a QA person: run `make aur-git`. Then, on an Arch machine, build the recipe the way
+  an AUR user would — `makepkg -si` in a copy of `build/aur/openemux-git/` — launch OpenEmux from
+  the menu, play a game, and `sudo pacman -Rns openemux-git`.
+- **Expected:** `make aur-git` ends with "ALL AUR CHECKS PASSED", writes
+  `build/aur/openemux-git/PKGBUILD` and `.SRCINFO` (the `pkgver` is `<app version>.r<N>.g<sha>`,
+  `arch = any`, `provides`/`conflicts = openemux`, `depends = retroarch`, and the `source` is the
+  GitHub URL on `develop`, never a local path), and puts nothing in `dist/`. On the Arch machine,
+  pacman pulls the distribution's `retroarch`, the installed package replaces a release
+  `openemux` if there is one, the game launches through `/usr/bin/retroarch`, and the removal
+  leaves nothing of the package behind.
+- **Check:** suite file `tests/test_aur_package.py`; the container build itself (`make aur-git`)
+  installs, verifies and removes the package and checks the `.SRCINFO` as its last steps.
+
 ### RT-279 — The native packages need no FUSE at all
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE

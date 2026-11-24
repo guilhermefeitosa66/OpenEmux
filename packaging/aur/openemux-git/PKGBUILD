@@ -1,0 +1,89 @@
+# Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
+#
+# The AUR's openemux-git: OpenEmux built from the development head of the
+# repository, for Arch users who would rather `yay -S openemux-git` than
+# download a release (issue #986).
+#
+# The same install as packaging/arch/PKGBUILD -- /opt/openemux, the
+# /usr/bin/openemux launcher, the desktop entry, icons and metainfo, all from
+# packaging/common/stage_tree.sh -- with two differences that come from being
+# built from a git clone:
+#
+# * the RetroArch is the distribution's. A clone carries no vendored emulator
+#   (it is a 171 MiB download kept out of git), the AUR prefers system packages
+#   to bundled binaries, and fetching it inside build() would be a network
+#   download in the middle of a build. The launcher finds `retroarch` on PATH,
+#   which is how the aarch64 release package already runs.
+# * the version is computed by pkgver() from the clone, so the `pkgver` below is
+#   only what the AUR page shows until the next publish. packaging/aur/build.sh
+#   (`make aur-git`) writes the publishable copy with the real one.
+
+pkgname=openemux-git
+_pkgname=openemux
+# The default branch, where every change lands first. `main` carries released
+# code only, for anyone who prefers that.
+_branch=develop
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu (development version)"
+# Pure Python, now that the emulator is the distribution's: the same package
+# runs wherever Arch (or Arch Linux ARM) ships a retroarch.
+arch=('any')
+url="https://openemux.libre-apps.org/"
+license=('MIT')
+
+depends=(
+  'python>=3.10'
+  'python-gobject'
+  'python-cairo'
+  'gtk4>=4.6'
+  'libadwaita>=1.5'
+  'python-yaml'
+  'python-xlib'
+  'python-cryptography'
+  'python-zeroconf'
+  'librsvg'
+  # Synced covers are WebP, which gdk-pixbuf cannot decode on its own
+  # (issue #251).
+  'webp-pixbuf-loader'
+  'adwaita-icon-theme'
+  'hicolor-icon-theme'
+  # Not bundled here, see above.
+  'retroarch'
+)
+makedepends=('git' 'imagemagick' 'desktop-file-utils' 'appstream')
+optdepends=('python-segno: QR code of the address in Share Nearby')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+
+source=("$_pkgname::git+https://github.com/guilhermefeitosa66/OpenEmux.git#branch=$_branch")
+sha256sums=('SKIP')
+
+# Nothing here is compiled.
+options=('!debug' '!lto' '!buildflags')
+
+pkgver() {
+  cd "$srcdir/$_pkgname"
+  # src/openemux/__init__.py stays the single source of the version. The
+  # commit count keeps every build newer than the one before it, whatever
+  # happens to the tags (a release is tagged on a squash commit of `main`).
+  local version
+  version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/openemux/__init__.py)"
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short=7 HEAD)"
+}
+
+package() {
+  cd "$srcdir/$_pkgname"
+
+  DESTDIR="$pkgdir" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
+
+  # stage_tree.sh writes the Debian location for the licence text; Arch keeps
+  # it under /usr/share/licenses. `copyright` records the third-party terms
+  # (issue #233).
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 packaging/common/copyright \
+    "$pkgdir/usr/share/licenses/$pkgname/copyright"
+  rm -rf "$pkgdir/usr/share/doc/openemux"
+  rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
+}

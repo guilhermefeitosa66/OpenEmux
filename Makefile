@@ -38,7 +38,7 @@ PIP := $(PYTHON) -m pip
 
 .PHONY: all setup setup-dev venv run test coverage smoke lint icons name-db clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch vendor-retroarch-win64 verify-vendors
-.PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean
+.PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean aur-git
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
 .PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
 .PHONY: devbox devbox-up devbox-app devbox-shot devbox-xdo devbox-res devbox-rec
@@ -258,6 +258,13 @@ rpm: vendor-retroarch
 arch: vendor-retroarch
 	./packaging/build.sh arch
 
+# The AUR's openemux-git recipe (packaging/aur/) -- built from a clone of this
+# checkout's HEAD, install-tested in the Arch image, and the PKGBUILD + .SRCINFO
+# to push to the AUR written to build/aur/openemux-git/. Not part of
+# `packages`, and nothing lands in dist/: it is not a release artifact.
+aur-git:
+	./packaging/build.sh aur
+
 # Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
 # Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).
 flatpak:
@@ -297,7 +304,7 @@ windows-clean:
 
 # Remove every packaged artifact
 packages-clean: appimage-clean windows-clean
-	rm -rf dist/*.deb dist/*.rpm dist/*.pkg.tar.* dist/*.flatpak dist/SHA256SUMS flatpak-repo
+	rm -rf dist/*.deb dist/*.rpm dist/*.pkg.tar.* dist/*.flatpak dist/SHA256SUMS flatpak-repo build/aur
 	@# The flatpak build runs as root inside its container, so the tree it
 	@# leaves behind is root-owned and rm(1) on the host cannot touch it.
 	@# Delete it the way it was created rather than reaching for sudo.

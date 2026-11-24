@@ -4,15 +4,19 @@
 # defined by packaging/docker/<target>.Dockerfile, so the host only needs
 # Docker, and artifacts land in dist/.
 #
+# `aur` is the odd one out: it builds the AUR's openemux-git recipe from a clone
+# of this checkout in the Arch image, and writes the files to publish to
+# build/aur/ -- never dist/, which is what a release uploads (issue #986).
+#
 # The per-target logic lives in packaging/<target>/build.sh, which this script
 # runs *inside* the container.
 set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|arch|flatpak|windows) ;;
+  appimage|deb|rpm|arch|flatpak|windows|aur) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows}" >&2
+    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur}" >&2
     exit 2
     ;;
 esac
@@ -61,7 +65,7 @@ fi
 # The check is which architectures are *supported*, then, rather than which one
 # the host is.
 case "$TARGET" in
-  appimage|deb|rpm|arch)
+  appimage|deb|rpm|arch|aur)
     # The container's architecture, which PLATFORM overrides.
     ARCH="$(uname -m)"
     case "${PLATFORM:-}" in
@@ -80,7 +84,7 @@ case "$TARGET" in
     # a container to build it in: the official `archlinux` image publishes
     # amd64 only (Arch Linux ARM is a separate distribution with its own
     # images). Said here rather than as a confusing `docker build` failure.
-    if [ "$TARGET" = "arch" ]; then
+    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ]; then
       case "$ARCH" in
         aarch64|arm64)
           echo "The Arch build image (archlinux:base-devel) is amd64-only." >&2
@@ -109,8 +113,9 @@ fi
 # The Linux formats that bundle an emulator. The Flatpak does not -- it
 # launches the host's org.libretro.RetroArch -- and on aarch64 there is nothing
 # to bundle, since libretro publishes no ARM build (issue #119).
-# ARCH is set by the architecture gate above, which only runs for these four
-# targets; ${ARCH:-} keeps `set -u` out of it for the other two.
+# ARCH is set by the architecture gate above, which only runs for appimage,
+# deb, rpm, arch and aur; ${ARCH:-} keeps `set -u` out of it for the others.
+# aur bundles nothing: it uses the distribution's RetroArch.
 case "$TARGET:${ARCH:-}" in
   appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64|arch:x86_64|arch:amd64)
     if [ ! -x vendors/RetroArch-Linux-x86_64/usr/bin/retroarch ]; then
@@ -135,13 +140,17 @@ if [ -n "${PLATFORM:-}" ]; then
   PLATFORM_ARGS=(--platform "$PLATFORM")
 fi
 
-IMAGE="openemux-build-$TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
+# The AUR recipe is an Arch package like any other, built in the same image.
+IMAGE_TARGET="$TARGET"
+[ "$TARGET" = "aur" ] && IMAGE_TARGET=arch
+
+IMAGE="openemux-build-$IMAGE_TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
 echo "==> building image $IMAGE"
 # --pull: without it a stale local image is reused silently, possibly one
 # cached before a security update. The Dockerfiles pin their base by digest, so
 # this only ever re-fetches the same bytes (issue #255).
 docker build "${PLATFORM_ARGS[@]}" --pull -q -t "$IMAGE" \
-  -f "packaging/docker/$TARGET.Dockerfile" packaging/docker
+  -f "packaging/docker/$IMAGE_TARGET.Dockerfile" packaging/docker
 
 # Artifacts are written as root inside the container; hand them back afterwards.
 HOST_UID="${HOST_UID:-$(id -u)}"
@@ -177,6 +186,23 @@ elif [ "$TARGET" = "flatpak" ]; then
   DOCKER_ARGS+=(--cap-add SYS_ADMIN --cap-add NET_ADMIN --device /dev/fuse
                 --security-opt apparmor:unconfined
                 --security-opt seccomp=unconfined)
+fi
+
+# The AUR recipe clones a git repository, and the code under test is this
+# checkout's HEAD -- not GitHub's develop, and not the working tree. A bare
+# clone of the current branch is what the container builds from; made here
+# because inside the container a worktree's .git points at a path that is not
+# mounted. Read-only: the build copies it before using it.
+if [ "$TARGET" = "aur" ]; then
+  AUR_SRC="$(mktemp -d)"
+  trap 'rm -rf "$AUR_SRC"' EXIT
+  git -C "$ROOT_DIR" clone -q --bare --no-local --single-branch \
+    "$ROOT_DIR" "$AUR_SRC/openemux.git"
+  # HEAD itself, detached, so a detached checkout works as well as a branch.
+  git --git-dir="$AUR_SRC/openemux.git" fetch -q "$ROOT_DIR" HEAD
+  git --git-dir="$AUR_SRC/openemux.git" update-ref --no-deref HEAD \
+    "$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  DOCKER_ARGS+=(-v "$AUR_SRC:/src:ro")
 fi
 
 echo "==> running packaging/$TARGET/build.sh in $IMAGE"
