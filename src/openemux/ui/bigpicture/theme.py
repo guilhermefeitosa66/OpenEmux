@@ -812,23 +812,20 @@ def stylesheet(scale=1.0):
 }}
 /* The focus mat lies outside its item, and a scroller clips at its edge: the
    content gets a gutter of the mat inside the clip, and the scroller reaches
-   out by as much, so the items stay on the page margins. */
+   out by as much, so the items stay on the page margins. In the middle of
+   the content the shell scrolls the mat into view as the focus moves
+   (``widgets.reveal_whole``). */
 .big-picture .bp-scroller {{
     margin-left: -{s('focus_mat')}px;
     margin-right: -{s('focus_mat')}px;
+    min-width: {2 * s('focus_mat')}px; /* never narrower than its margins: GTK refuses a negative size */
 }}
 .big-picture .bp-scroller > viewport > * {{
     margin-left: {s('focus_mat')}px;
     margin-right: {s('focus_mat')}px;
 }}
 .big-picture .bp-scroller-vertical > viewport > * {{
-    margin-top: {s('focus_mat')}px;
     margin-bottom: {s('focus_mat')}px;
-}}
-/* The games grid scrolls a focused cell into view, not its mat. */
-.big-picture gridview > child {{
-    padding-top: {s('focus_mat')}px;
-    padding-bottom: {s('focus_mat')}px;
 }}
 .big-picture .console-group-header label.heading {{
     font-size: {s('section_title')}px;

@@ -66,9 +66,14 @@ class TheStylesheet(unittest.TestCase):
             css = theme.stylesheet(scale)
             self.assertIn(f"margin-left: -{mat}px;", css)
             self.assertIn(f"margin-right: -{mat}px;", css)
+            self.assertIn(f"min-width: {2 * mat}px;", css)
             self.assertIn(f".big-picture .bp-scroller > viewport > * {{\n    margin-left: {mat}px;", css)
-            self.assertIn(f".big-picture .bp-scroller-vertical > viewport > * {{\n    margin-top: {mat}px;", css)
-            self.assertIn(f".big-picture gridview > child {{\n    padding-top: {mat}px;", css)
+            # Room below the last item only: the top of a page stays where it was.
+            self.assertIn(f".big-picture .bp-scroller-vertical > viewport > * {{\n    margin-bottom: {mat}px;\n}}", css)
+            self.assertNotIn(".bp-scroller-vertical {", css)
+        # The games grid's cells keep their size: a dormant grid reports the
+        # rows it will take from the card alone (grid.py, _dormant_height).
+        self.assertNotIn("gridview > child {", theme.stylesheet(1.0))
 
 
 @needs_display
@@ -91,6 +96,100 @@ class TheHelper(unittest.TestCase):
         self.assertTrue(scroller.has_css_class("bp-scroller"))
         self.assertTrue(scroller.has_css_class("bp-scroller-vertical"))
         self.assertTrue(scroller.get_vexpand())
+
+
+def _adjustment(value=0.0, upper=1000.0, page=100.0):
+    return Gtk.Adjustment(value=value, lower=0.0, upper=upper, step_increment=10.0,
+                          page_increment=page, page_size=page)
+
+
+@needs_display
+class TheWheelOnARow(unittest.TestCase):
+    def test_the_wheel_moves_a_row_sideways(self):
+        row = widgets.bp_scroller(Gtk.Box(), horizontal=True)
+        row.set_hadjustment(_adjustment())
+        self.assertTrue(widgets.wheel_sideways(row, 1.0))
+        self.assertEqual(row.get_hadjustment().get_value(), 25.0)
+        self.assertTrue(widgets.wheel_sideways(row, -4.0))
+        self.assertEqual(row.get_hadjustment().get_value(), 0.0)
+        row.get_hadjustment().set_value(890.0)
+        widgets.wheel_sideways(row, 2.0)
+        self.assertEqual(row.get_hadjustment().get_value(), 900.0)
+        self.assertFalse(widgets.wheel_sideways(row, 0.0))
+        controllers = [c for c in row.observe_controllers() if isinstance(c, Gtk.EventControllerScroll)]
+        self.assertTrue(any(c.emit("scroll", 0.0, 1.0) for c in controllers))
+        self.assertEqual(row.get_hadjustment().get_value(), 900.0)
+
+    def test_no_adjustment_no_wheel(self):
+        row = mock.Mock()
+        row.get_hadjustment.return_value = None
+        self.assertFalse(widgets.wheel_sideways(row, 1.0))
+
+    def test_a_page_has_no_sideways_wheel(self):
+        page = widgets.bp_scroller(Gtk.Box())
+        self.assertFalse([c for c in page.observe_controllers() if isinstance(c, Gtk.EventControllerScroll)
+                          and c.get_flags() == Gtk.EventControllerScrollFlags.VERTICAL])
+
+
+class _Bounds:
+    def __init__(self, x, y, w, h):
+        self.x, self.y, self.w, self.h = x, y, w, h
+
+    def get_x(self):
+        return self.x
+
+    def get_y(self):
+        return self.y
+
+    def get_width(self):
+        return self.w
+
+    def get_height(self):
+        return self.h
+
+
+@needs_display
+class RevealingTheMat(unittest.TestCase):
+    def scroller(self, width=100, height=100, hadj=None, vadj=None):
+        scroller = mock.Mock()
+        scroller.get_width.return_value = width
+        scroller.get_height.return_value = height
+        scroller.get_hadjustment.return_value = hadj
+        scroller.get_vadjustment.return_value = vadj
+        return scroller
+
+    def item(self, scroller, bounds):
+        item = mock.Mock()
+        item.get_ancestor.return_value = scroller
+        item.compute_bounds.return_value = (bounds is not None, bounds)
+        return item
+
+    def test_an_item_outside_any_scroller_is_left_alone(self):
+        self.assertFalse(widgets.reveal_whole(self.item(None, None), 9))
+
+    def test_an_item_with_no_bounds_is_left_alone(self):
+        self.assertFalse(widgets.reveal_whole(self.item(self.scroller(), None), 9))
+
+    def test_the_mat_below_the_fold_scrolls_in(self):
+        vadj = _adjustment(value=100.0)
+        scroller = self.scroller(vadj=vadj)
+        self.assertTrue(widgets.reveal_whole(self.item(scroller, _Bounds(0, 50, 50, 45)), 9))
+        self.assertEqual(vadj.get_value(), 104.0)
+
+    def test_the_mat_above_the_fold_scrolls_in(self):
+        hadj = _adjustment(value=100.0)
+        scroller = self.scroller(hadj=hadj)
+        self.assertTrue(widgets.reveal_whole(self.item(scroller, _Bounds(3, 20, 40, 40)), 9))
+        self.assertEqual(hadj.get_value(), 94.0)
+
+    def test_an_item_with_room_or_too_big_or_at_the_end_stays(self):
+        vadj = _adjustment(value=0.0)
+        scroller = self.scroller(vadj=vadj, hadj=_adjustment())
+        self.assertFalse(widgets.reveal_whole(self.item(scroller, _Bounds(20, 20, 40, 40)), 9))
+        self.assertFalse(widgets.reveal_whole(self.item(scroller, _Bounds(20, 0, 40, 95)), 9))
+        # Already at the top: there is nothing above to scroll to.
+        self.assertFalse(widgets.reveal_whole(self.item(scroller, _Bounds(20, 2, 40, 40)), 9))
+        self.assertFalse(widgets.reveal_whole(self.item(self.scroller(width=0, hadj=_adjustment()), _Bounds(20, 2, 40, 40)), 9))
 
 
 @needs_display
@@ -150,6 +249,27 @@ class NoScrollbarInTheMode(BigPictureCase):
         self.assertTrue(ok)
         self.assertEqual(origin.x, body.x)
         self.assertEqual(page.grid.get_width(), page.body.get_width())
+
+    def test_the_shell_reveals_the_mat_of_the_new_focus(self):
+        page = self.shell.shelf
+        card = page.cards[-1]
+        with mock.patch("openemux.ui.bigpicture.shell.reveal_whole") as reveal:
+            card.grab_focus()
+            self.pump()
+            self.assertTrue(reveal.called)
+            self.assertIs(reveal.call_args.args[0], card)
+            self.assertEqual(reveal.call_args.args[1], theme.px("focus_mat", self.shell._scale or self.shell.scale()))
+            reveal.reset_mock()
+            # The focus moved on before the idle ran: nothing for the old one.
+            self.shell._reveal_focus(page.cards[0])
+            reveal.assert_not_called()
+            # Out of the mode, the shell leaves the desktop's focus alone.
+            self.leave()
+            reveal.reset_mock()
+            self.win.set_focus(None)
+            self.shell._on_focus_moved(self.win, None)
+            self.pump()
+            reveal.assert_not_called()
 
     def test_the_desktop_keeps_its_scrollbars(self):
         self.leave()
