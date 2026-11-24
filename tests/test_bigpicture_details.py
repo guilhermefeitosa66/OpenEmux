@@ -319,6 +319,16 @@ class TheSettingsRows(_DetailsCase):
             self.assertIsNone(self.config.get_rom_cartridge_color_override(self.game["path"]))
         self.assertEqual(page._color_label("deep-blue"), "Deep Blue")
 
+    def test_a_custom_color_is_kept_or_replaced_here(self):
+        """Issue 983: picked on the desktop, listed in Big Picture."""
+        self.config.set_rom_cartridge_color(self.game["path"], "SFC", "#d23c2a")
+        page = self.open()
+        self.assertEqual(page.color_row.value_label.get_label(), self.said("cartridge_color.custom"))
+        page.color_row.emit("clicked")
+        self.assertEqual(self.ids()[-1], "#d23c2a")
+        self.pick("red")
+        self.assertEqual(self.config.get_rom_cartridge_color_override(self.game["path"]), "red")
+
 
 @needs_display
 class ThePlaylistsArtworkAndFileRows(_DetailsCase):

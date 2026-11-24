@@ -349,6 +349,50 @@ class CartridgeColorSubmenuTests(unittest.TestCase):
         self.assertEqual(len(_checked(submenu)), 1)
 
 
+class CustomCartridgeColorEntriesTests(unittest.TestCase):
+    """Any shell color (issue 983): the game's own, then the picker."""
+
+    def _submenu(self, override=None, supported=True):
+        from unittest.mock import patch
+
+        from openemux.core import cartridge_colors, cartridge_render
+
+        window = _Window(
+            view_mode="cartridge",
+            config=_Config(rom_color={ROM["path"]: override} if override else {}),
+        )
+        services = RomContextMenuServices(window)
+        with patch.object(
+            cartridge_render,
+            "frame_colors_for",
+            return_value=[cartridge_colors.DEFAULT_COLOR_ID, "black"],
+        ), patch.object(cartridge_render, "supports_custom_color", return_value=supported):
+            return window, _by_title(services.build_submenus(ROM), "context.cartridge_color")
+
+    def test_the_picker_closes_the_menu(self):
+        window, submenu = self._submenu()
+        last = submenu.entries[-1]
+        self.assertEqual(last[0], "cartridge_color.pick")
+        self.assertIs(submenu.entries[-2], SEPARATOR)
+        self.assertEqual(_checked(submenu), ["cartridge_color.default"])
+        last[1]()
+        self.assertEqual(window.calls, [("open_cartridge_color_dialog", (ROM,), {})])
+
+    def test_a_custom_color_is_listed_checked_with_its_swatch(self):
+        window, submenu = self._submenu(override="#d23c2a")
+        row = submenu.entries[-2]
+        self.assertEqual(row[0], "cartridge_color.custom")
+        self.assertEqual(row[3], "#d23c2a")
+        self.assertEqual(_checked(submenu), ["cartridge_color.custom"])
+        row[1]()
+        self.assertEqual(window.calls, [("set_rom_cartridge_color", (ROM, "#d23c2a"), {})])
+
+    def test_no_picker_where_no_custom_shell_can_be_made(self):
+        _window, submenu = self._submenu(supported=False)
+        labels = [entry[0] for entry in submenu.entries if entry is not SEPARATOR]
+        self.assertNotIn("cartridge_color.pick", labels)
+
+
 class CollectionEntriesTests(unittest.TestCase):
     def test_every_collection_is_listed_with_membership_marked(self):
         collections = [
