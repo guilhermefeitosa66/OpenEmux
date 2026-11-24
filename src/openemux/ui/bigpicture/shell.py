@@ -15,6 +15,7 @@ leaving the mode lands on exactly the desktop that was there.
 
 import logging
 import os
+from pathlib import Path
 
 import gi
 
@@ -312,7 +313,8 @@ class BigPictureShell(Gtk.Box):
         if "console_list_bg" in paint.values:
             args["console_list"] = paint.values["console_list_bg"]
         library = paint.backgrounds.get("library")
-        if library is not None:
+        # A cache file pruned since it was painted is left out, not shown broken.
+        if library is not None and Path(library["path"]).is_file():
             args["background"] = {"uri": library["uri"], "fit": library["fit"]}
         return args
 

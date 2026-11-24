@@ -184,9 +184,16 @@ class OpenEmuxApplication(Adw.Application):
         """The stored theme, with its backgrounds' cache (issue 1012)."""
         from openemux.ui import theming
         themes = self.config_manager.themes
-        # An editor or an import that a crash cut short leaves a hidden
-        # folder behind; nothing reads them, so they go.
-        themes.purge_leftovers()
+        # Once per process: an editor or an import that a crash cut short
+        # leaves a hidden folder behind, but on a second activation the
+        # editor open right now owns one.
+        if not getattr(self, "_themes_tidied", False):
+            self._themes_tidied = True
+            themes.purge_leftovers()
+            moved = themes.move_reserved_ids()
+            current = self.config_manager.get_ui_settings()["theme"]
+            if current in moved:
+                self.config_manager.set_theme(moved[current])
         theming.set_cache_dir(self.config_manager.store_path("theme_backgrounds"))
         theming.apply_theme(self.config_manager.get_ui_settings()["theme"], store=themes)
 

@@ -143,6 +143,17 @@ class RowKindTests(_RowsCase):
         dialog.refresh()
         self.assertEqual(row.dropdown.get_selected(), 0)
 
+    def test_an_icon_warning_asks_for_3_to_1(self):
+        dialog = self.editor()
+        dialog.set_value("icon_color", "#3a3a3a")  # on the #303030 header bar
+        subtitle = dialog.rows["icon_color"].get_subtitle()
+        self.assertIn("3.0", subtitle)
+        dialog.set_value("text_primary", "#3a3a3a")
+        self.assertIn("4.5", dialog.rows["text_primary"].get_subtitle())
+        # Seen from the background's row, the foreground still decides.
+        self.assertEqual(editor_module._needed("headerbar_bg", "icon_color"), 3.0)
+        self.assertEqual(editor_module._needed("text_primary", "card_bg"), 4.5)
+
     def test_the_font_list_is_read_once(self):
         dialog = self.editor()
         self.assertEqual(dialog.fonts(), ["Cantarell", "Noto Sans"])

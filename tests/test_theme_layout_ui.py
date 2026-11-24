@@ -36,6 +36,8 @@ def _reset():
     theming._suspended = False
     theming._applied = ("system", None, {}, None)
     theming._paint = theming.Paint()
+    theming._rendering.clear()
+    theming._waiting.clear()
     theming._cache_dir = None
     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 
@@ -103,10 +105,37 @@ class BackgroundTests(_Case):
         self.run_idle()
         self.assertNotIn("background-image", self.css())
 
-    def test_failed_render_lands_nothing(self):
+    def test_failed_render_calls_nobody_back(self):
+        called = []
         with mock.patch.object(theming.theme_images, "render", return_value=None):
-            theming.paint("dark", {"library_image": "images/library.png"}, self.images)
-        self.assertEqual(self.idle, [])
+            theming.prepare_backgrounds("dark", {"library_image": "images/library.png"},
+                                        self.images, on_ready=lambda: called.append(1))
+        self.run_idle()
+        self.assertEqual(called, [])
+        self.assertEqual(theming._rendering, set())
+
+    def test_one_render_per_picture_and_every_waiter_hears(self):
+        called = []
+        renders = []
+        spawned = []
+        with mock.patch.object(theming, "_spawn", spawned.append), \
+             mock.patch.object(theming.theme_images, "render",
+                               side_effect=lambda *a: renders.append(a) or a[0]):
+            for _ in range(3):
+                theming.prepare_backgrounds("dark", {"library_image": "images/library.png"},
+                                            self.images, on_ready=lambda: called.append(1))
+            self.assertEqual(len(spawned), 1)
+            spawned[0]()
+        self.run_idle()
+        self.assertEqual(len(renders), 1)
+        self.assertEqual(called, [1, 1, 1])
+
+    def test_the_backgrounds_on_screen_are_protected_from_pruning(self):
+        theming._paint.backgrounds = {"library": {"path": Path("/kept.png")}}
+        with mock.patch.object(theming.theme_images, "render", return_value=None) as render:
+            theming.prepare_backgrounds("dark", {"library_image": "images/library.png"},
+                                        self.images)
+        self.assertEqual(render.call_args[0][5], [Path("/kept.png")])
 
     def test_no_cache_dir_no_image_dir_or_missing_file_no_background(self):
         self.assertEqual(theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, None), {})
@@ -118,7 +147,8 @@ class BackgroundTests(_Case):
 
     def test_without_on_ready_the_render_still_happens(self):
         theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, self.images)
-        self.assertEqual(self.idle, [])
+        self.run_idle()  # the render lands, with nobody to call back
+        self.assertEqual(theming._rendering, set())
         ready = theming.prepare_backgrounds("dark", {"library_image": "images/library.png"}, self.images)
         self.assertEqual(ready["library"]["fit"], "cover")
 
@@ -278,8 +308,10 @@ class BigPictureThemeTests(BigPictureCase):
         base_scale = self.shell.scale()
         theming.paint("light", {"font_family": "Sans", "font_scale": 1.3,
                                 "library_bg": "#fafafa"})
+        picture = self.tmp / "x.png"
+        picture.write_bytes(b"png")
         theming._paint.backgrounds = {"library": {"uri": "file:///x.png", "fit": "tile",
-                                                  "path": Path("/x.png")}}
+                                                  "path": picture}}
         args = self.shell.theme_args()
         self.assertNotIn("console_list", args)
         theming._paint.values["console_list_bg"] = "#123456"
@@ -290,6 +322,9 @@ class BigPictureThemeTests(BigPictureCase):
         self.assertGreater(self.shell.scale(), base_scale)
         self.shell.apply_scale()
         self.assertIn("file:///x.png", self.shell._sheet_key[1])
+        # Pruned from the cache since: left out rather than shown broken.
+        picture.unlink()
+        self.assertNotIn("background", self.shell.theme_args())
 
     def test_entering_with_a_light_theme_is_light_and_leaving_gives_back(self):
         self.win.toggle_big_picture()

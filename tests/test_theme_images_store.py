@@ -257,6 +257,22 @@ class StoreImageTests(unittest.TestCase):
         staging = self.store.stage(Theme("", "New", "dark", folder=folder))
         self.assertEqual([p.name for p in (staging / "images").iterdir()], ["ok.png"])
 
+    def test_a_user_theme_on_a_reserved_id_is_moved_aside(self):
+        self.assertEqual(self.store.move_reserved_ids(), {})  # no folder yet
+        folder = self.store.root / "neon"
+        folder.mkdir(parents=True)
+        (folder / "theme.yaml").write_text("version: 1\nname: Neon\nbase: dark\n")
+        moved = self.store.move_reserved_ids()
+        self.assertEqual(moved, {"neon": "neon-2"})
+        self.assertEqual(self.store.get("neon-2").name, "Neon")
+        self.assertEqual(self.store.get("neon").name, "Neon")  # the ready-made one
+
+    def test_a_reserved_folder_that_cannot_move_is_left_and_logged(self):
+        (self.store.root / "kitty").mkdir(parents=True)
+        with mock.patch.object(Path, "rename", side_effect=OSError("busy")), \
+             self.assertLogs("openemux.core.custom_themes", level="WARNING"):
+            self.assertEqual(self.store.move_reserved_ids(), {})
+
     def test_purge_leftovers(self):
         self.store.purge_leftovers()  # no folder yet: nothing to do
         theme = self.store.create("Keep", "dark")
@@ -395,6 +411,18 @@ class ProcessTests(unittest.TestCase):
         remaining = sorted(self.cache.glob("*.png"))
         self.assertEqual(len(remaining), 2)
         self.assertIn(outs[-1], remaining)
+
+    def test_a_failed_write_leaves_no_temp_file(self):
+        with mock.patch.object(theme_images.os, "replace", side_effect=OSError("full")), \
+             self.assertLogs("openemux.core.theme_images", level="WARNING"):
+            self.assertIsNone(theme_images.render(self.source, 10, 0, "#000000", self.cache))
+        self.assertEqual(list(self.cache.glob(".*")), [])
+
+    def test_protected_files_survive_pruning(self):
+        with mock.patch.object(theme_images, "CACHE_KEEP", 1):
+            first = theme_images.render(self.source, 10, 0, "#000000", self.cache)
+            theme_images.render(self.source, 20, 0, "#000000", self.cache, protect=[first])
+        self.assertTrue(first.is_file())
 
     def test_prune_of_a_missing_folder(self):
         theme_images._prune(self.tmp / "nowhere", keep=None)

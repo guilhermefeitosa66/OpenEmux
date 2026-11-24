@@ -23,6 +23,8 @@ def _reset_theming():
     theming._suspended = False
     theming._applied = ("system", None, {}, None)
     theming._paint = theming.Paint()
+    theming._rendering.clear()
+    theming._waiting.clear()
     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 
 

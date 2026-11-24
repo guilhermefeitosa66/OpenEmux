@@ -61,6 +61,9 @@ _cache_dir = None
 #: paint does not reload over a newer one.
 _generation = 0
 _listeners = []
+#: Processed backgrounds being rendered, and who waits for each one.
+_rendering = set()
+_waiting = {}
 
 
 @dataclass
@@ -161,18 +164,33 @@ def prepare_backgrounds(base, values, folder, on_ready=None):
             ready[area] = {"path": target, "uri": target.as_uri(), "fit": fit}
             continue
 
-        def work(source=source, dim=dim, blur=blur, surface=surface):
-            done = theme_images.render(source, dim, blur, surface, _cache_dir)
-            if done is not None and on_ready is not None:
-                GLib.idle_add(_call_once, on_ready)
+        if on_ready is not None:
+            _waiting.setdefault(target, []).append(on_ready)
+        if target in _rendering:
+            continue  # one render per picture: it calls every waiter back
+        _rendering.add(target)
+        # What is on screen must survive the pruning this render does.
+        protect = [background["path"] for background in _paint.backgrounds.values()]
+
+        def work(source=source, dim=dim, blur=blur, surface=surface, target=target,
+                 protect=protect):
+            done = theme_images.render(source, dim, blur, surface, _cache_dir, protect)
+            GLib.idle_add(_landed, target, done is not None)
 
         _spawn(work)
     return ready
 
 
-def _call_once(callback):
-    callback()
+def _landed(target, ok):
+    """A render finished (on the main loop): call back whoever waited for it."""
+    _rendering.discard(target)
+    waiters = _waiting.pop(target, [])
+    if ok:
+        for callback in waiters:
+            callback()
     return GLib.SOURCE_REMOVE
+
+
 
 
 def uses_css_variables():

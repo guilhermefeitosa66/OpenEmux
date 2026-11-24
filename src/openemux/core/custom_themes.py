@@ -42,6 +42,7 @@ from openemux.core.contrast import WCAG_AA, contrast_ratio, relative_luminance
 from openemux.core.theme import (
     THEME_DARK,
     THEME_LIGHT,
+    READY_MADE,
     THEMES,
     is_custom_theme_id,
     is_ready_made,
@@ -719,6 +720,27 @@ class ThemeStore:
         staging = Path(staging)
         if staging.parent == self.root and staging.name.startswith(self.STAGING_PREFIX):
             shutil.rmtree(staging, ignore_errors=True)
+
+    def move_reserved_ids(self):
+        """Give a new id to a user theme whose folder a ready-made theme now owns.
+
+        Before issue 1012 shipped the ready-made themes, a theme named "Neon"
+        was stored as ``neon``; that id is reserved now and the folder would
+        be hidden. Returns ``{old id: new id}`` for whoever stored the old one.
+        """
+        moved = {}
+        for theme_id in READY_MADE:
+            folder = self.root / theme_id
+            if not folder.is_dir():
+                continue
+            new_id = self.new_id(theme_id)
+            try:
+                folder.rename(self.root / new_id)
+            except OSError as exc:
+                logger.warning("Could not move theme %s aside: %s", theme_id, exc)
+                continue
+            moved[theme_id] = new_id
+        return moved
 
     def purge_leftovers(self):
         """Staging and import folders a crash left behind."""

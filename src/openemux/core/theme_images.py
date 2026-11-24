@@ -21,6 +21,7 @@ thread and in the host test run.
 import hashlib
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 import gi
@@ -164,8 +165,13 @@ def processed_path(source, dim, blur, surface, cache_dir):
     return Path(cache_dir) / f"{digest}.png"
 
 
-def render(source, dim, blur, surface, cache_dir):
-    """Make (or reuse) the processed copy; returns its path, or None on failure."""
+def render(source, dim, blur, surface, cache_dir, protect=()):
+    """Make (or reuse) the processed copy; returns its path, or None on failure.
+
+    ``protect`` are cache files the pruning that follows must keep (the
+    backgrounds on screen). Each render writes its own temporary file, so two
+    renders of the same picture never trip over each other.
+    """
     target = processed_path(source, dim, blur, surface, cache_dir)
     if target.is_file():
         return target
@@ -185,20 +191,27 @@ def render(source, dim, blur, surface, cache_dir):
             veil.composite(flat, 0, 0, width, height, 0, 0, 1, 1,
                            GdkPixbuf.InterpType.NEAREST, int(round(255 * dim / 100)))
         target.parent.mkdir(parents=True, exist_ok=True)
-        temp = target.with_name(f".{target.name}.tmp")
-        flat.savev(str(temp), "png", [], [])
-        os.replace(temp, target)
+        handle, temp = tempfile.mkstemp(prefix=f".{target.stem}.", suffix=".tmp",
+                                        dir=target.parent)
+        os.close(handle)
+        try:
+            flat.savev(temp, "png", [], [])
+            os.replace(temp, target)
+        finally:
+            Path(temp).unlink(missing_ok=True)
     except (GLib.Error, OSError) as exc:
         logger.warning("Could not prepare background %s: %s", source, exc)
         return None
-    _prune(target.parent, keep=target)
+    _prune(target.parent, keep={target, *map(Path, protect)})
     return target
 
 
 def _prune(cache_dir, keep):
+    """Remove the oldest processed files beyond :data:`CACHE_KEEP`, never ``keep``."""
+    keep = set(keep or ())
     try:
         files = sorted(
-            (entry for entry in Path(cache_dir).glob("*.png") if entry != keep),
+            (entry for entry in Path(cache_dir).glob("*.png") if entry not in keep),
             key=lambda entry: entry.stat().st_mtime,
             reverse=True,
         )

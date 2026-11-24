@@ -25,7 +25,6 @@ import threading
 from gi.repository import Adw, GdkPixbuf, GLib, Gtk, Pango, PangoCairo
 
 from openemux.core import cartridge_colors, theme_images
-from openemux.core.contrast import WCAG_AA
 from openemux.core.custom_themes import (
     DENSITIES,
     FONT_NAME,
@@ -35,9 +34,11 @@ from openemux.core.custom_themes import (
     KIND_COLOR,
     KIND_FONT,
     KIND_IMAGE,
+    CONTRAST_PAIRS,
     SECTIONS,
     contrast_problems,
     keys_in_section,
+    needed_contrast,
     seed_from_palette,
     warnings_for,
 )
@@ -82,6 +83,12 @@ def installed_fonts():
     families = PangoCairo.FontMap.get_default().list_families()
     names = {family.get_name() for family in families}
     return sorted((name for name in names if FONT_NAME.fullmatch(name)), key=str.casefold)
+
+
+def _needed(key, other):
+    """The ratio the pair (``key``, ``other``) must reach; the foreground decides."""
+    foregrounds = {fg for fg, _backgrounds in CONTRAST_PAIRS}
+    return needed_contrast(key if key in foregrounds else other)
 
 
 def value_text(t, spec, value):
@@ -229,7 +236,7 @@ class ColorRow(SettingRow):
                 other=t(f"theme_editor.key.{other}"),
                 # Never rounded up: 4.46 must not read as the 4.5 it misses.
                 ratio=f"{math.floor(ratio * 10) / 10:.1f}",
-                needed=f"{WCAG_AA:.1f}",
+                needed=f"{_needed(self.key, other):.1f}",
             ))
         else:
             self._same_as_base(color.upper())
@@ -476,7 +483,7 @@ class ImageRow(SettingRow):
         def work():
             try:
                 theme_images.import_image(path, target)
-            except (theme_images.ThemeImageError, OSError) as exc:
+            except Exception as exc:  # noqa: BLE001 - the row must hear back, whatever broke
                 logger.info("Background image refused: %s", exc)
                 GLib.idle_add(self._taken, None)
                 return
@@ -519,7 +526,7 @@ class ImageRow(SettingRow):
                 "theme_editor.contrast_warning",
                 other=t(f"theme_editor.key.{other}"),
                 ratio=f"{math.floor(ratio * 10) / 10:.1f}",
-                needed=f"{WCAG_AA:.1f}",
+                needed=f"{_needed(self.key, other):.1f}",
             ))
             return
         size = theme_images.image_size(path) if path is not None else None

@@ -403,7 +403,7 @@ class ThemePicker:
         def work():
             try:
                 theme = theme_archive.import_theme(self.store, path)
-            except (theme_archive.ThemeImportError, OSError) as exc:
+            except Exception as exc:  # noqa: BLE001 - a hostile file must still get its toast
                 logger.info("Theme import refused (%s): %s", path, exc)
                 GLib.idle_add(self._imported, None)
                 return
