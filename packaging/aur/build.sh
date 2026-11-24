@@ -53,10 +53,15 @@ PKGINFO="$(pacman -Qip "$PKG_PATH")"
 echo "$PKGINFO"
 
 # The version pkgver() computed: <__version__>.r<commit count>.g<short sha>.
-APP_VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/openemux/__init__.py)"
+# Both read off the commit that was built, not the working tree at /work, which
+# may carry an uncommitted bump. --short=7 grows past 7 characters when 7 are
+# ambiguous, exactly as it does inside pkgver().
+INIT_PY="$(git --git-dir="$SRC_REPO" show "${COMMIT}:src/openemux/__init__.py")"
+APP_VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' <<< "$INIT_PY")"
+SHORT="$(git --git-dir="$SRC_REPO" rev-parse --short=7 "$COMMIT")"
 PKGVER="$(sed -n 's/^pkgver=//p' "$BUILDDIR/PKGBUILD")"
 case "$PKGVER" in
-  "${APP_VERSION}.r"*".g${COMMIT:0:7}") echo "pkgver: $PKGVER" ;;
+  "${APP_VERSION}.r"*".g${SHORT}") echo "pkgver: $PKGVER" ;;
   *) echo "FAIL: pkgver() gave '$PKGVER'" >&2; exit 1 ;;
 esac
 
@@ -75,7 +80,9 @@ for finding in 'Missing custom license directory' 'Package contains reference to
 done
 
 echo "==> install test (resolves retroarch through pacman)"
-pacman -Sy --noconfirm >/dev/null
+# -Syu, not -Sy: retroarch comes from today's repositories, and installing it
+# over the pinned image's older libraries is a partial upgrade.
+pacman -Syu --noconfirm >/dev/null
 pacman -U --noconfirm "$PKG_PATH"
 
 echo "==> verify the installed package"
@@ -87,6 +94,8 @@ grep -Eq '^Conflicts With +: openemux$' <<< "$INSTALLED" || {
 test -x /usr/bin/openemux
 # The emulator is the distribution's, found on PATH; nothing is vendored.
 command -v retroarch
+# Run, not just found: a binary that cannot load its libraries fails here.
+retroarch --version
 test ! -e /opt/openemux/vendors/RetroArch-Linux-x86_64
 test ! -e /opt/openemux/vendors/RetroArch-Linux-aarch64
 test -f /usr/share/applications/io.github.guilhermefeitosa66.OpenEmux.desktop

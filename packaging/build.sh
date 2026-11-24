@@ -113,8 +113,9 @@ fi
 # The Linux formats that bundle an emulator. The Flatpak does not -- it
 # launches the host's org.libretro.RetroArch -- and on aarch64 there is nothing
 # to bundle, since libretro publishes no ARM build (issue #119).
-# ARCH is set by the architecture gate above, which only runs for these four
-# targets; ${ARCH:-} keeps `set -u` out of it for the other two.
+# ARCH is set by the architecture gate above, which only runs for appimage,
+# deb, rpm, arch and aur; ${ARCH:-} keeps `set -u` out of it for the others.
+# aur bundles nothing: it uses the distribution's RetroArch.
 case "$TARGET:${ARCH:-}" in
   appimage:x86_64|appimage:amd64|deb:x86_64|deb:amd64|rpm:x86_64|rpm:amd64|arch:x86_64|arch:amd64)
     if [ ! -x vendors/RetroArch-Linux-x86_64/usr/bin/retroarch ]; then
