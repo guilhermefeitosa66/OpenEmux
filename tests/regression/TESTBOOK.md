@@ -17944,9 +17944,9 @@ has no Android device, so these are `MANUAL`.
      then come back.
   4. Narrow the window to about 520 px wide.
 - **Expected:** 1: one grid in play order, newest first; every game is drawn in its own console's
-  cartridge (in the shell colour chosen for it), the cartridges of a row stand on the same line
-  right above their titles, and the PlayStation game shows its cover; the caption under each title
-  is still when and for how long (issue 942). 2: the page changes at once each time, the same way
+  cartridge (in the shell colour chosen for it), every card has the same slot, the art of a row
+  (cartridges and the PlayStation cover alike) stands on the same line right above the titles,
+  and the caption under each title is still when and for how long (issues 942 and 996). 2: the page changes at once each time, the same way
   "All" does, and keeps its order. 3: "Recently played" shows rows while "All" keeps the global
   layout. 4: the grid reflows to fewer columns, nothing is clipped.
 - **Check:** suite files `tests/test_library_pages.py` (`TheRecentPageTests`),
@@ -19503,3 +19503,24 @@ runner has no Android device, so this is `MANUAL`: a person runs it on a phone o
 - **Check:** human only (`adb exec-out screencap -p > recent.png`); the cap and the ordering are
   covered by `ShelfLayoutTest` (`recentKeepsTheTwelveLastPlayedNewestFirst`,
   `recentShowsEveryPlayedGameUpToTheLimit`) in openemux-android.
+
+### RT-1226 — Recently played lines up whatever the consoles it mixes
+- **Area:** Desktop — Recently played
+- **Mode:** AUTO-SUITE
+- **Preconditions:** games played on NES, SNES, N64, GBA and PlayStation (at least one of them with
+  a cover), three of them favorites on different consoles; the view mode is "Cartridge".
+- **Steps:**
+  1. Open "Recently played" and look at each row.
+  2. Hover a short cartridge (SNES or GBA) and the PlayStation cover.
+  3. Switch to "Cover" view, then to "List" view, then back to "Cartridge".
+  4. Zoom out to the smallest size, then in to the largest.
+- **Expected:** 1: newest first; every card has the same slot, and in each row the art stands on one
+  line with the titles and dates on one line under it; a short cartridge has no tall empty gap
+  above it, and each favorite's star sits on the top-left corner of its own art, never above it in
+  empty space (issue 996). 2: the menu button and the play icon appear on the art itself.
+  3: in "Cover" the covers stand on the bottom of equal slots the same way; "List" rows are
+  unchanged. 4: the same alignment at both ends of the zoom, nothing clipped.
+- **Check:** suite files `tests/test_cartridge_on_mixed_pages.py` (`TheUniformSlotTests`,
+  `OneGridInPlayOrderTests`), `tests/test_rom_card_widget.py` (`OnAPageThatMixesConsolesTests`,
+  `ACartridgeOnAPageThatMixesConsolesTests`), `tests/test_library_pages.py`
+  (`test_every_card_gets_the_same_slot_whatever_the_mix`); human for the look of the page.
