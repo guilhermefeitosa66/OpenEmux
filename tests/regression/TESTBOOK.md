@@ -7262,7 +7262,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   2. Disconnect it (the same broadcast with `false`).
   3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
 - **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
-  "Y" "Options", "START" "Select", "B" "Shelf"), the focus highlight on one game, and the console
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and the console
   filter becomes the pager with "L1" and "R1" as its previous/next steps (in portrait it takes the
   console chips' place, issue 998; RT-1223); the view toggle grows a little.
   Disconnecting removes the hint bar and the highlight, brings the console chips back in portrait with
@@ -7359,7 +7359,7 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
 - **Expected:** 1: the console chips, as before. 2: the chips row is replaced, in the same place, by
   one row: the "L1" badge (LB/L by the pad family) at its start, the current filter centred (console
   pixel icon, star for "Favorites", none for "All games", and its name, never cut) and the "R1" badge
-  at its end. The hint bar has no "L1 R1" "Console" hint. 3: each press shows the next/previous
+  at its end. The hint bar keeps "L1 R1" "Console" (the pager scrolls away with the header). 3: each press shows the next/previous
   filter in place (title, games and the label follow), in the shelf's console order; "R1" is dimmed
   on the last console and "L1" on "All games", and a press there does nothing. 4: the menu lists every
   filter with its count and the current one highlighted; A picks, B closes. 5: "Filter: <name>, <N>
@@ -11372,11 +11372,11 @@ keyevent` comes from a virtual device and never changes the family. A release AP
      mode (START) to see SELECT.
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
-- **Expected:** Step 1 shows A (purple), Y and the View icon, and the filter pager's previous/next
-  steps read LB and RB (portrait and landscape alike, RT-859 and RT-1223; the hint bar has no
-  shoulder hint, the steps show them). Step 2, with no restart, shows B (purple), X and −, and the
-  steps read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline and
-  SHARE, and the steps read L1 and R1; with the DualSense product SELECT reads CREATE. The
+- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the filter pager's
+  previous/next steps read LB and RB (portrait, RT-1223; in landscape the same steps and no shoulder
+  hint, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the steps read L and R.
+  Step 3 shows a purple badge with a white cross outline, a triangle outline, SHARE and L1 R1, and the
+  steps read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
   bottom button, labelled B, confirms) and comes back. On a 360dp-wide portrait phone every hint stays
   on screen with PlayStation faces (the row shrinks a little).
