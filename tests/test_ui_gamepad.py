@@ -2,6 +2,7 @@ import errno
 import os
 import struct
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 from openemux.core.gamepad_reader import (
@@ -26,6 +27,26 @@ from openemux.core.ui_gamepad import (
     action_for_token,
 )
 from tests.platform_marks import linux_only
+
+
+_SANDBOX_PATCHES = []
+
+
+def setUpModule():
+    # Every reader test runs as if outside a sandbox: run from a Flatpak'd
+    # IDE terminal, the real /.flatpak-info would turn "no_gamepad" into
+    # "sandbox_no_input" under tests that are not about it (issue 1001).
+    for target in ("openemux.core.gamepad_reader.sandbox_hides_input",
+                   "openemux.core.ui_gamepad.sandbox_hides_input"):
+        patcher = mock.patch(target, return_value=False)
+        patcher.start()
+        _SANDBOX_PATCHES.append(patcher)
+
+
+def tearDownModule():
+    while _SANDBOX_PATCHES:
+        _SANDBOX_PATCHES.pop().stop()
+
 
 # A typical pad: 11 buttons from BTN_GAMEPAD (indices 0..10), left/right
 # sticks + triggers (axes 0..5 after hat exclusion) and one hat.
@@ -642,16 +663,26 @@ class TheReaderLoopTests(unittest.TestCase):
 
     def test_a_flatpak_without_the_input_devices_says_so_once_in_the_log(self):
         # Issue 1001: nothing on screen can say it, so the log does, with the
-        # command that gives the access back.
+        # command that gives the access back -- once per run of the app, not
+        # once per navigator (Big Picture builds its own).
+        from openemux.core import ui_gamepad
+
+        warned = patch.object(ui_gamepad, "_sandbox_warned", False)
+        warned.start()
+        self.addCleanup(warned.stop)
         with patch(
             "openemux.core.ui_gamepad.sandbox_hides_input", return_value=True
         ), patch.object(GamepadNavigator, "_open_pads", return_value={}):
-            with self._stop_after_one_turn(), self.assertLogs(
-                "openemux.core.ui_gamepad", level="WARNING"
-            ) as logs:
-                self.nav._run()
-        self.assertEqual(len(logs.records), 1)
+            with self.assertLogs("openemux.core.ui_gamepad", level="WARNING") as logs:
+                with self._stop_after_one_turn():
+                    self.nav._run()
+                self.nav._cancel.clear()
+                with self._stop_after_one_turn():
+                    self.nav._run()
+                ui_gamepad.logger.warning("sentinel")
+        self.assertEqual(len(logs.records), 2)
         self.assertIn("--device=all", logs.output[0])
+        self.assertIn("sentinel", logs.output[1])
 
     def test_the_first_pad_found_is_announced_by_name(self):
         pads = {7: OpenPad(make_tracker(), "Pad One", "/dev/input/event20")}

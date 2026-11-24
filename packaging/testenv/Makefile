@@ -232,6 +232,8 @@ flatpak-run: system-bus | $(WORK)
 # manifest grants the devices (issue 1001). No pad is needed to check that:
 # the directory and the granted permission are what a pad would need.
 flatpak-devices: system-bus
+	@flatpak info --user $(APP_ID) >/dev/null 2>&1 \
+	  || { printf '\033[1;31m==> the Flatpak is not installed: run make flatpak-install first\033[0m\n' >&2; exit 1; }
 	@perms=$$(flatpak info --user --show-permissions $(APP_ID)); \
 	devices=$$(printf '%s\n' "$$perms" | sed -n 's/^devices=//p'); \
 	case ";$$devices" in \

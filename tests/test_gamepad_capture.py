@@ -15,7 +15,9 @@ Windows.
 
 import errno
 import os
+import shutil
 import struct
+import tempfile
 import unittest
 from unittest import mock
 
@@ -42,6 +44,27 @@ from openemux.core.gamepad_reader import (
     list_gamepads,
 )
 from tests.platform_marks import linux_only
+
+
+#: The real check, kept before the module fixture below stubs it out.
+_REAL_SANDBOX_HIDES_INPUT = gamepad_reader.sandbox_hides_input
+_SANDBOX_PATCHES = []
+
+
+def setUpModule():
+    # Every reader test runs as if outside a sandbox: run from a Flatpak'd
+    # IDE terminal, the real /.flatpak-info would turn "no_gamepad" into
+    # "sandbox_no_input" under tests that are not about it (issue 1001).
+    for target in ("openemux.core.gamepad_reader.sandbox_hides_input",
+                   "openemux.core.ui_gamepad.sandbox_hides_input"):
+        patcher = mock.patch(target, return_value=False)
+        patcher.start()
+        _SANDBOX_PATCHES.append(patcher)
+
+
+def tearDownModule():
+    while _SANDBOX_PATCHES:
+        _SANDBOX_PATCHES.pop().stop()
 
 
 def _input_event(ev_type, code, value):
@@ -507,29 +530,26 @@ class TheCaptureLifecycleTests(unittest.TestCase):
         reader._emit_error("no_gamepad")
 
 
-
 class TheSandboxCheckTests(unittest.TestCase):
     """Only a Flatpak that lacks /dev/input is told to fix the sandbox (issue 1001)."""
 
     def setUp(self):
-        import tempfile
-
         self.root = tempfile.mkdtemp()
-        self.addCleanup(__import__("shutil").rmtree, self.root)
+        self.addCleanup(shutil.rmtree, self.root)
         self.info = os.path.join(self.root, ".flatpak-info")
         self.dev = os.path.join(self.root, "input")
 
     def test_a_flatpak_with_no_input_dir_hides_the_pads(self):
         open(self.info, "w").close()
-        self.assertTrue(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+        self.assertTrue(_REAL_SANDBOX_HIDES_INPUT(self.dev, self.info))
 
     def test_a_flatpak_that_was_given_the_devices_does_not(self):
         open(self.info, "w").close()
         os.mkdir(self.dev)
-        self.assertFalse(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+        self.assertFalse(_REAL_SANDBOX_HIDES_INPUT(self.dev, self.info))
 
     def test_outside_a_flatpak_a_missing_input_dir_is_not_a_sandbox_problem(self):
-        self.assertFalse(gamepad_reader.sandbox_hides_input(self.dev, self.info))
+        self.assertFalse(_REAL_SANDBOX_HIDES_INPUT(self.dev, self.info))
 
     def test_every_reason_has_a_message(self):
         self.assertEqual(

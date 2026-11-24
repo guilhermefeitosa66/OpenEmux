@@ -4384,14 +4384,16 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Area:** Input
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none (in a real run: OpenEmux as a Flatpak, with
-  `flatpak override --user --nodevice=all io.github.guilhermefeitosa66.OpenEmux`).
+  `flatpak override --user --nodevice=all io.github.guilhermefeitosa66.OpenEmux`; that also takes
+  the GPU away, so the app renders in software for this run and how it looks is not part of the
+  verdict).
 - **Steps:**
   1. Open "Preferences" → "Input", pick "Gamepad Port 1" and click a binding to remap it.
   2. Do the same in "Big Picture" → settings → input.
 - **Expected:** Instead of "No controller detected", a toast says "Can't read controllers: this
   Flatpak has no access to input devices. Allow "All devices" for OpenEmux in Flatseal." and the
-  capture ends. The app log has one warning with the `flatpak override --user --device=all`
-  command. Outside a Flatpak a missing `/dev/input` still reads as no controller.
+  capture ends. The app log has one warning per app run with the
+  `flatpak override --user --device=all` command. Outside a Flatpak a missing `/dev/input` still reads as no controller.
 - **Check:** suite files `tests/test_gamepad_capture.py` (`TheSandboxCheckTests`,
   `test_a_flatpak_without_the_input_devices_says_that_instead`), `tests/test_ui_gamepad.py`,
   `tests/test_preferences.py`, `tests/test_bigpicture_input.py`.

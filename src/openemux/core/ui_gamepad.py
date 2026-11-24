@@ -40,6 +40,10 @@ from openemux.core.gamepad_reader import (
 
 logger = logging.getLogger(__name__)
 
+#: Whether the "this Flatpak cannot see /dev/input" warning has been logged
+#: in this run; every navigator start would repeat it otherwise (issue 1001).
+_sandbox_warned = False
+
 #: Fixed token -> UI action map (RetroArch menu convention, udev numbering).
 #: Directions come from the D-pad hat and from the left stick (axes 0/1).
 NAV_TOKEN_ACTIONS = {
@@ -445,10 +449,12 @@ class GamepadNavigator(NavigatorCore):
         pads.clear()
 
     def _run(self):
-        if sandbox_hides_input():
-            # Said once, not on every rescan: nothing this reader does can fix
-            # it, and the toast-free library has nowhere else to say it
-            # (issue 1001).
+        global _sandbox_warned
+        if not _sandbox_warned and sandbox_hides_input():
+            # Said once per run, not on every rescan or every navigator:
+            # nothing this reader does can fix it, and the toast-free library
+            # has nowhere else to say it (issue 1001).
+            _sandbox_warned = True
             logger.warning(
                 "this Flatpak has no access to /dev/input, so no controller can "
                 "be read; allow it with: flatpak override --user --device=all "
