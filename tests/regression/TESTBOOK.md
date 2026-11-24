@@ -7262,10 +7262,11 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   2. Disconnect it (the same broadcast with `false`).
   3. Connect it again, then go to "Shelf", "Recent", "Import" and "Settings" with a finger.
 - **Expected:** Without a restart, connecting shows the hint bar ("A" "Details", "X" "Favorite",
-  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and "L1" and
-  "R1" pills at the two ends of the console chips; the chips and the view toggle grow a little.
-  Disconnecting removes the hint bar, the highlight and the pills and gives the chips and the toggle
-  their old size, again without a restart. With the controller connected every main tab keeps its
+  "Y" "Options", "L1 R1" "Console", "START" "Select", "B" "Shelf"), the focus highlight on one game, and the console
+  filter becomes the pager with "L1" and "R1" as its previous/next steps (in portrait it takes the
+  console chips' place, issue 998; RT-1223); the view toggle grows a little.
+  Disconnecting removes the hint bar and the highlight, brings the console chips back in portrait with
+  the same console picked, and gives the toggle its old size, again without a restart. With the controller connected every main tab keeps its
   hint bar. No toast or message announces either change.
 - **Check:** human only (`adb exec-out screencap -p > shot.png` after each step).
 
@@ -7330,15 +7331,56 @@ controller is faked with `adb shell am broadcast -a com.openemux.mobile.DEBUG_GA
   5. Do 1 to 4 with the D-pad only, in landscape, then in portrait; switch to pt-BR and to one CJK
      language and look at the setting and the hint bar.
   6. Send `adb shell input keyevent KEYCODE_DPAD_DOWN` with no controller connected.
-- **Expected:** With the controller the chips are taller, the toggle's buttons are bigger, the
+- **Expected:** With the controller the console chips give way to the filter pager (RT-1223), the toggle's buttons are bigger, the
   swatches are larger and every text link is a full-height target with its highlight whole; without it
-  everything has its old size. The "L1"/"R1" pills sit at the chips' ends (portrait: they scroll with
-  the chips). R1 and L1 switch the console chip on the shelf and the main tab on the other tabs.
+  everything has its old size and the chips are back. The "L1"/"R1" badges are the pager's steps, at
+  the ends of its row in portrait. R1 and L1 switch the console on the shelf and the main tab on the
+  other tabs.
   Nothing focused is ever under the hint bar or cut (RT-435 and RT-436 pass in this layout), and
   nothing on these screens needs touch. The new texts are translated and not cut. The `adb` key
-  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips keep
-  their touch size and the hint bar hides again on the next tap.
+  (a virtual device) shows the old show-on-press look but never turns the layout on: the chips stay
+  and the hint bar hides again on the next tap.
 - **Check:** human only.
+
+### RT-1223 — With a gamepad in portrait the console filter is the one-console pager
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** A debug build; a library with games in at least four consoles; the phone in
+  portrait; "Interface mode" on "Automatic"; the library open on "All games".
+- **Steps:**
+  1. Without a controller, look at the header under the title.
+  2. Connect a controller (`adb shell am broadcast -a com.openemux.mobile.DEBUG_GAMEPAD --ez connected true`).
+  3. Press `KEYCODE_BUTTON_R1` (`adb shell input gamepad keyevent ...`) until the last console, then
+     once more; then `KEYCODE_BUTTON_L1` back to "All games", then once more.
+  4. Press UP until the filter name is focused, press A, move in the menu with the D-pad, press A on a
+     console; reopen it and press B.
+  5. With TalkBack on (or `adb shell uiautomator dump`), read the filter row.
+  6. Repeat 2 and 3 in the list view and, on a foldable in tabletop, on the bottom half.
+- **Expected:** 1: the console chips, as before. 2: the chips row is replaced, in the same place, by
+  one row: the "L1" badge (LB/L by the pad family) at its start, the current filter centred (console
+  pixel icon, star for "Favorites", none for "All games", and its name, never cut) and the "R1" badge
+  at its end. The hint bar keeps "L1 R1" "Console" (the pager scrolls away with the header). 3: each press shows the next/previous
+  filter in place (title, games and the label follow), in the shelf's console order; "R1" is dimmed
+  on the last console and "L1" on "All games", and a press there does nothing. 4: the menu lists every
+  filter with its count and the current one highlighted; A picks, B closes. 5: "Filter: <name>, <N>
+  games. Change filter", "Previous filter: <name>", "Next filter: <name>". 6: the same pager in the
+  list view and on the tabletop deck.
+- **Check:** human only (`adb exec-out screencap -p` per step).
+- **Restore:** disconnect (`... --ez clear true`), TalkBack off.
+
+### RT-1224 — Switching between chips and pager keeps the picked console
+- **Area:** Android — Gamepad navigation
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1223, a controller connected, the pager on a console other than "All games".
+- **Steps:**
+  1. Disconnect the controller (`... --ez connected false`).
+  2. Connect it again.
+  3. Rotate to landscape (`adb shell settings put system user_rotation 1`), then back to portrait (`0`).
+- **Expected:** 1: the console chips come back with the same console selected and no shoulder pills.
+  2: the pager comes back on that console. 3: landscape shows its one-row header (RT-859) on the same
+  console; back in portrait the pager is still on it. The grid never jumps to another filter.
+- **Check:** human only (a screenshot after each step).
+- **Restore:** `... --ez clear true`, `user_rotation 0`.
 
 ### RT-593 — Left/right crosses console groups in the landscape row with no stop
 - **Area:** Android — Gamepad navigation
@@ -11330,11 +11372,11 @@ keyevent` comes from a virtual device and never changes the family. A release AP
      mode (START) to see SELECT.
   4. Run pad `11720` (8BitDo), then `--ei vendor 0 --es name "Pro Controller"`.
   5. With Nintendo faces showing, press `KEYCODE_BUTTON_A`, then `KEYCODE_BUTTON_B`.
-- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the shoulder pills at the ends
-  of the console chips read LB and RB (portrait; in landscape the chips row is gone and the filter
-  pager's previous/next show the same faces, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the
-  pills read L and R. Step 3 shows a purple badge with a white cross outline, a triangle outline,
-  SHARE and L1 R1, and the pills read L1 and R1; with the DualSense product SELECT reads CREATE. The
+- **Expected:** Step 1 shows A (purple), Y, the View icon and LB RB, and the filter pager's
+  previous/next steps read LB and RB (portrait, RT-1223; in landscape the same steps and no shoulder
+  hint, RT-859). Step 2, with no restart, shows B (purple), X, − and L R, and the steps read L and R.
+  Step 3 shows a purple badge with a white cross outline, a triangle outline, SHARE and L1 R1, and the
+  steps read L1 and R1; with the DualSense product SELECT reads CREATE. The
   shapes are crisp outlines, never boxes or coloured glyphs. Step 4 shows Xbox faces, then Nintendo faces. Step 5 opens the console (the
   bottom button, labelled B, confirms) and comes back. On a 360dp-wide portrait phone every hint stays
   on screen with PlayStation faces (the row shrinks a little).
