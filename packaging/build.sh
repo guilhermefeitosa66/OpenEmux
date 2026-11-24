@@ -7,6 +7,9 @@
 # `aur` is the odd one out: it builds the AUR's openemux-git recipe from a clone
 # of this checkout in the Arch image, and writes the files to publish to
 # build/aur/ -- never dist/, which is what a release uploads (issue #986).
+# `aur-release` does the same for the three recipes that follow a published
+# release (openemux, -bin, -appimage), for the tag in AUR_TAG, and can push
+# them to the AUR (packaging/aur/release.sh, issue #991).
 #
 # The per-target logic lives in packaging/<target>/build.sh, which this script
 # runs *inside* the container.
@@ -14,9 +17,9 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|arch|flatpak|windows|aur) ;;
+  appimage|deb|rpm|arch|flatpak|windows|aur|aur-release) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur}" >&2
+    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur|aur-release}" >&2
     exit 2
     ;;
 esac
@@ -65,7 +68,7 @@ fi
 # The check is which architectures are *supported*, then, rather than which one
 # the host is.
 case "$TARGET" in
-  appimage|deb|rpm|arch|aur)
+  appimage|deb|rpm|arch|aur|aur-release)
     # The container's architecture, which PLATFORM overrides.
     ARCH="$(uname -m)"
     case "${PLATFORM:-}" in
@@ -84,7 +87,7 @@ case "$TARGET" in
     # a container to build it in: the official `archlinux` image publishes
     # amd64 only (Arch Linux ARM is a separate distribution with its own
     # images). Said here rather than as a confusing `docker build` failure.
-    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ]; then
+    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ] || [ "$TARGET" = "aur-release" ]; then
       case "$ARCH" in
         aarch64|arm64)
           echo "The Arch build image (archlinux:base-devel) is amd64-only." >&2
@@ -140,9 +143,10 @@ if [ -n "${PLATFORM:-}" ]; then
   PLATFORM_ARGS=(--platform "$PLATFORM")
 fi
 
-# The AUR recipe is an Arch package like any other, built in the same image.
+# The AUR recipes are Arch packages like any other, built in the same image.
 IMAGE_TARGET="$TARGET"
 [ "$TARGET" = "aur" ] && IMAGE_TARGET=arch
+[ "$TARGET" = "aur-release" ] && IMAGE_TARGET=arch
 
 IMAGE="openemux-build-$IMAGE_TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
 echo "==> building image $IMAGE"
@@ -205,5 +209,16 @@ if [ "$TARGET" = "aur" ]; then
   DOCKER_ARGS+=(-v "$AUR_SRC:/src:ro")
 fi
 
-echo "==> running packaging/$TARGET/build.sh in $IMAGE"
-docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "packaging/$TARGET/build.sh"
+# The release recipes download the published release, so what they need from
+# here is the tag, the mode and -- to publish -- the AUR key. Passed by name
+# (`-e VAR`), so the key's value never appears on a command line.
+SCRIPT="packaging/$TARGET/build.sh"
+if [ "$TARGET" = "aur-release" ]; then
+  SCRIPT=packaging/aur/release.sh
+  export AUR_TAG="${AUR_TAG:-}" AUR_MODE="${AUR_MODE:-check}" AUR_PKGREL="${AUR_PKGREL:-1}"
+  export AUR_SSH_PRIVATE_KEY="${AUR_SSH_PRIVATE_KEY:-}"
+  DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL -e AUR_SSH_PRIVATE_KEY)
+fi
+
+echo "==> running $SCRIPT in $IMAGE"
+docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "$SCRIPT"

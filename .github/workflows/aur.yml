@@ -1,0 +1,63 @@
+name: AUR
+
+# Writes the three release AUR recipes -- openemux, openemux-bin and
+# openemux-appimage -- for a published release, builds and install-tests them
+# in the Arch image, and pushes them to the AUR (issue #991). Dispatched by the
+# release process once the GitHub release exists, the way openemux-flatpak's
+# publish.yml is:
+#
+#   gh workflow run aur.yml -f tag=vX.Y.Z -f dry_run=false
+#
+# A dry run (the default) needs no secret and pushes nothing: it prints the
+# diff each AUR repository would get. Publishing needs the AUR account's SSH
+# key in the AUR_SSH_PRIVATE_KEY secret and fails, before building anything,
+# when it is not set. All of it is `make aur-publish`, which runs the same way
+# on a developer's machine.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to package (vX.Y.Z); the GitHub release must exist'
+        required: true
+        type: string
+      dry_run:
+        description: 'Print the diff without pushing to the AUR'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  # One push per package at a time; two runs for the same tag would race.
+  group: aur
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  aur:
+    name: AUR (${{ inputs.tag }}${{ inputs.dry_run && ', dry run' || '' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the recipes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build, check and ${{ inputs.dry_run && 'diff' || 'publish' }}
+        env:
+          # Passed through the environment, never interpolated into the script:
+          # the tag is free text typed into the dispatch form.
+          TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          # Checked here as well as by release.py: make expands the tag into
+          # a shell line before anything else sees it.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' is not a release tag (expected vX.Y.Z)"
+            exit 1
+          fi
+          make aur-publish TAG="$TAG" DRY_RUN="$DRY_RUN"

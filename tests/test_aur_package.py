@@ -129,7 +129,7 @@ class AurBuildScriptTests(unittest.TestCase):
 class WiringTests(unittest.TestCase):
     def test_the_dispatcher_accepts_the_target_and_builds_in_the_arch_image(self):
         dispatcher = _read("packaging/build.sh")
-        self.assertIn("appimage|deb|rpm|arch|flatpak|windows|aur)", dispatcher)
+        self.assertIn("appimage|deb|rpm|arch|flatpak|windows|aur|aur-release)", dispatcher)
         self.assertIn('[ "$TARGET" = "aur" ] && IMAGE_TARGET=arch', dispatcher)
         self.assertIn('DOCKER_ARGS+=(-v "$AUR_SRC:/src:ro")', dispatcher)
 

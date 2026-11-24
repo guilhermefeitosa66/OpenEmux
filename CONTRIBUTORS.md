@@ -208,7 +208,10 @@ Asked for an `openemux-git` package on the AUR, so Arch users can install and up
 one command instead of downloading each release. That request became
 [#986](https://github.com/guilhermefeitosa66/OpenEmux/issues/986): the `openemux-git` recipe in
 `packaging/aur/`, built from the repository with the distribution's RetroArch, and `make aur-git`
-to build, test and prepare it for the AUR.
+to build, test and prepare it for the AUR. Then suggested the release-based packages most apps
+offer, bumped on every release:
+[#991](https://github.com/guilhermefeitosa66/OpenEmux/issues/991) added `openemux`, `openemux-bin`
+and `openemux-appimage`, with a workflow that updates them for each release.
 
 Reported, with a screen recording, that the submenus of a game's right-click menu ("Load state",
 "Core") flickered open and closed on a KDE Plasma Wayland session
