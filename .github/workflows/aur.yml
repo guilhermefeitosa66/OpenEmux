@@ -28,8 +28,11 @@ on:
         default: true
 
 concurrency:
-  # One push per package at a time; two runs for the same tag would race.
-  group: aur
+  # Publishes run one at a time, since two pushes to the same AUR repository
+  # would race. GitHub keeps one pending run per group, so a newer publish
+  # replaces a queued one (the newer recipes win); dry runs push nothing and
+  # get a group of their own, so they never displace a pending publish.
+  group: ${{ inputs.dry_run && format('aur-dry-run-{0}', github.run_id) || 'aur-publish' }}
   cancel-in-progress: false
 
 permissions:

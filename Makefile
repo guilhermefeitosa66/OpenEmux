@@ -272,13 +272,15 @@ aur-git:
 # (AUR_SSH_PRIVATE_KEY), or with DRY_RUN=1 prints the diff and pushes nothing.
 #   make aur-release TAG=v1.24.0
 #   make aur-publish TAG=v1.24.0 DRY_RUN=1
+# TAG is read from the environment (make exports command-line variables)
+# and checked before use, so it never reaches the shell unquoted.
 aur-release:
-	@test -n "$(TAG)" || { echo "usage: make aur-release TAG=vX.Y.Z [PKGREL=N]" >&2; exit 2; }
-	AUR_TAG='$(TAG)' AUR_MODE=check AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
+	@printf '%s\n' "$$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' || { echo "usage: make aur-release TAG=vX.Y.Z [PKGREL=N]" >&2; exit 2; }
+	AUR_TAG="$$TAG" AUR_MODE=check AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
 
 aur-publish:
-	@test -n "$(TAG)" || { echo "usage: make aur-publish TAG=vX.Y.Z [DRY_RUN=1] [PKGREL=N]" >&2; exit 2; }
-	AUR_TAG='$(TAG)' AUR_MODE=$(if $(filter 1,$(DRY_RUN)),dry-run,publish) AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
+	@printf '%s\n' "$$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' || { echo "usage: make aur-publish TAG=vX.Y.Z [DRY_RUN=1] [PKGREL=N]" >&2; exit 2; }
+	AUR_TAG="$$TAG" AUR_MODE=$(if $(filter 1,$(DRY_RUN)),dry-run,publish) AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
 
 # Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
 # Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).

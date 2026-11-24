@@ -15,6 +15,7 @@ what an Arch user only finds out on their own machine:
 """
 
 import hashlib
+import http.client
 import importlib.util
 import io
 import re
@@ -176,6 +177,7 @@ class ReleaseRecipeTests(unittest.TestCase):
         self.assertIn('ln -s "/opt/$pkgname/OpenEmux.AppImage" "$pkgdir/usr/bin/$_pkgname"',
                       pkgbuild)
         self.assertIn("s|^Exec=.*|Exec=/usr/bin/openemux|", pkgbuild)
+        self.assertIn("sed -i '/^Exec=/a TryExec=/usr/bin/openemux'", pkgbuild)
         for path in ("usr/share/applications/$_appid.desktop",
                      "usr/share/icons/hicolor/512x512/apps/$_appid.png",
                      "usr/share/metainfo/$_appid.metainfo.xml",
@@ -286,7 +288,8 @@ class FetchTests(unittest.TestCase):
 
     def test_a_failed_download_names_the_url(self):
         for error in (urllib.error.HTTPError("u", 404, "Not Found", {}, None),
-                      urllib.error.URLError("no route"), TimeoutError("slow")):
+                      urllib.error.URLError("no route"), TimeoutError("slow"),
+                      http.client.IncompleteRead(b"half"), ValueError("unknown url type")):
             with self.subTest(error=type(error).__name__), \
                     mock.patch.object(release.urllib.request, "urlopen", side_effect=error), \
                     self.assertRaisesRegex(release.ReleaseError,
@@ -432,12 +435,19 @@ class WiringTests(unittest.TestCase):
         self.assertIn("DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL)", dispatcher)
         self.assertIn('if [ "$AUR_MODE" = "publish" ]; then\n    DOCKER_ARGS+=(-e AUR_SSH_PRIVATE_KEY)',
                       dispatcher)
+        # Downloaded release code gets no ScreenScraper credential either.
+        self.assertIn('if [ "$TARGET" = "aur-release" ]; then\n'
+                      '  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID= -e SCREENSCRAPER_DEVPASSWORD=)',
+                      dispatcher)
         refusal = dispatcher.index("FAIL: AUR_SSH_PRIVATE_KEY is not set")
         self.assertLess(refusal, dispatcher.index('docker build "${PLATFORM_ARGS[@]}"'))
 
     def test_make_targets(self):
         makefile = _read("Makefile")
-        self.assertIn("AUR_TAG='$(TAG)' AUR_MODE=check", makefile)
+        self.assertIn('AUR_TAG="$$TAG" AUR_MODE=check', makefile)
+        self.assertNotIn("'$(TAG)'", makefile)
+        self.assertEqual(makefile.count(
+            "grep -Eqx 'v[0-9]+\\.[0-9]+\\.[0-9]+'"), 2)
         self.assertIn("AUR_MODE=$(if $(filter 1,$(DRY_RUN)),dry-run,publish)", makefile)
         packages = re.search(r"(?m)^packages: (.*)$", makefile).group(1)
         self.assertNotIn("aur", packages)
@@ -454,6 +464,12 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(inputs["tag"]["required"])
         self.assertEqual(inputs["dry_run"]["type"], "boolean")
         self.assertIs(inputs["dry_run"]["default"], True)
+
+    def test_a_dry_run_never_displaces_a_pending_publish(self):
+        group = self.data["concurrency"]["group"]
+        self.assertIn("format('aur-dry-run-{0}', github.run_id)", group)
+        self.assertIn("'aur-publish'", group)
+        self.assertIs(self.data["concurrency"]["cancel-in-progress"], False)
 
     def test_read_only_and_the_secret_only_in_the_environment(self):
         self.assertEqual(self.data["permissions"], {"contents": "read"})

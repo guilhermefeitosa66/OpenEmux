@@ -64,8 +64,8 @@ format installs to `/usr/share/metainfo/`).
 
 ## The AUR packages
 
-Four packages on the AUR, all of them `provides`/`conflicts` `openemux`, so
-pacman swaps any one for any other:
+Four packages on the AUR. `openemux` is the plain name; the other three
+`provides`/`conflicts` `openemux`, so pacman swaps any one for any other:
 
 | Package | What it installs | Pick it when |
 | --- | --- | --- |

@@ -61,6 +61,9 @@ package() {
   # The same Exec line the native packages write (stage_tree.sh).
   sed -i 's|^Exec=.*|Exec=/usr/bin/openemux|' \
     "$pkgdir/usr/share/applications/$_appid.desktop"
+  grep -q '^TryExec=' "$pkgdir/usr/share/applications/$_appid.desktop" ||
+    sed -i '/^Exec=/a TryExec=/usr/bin/openemux' \
+      "$pkgdir/usr/share/applications/$_appid.desktop"
   install -Dm644 "usr/share/icons/hicolor/512x512/apps/$_appid.png" \
     "$pkgdir/usr/share/icons/hicolor/512x512/apps/$_appid.png"
   install -Dm644 "usr/share/metainfo/$_appid.metainfo.xml" \

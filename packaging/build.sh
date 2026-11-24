@@ -175,8 +175,14 @@ DOCKER_ARGS=("${PLATFORM_ARGS[@]}" --rm -t -v "$ROOT_DIR:/work" -w /work
 # local .env sourced above, or the shell environment). Unset/empty means no
 # embedded credential -- the injection step is then a no-op and ScreenScraper
 # stays opt-in, so a build without a .env needs nothing here.
-DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
-              -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+# Not for aur-release: it builds code downloaded from a published release,
+# which has no business seeing the credential (nor the AUR key, see below).
+if [ "$TARGET" = "aur-release" ]; then
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID= -e SCREENSCRAPER_DEVPASSWORD=)
+else
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
+                -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+fi
 # Two builds have to mount a filesystem, and --privileged is how they used to
 # get to: full host root, every capability and every device, in a container
 # that also bind-mounts the repository and carries SCREENSCRAPER_DEVPASSWORD --

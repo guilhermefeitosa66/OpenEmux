@@ -20,6 +20,7 @@ image. Standard library only: this runs on the host, in that image and in CI.
 
 import argparse
 import hashlib
+import http.client
 import re
 import sys
 import urllib.error
@@ -102,7 +103,7 @@ def fetch(url):
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return response.read()
-    except (urllib.error.URLError, OSError) as error:
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as error:
         raise ReleaseError(f"could not download {url}: {error}") from error
 
 
