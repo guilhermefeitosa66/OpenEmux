@@ -900,6 +900,8 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self._translatable(lambda: self._sync_search_scope(self.current_console))
         content_overlay = Gtk.Overlay()
         content_overlay.set_child(self.content_stack)
+        # What a custom theme's "Library" color paints (issue 1011).
+        self.content_stack.add_css_class("library-area")
         content_overlay.add_overlay(self.search_empty)
         toolbar.set_content(content_overlay)
         # Big Picture borrows the overlay -- the page stack and the search's

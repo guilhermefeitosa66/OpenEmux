@@ -74,7 +74,7 @@ class ActivatingTheApplicationTests(_ApplicationCase):
         with mock.patch("openemux.ui.theming.apply_theme") as apply_theme:
             self.app.do_activate()
         apply_theme.assert_called_once_with(
-            self.config.get_ui_settings()["theme"]
+            self.config.get_ui_settings()["theme"], store=self.config.themes
         )
 
     def test_the_bundled_icons_are_registered_before_any_window_exists(self):
