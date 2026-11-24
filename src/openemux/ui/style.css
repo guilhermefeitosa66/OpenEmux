@@ -546,3 +546,15 @@ button.controller-target.current.lit {
 .palette-dots {
   opacity: 0.9;
 }
+
+/* Preferences: the ready-made themes' cards (issue 1012). The one in use
+   carries the accent outline, as a selected card in the library does. */
+.ready-theme-card {
+    padding: 6px;
+    border-radius: 12px;
+}
+
+.ready-theme-card.ready-theme-current {
+    outline: 2px solid @accent_bg_color;
+    outline-offset: -2px;
+}

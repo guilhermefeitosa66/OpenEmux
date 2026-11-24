@@ -27,6 +27,8 @@ SOURCE_ROOTS = ("src/openemux", "tools", "scripts", "tests")
 #: of these prefixes is reachable even though no literal spells it out.
 DYNAMIC_PREFIXES = (
     # The theme editor builds these from the key table (issue 1011).
+    "theme_editor.density.",
+    "theme_editor.fit.",
     "theme_editor.group.",
     "theme_editor.key.",
     "theme_editor.section.",

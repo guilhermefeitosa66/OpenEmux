@@ -1,0 +1,27 @@
+version: 1
+name: 'Tokyo Night'
+base: dark
+window_bg: '#1a1b26'
+headerbar_bg: '#24283b'
+sidebar_bg: '#16161e'
+library_bg: '#1a1b26'
+console_list_bg: '#24283b'
+card_bg: '#24283b'
+popover_bg: '#1f2335'
+details_bg: '#1a1b26'
+text_primary: '#c0caf5'
+text_secondary: '#a9b1d6'
+sidebar_text_primary: '#7aa2f7'
+sidebar_text_secondary: '#9aa5ce'
+accent: '#7aa2f7'
+selection_bg: '#2e3c64'
+accent_button_bg: '#7aa2f7'
+accent_button_fg: '#16161e'
+border_color: '#292e42'
+shadow_color: '#000000'
+corner_radius: 12.0
+shadow_strength: 0.3
+icon_color: '#7dcfff'
+library_image: images/library.png
+library_image_dim: 0.7
+library_image_blur: 0.0

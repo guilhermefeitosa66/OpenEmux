@@ -19893,8 +19893,9 @@ import replaced. Save states are not part of it. The runner has no Android devic
   1. Open "Settings" ▸ "System"; in "Interface", open the "Theme" list.
   2. Pick "Light", then "Dark", then "System"; `make devbox-shot OUT=$SCRATCH/RT-1238.png WIN=1`
      after each.
-- **Expected:** 1: the list reads "System", "Light", "Dark" and nothing else; a "New Theme…" row
-  sits under it. 2: the app paints light, dark, then the desktop's appearance, as before; with any
+- **Expected:** 1: the list reads "System", "Light", "Dark", then the ready-made "Pastel",
+  "Dracula", "Kitty", "Neon", "Tokyo Night" (issue 1012), and nothing else; the "Ready-made Themes"
+  cards, a "New Theme…" row and an "Import Theme…" row sit under it. 2: the app paints light, dark, then the desktop's appearance, as before; with any
   of the three picked there is no edit (pencil) button and no "More Theme Actions" (⋮) menu beside
   the row.
 - **Check:** suite file `tests/test_theme_picker.py` (`ListTests`); the screenshots for a human look.
@@ -20020,6 +20021,189 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Expected:** exactly as in issue 983: the cartridge preview follows, an invalid hex greys out
   "Apply", Enter in "Hex" applies.
 - **Check:** suite files `tests/test_cartridge_color_dialog.py`, `tests/test_color_picker.py`.
+
+### RT-1265 — Borders and Shadows, Icons and Typography change the whole app
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use ("Midnight", RT-1239).
+- **Steps:**
+  1. Edit it; "Borders and Shadows": "Corner radius" 24, "Border width" 2, "Shadow strength" 80.
+  2. "Icons": "Icon size" 150%, change "Icon color".
+  3. "Typography": "Text size" 130%, pick another family in "Font".
+  4. "Save"; then narrow the window until the sidebar collapses.
+- **Expected:** 1–3: the preview follows each change; changed rows show their value ("24 px",
+  "130%") and an active reset button. 4: cards, boxed lists and buttons are rounder with a border
+  and a stronger shadow; the sidebar's and header bar's symbolic icons are larger and in the picked
+  color; all text is larger and in the picked font; the narrow layout still fits and scrolls.
+- **Check:** human only (`tests/test_theme_css.py` and `tests/test_theme_editor_rows.py` cover the
+  rules and the rows).
+
+### RT-1266 — Spacing: density, grid gap, card size and sidebar width
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. Edit it; "Spacing": click "Compact", then "Comfortable"; move "Fine adjustment".
+  2. "Grid gap" 0, then 32; "Card size" 75%, then 150%; "Sidebar width" 200, then 420. "Save".
+  3. Make the window narrow, then wide again.
+- **Expected:** 1: the picked density stays highlighted and its row gets an active reset; rows and
+  the header grow and shrink with the density and, finer, with "Fine adjustment". 2: after Save the library rebuilds with the new gaps
+  and card sizes; the sidebar takes the chosen width when the window has room. 3: a narrow window
+  still shares the width and collapses the sidebar at its usual breakpoint.
+- **Check:** human only (`tests/test_theme_layout_ui.py` `WindowSizeTests`).
+
+### RT-1267 — Background images for the library and the sidebar
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use; a large photo (JPEG or PNG) on disk.
+- **Steps:**
+  1. Edit it; "Backgrounds" ▸ "Library" ▸ "Choose…", pick the photo.
+  2. Try "Fit" Cover, Contain, Tile; move "Dim" and "Blur". Same for "Sidebar".
+  3. "Save". Scroll a console with many games.
+  4. Move or delete the original photo; restart the app.
+- **Expected:** 1: the thumbnail and the picture's size appear; "Fit", "Dim" and "Blur" become
+  active. 2: the preview follows; a too-light picture under light text shows a contrast warning on
+  the image row and a warning icon beside "Backgrounds". 3: the images show behind the games and the
+  console list, dimmed into the theme's colors; scrolling stays smooth. 4: the images are still there
+  (they live in `~/.openemux/themes/<id>/images/`).
+- **Check:** human only (`tests/test_theme_editor_rows.py` `ImageRowTests`,
+  `tests/test_theme_layout_ui.py` `BackgroundTests`).
+
+### RT-1268 — A file that is not a usable picture is refused
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a text file renamed `fake.png`; an image larger than 8192 px on a side.
+- **Steps:** In the editor, "Backgrounds" ▸ "Choose…" each of them.
+- **Expected:** the row says "The image could not be used: it is not a picture, or it is too
+  large." in red; nothing else changes and the app keeps working.
+- **Check:** human only (`tests/test_theme_images_store.py` `ImportImageTests`).
+
+### RT-1269 — Images are never left behind
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with a library image.
+- **Steps:**
+  1. Edit it, pick another image, "Cancel".
+  2. "⋮" ▸ "Duplicate"; then delete the original theme.
+  3. Delete the copy.
+- **Expected:** 1: the theme keeps its old image; no `.staging-*` folder stays under
+  `~/.openemux/themes/`. 2: the copy shows the same image after the original is gone. 3: the
+  theme's folder, images included, is gone.
+- **Check:** human only (`tests/test_theme_images_store.py` `StoreImageTests`).
+
+### RT-1270 — Export a theme and import it back
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with images and shape settings.
+- **Steps:**
+  1. "⋮" ▸ "Export…", save `Midnight.openemux-theme`.
+  2. Delete the theme; "Import Theme…", pick the file.
+  3. "Import Theme…" the same file again.
+- **Expected:** 1: a toast "Theme exported"; the file is a zip with `theme.yaml` and `images/`.
+  2: a toast "Imported “Midnight”"; the theme is picked and looks exactly as before, images
+  included. 3: a second theme "Midnight (2)"; nothing is overwritten.
+- **Check:** human only (`tests/test_theme_archive.py` round trip,
+  `tests/test_theme_picker_share.py`).
+
+### RT-1271 — A hostile theme file is refused and touches nothing
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** test files prepared by QA: not a zip, a zip with `../evil.txt`, a zip with a
+  symlink, a zip bomb, a `theme.yaml` with unknown keys and out-of-range numbers.
+- **Steps:** "Import Theme…" each file; list `~/.openemux/themes/` before and after.
+- **Expected:** every bad file shows "This file is not a theme OpenEmux can use." and the folder is
+  unchanged (no new or hidden folder). The unknown-keys file imports with those keys dropped and
+  the numbers clamped.
+- **Check:** suite file `tests/test_theme_archive.py` (one test per attack).
+
+### RT-1272 — Start from a Palette
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a dark-base theme and a light-base theme; one palette of your own made in the
+  Custom Color dialog.
+- **Steps:** In the editor, "Start from a Palette" ▸ "Nord" (dark base), then "Gruvbox" (light
+  base), then your own palette.
+- **Expected:** surfaces, text and accent fill at once; the preview follows; no contrast warning
+  for the presets; your palette is listed after the presets; "Reset All" and "Cancel" undo it.
+- **Check:** suite file `tests/test_theme_images_store.py` (`SeedTests`).
+
+### RT-1273 — The editor's color popovers share Saved colors and palettes
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** a saved custom cartridge color and a palette of your own (issue 983).
+- **Steps:** In the editor, click the color swatch of rows in every section that has colors
+  (Colors, Text, Accent, Borders and Shadows, Icons); open the palette list.
+- **Expected:** under the picker of every one of them, the same "Saved" colors and palette picker
+  as card ▸ "Cartridge color" ▸ "Custom…": Shell Colors, the 8 palettes shared with Android
+  (Basic, Dracula, Pastel, Nord, Gruvbox, Neon, Earth, Green screen) and your own; a click on a
+  swatch sets the row's color.
+- **Check:** suite file `tests/test_theme_editor_rows.py` (`PaletteTests`).
+
+### RT-1274 — Big Picture follows a custom theme
+- **Area:** Custom themes, Big Picture
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme with a library image and "Text size" 130%.
+- **Steps:**
+  1. Open Big Picture; walk Library, a console, a game's details, Recent, Settings, the pause
+     menu and the on-screen keyboard with a gamepad.
+  2. In Big Picture "Settings", switch to another custom theme, then to "Dark".
+- **Expected:** 1: Big Picture takes the theme's colors and font, the image behind the shelves and
+  larger text; console shelf colors are unchanged; the focused item is always visible. 2: each
+  switch applies at once; under "Dark" (and "System", "Light") Big Picture looks exactly as before.
+- **Check:** human only (`tests/test_bigpicture_theme.py` checks the floors;
+  `tests/test_theme_layout_ui.py` `BigPictureThemeTests`).
+
+### RT-1275 — Themes saved before keep loading
+- **Area:** Custom themes
+- **Mode:** AUTO-SUITE
+- **Preconditions:** a `theme.yaml` from part 1 (colors only).
+- **Steps:** Start the app with it in use.
+- **Expected:** it paints as before; every new setting reads "Same as base".
+- **Check:** suite file `tests/test_custom_themes.py`.
+
+### RT-1276 — Ready-made themes: preview cards, one click, a restart
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** none.
+- **Steps:**
+  1. "Settings" ▸ "System" ▸ "Interface": look at the "Ready-made Themes" cards.
+  2. Click each card in turn: "Pastel", "Dracula", "Kitty", "Neon", "Tokyo Night".
+  3. With "Kitty" picked, quit and start the app again; open Big Picture.
+- **Expected:** 1: five cards, each a small drawing of the app in that theme with its picture.
+  2: each click applies the theme at once (colors and its background picture; Kitty's cat sits by
+  a ball of yarn in the library's lower right), the card in use is outlined and "Theme" names it; no contrast
+  warning would apply to any of them. 3: Kitty is still in use; Big Picture follows it.
+- **Check:** human only (`tests/test_ready_themes.py` holds the contrast; `tests/test_theme_picker_share.py`
+  `ReadyMadeTests` the cards).
+
+### RT-1277 — Ready-made themes are read-only; Duplicate makes an editable copy
+- **Area:** Custom themes
+- **Mode:** MANUAL
+- **Preconditions:** "Dracula" picked.
+- **Steps:**
+  1. Look beside "Theme"; open "⋮".
+  2. "⋮" ▸ "Duplicate"; edit the copy and change its accent; "Save".
+- **Expected:** 1: no edit (pencil) button; in "⋮", "Rename…" and "Delete…" are greyed out,
+  "Duplicate" and "Export…" work. 2: "Dracula (copy)" is created with the same picture and picked;
+  it can be edited, renamed and deleted; "Dracula" itself is unchanged.
+- **Check:** suite file `tests/test_theme_picker_share.py` (`ReadyMadeTests`).
+
+### RT-1278 — Big Picture's console list follows the theme
+- **Area:** Custom themes, Big Picture
+- **Mode:** MANUAL
+- **Preconditions:** a custom theme in use.
+- **Steps:**
+  1. Open Big Picture; look at the console list (Library).
+  2. Edit the theme ▸ "Colors" ▸ "Big Picture" ▸ "Console list": pick a color; "Save"; open Big
+     Picture again. Then reset the row and save.
+  3. Pick each ready-made theme and open Big Picture.
+  4. Pick a "Console list" color close to the primary text color.
+- **Expected:** 1: as before, each console card in its own color. 2: every card takes the picked
+  color, names and counts in the theme's text colors; after the reset, the per-console colors are
+  back. 3: each ready-made theme gives its own console-list color, all readable. 4: a contrast
+  warning on the "Console list" row (and on the text rows) in the editor.
+- **Check:** suite file `tests/test_bigpicture_theme.py` (`ConsoleListTests`); the ready-made
+  contrast in `tests/test_ready_themes.py`.
 
 ## Android — Themes
 

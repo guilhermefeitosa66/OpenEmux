@@ -14,7 +14,10 @@ from openemux.core.custom_themes import (
     CONTRAST_PAIRS,
     FORMAT_VERSION,
     KEYS_BY_NAME,
+    KIND_CHOICE,
     KIND_COLOR,
+    KIND_FONT,
+    KIND_IMAGE,
     KIND_NUMBER,
     SECTIONS,
     THEME_FILE,
@@ -40,16 +43,26 @@ class TableTests(unittest.TestCase):
         self.assertEqual(len(KEYS_BY_NAME), len(THEME_KEYS))
         for spec in THEME_KEYS:
             self.assertIn(spec.section, SECTIONS)
-            self.assertEqual(spec.kind, KIND_COLOR)
+            self.assertIn(spec.kind, (KIND_COLOR, KIND_NUMBER, KIND_CHOICE, KIND_FONT, KIND_IMAGE))
 
     def test_each_section_has_rows(self):
         for section in SECTIONS:
             self.assertTrue(keys_in_section(section))
 
-    def test_defaults_are_valid_colors_on_both_bases(self):
+    def test_defaults_are_valid_values_on_both_bases(self):
+        # A font or an image defaults to empty: none, which is no value at all.
         for spec in THEME_KEYS:
             for base in ("light", "dark"):
+                if spec.kind in (KIND_FONT, KIND_IMAGE):
+                    self.assertEqual(spec.default(base), "")
+                    continue
                 self.assertEqual(validate_value(spec, spec.default(base)), spec.default(base))
+
+    def test_numbers_have_a_range_and_a_unit(self):
+        for spec in THEME_KEYS:
+            if spec.kind == KIND_NUMBER:
+                self.assertLess(spec.minimum, spec.maximum, spec.key)
+                self.assertIn(spec.unit, ("px", "%"), spec.key)
 
     def test_the_bases_text_pairs_pass_aa_except_libadwaitas_accent_button(self):
         # The defaults are the base's own look; its text passes AA. Its
@@ -88,9 +101,83 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(validate_value(self.NUMBER, -3), 0)
         self.assertEqual(validate_value(self.NUMBER, 99.5), 24)
 
-    def test_numbers_without_a_range_pass_through(self):
+    def test_numbers_without_a_range_are_whole(self):
         spec = ThemeKey("scale", "typography", "text", KIND_NUMBER, 1, 1)
-        self.assertEqual(validate_value(spec, 7.5), 7.5)
+        self.assertEqual(validate_value(spec, 7.5), 8)
+        self.assertEqual(validate_value(spec, 7), 7)
+
+    def test_choices_are_exact(self):
+        density = KEYS_BY_NAME["density"]
+        self.assertEqual(density.choices, custom_themes.DENSITIES)
+        self.assertEqual(validate_value(density, "compact"), "compact")
+        self.assertIsNone(validate_value(density, "Compact"))
+        self.assertIsNone(validate_value(density, 80))
+        self.assertIsNone(validate_value(density, True))
+        number = ThemeKey("n", "spacing", "spacing", KIND_CHOICE, 16, 16, choices=(16, 20))
+        self.assertEqual(validate_value(number, 20), 20)
+        self.assertIsNone(validate_value(number, 20.0))
+        self.assertIsNone(validate_value(number, 18))
+        fit = KEYS_BY_NAME["library_image_fit"]
+        self.assertEqual(validate_value(fit, "tile"), "tile")
+        self.assertIsNone(validate_value(fit, "stretch"))
+
+    def test_fonts_cannot_leave_a_css_string(self):
+        font = KEYS_BY_NAME["font_family"]
+        self.assertEqual(validate_value(font, "Noto Sans CJK JP"), "Noto Sans CJK JP")
+        self.assertEqual(validate_value(font, "Fira Code (Retina)"), "Fira Code (Retina)")
+        for bad in ('Sans"; } * {', "Sans\\", " Sans", "Sans\n", "", "x" * 65, 12, None):
+            self.assertIsNone(validate_value(font, bad), repr(bad))
+
+    def test_images_are_names_in_the_images_folder(self):
+        image = KEYS_BY_NAME["library_image"]
+        for good in ("images/library.png", "images/bg-2.jpg", "images/a_b.jpeg", "images/x.webp"):
+            self.assertEqual(validate_value(image, good), good)
+        for bad in ("library.png", "images/../x.png", "/images/x.png", "images/a/b.png",
+                    "images/X.png", "images/x.gif", "images/x.png\n", "images/.x.png",
+                    "Images/x.png", "images\\x.png", 3):
+            self.assertIsNone(validate_value(image, bad), repr(bad))
+        # The bare file name, as it sits inside images/.
+        self.assertTrue(custom_themes.IMAGE_FILE.fullmatch("library.png"))
+        self.assertIsNone(custom_themes.IMAGE_FILE.fullmatch("images/library.png"))
+
+    def test_fractions_keep_two_decimals_and_pixels_are_whole(self):
+        shadow = KEYS_BY_NAME["shadow_strength"]
+        self.assertTrue(shadow.fraction)
+        self.assertEqual(shadow.step, 0.05)
+        self.assertEqual(validate_value(shadow, 0.333), 0.33)
+        self.assertEqual(validate_value(shadow, 1), 1.0)
+        self.assertIsInstance(validate_value(shadow, 1), float)
+        self.assertEqual(validate_value(shadow, 35), 1.0)
+        self.assertEqual(validate_value(shadow, -1), 0.0)
+        dim = KEYS_BY_NAME["library_image_dim"]
+        self.assertEqual(validate_value(dim, 0.95), 0.9)
+        self.assertEqual(KEYS_BY_NAME["icon_scale"].default("dark"), 1.0)
+        self.assertEqual(validate_value(KEYS_BY_NAME["icon_scale"], 0.5), 0.75)
+        radius = KEYS_BY_NAME["corner_radius"]
+        self.assertFalse(radius.fraction)
+        self.assertEqual(radius.step, 1)
+        self.assertEqual(validate_value(radius, 8.0), 8)
+        self.assertIsInstance(validate_value(radius, 8.0), int)
+        self.assertEqual(validate_value(radius, 40), 28)
+        # Only a number is a fraction, whatever its unit says.
+        self.assertFalse(KEYS_BY_NAME["density"].fraction)
+
+    def test_the_shared_ranges(self):
+        expected = {
+            "corner_radius": (0, 28, "px"), "border_width": (0, 4, "px"),
+            "grid_gap": (0, 32, "px"), "library_image_blur": (0, 24, "px"),
+            "sidebar_width": (200, 420, "px"), "shadow_strength": (0, 1, "%"),
+            "icon_scale": (0.75, 1.5, "%"), "font_scale": (0.85, 1.3, "%"),
+            "density_fine": (0.8, 1.2, "%"), "card_scale": (0.75, 1.5, "%"),
+            "sidebar_image_dim": (0, 0.9, "%"),
+        }
+        for key, (low, high, unit) in expected.items():
+            spec = KEYS_BY_NAME[key]
+            self.assertEqual((spec.minimum, spec.maximum, spec.unit), (low, high, unit), key)
+        self.assertEqual(KEYS_BY_NAME["shadow_strength"].light, 0.35)
+        self.assertEqual(KEYS_BY_NAME["library_image_dim"].dark, 0.4)
+        self.assertNotIn("sidebar_icon_size", KEYS_BY_NAME)
+        self.assertNotIn("toolbar_icon_size", KEYS_BY_NAME)
 
     def test_numbers_of_the_wrong_type_are_dropped(self):
         for value in (True, "12", None, [], math.nan, math.inf):
@@ -140,6 +227,24 @@ class ThemeModelTests(unittest.TestCase):
         other.values["card_bg"] = "#202020"
         self.assertEqual(theme.values["card_bg"], "#101010")
         self.assertEqual(other.name, "U")
+
+    def test_icons_need_3_to_1_and_text_4_5_to_1(self):
+        self.assertEqual(custom_themes.needed_contrast("icon_color"), custom_themes.NON_TEXT_CONTRAST)
+        self.assertEqual(custom_themes.needed_contrast("text_primary"), WCAG_AA)
+        # #808080 on the dark header bar and sidebar (#303030) is about 3.3:1.
+        gray = "#808080"
+        ratio = contrast_ratio(gray, KEYS_BY_NAME["headerbar_bg"].dark)
+        self.assertTrue(3 <= ratio < WCAG_AA, ratio)
+        self.assertEqual(contrast_problems(Theme("t", "T", "dark", {"icon_color": gray})), [])
+        problems = contrast_problems(Theme("t", "T", "dark", {"text_primary": gray}))
+        self.assertIn(("text_primary", "headerbar_bg"), [(fg, bg) for fg, bg, _r in problems])
+        dark = contrast_problems(Theme("t", "T", "dark", {"icon_color": "#444444"}))
+        self.assertEqual({fg for fg, _bg, _r in dark}, {"icon_color"})
+
+    def test_the_sidebar_text_is_not_checked_on_the_selection(self):
+        # The stylesheet makes the selected row's text readable instead.
+        theme = Theme("t", "T", "dark", {"selection_bg": "#ffffff"})
+        self.assertEqual(contrast_problems(theme), [])
 
     def test_unchanged_pairs_never_warn(self):
         self.assertEqual(contrast_problems(Theme("t", "T", "light")), [])

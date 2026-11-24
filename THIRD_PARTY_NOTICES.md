@@ -15,6 +15,16 @@ components OpenEmux ships or fetches.
 
 ---
 
+## Theme color schemes
+
+The ready-made themes (issue 1012) reuse two published color schemes. Only the
+colors are used; no code, picture or other file of either project is shipped.
+The pictures of every ready-made theme are OpenEmux's own (see
+`src/openemux/ui/assets/themes/CREDITS.md`).
+
+- **Dracula** — https://draculatheme.com — Copyright (c) Dracula Theme, MIT License.
+- **Tokyo Night** — https://github.com/enkia/tokyo-night-vscode-theme — Copyright (c) enkia, MIT License.
+
 ## RetroArch
 
 - **License:** GNU General Public License v3.0 (GPLv3)

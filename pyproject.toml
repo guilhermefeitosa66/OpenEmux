@@ -104,6 +104,9 @@ openemux = [
     # this is the index GTK falls back to on a host with no hicolor of its own.
     "ui/assets/icons/symbolic/hicolor/index.theme",
     "ui/assets/icons/ATTRIBUTION.md",
+    # The ready-made themes' pictures say where they come from (issue 1012).
+    "ui/assets/themes/CREDITS.md",
+    "ui/assets/themes/*/theme.yaml",
     # The controller drawings for the input page (issue 814): the PNGs ride on
     # the pattern above, each console's layout.json needs its own.
     "ui/assets/controllers/*/layout.json",

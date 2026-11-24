@@ -15,6 +15,7 @@ leaving the mode lands on exactly the desktop that was there.
 
 import logging
 import os
+from pathlib import Path
 
 import gi
 
@@ -22,6 +23,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from openemux.core.custom_themes import KEYS_BY_NAME
+from openemux.core.theme import THEME_LIGHT
 from openemux.ui import theming
 from openemux.ui.bigpicture import theme
 from openemux.ui.bigpicture.osk import MODE_SEARCH, OnScreenKeyboard
@@ -119,10 +122,13 @@ class BigPictureShell(Gtk.Box):
         self._provider = None
         self._clock_source = 0
         self._scale = None
+        self._sheet_key = None
         self._active = False
         self._pushed = set()
         self._color_scheme = None
         self.tab = TAB_LIBRARY
+        # A theme picked or edited while Big Picture is open shows at once.
+        theming.add_listener(self._on_theme_painted)
 
         self.rail = NavRail(self.t, self.switch_tab, lambda: self.win.toggle_big_picture())
         # The rail's hints are one context; A says what it does on the way out,
@@ -262,10 +268,13 @@ class BigPictureShell(Gtk.Box):
         if on:
             if self._color_scheme is None:
                 self._color_scheme = style.get_color_scheme()
-            # A custom theme's colors are the desktop's (issue 1011): off
-            # while Big Picture paints its own palette.
+            # The desktop's custom stylesheet is off while Big Picture paints
+            # itself -- from the same theme (issue 1012), in its base.
             theming.set_suspended(True)
-            style.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+            base = theming.current_paint().base
+            style.set_color_scheme(
+                Adw.ColorScheme.FORCE_LIGHT if base == THEME_LIGHT else Adw.ColorScheme.FORCE_DARK
+            )
         elif self._color_scheme is not None:
             style.set_color_scheme(self._color_scheme)
             self._color_scheme = None
@@ -280,17 +289,51 @@ class BigPictureShell(Gtk.Box):
             if monitor is not None:
                 height = monitor.get_geometry().height
         text_size = self.win.config_manager.get_big_picture_settings()["text_size"]
-        return theme.scale_for(height, text_size)
+        scale = theme.scale_for(height, text_size)
+        paint = theming.current_paint()
+        if paint.base is None:
+            return scale
+        # A custom theme's text size only ever makes Big Picture bigger.
+        factor = theme.font_scale_factor(paint.effective("font_scale"))
+        return round(min(theme.MAX_SCALE, scale * factor), 3)
+
+    def theme_args(self):
+        """Big Picture's palette, font and background from the theme on screen.
+
+        Empty under System, Light and Dark: Big Picture stays as it was.
+        """
+        paint = theming.current_paint()
+        if paint.base is None:
+            return {}
+        values = {key: paint.effective(key) for key in KEYS_BY_NAME}
+        args = {
+            "palette": theme.palette_for(values, paint.base),
+            "font_family": values["font_family"] or None,
+        }
+        if "console_list_bg" in paint.values:
+            args["console_list"] = paint.values["console_list_bg"]
+        library = paint.backgrounds.get("library")
+        # A cache file pruned since it was painted is left out, not shown broken.
+        if library is not None and Path(library["path"]).is_file():
+            args["background"] = {"uri": library["uri"], "fit": library["fit"]}
+        return args
+
+    def _on_theme_painted(self):
+        if self._active:
+            self.apply_scale()
 
     def apply_scale(self):
-        """Regenerate the stylesheet for the window's height and text size."""
+        """Regenerate the stylesheet for the window's height, text size and theme."""
         scale = self.scale()
-        if scale == self._scale:
+        args = self.theme_args()
+        key = (scale, repr(sorted(args.items(), key=lambda item: item[0])))
+        if key == self._sheet_key:
             return scale
+        self._sheet_key = key
         self._scale = scale
         display = Gdk.Display.get_default()
         provider = Gtk.CssProvider()
-        provider.load_from_string(theme.stylesheet(scale))
+        provider.load_from_string(theme.stylesheet(scale, **args))
         if self._provider is not None and display is not None:
             Gtk.StyleContext.remove_provider_for_display(display, self._provider)
         if display is not None:
@@ -312,7 +355,9 @@ class BigPictureShell(Gtk.Box):
             Gtk.StyleContext.remove_provider_for_display(display, self._provider)
         self._provider = None
         self._scale = None
+        self._sheet_key = None
         self._stop_clock()
+        theming.remove_listener(self._on_theme_painted)
 
     # -- the clock -------------------------------------------------------------------
     def sync_clock(self):
