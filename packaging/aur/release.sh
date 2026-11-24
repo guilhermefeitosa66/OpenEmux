@@ -36,9 +36,16 @@ case "$MODE" in
   check|dry-run|publish) ;;
   *) echo "FAIL: AUR_MODE must be check, dry-run or publish (got '$MODE')" >&2; exit 2 ;;
 esac
+# Out of the environment at once: makepkg, the downloaded release's own build
+# steps, pacman's install scriptlets and the import smoke test all run before
+# the push, and none of them may inherit the AUR account's key. It is written
+# to disk only in the push block below.
+AUR_KEY="${AUR_SSH_PRIVATE_KEY:-}"
+unset AUR_SSH_PRIVATE_KEY
 # Before anything is downloaded: a publish that cannot push should say so in
-# its first line, not after ten minutes of building.
-if [ "$MODE" = publish ] && [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]; then
+# its first line, not after ten minutes of building (build.sh says it even
+# before the image is built).
+if [ "$MODE" = publish ] && [ -z "$AUR_KEY" ]; then
   echo "FAIL: AUR_SSH_PRIVATE_KEY is not set, so nothing can be pushed to the AUR." >&2
   echo "Add the AUR account's SSH key as the repository secret AUR_SSH_PRIVATE_KEY," >&2
   echo "or run with AUR_MODE=dry-run (make aur-publish DRY_RUN=1) to see the diff." >&2
@@ -206,7 +213,7 @@ mkdir -p "$REPOS"
 if [ "$MODE" = publish ]; then
   pacman -S --noconfirm --needed openssh >/dev/null
   install -d -m 700 /root/.ssh
-  printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > /root/.ssh/aur
+  ( umask 077 && printf '%s\n' "$AUR_KEY" > /root/.ssh/aur )
   chmod 600 /root/.ssh/aur
   printf '%s\n' "$AUR_HOST_KEY" > /root/.ssh/known_hosts
   export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"

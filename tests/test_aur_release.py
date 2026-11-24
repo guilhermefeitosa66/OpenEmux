@@ -166,7 +166,8 @@ class ReleaseRecipeTests(unittest.TestCase):
             'mv "$pkgdir/usr/share/licenses/$_pkgname" "$pkgdir/usr/share/licenses/$pkgname"',
             pkgbuild,
         )
-        self.assertIn('rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"', pkgbuild)
+        self.assertIn('if [ -d "$pkgdir/usr/share/doc" ]; then\n'
+                      '    rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"', pkgbuild)
 
     def test_the_appimage_package_integrates_with_the_desktop(self):
         pkgbuild = self.recipes["openemux-appimage"]
@@ -379,7 +380,12 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_publish_without_the_key_fails_before_building(self):
         refusal = self.script.index("FAIL: AUR_SSH_PRIVATE_KEY is not set")
         self.assertLess(refusal, self.script.index("python3 packaging/aur/release.py"))
-        self.assertIn('[ "$MODE" = publish ] && [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]', self.script)
+        self.assertIn('[ "$MODE" = publish ] && [ -z "$AUR_KEY" ]', self.script)
+
+    def test_the_key_leaves_the_environment_before_anything_runs(self):
+        unset = self.script.index("unset AUR_SSH_PRIVATE_KEY")
+        self.assertLess(unset, self.script.index("python3 packaging/aur/release.py"))
+        self.assertEqual(self.script.count("AUR_SSH_PRIVATE_KEY:-"), 1)
 
     def test_the_modes(self):
         self.assertIn("  check|dry-run|publish) ;;", self.script)
@@ -418,8 +424,13 @@ class WiringTests(unittest.TestCase):
         self.assertIn("appimage|deb|rpm|arch|flatpak|windows|aur|aur-release)", dispatcher)
         self.assertIn('[ "$TARGET" = "aur-release" ] && IMAGE_TARGET=arch', dispatcher)
         self.assertIn("SCRIPT=packaging/aur/release.sh", dispatcher)
-        # By name: the key's value never lands on docker's command line.
-        self.assertIn("-e AUR_TAG -e AUR_MODE -e AUR_PKGREL -e AUR_SSH_PRIVATE_KEY", dispatcher)
+        # By name, so its value never lands on docker's command line, and only
+        # into a publish; refused before the image is built when missing.
+        self.assertIn("DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL)", dispatcher)
+        self.assertIn('if [ "$AUR_MODE" = "publish" ]; then\n    DOCKER_ARGS+=(-e AUR_SSH_PRIVATE_KEY)',
+                      dispatcher)
+        refusal = dispatcher.index("FAIL: AUR_SSH_PRIVATE_KEY is not set")
+        self.assertLess(refusal, dispatcher.index('docker build "${PLATFORM_ARGS[@]}"'))
 
     def test_make_targets(self):
         makefile = _read("Makefile")

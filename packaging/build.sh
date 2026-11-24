@@ -143,6 +143,15 @@ if [ -n "${PLATFORM:-}" ]; then
   PLATFORM_ARGS=(--platform "$PLATFORM")
 fi
 
+# A publish that cannot push says so before the image is built, not after.
+if [ "$TARGET" = "aur-release" ] && [ "${AUR_MODE:-check}" = "publish" ] \
+   && [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]; then
+  echo "FAIL: AUR_SSH_PRIVATE_KEY is not set, so nothing can be pushed to the AUR." >&2
+  echo "Add the AUR account's SSH key as the repository secret AUR_SSH_PRIVATE_KEY," >&2
+  echo "or run with AUR_MODE=dry-run (make aur-publish DRY_RUN=1) to see the diff." >&2
+  exit 1
+fi
+
 # The AUR recipes are Arch packages like any other, built in the same image.
 IMAGE_TARGET="$TARGET"
 [ "$TARGET" = "aur" ] && IMAGE_TARGET=arch
@@ -210,14 +219,17 @@ if [ "$TARGET" = "aur" ]; then
 fi
 
 # The release recipes download the published release, so what they need from
-# here is the tag, the mode and -- to publish -- the AUR key. Passed by name
-# (`-e VAR`), so the key's value never appears on a command line.
+# here is the tag, the mode and -- to publish, and only then -- the AUR key.
+# Passed by name (`-e VAR`), so the key's value never appears on a command
+# line; a check or a dry run never sees it at all.
 SCRIPT="packaging/$TARGET/build.sh"
 if [ "$TARGET" = "aur-release" ]; then
   SCRIPT=packaging/aur/release.sh
   export AUR_TAG="${AUR_TAG:-}" AUR_MODE="${AUR_MODE:-check}" AUR_PKGREL="${AUR_PKGREL:-1}"
-  export AUR_SSH_PRIVATE_KEY="${AUR_SSH_PRIVATE_KEY:-}"
-  DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL -e AUR_SSH_PRIVATE_KEY)
+  DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL)
+  if [ "$AUR_MODE" = "publish" ]; then
+    DOCKER_ARGS+=(-e AUR_SSH_PRIVATE_KEY)
+  fi
 fi
 
 echo "==> running $SCRIPT in $IMAGE"

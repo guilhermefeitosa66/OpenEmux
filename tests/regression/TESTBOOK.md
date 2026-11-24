@@ -3090,7 +3090,7 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_aur_package.py`; the container build itself (`make aur-git`)
   installs, verifies and removes the package and checks the `.SRCINFO` as its last steps.
 
-### RT-1222 — The release AUR recipes build, install, swap and dry-run for a published release
+### RT-1223 — The release AUR recipes build, install, swap and dry-run for a published release
 - **Area:** Packaging
 - **Mode:** AUTO-SUITE
 - **Preconditions:** Docker (the Arch build image); network to GitHub and to `aur.archlinux.org`;

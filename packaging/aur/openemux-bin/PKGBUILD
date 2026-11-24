@@ -66,5 +66,8 @@ package() {
   mv "$pkgdir/usr/share/licenses/$_pkgname" "$pkgdir/usr/share/licenses/$pkgname"
   # The release package ships /usr/share/doc empty (stage_tree.sh's Debian
   # copyright is moved out of it); an empty directory is a namcap finding.
-  rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
+  # Guarded: a later release package without the directory must not fail here.
+  if [ -d "$pkgdir/usr/share/doc" ]; then
+    rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
+  fi
 }
