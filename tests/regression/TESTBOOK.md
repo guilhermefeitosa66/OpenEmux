@@ -19885,13 +19885,13 @@ import replaced. Save states are not part of it. The runner has no Android devic
 
 ## Desktop — Custom themes
 
-### RT-1237 — System, Light and Dark stay as they were and cannot be edited
+### RT-1238 — System, Light and Dark stay as they were and cannot be edited
 - **Area:** Custom themes
 - **Mode:** AUTO-UI
 - **Preconditions:** the devbox app running (`make devbox-app`), no custom theme.
 - **Steps:**
   1. Open "Settings" ▸ "System"; in "Interface", open the "Theme" list.
-  2. Pick "Light", then "Dark", then "System"; `make devbox-shot OUT=$SCRATCH/RT-1237.png WIN=1`
+  2. Pick "Light", then "Dark", then "System"; `make devbox-shot OUT=$SCRATCH/RT-1238.png WIN=1`
      after each.
 - **Expected:** 1: the list reads "System", "Light", "Dark" and nothing else; a "New Theme…" row
   sits under it. 2: the app paints light, dark, then the desktop's appearance, as before; with any
@@ -19900,7 +19900,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** suite file `tests/test_theme_picker.py` (`ListTests`); the screenshots for a human look.
 - **Restore:** pick the theme that was in use before step 2.
 
-### RT-1238 — A new theme is made in the editor, saved, picked, and survives a restart
+### RT-1239 — A new theme is made in the editor, saved, picked, and survives a restart
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a throwaway home (the devbox's is one).
@@ -19919,10 +19919,10 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_theme_editor.py` `SaveTests` and
   `tests/test_theme_picker.py` `NewThemeTests` cover the logic).
 
-### RT-1239 — Cancel throws away every change, the live preview included
+### RT-1240 — Cancel throws away every change, the live preview included
 - **Area:** Custom themes
 - **Mode:** MANUAL
-- **Preconditions:** RT-1238 done ("Midnight" exists and is in use).
+- **Preconditions:** RT-1239 done ("Midnight" exists and is in use).
 - **Steps:**
   1. With "Midnight" picked, click the edit (pencil) button beside "Theme".
   2. Turn on "Apply to the whole app while editing"; change "Window background" and "Accent and
@@ -19935,7 +19935,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   `~/.openemux/themes/`.
 - **Check:** human only (`tests/test_theme_editor.py` `LiveTests`).
 
-### RT-1240 — Text below WCAG AA warns next to its row, without blocking Save
+### RT-1241 — Text below WCAG AA warns next to its row, without blocking Save
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme on the Light base.
@@ -19950,7 +19950,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** human only (`tests/test_theme_editor.py` `ValueTests`,
   `tests/test_custom_themes.py` contrast tests).
 
-### RT-1241 — Reset a row, reset all
+### RT-1242 — Reset a row, reset all
 - **Area:** Custom themes
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
@@ -19960,7 +19960,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   every row does, "Reset All" greys out, and the preview is the base's look.
 - **Check:** suite file `tests/test_theme_editor.py` (`ValueTests`).
 
-### RT-1242 — Duplicate, rename and delete; deleting the theme in use falls back to System
+### RT-1243 — Duplicate, rename and delete; deleting the theme in use falls back to System
 - **Area:** Custom themes
 - **Mode:** MANUAL
 - **Preconditions:** a custom theme in use.
@@ -19973,7 +19973,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   from `~/.openemux/themes/`, and "Theme" reads "System".
 - **Check:** human only (`tests/test_theme_picker.py` `DuplicateRenameDeleteTests`).
 
-### RT-1243 — A hand-broken theme.yaml never crashes the app
+### RT-1244 — A hand-broken theme.yaml never crashes the app
 - **Area:** Custom themes
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.
@@ -19987,7 +19987,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Check:** suite files `tests/test_custom_themes.py` (`ParseTests`, `StoreTests`),
   `tests/test_theme_css.py`, `tests/test_custom_theming.py`.
 
-### RT-1244 — The header toggle leaves a custom theme for built-in Light or Dark
+### RT-1245 — The header toggle leaves a custom theme for built-in Light or Dark
 - **Area:** Custom themes
 - **Mode:** AUTO-SUITE
 - **Preconditions:** a custom theme in use.
@@ -19996,13 +19996,13 @@ import replaced. Save states are not part of it. The runner has no Android devic
   one), the custom colors go away, and "Settings" ▸ "Theme" reads that built-in.
 - **Check:** suite file `tests/test_custom_theming.py` (`WindowThemeTests`).
 
-### RT-1245 — The theme editor in a narrow window
+### RT-1246 — The theme editor in a narrow window
 - **Area:** Custom themes
 - **Mode:** AUTO-UI
 - **Preconditions:** the devbox app running.
 - **Steps:**
   1. `make devbox-res RES=520x900`; "Settings" ▸ "System" ▸ "New Theme…", any name, "Create".
-  2. `make devbox-shot OUT=$SCRATCH/RT-1245.png`; pick "Text" in the "Section" row.
+  2. `make devbox-shot OUT=$SCRATCH/RT-1246.png`; pick "Text" in the "Section" row.
   3. "Cancel"; `make devbox-res RES=1280x800`.
 - **Expected:** 2: the preview sits above the controls, the section list is replaced by a
   "Section" row, and "Reset All" is under the rows; picking "Text" shows its rows. 3: nothing was
@@ -20011,7 +20011,7 @@ import replaced. Save states are not part of it. The runner has no Android devic
   the screenshot for a human look.
 - **Restore:** step 3.
 
-### RT-1246 — The Custom Color dialog keeps working on the shared picker
+### RT-1247 — The Custom Color dialog keeps working on the shared picker
 - **Area:** Custom themes
 - **Mode:** AUTO-SUITE
 - **Preconditions:** none.

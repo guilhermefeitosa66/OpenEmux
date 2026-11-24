@@ -119,7 +119,7 @@ class CartridgeColorDialog(Adw.Dialog):
 
         # Read here: a worker thread must not touch the widget.
         self._scale = max(1, self.get_scale_factor())
-        self._schedule_preview()
+        self._on_color_changed(self.color)
         self._spawn(self._load_sources)
 
     # -- layout ----------------------------------------------------------
