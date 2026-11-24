@@ -88,6 +88,17 @@
   </keywords>
 
   <releases>
+    <release version="1.25.0" date="2026-11-24">
+      <description>
+        <p>Themes: make OpenEmux look the way you want.</p>
+        <ul>
+          <li>Create your own themes in an editor with a live preview: colours, borders, icons, fonts, spacing and background images</li>
+          <li>Five ready-made themes: Pastel, Dracula, Kitty, Neon and Tokyo Night, and theme files you can share</li>
+          <li>Any cartridge colour, with saved colours and palettes</li>
+          <li>Fixes for mouse clicks that stopped registering, flickering menus, Big Picture layout and gamepads in the Flatpak</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.24.0" date="2026-11-15">
       <description>
         <p>Big Picture: a full-screen layout for the couch, a TV and a controller.</p>
