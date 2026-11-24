@@ -167,6 +167,15 @@ class GameDetailsDialog(Adw.Dialog):
             self.color_row = self._combo_row(
                 group, "context.cartridge_color", self._on_color_selected
             )
+            if cartridge_render.supports_custom_color(self.rom["console"]):
+                # Any color (issue 983), beside the reset arrow.
+                pick = Gtk.Button.new_from_icon_name("color-select-symbolic")
+                pick.add_css_class("flat")
+                pick.set_valign(Gtk.Align.CENTER)
+                pick.set_tooltip_text(self.t("cartridge_color.dialog.tooltip"))
+                pick.connect("clicked", self._on_pick_color)
+                self.color_row.add_suffix(pick)
+                self.color_row.pick_button = pick
         self._sync_settings()
         return group
 
@@ -249,6 +258,11 @@ class GameDetailsDialog(Adw.Dialog):
                 for color_id in cartridge_colors.order_color_ids(available)
                 if color_id != cartridge_colors.DEFAULT_COLOR_ID
             ]
+            override = self.config.get_rom_cartridge_color_override(path)
+            if cartridge_colors.is_custom_color(override):
+                # Listed only while the game has one: it is not a choice
+                # of the palette, it is this game's own.
+                ordered.append(override)
             console_color = self.config.get_cartridge_color_for_console(console)
             self._fill_row(
                 self.color_row,
@@ -300,6 +314,12 @@ class GameDetailsDialog(Adw.Dialog):
             return
         self.win.set_rom_cartridge_color(self.rom, chosen)
         self._mark_scope(row, chosen is not None)
+
+    def _on_pick_color(self, _button):
+        dialog = self.win.open_cartridge_color_dialog(self.rom)
+        # The row lists "Custom" only once the game has one: rebuild it when
+        # the dialog is done (never from the row's own notify::selected).
+        dialog.connect("closed", lambda _d: self._sync_settings())
 
     def _reset_row(self, row):
         """Back to the console default in one step: the first item is that."""

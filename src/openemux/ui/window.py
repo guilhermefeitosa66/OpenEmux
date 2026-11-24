@@ -71,6 +71,7 @@ from openemux.core.console_order import (
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.i18n import LANGUAGE_META, tr
 from openemux.core.gamepad_backend import make_navigator
+from openemux.ui.cartridge_color_dialog import open_cartridge_color_dialog
 from openemux.ui.grid import RomGrid
 from openemux.ui.game_session import GameSession
 from openemux.ui.import_flow import ImportFlow
@@ -2920,6 +2921,10 @@ class OpenEmuxWindow(Adw.ApplicationWindow):
         self.config_manager.set_rom_cartridge_color(rom["path"], rom["console"], color_id)
         for grid in self.pages.grids():
             grid.refresh_rom_frame(rom)
+
+    def open_cartridge_color_dialog(self, rom):
+        """The Custom Color dialog for one game's shell (issue 983)."""
+        return open_cartridge_color_dialog(self, rom)
 
     def sync_rom_artwork(self, rom, art_kind, on_finished=None):
         """Fetch one ROM's artwork of ``art_kind`` right away, in the background.

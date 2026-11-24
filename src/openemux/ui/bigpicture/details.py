@@ -570,6 +570,11 @@ class GameDetail(Gtk.Box):
             for color_id in cartridge_colors.order_color_ids(cartridge_render.frame_colors_for(console))
             if color_id != cartridge_colors.DEFAULT_COLOR_ID
         ]
+        override = config.get_rom_cartridge_color_override(self.rom["path"])
+        if cartridge_colors.is_custom_color(override):
+            # A custom color (issue 983) is picked on the desktop; here it
+            # is only kept, or replaced by a named one.
+            ordered.append(override)
         console_label = self._color_label(config.get_cartridge_color_for_console(console))
         options = [{"id": CONSOLE_DEFAULT, "label": t("details.console_default", value=console_label)}]
         options += [{"id": color_id, "label": self._color_label(color_id)} for color_id in ordered]
