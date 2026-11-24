@@ -54,6 +54,14 @@ def build_zip(path, entries, compression=zipfile.ZIP_DEFLATED):
         warnings.simplefilter("ignore")  # duplicate names, on purpose
         with zipfile.ZipFile(path, "w", compression=compression) as archive:
             for name, data in entries:
+                if isinstance(name, str):
+                    # ZipInfo turns os.sep into "/" -- a backslash on
+                    # Windows -- so the name is set after it, exactly as a
+                    # hostile file would carry it.
+                    info = zipfile.ZipInfo(name)
+                    info.filename = name
+                    info.compress_type = compression
+                    name = info
                 archive.writestr(name, data)
     return Path(path)
 
