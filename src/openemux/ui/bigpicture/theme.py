@@ -793,6 +793,43 @@ def stylesheet(scale=1.0):
     padding: {s('gap')}px 0;
     background: none;
 }}
+
+/* Scrollers (issue 999). The pad drives the mode on a TV: no scrollbar is
+   ever drawn, and none takes room or catches the pointer, while the content
+   still scrolls (focus, wheel, touch). Scoped to the mode's classes, so the
+   desktop keeps its scrollbars. */
+.big-picture scrollbar,
+.big-picture scrollbar trough,
+.big-picture scrollbar slider {{
+    opacity: 0;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+}}
+/* The focus mat lies outside its item, and a scroller clips at its edge: the
+   content gets a gutter of the mat inside the clip, and the scroller reaches
+   out by as much, so the items stay on the page margins. */
+.big-picture .bp-scroller {{
+    margin-left: -{s('focus_mat')}px;
+    margin-right: -{s('focus_mat')}px;
+}}
+.big-picture .bp-scroller > viewport > * {{
+    margin-left: {s('focus_mat')}px;
+    margin-right: {s('focus_mat')}px;
+}}
+.big-picture .bp-scroller-vertical > viewport > * {{
+    margin-top: {s('focus_mat')}px;
+    margin-bottom: {s('focus_mat')}px;
+}}
+/* The games grid scrolls a focused cell into view, not its mat. */
+.big-picture gridview > child {{
+    padding-top: {s('focus_mat')}px;
+    padding-bottom: {s('focus_mat')}px;
+}}
 .big-picture .console-group-header label.heading {{
     font-size: {s('section_title')}px;
 }}

@@ -628,6 +628,28 @@ def button(label, on_click=None, suggested=False, destructive=False):
     return widget
 
 
+def bp_scroller(child, horizontal=False):
+    """Every Big Picture scroller: ``child`` in one, edge-safe and barless.
+
+    Issue 999. The ``bp-scroller`` class gives the content a gutter of the
+    focus mat inside the clip (``theme.stylesheet``), so the focused item at
+    either end of the row, or at the bottom of a list, is drawn whole; the
+    stylesheet also hides every scrollbar in the mode, so the policy here only
+    says which way the content may scroll.
+    """
+    widget = Gtk.ScrolledWindow()
+    widget.add_css_class("bp-scroller")
+    if horizontal:
+        widget.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        widget.set_propagate_natural_height(True)
+    else:
+        widget.add_css_class("bp-scroller-vertical")
+        widget.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        widget.set_vexpand(True)
+    widget.set_child(child)
+    return widget
+
+
 class BigPage(Adw.NavigationPage):
     """A Big Picture page: the safe inset, a top bar, a body, no header bar.
 
@@ -672,11 +694,7 @@ class BigPage(Adw.NavigationPage):
 
     def scrolled(self, child):
         """``child`` in a vertical scroller that fills the body."""
-        scroller = Gtk.ScrolledWindow()
-        scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroller.set_vexpand(True)
-        scroller.set_child(child)
-        return scroller
+        return bp_scroller(child)
 
     def focus_default(self):
         """Put the focus on the first thing the pad should land on."""
