@@ -338,8 +338,13 @@ class RejectionTests(ArchiveTestCase):
     def test_absolute(self):
         self._bad_name("/etc/x")
 
-    @unittest.skipIf(os.sep == "\\", "zipfile reads a backslash as a slash on Windows")
     def test_backslash(self):
+        build_zip(self.file, [("a\\b", b"x")])
+        with zipfile.ZipFile(self.file) as archive:
+            if "\\" not in archive.namelist()[0]:
+                # Windows' zipfile reads a backslash back as a slash: the name
+                # never reaches this module with one.
+                self.skipTest("zipfile turns backslashes into slashes here")
         self._bad_name("images\\a.png")
         self._bad_name("notes\\readme.txt")
 
