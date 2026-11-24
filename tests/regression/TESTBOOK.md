@@ -20020,3 +20020,171 @@ import replaced. Save states are not part of it. The runner has no Android devic
 - **Expected:** exactly as in issue 983: the cartridge preview follows, an invalid hex greys out
   "Apply", Enter in "Hex" applies.
 - **Check:** suite files `tests/test_cartridge_color_dialog.py`, `tests/test_color_picker.py`.
+
+## Android — Themes
+
+User themes in the Android app (openemux-android, `pkg/android/openemux`, issue 1018): Settings ▸
+Theme lists System, Light and Dark, then "MY THEMES" with "New theme" and "Import theme file"; a
+full-screen editor (`ui/theme/ThemeEditor.kt`) over `data/theme/`. A theme file is a
+`.openemux-theme` zip shared with the desktop (`pkg/android/openemux/docs/theme-format.md`). The
+runner has no Android device, so these are `MANUAL` (the logic is in the `data/theme` tests of
+openemux-android: `UserThemeTest`, `ThemeYamlTest`, `ThemeStoreTest`, `ResolvedThemeTest`,
+`ThemeDraftTest`, `ThemeBlurTest`, and `ThemePrefTest`, `StringsThemeTest` in `ui`).
+
+### RT-1248 — System, Light and Dark are unchanged and cannot be edited
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a few games; no user theme; locale English.
+- **Steps:**
+  1. Settings ▸ "Theme": pick "Light", then "Dark", then "System" (switch the phone's dark mode).
+  2. Look at the rows of "System", "Light" and "Dark".
+- **Expected:** 1: each looks exactly as before issue 1018. 2: they have no Edit or "⋮" button;
+  "MY THEMES" shows only "New theme" and "Import theme file".
+- **Check:** human only; `ResolvedThemeTest.anUntouchedThemePaintsLikeItsBase`.
+
+### RT-1249 — A new theme: live preview, Save picks it, and it survives a restart
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** As RT-1248.
+- **Steps:**
+  1. Settings ▸ "Theme" ▸ "New theme", name "Midnight", "Dark", "Create".
+  2. In "Colors" change "Navigation", "Library" and "Cards"; tap the preview.
+  3. "Save". Look at the library, a game's page, Settings and a sheet.
+  4. Force-stop the app and open it again.
+- **Expected:** 1: the editor, title "New theme", subtitle "Midnight · Dark base", every row "Same as
+  base". 2: the preview follows each change at once; the tap switches it to a game's details and
+  back. 3: "Midnight" is picked and the app paints with it, without a restart. 4: still Midnight.
+- **Check:** human only (`adb shell run-as com.openemux.mobile cat files/themes/midnight/theme.yaml`
+  lists only the changed keys); `ThemeStoreTest.createListGetRenameDelete`.
+
+### RT-1250 — Cancel and Back throw the changes away
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight".
+- **Steps:**
+  1. Edit "Midnight", change "Background", tap "Cancel".
+  2. Edit again, change "Cards", press Back (or B).
+- **Expected:** 1: "Discard changes?" with "Discard" and "Keep editing"; "Discard" leaves the theme
+  as it was saved. 2: the same question.
+- **Check:** human only; `ThemeDraftTest.editingTracksChangesAgainstTheSavedTheme`.
+
+### RT-1251 — Reset per setting, Reset all and the contrast warning
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight".
+- **Steps:**
+  1. Edit it; in "Text" set "Secondary text" close to the "Cards" color.
+  2. Tap the reset button of "Secondary text".
+  3. Change two settings, then "Reset all" and confirm.
+- **Expected:** 1: under the row "Low contrast on Cards: 1.x:1", a warning card at the top of the
+  section and a warning icon on the "Text" chip (and on "Colors"); "Save" still works. 2: the row
+  reads "Same as base", its reset button greys out, the warnings go. 3: every row "Same as base",
+  pictures removed.
+- **Check:** human only; `UserThemeTest.contrastProblemsOnlyForChangedPairs`,
+  `ThemeDraftTest.warningsPerKeyAndSection`.
+
+### RT-1252 — Shapes, icons and sizes at their extremes keep the app usable
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; a phone, then the same phone in landscape.
+- **Steps:**
+  1. "Shapes": "Corner radius" 0 then 28, "Border width" 3 with a bright "Border color", "Shadow
+     strength" 100%. Save; look at the shelf, Settings and a game's page.
+  2. "Icons": "Icon size" 150%, an "Icon color". "Sizes": "Text size" 130%, "Density" "Compact" then
+     "Comfortable", "Grid spacing" 0 then 32, "Card size" 75% then 150%. Save each time.
+  3. Turn the phone to landscape and repeat the look around; open the editor there too.
+- **Expected:** 1: cards and buttons get square or round corners, a visible border and a shadow. 2:
+  icons and text grow, rows get tighter or looser (never too small to tap), the grid spacing and,
+  where the columns are automatic (landscape), the card width change. No text is cut and nothing
+  overlaps. 3: the same in landscape; the editor shows sections, settings and preview side by side.
+- **Check:** human only; `ResolvedThemeTest.shapesSizesAndPictures`, `ThemePrefTest.gridFollowsTheTheme`.
+
+### RT-1253 — Background pictures are copied in and survive the original
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1249's "Midnight"; two photos in the gallery.
+- **Steps:**
+  1. "Backgrounds" ▸ "Library background" ▸ "Choose", pick a photo; try "Cover", "Contain", "Tile",
+     "Dim" and "Blur". Do the same under "Navigation background". Save.
+  2. Delete both photos from the gallery, force-stop and reopen the app.
+  3. Edit the theme and remove the library picture; Save.
+- **Expected:** 1: the preview and, after Save, the library and the tabs show the pictures as set;
+  text stays readable over them; scrolling the library stays smooth. 2: the pictures are still
+  there. 3: the library goes back to its color; the copy is gone from
+  `files/themes/midnight/images/`.
+- **Check:** human only (`adb shell run-as com.openemux.mobile ls files/themes/midnight/images`);
+  `ThemeStoreTest.picturesAreStagedSavedAndPruned`.
+
+### RT-1254 — Duplicate, Rename and Delete; deleting the active theme goes back to System
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight" with its pictures.
+- **Steps:**
+  1. "⋮" beside "Midnight" ▸ "Duplicate".
+  2. "⋮" beside the copy ▸ "Rename", "Night copy", "Rename".
+  3. "⋮" beside "Night copy" ▸ "Delete".
+- **Expected:** 1: "Midnight (copy)" appears, picked, with the same pictures. 2: renamed in the list
+  and in Settings. 3: "Delete “Night copy”?" saying it is removed for good and the app goes back to
+  System; after "Delete" the app paints as System and "System" is picked.
+- **Check:** human only; `ThemeStoreTest.duplicateCopiesPictures`.
+
+### RT-1255 — Share, Save and Import a theme file; import never overwrites
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight"; a file manager app.
+- **Steps:**
+  1. "⋮" ▸ "Share theme file" and send it somewhere you can open (Files, Drive, a chat with yourself).
+  2. "⋮" ▸ "Save theme file", save `midnight.openemux-theme` to Downloads.
+  3. Delete "Midnight", then "Import theme file" and pick the saved file.
+  4. "Import theme file" with the same file again.
+  5. In the file manager, open the file with OpenEmux; then open a ROM the same way.
+- **Expected:** 1: the share sheet offers the file. 2: "Theme file saved". 3: "Imported
+  “Midnight”"; the theme is back, picked, identical (colors, sizes, pictures). 4: "Imported
+  “Midnight (2)”", the first one untouched. 5: the theme imports as in 4 ("Midnight (3)"); the ROM
+  goes to the library as before.
+- **Check:** human only; `ThemeStoreTest.exportThenImportIsTheSameTheme`, `ThemePrefTest.themeFilesByName`.
+
+### RT-1256 — A theme file moves between the desktop and the phone
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A desktop OpenEmux with theme export (issue 1012) and the Android app.
+- **Steps:**
+  1. On the desktop, make a theme with surface, text and accent colors; export it; import it on the
+     phone.
+  2. Export a phone theme and import it on the desktop.
+- **Expected:** 1: the same colors on the phone; desktop-only settings (sidebar width, font family)
+  are ignored. 2: the shared settings come in identical; Android-only ones are ignored.
+- **Check:** human only; `ThemeStoreTest.importsADesktopFileInATopFolder`, `ThemeYamlTest.readsWhatTheDesktopWrites`.
+
+### RT-1257 — A hostile or broken theme file is refused without a crash
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** In Downloads: a `.txt` renamed to `x.openemux-theme`; a zip renamed the same way
+  with an entry named `../theme.yaml`; one whose `theme.yaml` says `base: sepia`; one whose image is
+  a text file named `images/a.png`.
+- **Steps:** "Import theme file" with each of them.
+- **Expected:** a message each time ("This is not a theme file.", "This theme file is damaged.",
+  "An image in this theme file could not be read."); no crash, nothing new in "MY THEMES", nothing
+  left in `files/themes/` but the themes that were there.
+- **Check:** human only; `ThemeStoreTest.hostileFilesAreRefusedAndWriteNothing`.
+
+### RT-1258 — With a gamepad the focus is visible everywhere under any theme
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** A gamepad (or a TV remote); a theme whose "Background", "Library", "Cards",
+  "Sheets and dialogs" and "Selection" are all the same color.
+- **Steps:**
+  1. Walk the shelf, the library (grid and list), a game's page, Settings and a sheet with the D-pad.
+  2. Open the editor with the pad: L1/R1 through the sections, ◀▶ on a slider, A on a color row (the
+     picker's square and hue steer with the D-pad), B back, Start saves.
+- **Expected:** 1: the focused item always stands out from what is around it. 2: every control is
+  reachable and works; the hint bar names the buttons.
+- **Check:** human only; `ResolvedThemeTest.theFocusStaysVisibleWhateverTheTheme`.
+
+### RT-1259 — A backup brings the themes back
+- **Area:** Android — Themes
+- **Mode:** MANUAL
+- **Preconditions:** RT-1253's "Midnight" picked.
+- **Steps:** Settings ▸ "Backup": export with settings; delete "Midnight"; import the backup.
+- **Expected:** "Midnight" is back with its pictures, and picked.
+- **Check:** human only (`unzip -l` of the backup lists `internal/themes/`).
