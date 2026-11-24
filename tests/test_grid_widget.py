@@ -602,14 +602,6 @@ class SleepingAndWakingTests(_GridCase):
         awake = self.grid.measure(Gtk.Orientation.VERTICAL, width)[1]
         self.grid.set_dormant(True)
         asleep = self.grid.measure(Gtk.Orientation.VERTICAL, width)[1]
-        from openemux.ui import theming as _t  # DIAGNOSTIC, temporary
-        import sys as _s
-        g = self.grid
-        print("DIAG", width, awake, asleep, _t.current_paint().base, _t.current_paint().values,
-              getattr(g, "_card_scale", None), g._spacing, g._card_size, g._margin,
-              g._card_allocation_width(), g._columns_for(width), g._row_height(),
-              len(g.entries()), _t._provider.to_string()[:300] if _t._provider else None,
-              file=_s.stderr)
         self.assertEqual(asleep, awake)
 
     def _margins(self, grid=None):
