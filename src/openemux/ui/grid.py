@@ -45,13 +45,13 @@ from openemux.ui.card_layout import (  # noqa: F401  (re-exported)
     LIST_MARGIN,
     LIST_ROW_SPACING,
     FixedSizePicture,
+    any_cartridge_frame,
     card_size_for,
     cartridge_frame_for,
     cartridge_frame_svg,
     columns_and_slack,
     cover_size_for_console,
-    default_item_size,
-    tallest_cartridge_frame,
+    uniform_slot_size,
 )
 from openemux.ui.context_menu import dismiss_context_popover
 from openemux.ui.grid_selection import GridSelection
@@ -218,11 +218,11 @@ class RomGrid(Gtk.GridView):
         # (issue 903): the card grows by it on every side, and the gaps and
         # the edges give the same back, so the cartridges keep their place.
         # A page that mixes consoles in one grid may still draw cartridges
-        # when it asks to ("Recently played", issue 942): the cell is sized by
-        # the tallest shell and each card draws its own console's.
+        # when it asks to ("Recently played", issue 942): each card draws its
+        # own console's shell, fitted into the page's uniform slot (issue 996).
         self._mixed_cartridges = bool(mixed_consoles and mixed_cartridges)
         if self._mixed_cartridges:
-            cartridge_frame_path = tallest_cartridge_frame(
+            cartridge_frame_path = any_cartridge_frame(
                 (rom.get("console") for rom in roms), self.view_mode, compact=self.compact
             )
         else:
@@ -243,10 +243,11 @@ class RomGrid(Gtk.GridView):
 
         # One fixed card size for the whole page, so the grid lays out on an
         # even lattice. Per console it follows that console's box-art
-        # proportions; pages mixing consoles have no single shape to follow, so
-        # they use a uniform square box and centre each cover inside it.
+        # proportions; a page mixing consoles has no single shape to follow,
+        # so every card gets the same slot and its art, cover or cartridge, is
+        # fitted into it standing on the slot's bottom edge (issue 996).
         cover_size = (
-            default_item_size(self.zoom)
+            uniform_slot_size(self.zoom)
             if mixed_consoles
             else cover_size_for_console(console, self.zoom)
         )
@@ -255,7 +256,14 @@ class RomGrid(Gtk.GridView):
         # margin on every side. Since issue #384 a mixed page is one grid per
         # console, so this reaches "All", "Favorites" and the collections too
         # (issue #385).
-        if cartridge_frame_path:
+        if cartridge_frame_path and mixed_consoles:
+            # The slot itself, whatever shells the page mixes: the cell no
+            # longer grows to the tallest one (issue 996).
+            cover_size = (
+                cover_size[0] + 2 * self._shadow_pad,
+                cover_size[1] + 2 * self._shadow_pad,
+            )
+        elif cartridge_frame_path:
             frame = cartridge_render.load_frame(cartridge_frame_path)
             width, height = frame.size_for_width(scale_length(FIXED_ITEM_WIDTH, self.zoom))
             cover_size = (width + 2 * self._shadow_pad, height + 2 * self._shadow_pad)
@@ -741,8 +749,9 @@ class RomGrid(Gtk.GridView):
     def _mixed_frame_path_for_rom(self, rom):
         """The ROM's own console shell on a grid mixing consoles (issue 942).
 
-        Never the grid's base frame, which is only the tallest console's: a
-        console with no shell drawn gets ``None`` and its card shows the cover.
+        Never the grid's base frame, which is only the first console with a
+        shell (issue 996): a console with no shell drawn gets ``None`` and its
+        card shows the cover.
         """
         console = rom.get("console")
         color = self._frame_color_for_rom(rom) if self._frame_color_for_rom else None
