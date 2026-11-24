@@ -48,9 +48,25 @@ class Submenu:
         self.icon_name = icon_name
 
 
+class _MenuPopover(Gtk.Popover):
+    """A menu, or a submenu, that takes its submenus down before itself.
+
+    GTK hides a popover's own surface before it unmaps the popovers inside it,
+    so a menu closed with a submenu up released its popups outermost first --
+    the reverse of the order Wayland's popup grabs come down in, and the
+    suspected way a window was left taking hover but no more clicks (issue
+    984). Every close comes through here, whoever asked for it: a row, the
+    app, Escape, or GTK's own autohide.
+    """
+
+    def do_unmap(self):
+        _close_submenus(self)
+        Gtk.Popover.do_unmap(self)
+
+
 def build_context_popover(entries):
     """Build a menu-styled popover from ``entries``."""
-    popover = Gtk.Popover()
+    popover = _MenuPopover()
     popover.set_has_arrow(False)
     popover.set_halign(Gtk.Align.START)
     popover.add_css_class("menu")
@@ -82,6 +98,10 @@ _outside_guard = None
 #: an ordinary idle can wait behind the redraws for a second and eat the next
 #: click.
 _guard_closing = False
+#: Set while submenus are being popped down. Closing one hands the keyboard back
+#: to the row that opened it, and that row's focus handler would open it again
+#: (issue 984).
+_closing_submenus = False
 
 
 def present_context_popover(popover):
@@ -215,6 +235,44 @@ def unparent_when_idle(popover):
     GLib.idle_add(_unparent)
 
 
+def _nested_popovers(widget):
+    """Every popover under ``widget``, each one before the ones inside it."""
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Gtk.Popover):
+            yield child
+        yield from _nested_popovers(child)
+        child = child.get_next_sibling()
+
+
+def _close_submenus(popover):
+    """Pop down the open submenus of ``popover``, innermost first (issue 984).
+
+    Called as a menu unmaps (see :class:`_MenuPopover`). Stand-ins for a
+    popover (the headless tests) have no widget tree to walk.
+    """
+    if not isinstance(popover, Gtk.Widget):
+        return
+    open_ones = [sub for sub in _nested_popovers(popover) if sub.get_visible()]
+    if not open_ones:
+        return
+    logger.info("context menu closing %d open submenu(s) first", len(open_ones))
+    # Pre-order lists a submenu before the ones it holds: reversed is innermost first.
+    _pop_down_quietly(reversed(open_ones))
+
+
+def _pop_down_quietly(popovers):
+    """Pop ``popovers`` down with the rows' hover and focus handlers held off."""
+    global _closing_submenus
+    outer = _closing_submenus
+    _closing_submenus = True
+    try:
+        for popover in popovers:
+            popover.popdown()
+    finally:
+        _closing_submenus = outer
+
+
 def _build_menu_box(entries, root_popover):
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     box.add_css_class("context-menu-box")
@@ -262,18 +320,27 @@ def _reveal_on_hover(button, hover, child=None):
     the focus, on purpose: if it did not, the next refocus of that row would
     read as a move and reopen the submenu the pointer had just closed. The
     keyboard reopens it by moving away and back.
+
+    Nothing opens on a row that is no longer mapped: crossing events still
+    arrive while a closing menu unmaps, and a submenu popped up then would
+    take a popup grab on top of a menu that is going away (issue 984). The
+    branch a row closes comes down with the handlers held off, so its own row
+    regaining the keyboard does not open it again.
     """
 
     def _reveal(*_args):
-        if hover.get("busy"):
+        if hover.get("busy") or _closing_submenus:
             return
         hover["busy"] = True
         try:
             current = hover.get("open")
             if current is not None and current is not child:
+                # Forgotten first: closing it hands the keyboard back to its
+                # own row, which must not find it still recorded as the open
+                # one; the handlers stay held off while it comes down.
                 hover["open"] = None
-                current.popdown()
-            if child is not None and not child.get_visible():
+                _pop_down_quietly([current])
+            if child is not None and not child.get_visible() and button.get_mapped():
                 child.popup()
                 hover["open"] = child
         finally:
@@ -428,7 +495,7 @@ def _submenu_row(root_popover, submenu, hover):
     button.add_css_class("flat")
     button.add_css_class("context-menu-item")
 
-    child = Gtk.Popover()
+    child = _MenuPopover()
     child.set_has_arrow(False)
     child.add_css_class("menu")
     child.set_position(Gtk.PositionType.RIGHT)

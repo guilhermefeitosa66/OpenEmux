@@ -19410,3 +19410,24 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
   its focused row when a submenu maps, which closed the submenu) and is covered by
   `tests/test_context_menu_rows.py` (`OpeningASubmenuOnHoverTests`, including
   `test_the_focused_row_getting_focus_back_does_not_close_the_submenu`).
+
+### RT-1223 — Context-menu submenus never leave the window deaf to clicks (Wayland)
+- **Area:** Library & scanning
+- **Mode:** MANUAL
+- **Preconditions:** a Wayland session (KDE Plasma reproduces it best), a library with a game whose
+  right-click menu has "Core" and "Load State" submenus.
+- **Steps:**
+  1. Right-click a game and sweep the pointer up and down over "Core", "Load State" and the rows
+     around them for about ten seconds.
+  2. Close the menu each way in turn, reopening it between them: click "Details"; click outside the
+     menu on empty grid space; right-click another game; press Escape.
+  3. Open a submenu by pointing at it, then pick an entry inside it (a core, a save slot).
+  4. Repeat steps 1–3 for five minutes, then left-click a console in the sidebar and a game in the
+     grid.
+- **Expected:** every close takes the whole menu down, submenus included; the entry picked in step 3
+  is applied; in step 4 the sidebar selects the console and the game starts. Hover highlights and
+  clicks keep working throughout — at no point does the window take hover but ignore clicks
+  (issue 984).
+- **Check:** suite file `tests/test_context_menu_rows.py` (`ClosingSubmenusInnermostFirstTests`,
+  and in `OpeningASubmenuOnHoverTests` the unmapped-row and held-off-handler tests); on Wayland,
+  the manual steps above.

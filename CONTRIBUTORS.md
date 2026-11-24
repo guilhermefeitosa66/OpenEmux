@@ -215,6 +215,12 @@ Reported, with a screen recording, that the submenus of a game's right-click men
 ([#985](https://github.com/guilhermefeitosa66/OpenEmux/issues/985)). The menu gave the focus back to
 its focused row each time a submenu appeared, which closed the submenu; that refocus is now ignored.
 
+Also reported, with start-up logs and a screen recording, that on KDE Wayland the window stopped
+taking clicks after a few minutes of use
+([#984](https://github.com/guilhermefeitosa66/OpenEmux/issues/984)), most often after the
+right-click menu's submenus had flickered. The logs narrowed it down to the nested submenus and the
+order their popups came down in: a menu now always closes its submenus innermost first.
+
 ## How contributions are credited
 
 - **Reporting an issue counts.** If your report or suggestion leads to a change,
