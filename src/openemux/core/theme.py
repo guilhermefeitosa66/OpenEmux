@@ -22,6 +22,12 @@ THEME_DARK = "dark"
 #: Also the order the Preferences combo lists them in.
 THEMES = (THEME_SYSTEM, THEME_LIGHT, THEME_DARK)
 
+#: The ready-made themes the app ships (issue 1012): read-only, like the
+#: three above, with the same ids on Android. Their colors and pictures are in
+#: ``openemux.core.ready_themes``; the ids are reserved here so a user theme
+#: can never take one.
+READY_MADE = ("pastel", "dracula", "kitty", "neon", "tokyo-night")
+
 DEFAULT_THEME = THEME_SYSTEM
 
 #: A custom theme's id: its folder name, so lower-case, digits and dashes.
@@ -33,15 +39,20 @@ def is_custom_theme_id(value):
     return (
         isinstance(value, str)
         and value not in THEMES
+        and value not in READY_MADE
         and bool(_CUSTOM_ID.match(value))
     )
+
+
+def is_ready_made(value):
+    return value in READY_MADE
 
 
 def normalize_theme(value):
     """Anything unknown -- an older config, a hand-edited typo -- is the default."""
     if isinstance(value, str) and value.strip().lower() in THEMES:
         return value.strip().lower()
-    if is_custom_theme_id(value):
+    if is_custom_theme_id(value) or is_ready_made(value):
         return value
     return DEFAULT_THEME
 

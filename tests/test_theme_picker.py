@@ -72,9 +72,10 @@ class _PickerCase(unittest.TestCase):
 class ListTests(_PickerCase):
     def test_built_ins_first_then_the_users_themes_by_name(self):
         picker = self.picker()
-        self.assertEqual(picker.ids, ["system", "light", "dark", "night", "paper"])
+        ready = ["pastel", "dracula", "kitty", "neon", "tokyo-night"]
+        self.assertEqual(picker.ids, ["system", "light", "dark", *ready, "night", "paper"])
         model = picker.combo.get_model()
-        self.assertEqual(model.get_string(3), "Night")
+        self.assertEqual(model.get_string(8), "Night")
         self.assertEqual(picker.selected_id(), "system")
 
     def test_the_stored_theme_is_selected(self):
@@ -138,6 +139,9 @@ class HelperTests(_PickerCase):
         self.assertEqual(
             theme_choices(t, self.store),
             [("system", "theme.system"), ("light", "theme.light"), ("dark", "theme.dark"),
+             ("pastel", "theme.ready.pastel"), ("dracula", "theme.ready.dracula"),
+             ("kitty", "theme.ready.kitty"), ("neon", "theme.ready.neon"),
+             ("tokyo-night", "theme.ready.tokyo-night"),
              ("night", "Night"), ("paper", "Paper")],
         )
         self.assertEqual(theme_label(t, self.store, "dark"), "theme.dark")

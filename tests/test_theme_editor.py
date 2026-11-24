@@ -53,9 +53,12 @@ class LayoutTests(_EditorCase):
     def test_nothing_changed_reads_same_as_base(self):
         dialog = self.editor()
         for row in dialog.rows.values():
-            self.assertEqual(row.get_subtitle(), self.said("theme_editor.same_as_base"))
+            # An image row says "None" rather than "Same as base" (issue 1012).
+            expected = "theme_editor.image.none" if row.key.endswith("_image") else "theme_editor.same_as_base"
+            self.assertEqual(row.get_subtitle(), self.said(expected))
             self.assertFalse(row.reset_button.get_sensitive())
-            self.assertFalse(row.warning_icon.get_visible())
+            if hasattr(row, "warning_icon"):
+                self.assertFalse(row.warning_icon.get_visible())
         self.assertFalse(dialog.reset_all_button.get_sensitive())
 
     def test_sections_switch_from_the_list_and_from_the_narrow_row(self):
@@ -157,13 +160,13 @@ class LiveTests(_EditorCase):
     def test_the_switch_paints_the_app_and_turning_it_off_restores(self):
         dialog = self.editor()
         dialog.live_row.set_active(True)
-        self.paint.assert_called_with("dark", {})
+        self.paint.assert_called_with("dark", {}, dialog.staging)
         # A burst of changes is painted once, with the latest value.
         self.paint.reset_mock()
         dialog.set_value("card_bg", "#202020")
         dialog.set_value("card_bg", "#101010")
         self.assertTrue(self.pump_until(lambda: self.paint.called))
-        self.paint.assert_called_once_with("dark", {"card_bg": "#101010"})
+        self.paint.assert_called_once_with("dark", {"card_bg": "#101010"}, dialog.staging)
         # A change queued just before the switch goes off paints nothing.
         self.paint.reset_mock()
         dialog.set_value("card_bg", "#303030")

@@ -101,6 +101,7 @@ def _icon(cr, x, y, size, color):
     """A plain ring standing for a symbolic icon."""
     cr.set_source_rgb(*_rgb(color))
     cr.set_line_width(max(1, size / 7))
+    cr.new_sub_path()
     cr.arc(x + size / 2, y + size / 2, max(1, size / 2 - 1), 0, 2 * math.pi)
     cr.stroke()
 
@@ -238,4 +239,61 @@ class ThemePreview(Gtk.DrawingArea):
         _path(cr, 0, 0, width, height, 12)
         cr.clip()
         draw_preview(cr, width, height, self.colors, self.labels, self.images)
+        cr.restore()
+
+
+def draw_card(cr, width, height, colors, image=None):
+    """A ready-made theme's card (issue 1012): its picture, framed by its colors.
+
+    Smaller than the editor's preview and without words: a header strip, the
+    sidebar with a selected row, and three cards over the library's picture,
+    the first outlined in the accent.
+    """
+    c = dict(_SHAPE_DEFAULTS)
+    c.update(colors)
+    _rect(cr, 0, 0, width, height, c["library_bg"])
+    if image is not None:
+        _image(cr, 0, 0, width, height, image)
+    header = max(8, round(height * 0.14))
+    _rect(cr, 0, 0, width, header, c["headerbar_bg"])
+    sidebar = round(width * 0.26)
+    r, g, b = _rgb(c["sidebar_bg"])
+    cr.set_source_rgba(r, g, b, 0.92)
+    cr.rectangle(0, header, sidebar, height - header)
+    cr.fill()
+    row = max(6, round(height * 0.11))
+    _rect(cr, 4, header + 5, sidebar - 8, row, c["selection_bg"], radius=3)
+    for index in range(1, 3):
+        _rect(cr, 8, header + 5 + index * (row + 4) + row / 3, sidebar * 0.55, row / 3,
+              c["sidebar_text_secondary"], radius=1)
+    gap = 6
+    card_w = (width - sidebar - gap * 4) / 3
+    card_h = min(height - header - gap * 2, card_w * 1.2)
+    radius = min(card_w / 4, c["corner_radius"] * 0.35)
+    for index in range(3):
+        x = sidebar + gap + index * (card_w + gap)
+        y = header + gap
+        if index == 0:
+            _rect(cr, x - 1.5, y - 1.5, card_w + 3, card_h + 3, c["accent"], radius=radius + 1)
+        _rect(cr, x, y, card_w, card_h, c["card_bg"], radius=radius)
+        _rect(cr, x + 3, y + card_h - 7, card_w * 0.6, 3, c["text_primary"], radius=1)
+
+
+class ThemeCard(Gtk.DrawingArea):
+    """``draw_card`` as a widget, clipped to a rounded frame."""
+
+    def __init__(self, colors, image=None, width=140, height=88):
+        super().__init__()
+        self.colors = colors
+        self.image = image
+        self.set_content_width(width)
+        self.set_content_height(height)
+        self.add_css_class("ready-theme-art")
+        self.set_draw_func(self._draw)
+
+    def _draw(self, _area, cr, width, height):
+        cr.save()
+        _path(cr, 0, 0, width, height, 8)
+        cr.clip()
+        draw_card(cr, width, height, self.colors, self.image)
         cr.restore()

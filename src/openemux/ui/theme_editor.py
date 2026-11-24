@@ -57,8 +57,8 @@ SECTION_ICONS = {
     "accent": "starred-symbolic",
     "borders": "view-grid-symbolic",
     "icons": "emblem-photos-symbolic",
-    "typography": "format-text-bold-symbolic",
-    "spacing": "view-continuous-symbolic",
+    "typography": "document-properties-symbolic",
+    "spacing": "view-list-symbolic",
     "backgrounds": "image-x-generic-symbolic",
 }
 SWATCH_WIDTH, SWATCH_HEIGHT = 40, 26
@@ -306,20 +306,26 @@ class ChoiceRow(SettingRow):
         self._same_as_base()
 
 
-class DensityRow(Adw.ActionRow):
+class DensityRow(Adw.PreferencesRow):
     """Compact / Default / Comfortable: presets of the density setting.
 
-    The exact value is the "Fine adjustment" row under it; a preset reads
-    as active only while the value is exactly its own.
+    The title above, the three presets across the row under it (beside the
+    title they squeezed it in a narrow column). The exact value is the
+    "Fine adjustment" row below; a preset reads as active only while the
+    value is exactly its own.
     """
 
     def __init__(self, editor):
         super().__init__(title=editor.t("theme_editor.key.density"))
         self.editor = editor
         self._syncing = False
-        box = Gtk.Box()
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(column, f"set_margin_{side}")(12)
+        label = Gtk.Label(label=self.get_title(), xalign=0)
+        column.append(label)
+        box = Gtk.Box(homogeneous=True)
         box.add_css_class("linked")
-        box.set_valign(Gtk.Align.CENTER)
         box.update_property([Gtk.AccessibleProperty.LABEL], [self.get_title()])
         self.buttons = {}
         for name, value in DENSITY_PRESETS:
@@ -327,7 +333,9 @@ class DensityRow(Adw.ActionRow):
             button.connect("toggled", self._on_toggled, value)
             box.append(button)
             self.buttons[value] = button
-        self.add_suffix(box)
+        column.append(box)
+        self.set_child(column)
+        self.set_activatable(False)
 
     def _on_toggled(self, button, value):
         if self._syncing:
@@ -488,6 +496,16 @@ class ImageRow(SettingRow):
             self.add_css_class("error")
             return
         self.remove_css_class("error")
+        warnings = warnings_for(self.editor.draft, self.key, problems) if problems else []
+        if warnings:
+            other, ratio = warnings[0]
+            self.set_subtitle(t(
+                "theme_editor.contrast_warning",
+                other=t(f"theme_editor.key.{other}"),
+                ratio=f"{math.floor(ratio * 10) / 10:.1f}",
+                needed=f"{WCAG_AA:.1f}",
+            ))
+            return
         size = theme_images.image_size(path) if path is not None else None
         if size is not None:
             self.set_subtitle(t("theme_editor.image.size", width=size[0], height=size[1]))
@@ -590,7 +608,7 @@ class ThemeEditorDialog(Adw.Dialog):
         self.body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
 
         self.sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.sidebar.set_size_request(210, -1)
+        self.sidebar.set_size_request(240, -1)
         self.sidebar.add_css_class("theme-editor-sections")
         for side in ("top", "bottom", "start", "end"):
             getattr(self.sidebar, f"set_margin_{side}")(8)

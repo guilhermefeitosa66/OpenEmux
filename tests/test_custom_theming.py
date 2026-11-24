@@ -21,7 +21,8 @@ def _reset_theming():
         Gtk.StyleContext.remove_provider_for_display(display, theming._provider)
     theming._provider = None
     theming._suspended = False
-    theming._applied = ("system", None, {})
+    theming._applied = ("system", None, {}, None)
+    theming._paint = theming.Paint()
     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 
 

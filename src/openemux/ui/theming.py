@@ -20,6 +20,7 @@ needs them registers with ``add_listener`` and reads ``current_paint()``.
 
 import logging
 import threading
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -90,19 +91,29 @@ def set_cache_dir(path):
     _cache_dir = Path(path) if path is not None else None
 
 
+def _ref(callback):
+    # A window's method is held weakly: a window that went away without
+    # saying so must not be kept alive, nor called, by the theme.
+    if hasattr(callback, "__self__"):
+        return weakref.WeakMethod(callback)
+    return lambda: callback
+
+
 def add_listener(callback):
     """Call ``callback()`` after every change of what is painted."""
-    if callback not in _listeners:
-        _listeners.append(callback)
+    remove_listener(callback)
+    _listeners.append(_ref(callback))
 
 
 def remove_listener(callback):
-    if callback in _listeners:
-        _listeners.remove(callback)
+    _listeners[:] = [ref for ref in _listeners if ref() not in (None, callback)]
 
 
 def _notify():
-    for callback in list(_listeners):
+    for ref in list(_listeners):
+        callback = ref()
+        if callback is None:
+            continue
         try:
             callback()
         except Exception:  # noqa: BLE001 - one listener must not stop the rest

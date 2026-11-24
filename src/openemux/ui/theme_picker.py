@@ -15,30 +15,43 @@ import logging
 
 import threading
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, GdkPixbuf, Gio, GLib, Gtk
 
-from openemux.core import theme_archive
+from openemux.core import ready_themes, theme_archive
 from openemux.core.custom_themes import MAX_NAME_LENGTH, Theme
-from openemux.core.theme import THEMES, THEME_SYSTEM
+from openemux.core.theme import READY_MADE, THEMES, THEME_SYSTEM
 from openemux.ui import theming
 from openemux.ui.theme_editor import open_theme_editor
+from openemux.ui.theme_preview import ThemeCard
 
 logger = logging.getLogger(__name__)
 
 
 def theme_choices(t, store):
-    """Every theme a person can pick, as (id, label): built-ins, then theirs."""
-    return [(name, t(f"theme.{name}")) for name in THEMES] + [
-        (theme.id, theme.name) for theme in store.list()
-    ]
+    """Every theme a person can pick, as (id, label).
+
+    Built-ins, then the ready-made ones (issue 1012), then the person's own.
+    """
+    return (
+        [(name, t(f"theme.{name}")) for name in THEMES]
+        + [(theme_id, t(f"theme.ready.{theme_id}")) for theme_id in READY_MADE]
+        + [(theme.id, theme.name) for theme in store.list()]
+    )
 
 
 def theme_label(t, store, theme_id):
     """What a stored ``ui.theme`` is called; a missing custom one is System."""
     if theme_id in THEMES:
         return t(f"theme.{theme_id}")
+    if theme_id in READY_MADE:
+        return t(f"theme.ready.{theme_id}")
     theme = store.get(theme_id)
     return theme.name if theme is not None else t(f"theme.{THEME_SYSTEM}")
+
+
+#: The ready-made theme cards: each theme's picture, framed by its colors.
+CARD_WIDTH, CARD_HEIGHT = 140, 88
+CARD_IMAGE = 320
 
 
 def _spawn(target):
@@ -113,6 +126,8 @@ class ThemePicker:
         self.new_row.set_activatable(True)
         self.new_row.connect("activated", lambda _r: self.ask_new())
 
+        self.cards = self._build_cards()
+
         self.import_row = Adw.ActionRow(title=t("theme.custom.import"))
         self.import_row.add_prefix(Gtk.Image(icon_name="document-open-symbolic"))
         self.import_row.set_activatable(True)
@@ -120,6 +135,65 @@ class ThemePicker:
 
         self.reload()
         self.combo.connect("notify::selected", self.on_selected)
+
+    # -- the ready-made themes' cards (issue 1012) --------------------------
+
+    def _build_cards(self):
+        """A card per ready-made theme: its drawn preview and its name."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.add_css_class("ready-theme-cards")
+        heading = Gtk.Label(label=self.t("theme.ready.heading"), xalign=0)
+        heading.add_css_class("heading")
+        box.append(heading)
+        self.card_flow = Gtk.FlowBox()
+        self.card_flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.card_flow.set_homogeneous(True)
+        self.card_flow.set_min_children_per_line(3)
+        self.card_flow.set_max_children_per_line(5)
+        self.card_flow.set_column_spacing(8)
+        self.card_flow.set_row_spacing(8)
+        self.card_buttons = {}
+        for theme in ready_themes.all_themes():
+            self.card_flow.append(self._card(theme))
+        box.append(self.card_flow)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{side}")(12)
+        # A row of its own, so the cards sit in the list right under "Theme".
+        row = Adw.PreferencesRow(title=self.t("theme.ready.heading"))
+        row.set_activatable(False)
+        row.set_child(box)
+        return row
+
+    def _card(self, theme):
+        label = theme_label(self.t, self.store, theme.id)
+        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        image = None
+        path = theme.image_path("library")
+        if path is not None:
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(str(path), CARD_IMAGE, CARD_IMAGE, True)
+                image = (pixbuf, theme.effective("library_image_fit"))
+            except GLib.Error:  # pragma: no cover - a shipped asset that will not load
+                pass
+        column.append(ThemeCard(theme.effective_values(), image, CARD_WIDTH, CARD_HEIGHT))
+        column.append(Gtk.Label(label=label))
+        button = Gtk.Button()
+        button.set_child(column)
+        button.add_css_class("flat")
+        button.add_css_class("ready-theme-card")
+        button.set_tooltip_text(label)
+        button.update_property([Gtk.AccessibleProperty.LABEL], [label])
+        button.connect("clicked", lambda _b, theme_id=theme.id: self._select_and_apply(theme_id))
+        self.card_buttons[theme.id] = button
+        return button
+
+    def sync_cards(self):
+        current = self.selected_id()
+        for theme_id, button in self.card_buttons.items():
+            if theme_id == current:
+                button.add_css_class("ready-theme-current")
+            else:
+                button.remove_css_class("ready-theme-current")
 
     # -- the list --------------------------------------------------------
 
@@ -148,9 +222,16 @@ class ThemePicker:
         return self.ids[index] if 0 <= index < len(self.ids) else None
 
     def _sync_actions(self):
-        custom = self.selected_id() not in THEMES
+        selected = self.selected_id()
+        ready = selected in READY_MADE
+        custom = selected not in THEMES and not ready
+        # A ready-made theme is read-only: it can be duplicated (the way to
+        # change one) and exported, never edited, renamed or deleted.
         self.edit_button.set_visible(custom)
-        self.menu_button.set_visible(custom)
+        self.menu_button.set_visible(custom or ready)
+        for name in ("rename", "delete"):
+            self.actions.lookup_action(name).set_enabled(custom)
+        self.sync_cards()
 
     def on_selected(self, row, *_args):
         if self._syncing:
@@ -346,7 +427,8 @@ class ThemePicker:
             self.reload()
             return None
         try:
-            copy = self.store.duplicate(source.id, copy_name(self.t, source.name))
+            name = theme_label(self.t, self.store, source.id)
+            copy = self.store.duplicate(source.id, copy_name(self.t, name))
         except OSError as exc:
             self._failed(exc)
             return None

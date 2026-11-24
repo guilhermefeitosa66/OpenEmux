@@ -163,3 +163,41 @@ library_image: library.png
 library_image_dim: 60
 library_image_blur: 4
 ```
+
+## Ready-made themes
+
+Both apps ship the same five read-only themes, with these ids and exactly these
+values (anything not listed is the base's default). They are not files: each
+app builds them from its own code and ships its own copy of the background
+picture (`library.png`, 1600 × 1000, drawn for OpenEmux by
+`tools/theme_backgrounds.py`, MIT). A ready-made id is reserved: a user theme
+never takes it, and `ui.theme` may name it. "Duplicate" turns one into an
+ordinary, editable theme; exporting one writes an ordinary theme file.
+
+| Key | `pastel` | `dracula` | `kitty` | `neon` | `tokyo-night` |
+|---|---|---|---|---|---|
+| base | light | dark | dark | dark | dark |
+| name (English) | Pastel | Dracula | Kitty | Neon | Tokyo Night |
+| `window_bg` | `#fff7fb` | `#282a36` | `#2a2438` | `#0d0221` | `#1a1b26` |
+| `sidebar_bg` | `#fce7f3` | `#21222c` | `#241f31` | `#12062b` | `#16161e` |
+| `headerbar_bg` | `#fce7f3` | `#21222c` | `#241f31` | `#12062b` | `#16161e` |
+| `library_bg` | `#fff7fb` | `#282a36` | `#2a2438` | `#0d0221` | `#1a1b26` |
+| `card_bg` | `#ffffff` | `#44475a` | `#3b3250` | `#1b0838` | `#24283b` |
+| `popover_bg` | `#ffffff` | `#343746` | `#352c47` | `#1b0838` | `#24283b` |
+| `details_bg` | `#fff7fb` | `#2e303e` | `#30293f` | `#150530` | `#1f2335` |
+| `text_primary` | `#3f3350` | `#f8f8f2` | `#f5e0ee` | `#d1f7ff` | `#c0caf5` |
+| `text_secondary` | `#5f526f` | `#c6c9de` | `#cdbcd9` | `#a8b8e8` | `#a9b1d6` |
+| `sidebar_text_primary` | `#3f3350` | `#f8f8f2` | `#f5e0ee` | `#d1f7ff` | `#c0caf5` |
+| `sidebar_text_secondary` | `#5f526f` | `#c6c9de` | `#cdbcd9` | `#a8b8e8` | `#a9b1d6` |
+| `accent` | `#7c3aed` | `#bd93f9` | `#f5c2e7` | `#05d9e8` | `#7aa2f7` |
+| `selection_bg` | `#ede0ff` | `#44475a` | `#4a3b5c` | `#2a0b4a` | `#292e42` |
+| `accent_button_bg` | `#7c3aed` | `#bd93f9` | `#f5c2e7` | `#ff2a6d` | `#7aa2f7` |
+| `accent_button_fg` | `#ffffff` | `#282a36` | `#2a2438` | `#0d0221` | `#1a1b26` |
+| `border_color` | `#f5d0e6` | `#44475a` | `#4a3b5c` | `#ff2a6d` | `#3b4261` |
+| `border_width` |  |  |  | `1` |  |
+| `corner_radius` | `16` |  | `20` |  |  |
+| `shadow_color` | `#c084fc` |  | `#f5c2e7` | `#ff2a6d` |  |
+| `shadow_strength` | `20` | `45` | `20` | `60` |  |
+| `icon_color` | `#6d28d9` | `#ff79c6` | `#b4befe` | `#05d9e8` | `#bb9af7` |
+| `library_image` | `library.png` | `library.png` | `library.png` | `library.png` | `library.png` |
+| `library_image_dim` | `55` | `45` | `30` | `35` | `40` |

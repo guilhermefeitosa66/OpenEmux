@@ -889,7 +889,9 @@ class TheSystemSection(SettingsCase):
 
         rows["theme"].emit("clicked")
         self.pump()
-        self.assertEqual(self.chooser_ids(), ["system", "light", "dark"])
+        # The ready-made themes follow the built-ins (issue 1012).
+        self.assertEqual(self.chooser_ids(), ["system", "light", "dark", "pastel", "dracula",
+                                              "kitty", "neon", "tokyo-night"])
         with mock.patch.object(
             settings_module.theming, "apply_theme", return_value="dark"
         ) as apply_theme, mock.patch.object(

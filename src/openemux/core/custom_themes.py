@@ -39,7 +39,13 @@ import yaml
 
 from openemux.core.cartridge_colors import hex_to_hsv, hex_to_rgb, parse_hex
 from openemux.core.contrast import WCAG_AA, contrast_ratio, relative_luminance
-from openemux.core.theme import THEME_DARK, THEME_LIGHT, THEMES, is_custom_theme_id
+from openemux.core.theme import (
+    THEME_DARK,
+    THEME_LIGHT,
+    THEMES,
+    is_custom_theme_id,
+    is_ready_made,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +548,11 @@ class ThemeStore:
         return themes
 
     def get(self, theme_id):
+        """A user theme by id; a ready-made id gives that theme (issue 1012)."""
+        if is_ready_made(theme_id):
+            # Imported here: ready_themes builds on this module.
+            from openemux.core import ready_themes
+            return ready_themes.get(theme_id)
         if not is_custom_theme_id(theme_id):
             return None
         return self._load(theme_id)
@@ -549,7 +560,7 @@ class ThemeStore:
     def new_id(self, name):
         slug = slugify(name)
         candidate, number = slug, 2
-        while candidate in THEMES or (self.root / candidate).exists():
+        while candidate in THEMES or is_ready_made(candidate) or (self.root / candidate).exists():
             candidate = f"{slug}-{number}"
             number += 1
         return candidate
