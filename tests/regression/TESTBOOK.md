@@ -19633,3 +19633,113 @@ runner has no Android device, so this is `MANUAL`: a person runs it on a phone o
   `OneGridInPlayOrderTests`), `tests/test_rom_card_widget.py` (`OnAPageThatMixesConsolesTests`,
   `ACartridgeOnAPageThatMixesConsolesTests`), `tests/test_library_pages.py`
   (`test_every_card_gets_the_same_slot_whatever_the_mix`); human for the look of the page.
+
+## Android — Game files
+
+A game's page in the Android app (openemux-android, `pkg/android/openemux`, `ui/GameFilesCard.kt`
+over `data/GameFiles.kt`) has a "Game files" card since issue 1005: export the game's file and its
+battery save, import a save from a file (another emulator's included) and put back the save an
+import replaced. Save states are not part of it. The runner has no Android device, so these are
+`MANUAL` (the logic is in `GameFilesTest` in openemux-android).
+
+### RT-1229 — "Export game file" writes the game, a disc game as one zip that imports back
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with a GBA game and a PlayStation game made of a `.cue` and its
+  `.bin` tracks; locale English.
+- **Steps:**
+  1. Open the GBA game's page and scroll to "GAME FILES". Note the value beside "Export game file".
+  2. Tap "Export game file", pick "Downloads" in the system dialog and tap "Save".
+  3. Open the PlayStation game's page; note the value beside "Export game file", then export it to
+     "Downloads" the same way.
+  4. Remove the PlayStation game from the library, then import the exported `.zip` from "Import".
+- **Expected:** 1: the game's size ("16 MB" or similar). 2: a "Exported “<file name>”" toast;
+  Downloads has the file with the game's name and the same size. 3: the value reads "<N> files ·
+  <size>"; the export is one `<game name>.zip` holding the `.cue` and every `.bin`, and while it runs
+  the row shows "<done> of <total>". 4: the game is back in the library and starts.
+- **Check:** human only (`adb shell ls -l /sdcard/Download/`, `unzip -l` of the zip);
+  `GameFilesTest` (`aSingleFileGameExportsAsItself`, `aDiscGameExportsEveryPartInOneZip`).
+
+### RT-1230 — "Export game save" only when the game has a save, with its companions zipped
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game never played, and a Game Boy game (Gambatte) with a cartridge clock
+  (for example a Pokémon Gold/Silver/Crystal) saved in game at least once; locale English.
+- **Steps:**
+  1. Open the unplayed GBA game's page and look at "GAME FILES".
+  2. Play it, save in game (the game's own save, not a save state), quit, and look again.
+  3. Tap "Export game save" and save it to "Downloads".
+  4. Do the same for the Game Boy game.
+- **Expected:** 1: "Export game file" and "Import game save" only; no "Export game save", no
+  "Restore previous save". 2: "Export game save" appears, its value the date and time of the save.
+  3: Downloads has `<game name>.srm`. 4: Downloads has `<game name> save.zip` holding the `.srm` and
+  the `.rtc`.
+- **Check:** human only; `GameFilesTest` (`noSaveMeansNothingToExport`,
+  `aLoneSaveExportsAsItselfAndCompanionsAsAZip`, `onlyTheGamesOwnBatterySavesCount`).
+
+### RT-1231 — A save from another emulator is imported, and the replaced save comes back
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game and a SNES game, each with an in-game save of its own; a `.sav` made
+  by another emulator for each of them (same game, other progress) in Downloads; locale English.
+- **Steps:**
+  1. On the GBA game's page tap "Import game save" and pick its `.sav`.
+  2. Read the dialog, tap "Replace".
+  3. Start the game (with "Restart" if "Continue" is offered) and load the game's save.
+  4. Back on its page, tap "Restore previous save", then "Restore"; start the game again.
+  5. Tap "Restore previous save" once more and confirm; start the game.
+  6. Repeat steps 1 to 3 with the SNES game.
+- **Expected:** 2: titled "Replace this game's save?", naming the file and the game, saying the
+  current save is kept and "Saves from other emulators usually work, but not always."; then a "Save
+  imported" toast and a "Restore previous save" row dated now. 3: the other emulator's progress.
+  4: "Previous save restored"; the game's own progress is back. 5: the imported progress again (a
+  restore can be undone). 6: as in 2 and 3.
+- **Check:** human only; `GameFilesTest` (`anImportKeepsTheSaveItReplacesAndItsCompanions`,
+  `restoreSwapsAndCanBeUndone`, `theTargetIsTheCoresUsualNameWithoutASave`).
+
+### RT-1232 — An import that doesn't look right asks first, and what can't be a save is refused
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A GBA game with a 128 KB save; in Downloads a 64 KB `.sav`, a `.dat` file, an
+  empty file and a save state (`.state1`); a suspended game ("Continue" on the page); English.
+- **Steps:**
+  1. "Import game save" → the 64 KB `.sav`; read the dialog and tap "Cancel".
+  2. "Import game save" → the `.dat`; read the dialog and tap "Cancel".
+  3. "Import game save" → the empty file; then the `.state1`.
+- **Expected:** 1: the dialog adds "This file is 64 kB; the save of this game is 128 kB. It may not
+  be a save of this game." and, because a suspended game exists, "Start the game with Restart:
+  Continue resumes the suspended game with its old progress."; after "Cancel" the save and its date
+  are unchanged and no "Restore previous save" appears. 2: the dialog adds "“<name>.dat” does not
+  have a usual save file extension.". 3: no dialog: "The file is empty", then "This is not a game
+  save: save states, games and images cannot be imported here".
+- **Check:** human only; `GameFilesTest` (`theSizeIsComparedWithTheGamesOwnSave`,
+  `anUnusualExtensionAsksFirst`, `whatCannotBeASaveIsRefused`).
+
+### RT-1233 — Import is refused while the game is running
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A SNES game with a save; a `.srm` for it in Downloads; locale English.
+- **Steps:**
+  1. Start the game, then press Home (the game stays open in Recents) and open OpenEmux's library
+     from the launcher.
+  2. Open the same game's page, tap "Import game save" and pick the `.srm`.
+  3. Open another game's page and import a save for it the same way, then tap "Cancel".
+- **Expected:** 2: no dialog; a "Close the game first: it is running" toast, and the save is
+  untouched. 3: the dialog opens normally (only the running game is refused).
+- **Check:** human only; `GameFilesTest` (`theEnginesStatusSaysWhetherThisGameRuns`).
+
+### RT-1234 — The Game files card with a gamepad and with TalkBack
+- **Area:** Android — Game files
+- **Mode:** MANUAL
+- **Preconditions:** A game with a save and a kept save (after RT-1231 step 2); a controller
+  connected; then TalkBack on.
+- **Steps:**
+  1. With the controller only, open the game's page and press Down until "GAME FILES" is reached;
+     keep pressing Down through its rows, then press A on "Import game save" and B in the picker.
+  2. Press A on "Restore previous save", then B.
+  3. Turn TalkBack on and swipe through the card.
+- **Expected:** 1: each row ("Export game file", "Export game save", "Import game save", "Restore
+  previous save") takes focus in that order, then "Remove from library"; A opens the system picker
+  and B comes back to the page with the focus on the row. 2: the "Restore the previous save?"
+  dialog opens and B closes it without restoring. 3: each row is read with its value or subtitle.
+- **Check:** human only.
