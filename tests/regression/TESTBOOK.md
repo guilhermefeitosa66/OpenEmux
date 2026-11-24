@@ -19431,3 +19431,33 @@ records the design; `src/openemux/ui/bigpicture/` carries it. In the devbox, sen
 - **Check:** suite file `tests/test_context_menu_rows.py` (`ClosingSubmenusInnermostFirstTests`,
   and in `OpeningASubmenuOnHoverTests` the unmapped-row and held-off-handler tests); on Wayland,
   the manual steps above.
+
+## Android — Recent tab
+
+The Android app's "Recent" tab (openemux-android, `pkg/android/openemux`, `RecentScreen` in
+`ui/LibraryScreens.kt`) lists the games played last, capped at `RECENT_LIMIT` (12, the desktop's
+"Recently played" size) since issue 997; before, it grew with every game ever played. It is built
+with the same helper as the shelf's "Continue playing" row, so that row is always its head. The
+runner has no Android device, so this is `MANUAL`: a person runs it on a phone or an emulator.
+
+### RT-1225 — "Recent" shows the 12 last played, newest first, without trimming the history
+- **Area:** Android — Recent tab
+- **Mode:** MANUAL
+- **Preconditions:** The Android app with at least 14 games across a few consoles, none played
+  yet (a fresh install, or "Recent" empty); locale English.
+- **Steps:**
+  1. Start and quit 3 different games. Open "Recent".
+  2. Start and quit 11 more different games (14 in all), noting the order. Open "Recent".
+  3. From a console's shelf, open the first game played in step 1 (no longer listed), note its
+     play time on its page, then start and quit it. Open "Recent" again, then that game's page.
+  4. Open the "Library" tab (the shelf), look at "Continue playing", then tap "See recent".
+  5. Open "All games" and sort by "Recent".
+- **Expected:** 1: the 3 games, the last played first, each with "Console · <time ago>". 2:
+  exactly 12 rows, the last played first; the first two games of step 1 are not listed. 3: that
+  game is now first and the list still has 12 rows (the one that was 12th is gone); its page shows
+  the earlier play time plus the new session, nothing reset. 4: the cards in "Continue playing" are
+  the first rows of "Recent", in the same order. 5: every played game (more than 12) is still
+  ordered by when it was last played.
+- **Check:** human only (`adb exec-out screencap -p > recent.png`); the cap and the ordering are
+  covered by `ShelfLayoutTest` (`recentKeepsTheTwelveLastPlayedNewestFirst`,
+  `recentShowsEveryPlayedGameUpToTheLimit`) in openemux-android.
