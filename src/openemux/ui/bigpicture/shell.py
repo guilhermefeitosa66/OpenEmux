@@ -22,6 +22,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
+from openemux.ui import theming
 from openemux.ui.bigpicture import theme
 from openemux.ui.bigpicture.osk import MODE_SEARCH, OnScreenKeyboard
 from openemux.ui.bigpicture.rail import (
@@ -261,10 +262,14 @@ class BigPictureShell(Gtk.Box):
         if on:
             if self._color_scheme is None:
                 self._color_scheme = style.get_color_scheme()
+            # A custom theme's colors are the desktop's (issue 1011): off
+            # while Big Picture paints its own palette.
+            theming.set_suspended(True)
             style.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
         elif self._color_scheme is not None:
             style.set_color_scheme(self._color_scheme)
             self._color_scheme = None
+            theming.set_suspended(False)
 
     # -- scale --------------------------------------------------------------------
     def scale(self):

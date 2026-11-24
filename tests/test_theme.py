@@ -11,6 +11,7 @@ from openemux.core.theme import (
     THEME_LIGHT,
     THEME_SYSTEM,
     THEMES,
+    is_custom_theme_id,
     normalize_theme,
     toggled_theme,
 )
@@ -26,8 +27,19 @@ class NormalizeThemeTests(unittest.TestCase):
 
     def test_anything_else_is_the_default(self):
         # A hand-edited config, or one written by a future version.
-        for value in ("solarized", "", None, 3, [], "system-ish"):
+        for value in ("Solarized!", "", None, 3, [], "-dash", "a" * 49, "my theme"):
             self.assertEqual(normalize_theme(value), DEFAULT_THEME, repr(value))
+
+    def test_a_custom_theme_id_is_kept(self):
+        # Whether the folder exists is decided when the theme is applied.
+        for value in ("midnight", "nord-2", "9lives"):
+            self.assertEqual(normalize_theme(value), value)
+
+    def test_custom_ids_never_shadow_a_built_in(self):
+        for theme in THEMES:
+            self.assertFalse(is_custom_theme_id(theme))
+        self.assertFalse(is_custom_theme_id(None))
+        self.assertTrue(is_custom_theme_id("dark-2"))
 
     def test_the_default_follows_the_desktop(self):
         self.assertEqual(DEFAULT_THEME, THEME_SYSTEM)
@@ -61,13 +73,27 @@ class ThemeConfigTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             cfg_path = Path(tmp_dir) / "config.yaml"
             manager = ConfigManager(config_file=cfg_path)
-            manager.config["ui"]["theme"] = "midnight"
+            manager.config["ui"]["theme"] = "Mid night!"
             self.assertEqual(manager.get_ui_settings()["theme"], THEME_SYSTEM)
 
     def test_setting_an_unknown_value_stores_the_default(self):
         with TemporaryDirectory() as tmp_dir:
             manager = self._manager(tmp_dir)
-            self.assertEqual(manager.set_theme("midnight"), THEME_SYSTEM)
+            self.assertEqual(manager.set_theme("Mid night!"), THEME_SYSTEM)
+
+    def test_a_custom_theme_id_round_trips(self):
+        with TemporaryDirectory() as tmp_dir:
+            cfg_path = Path(tmp_dir) / "config.yaml"
+            manager = ConfigManager(config_file=cfg_path)
+            self.assertEqual(manager.set_theme("midnight"), "midnight")
+            manager.flush()
+            reloaded = ConfigManager(config_file=cfg_path)
+            self.assertEqual(reloaded.get_ui_settings()["theme"], "midnight")
+
+    def test_the_manager_has_a_theme_store_beside_the_config(self):
+        with TemporaryDirectory() as tmp_dir:
+            manager = self._manager(tmp_dir)
+            self.assertEqual(manager.themes.root, Path(tmp_dir) / "themes")
 
 
 if __name__ == "__main__":

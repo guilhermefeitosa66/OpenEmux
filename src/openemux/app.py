@@ -93,7 +93,9 @@ class OpenEmuxApplication(Adw.Application):
         # Before the first window is drawn: setting the scheme afterwards
         # repaints a window the user is already looking at (issue #198).
         from openemux.ui.theming import apply_theme
-        apply_theme(self.config_manager.get_ui_settings()["theme"])
+        apply_theme(
+            self.config_manager.get_ui_settings()["theme"], store=self.config_manager.themes
+        )
 
         if self._bootstrap_running:
             if self._bootstrap_window:
@@ -179,7 +181,9 @@ class OpenEmuxApplication(Adw.Application):
         # The profile's own settings: its theme, and no second offer even if
         # its first boot never finished.
         from openemux.ui.theming import apply_theme
-        apply_theme(self.config_manager.get_ui_settings()["theme"])
+        apply_theme(
+            self.config_manager.get_ui_settings()["theme"], store=self.config_manager.themes
+        )
         self.config_manager.set_portable_import_dismissed(True)
 
     def do_shutdown(self):

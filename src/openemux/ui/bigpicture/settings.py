@@ -50,10 +50,10 @@ from openemux.core.big_picture_shelf import full_name
 from openemux.core.systems import SYSTEM_IDS, get_system_display_name
 from openemux.core.update_checker import check_for_update_async
 from openemux import __version__
-from openemux.core.theme import THEMES
 from openemux.i18n import LANGUAGE_META, SUPPORTED_LOCALES, normalize_locale
 from openemux.ui import theming
 from openemux.ui.bigpicture import theme
+from openemux.ui.theme_picker import theme_choices, theme_label
 from openemux.ui.bigpicture.widgets import (
     ROW_ACTION,
     ROW_CHOICE,
@@ -956,7 +956,8 @@ class SystemSection(Section):
         ui = config.get_ui_settings()
         interface = self.group(t("prefs.group.interface"), t("big_picture.settings.theme.note"))
         self.add("theme", Row(t("settings.system.theme.title"), t("settings.system.theme.subtitle"), kind=ROW_CHOICE,
-                              value=t(f"theme.{ui['theme']}"), on_activate=self._pick_theme), interface)
+                              value=theme_label(t, self.config.themes, ui["theme"]),
+                              on_activate=self._pick_theme), interface)
         self.add("tips", Row(t("settings.system.tips.title"), t("settings.system.tips.subtitle"), kind=ROW_SWITCH,
                              active=ui["show_tips"], on_activate=self._set_tips), interface)
         settings = config.get_big_picture_settings()
@@ -1144,19 +1145,19 @@ class SystemSection(Section):
     # -- interface -------------------------------------------------------------------------------
     def _pick_theme(self):
         t = self.t
-        options = [{"id": name, "label": t(f"theme.{name}")} for name in THEMES]
+        options = [{"id": theme_id, "label": label}
+                   for theme_id, label in theme_choices(t, self.config.themes)]
         self.page.choose(self.rows["theme"], t("settings.system.theme.title"), options,
                          self.config.get_ui_settings()["theme"], self._set_theme,
                          lead=t("settings.system.theme.subtitle"))
 
     def _set_theme(self, name):
-        applied = self.config.set_theme(name)
-        theming.apply_theme(applied)
+        applied = theming.apply_theme(self.config.set_theme(name), store=self.config.themes)
         self.shell.adopt_color_scheme()
         # "System" that lands on the same appearance emits no notify::dark,
         # so the header icon is refreshed here rather than left to that.
         self.win._sync_theme_button()
-        self.rows["theme"].set_value(self.t(f"theme.{applied}"))
+        self.rows["theme"].set_value(theme_label(self.t, self.config.themes, applied))
 
     def _set_tips(self, enabled):
         self.config.set_show_tips(enabled)
@@ -1612,7 +1613,7 @@ class SettingsPage(BigPage):
             else t("big_picture.settings.bios.ok")
         )
         values = {
-            "theme": t(f"theme.{config.get_ui_settings()['theme']}"),
+            "theme": theme_label(t, config.themes, config.get_ui_settings()["theme"]),
             "language": SystemSection._language_label(self.sections["language"]._locale()),
             "share": config.get_share_device_name() or default_device_name(),
             "roms": str(config.get_roms_path()),

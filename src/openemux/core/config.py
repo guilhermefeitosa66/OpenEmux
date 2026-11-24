@@ -51,6 +51,7 @@ from openemux.core.retroarch_log import clamp_volume_db
 from openemux.core.session_store import SessionStore
 from openemux.core.shaders import ShaderConfigStore
 from openemux.core.systems import LEGACY_ID_MAP, SYSTEM_IDS, resolve_system_id
+from openemux.core.custom_themes import ThemeStore
 from openemux.core.theme import DEFAULT_THEME, normalize_theme
 from openemux.core.pause_trigger import normalize_mode as normalize_pause_trigger
 from openemux.core.update_checker import (
@@ -567,6 +568,8 @@ class ConfigManager:
         # Which view the library was left on (issue #383). Its own file: it is
         # rewritten on every navigation, and config.yaml holds the settings.
         self.session = SessionStore(self.store_path("session"))
+        # The user's own themes (issue 1011): a folder each, read on demand.
+        self.themes = ThemeStore(self.store_path("themes"))
         self.config = self.load_config()
 
     def store_path(self, name):

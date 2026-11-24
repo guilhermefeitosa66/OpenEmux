@@ -45,6 +45,8 @@ class GameDetailsDialog(Adw.Dialog):
         self.set_content_height(720)
 
         toolbar = Adw.ToolbarView()
+        # What a custom theme's "Game details" color paints (issue 1011).
+        toolbar.add_css_class("game-details-view")
         header = Adw.HeaderBar()
         header.set_title_widget(
             Adw.WindowTitle.new(

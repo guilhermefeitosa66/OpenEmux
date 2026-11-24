@@ -64,6 +64,8 @@ STORE_FILENAMES = {
     # console and color. Not under cache/: housekeeping prunes that by age,
     # and a pruned shell is a fresh render on the main thread.
     "cartridge_frames": "cartridge_frames",
+    # The user's own themes, one folder each (issue 1011).
+    "themes": "themes",
     # Custom bezel images, one per console (issue #507).
     "bezels": "bezels",
     # Share nearby's device identity: id, key and certificate (issue #587).
