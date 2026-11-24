@@ -38,7 +38,7 @@ PIP := $(PYTHON) -m pip
 
 .PHONY: all setup setup-dev venv run test coverage smoke lint icons name-db clean install-sys-deps bootstrap check-retroarch lock-deps
 .PHONY: install-sys-deps-windows vendor-retroarch vendor-retroarch-win64 verify-vendors
-.PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean aur-git
+.PHONY: appimage appimage-clean deb rpm flatpak windows windows-clean checksums packages packages-clean aur-git aur-release aur-publish
 .PHONY: distrobox-install testenv-matrix testenv-list testenv-status testenv-rm-all
 .PHONY: ubuntu-x11 ubuntu-wayland debian-x11 debian-wayland fedora-x11 fedora-wayland
 .PHONY: devbox devbox-up devbox-app devbox-shot devbox-xdo devbox-res devbox-rec
@@ -264,6 +264,23 @@ arch: vendor-retroarch
 # `packages`, and nothing lands in dist/: it is not a release artifact.
 aur-git:
 	./packaging/build.sh aur
+
+# The AUR's release recipes -- openemux, openemux-bin, openemux-appimage
+# (packaging/aur/release.sh, issue #991) -- written for a published release,
+# built from its GitHub downloads, install- and swap-tested in the Arch image.
+# Output in build/aur/release/. `aur-publish` then pushes them to the AUR
+# (AUR_SSH_PRIVATE_KEY), or with DRY_RUN=1 prints the diff and pushes nothing.
+#   make aur-release TAG=v1.24.0
+#   make aur-publish TAG=v1.24.0 DRY_RUN=1
+# TAG is read from the environment (make exports command-line variables)
+# and checked before use, so it never reaches the shell unquoted.
+aur-release:
+	@printf '%s\n' "$$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' || { echo "usage: make aur-release TAG=vX.Y.Z [PKGREL=N]" >&2; exit 2; }
+	AUR_TAG="$$TAG" AUR_MODE=check AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
+
+aur-publish:
+	@printf '%s\n' "$$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+' || { echo "usage: make aur-publish TAG=vX.Y.Z [DRY_RUN=1] [PKGREL=N]" >&2; exit 2; }
+	AUR_TAG="$$TAG" AUR_MODE=$(if $(filter 1,$(DRY_RUN)),dry-run,publish) AUR_PKGREL=$(or $(PKGREL),1) ./packaging/build.sh aur-release
 
 # Flatpak bundle — built and install-tested in an Ubuntu 24.04 container.
 # Also refreshes flatpak-repo/ (the ostree repo published to openemux-flatpak).

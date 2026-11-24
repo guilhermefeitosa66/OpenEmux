@@ -3090,6 +3090,28 @@ verdict per scenario. Scenarios are written the way a QA person would run them b
 - **Check:** suite file `tests/test_aur_package.py`; the container build itself (`make aur-git`)
   installs, verifies and removes the package and checks the `.SRCINFO` as its last steps.
 
+### RT-1223 — The release AUR recipes build, install, swap and dry-run for a published release
+- **Area:** Packaging
+- **Mode:** AUTO-SUITE
+- **Preconditions:** Docker (the Arch build image); network to GitHub and to `aur.archlinux.org`;
+  no `AUR_SSH_PRIVATE_KEY` in the environment.
+- **Steps:** As a QA person: run `make aur-release TAG=v1.24.0`. Open the three folders under
+  `build/aur/release/`. Run `make aur-publish TAG=v1.24.0 DRY_RUN=1`, then
+  `make aur-publish TAG=v1.24.0` (no dry run). Run
+  `python3 packaging/aur/release.py 1.24 --out /tmp/aur-x` and
+  `python3 packaging/aur/release.py v9.9.9 --out /tmp/aur-x`.
+- **Expected:** `make aur-release` builds `openemux`, `openemux-bin` and `openemux-appimage`, runs
+  namcap on each, installs `openemux`, swaps it for `-bin`, then `-appimage`, then back, and ends
+  with "ALL AUR RELEASE CHECKS PASSED". Each folder holds a `PKGBUILD` and `.SRCINFO` with
+  `pkgver = 1.24.0`, `pkgrel = 1`, and the `-bin` and `-appimage` checksums equal to the lines for
+  `openemux-1.24.0-1-x86_64.pkg.tar.zst` and `OpenEmux-1.24.0-x86_64.AppImage` in the release's
+  `SHA256SUMS`; nothing lands in `dist/`. The dry run prints the diff for each package and ends with
+  "DRY RUN: nothing was pushed to the AUR". Without the dry run it stops at once with
+  "AUR_SSH_PRIVATE_KEY is not set" and a non-zero exit. The generator rejects `1.24` as not a
+  release tag and fails on `v9.9.9` with "could not download", both with exit 1.
+- **Check:** suite file `tests/test_aur_release.py`; `make aur-release TAG=<latest tag>` installs,
+  swaps and removes the three packages as its own steps.
+
 ### RT-279 — The native packages need no FUSE at all
 - **Area:** Packaging
 - **Mode:** AUTO-PROBE

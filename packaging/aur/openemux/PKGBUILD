@@ -1,0 +1,71 @@
+# Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
+#
+# The AUR's openemux: the stable release, built from the source archive GitHub
+# serves for the release tag (issue #991). `openemux-git` is the same recipe
+# for the development head; `openemux-bin` and `openemux-appimage` repackage
+# the release's own artifacts instead of building anything.
+#
+# The install is the one every native package shares -- /opt/openemux, the
+# /usr/bin/openemux launcher, the desktop entry, icons and metainfo, all from
+# packaging/common/stage_tree.sh. The tag archive carries no vendored RetroArch
+# (it is a 171 MiB download kept out of git), so, like `openemux-git`, this one
+# runs the distribution's.
+#
+# This file is a template. `pkgver`, `pkgrel` and `sha256sums` are written by
+# packaging/aur/release.py for a given release tag (`make aur-release
+# TAG=vX.Y.Z`); the copy pushed to the AUR is that output, never this file.
+
+pkgname=openemux
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu"
+# Nothing compiled and nothing vendored: one package for every architecture
+# Arch (or Arch Linux ARM) ships a retroarch for.
+arch=('any')
+url="https://openemux.libre-apps.org/"
+license=('MIT')
+
+depends=(
+  'python>=3.10'
+  'python-gobject'
+  'python-cairo'
+  'gtk4>=4.6'
+  'libadwaita>=1.5'
+  'python-yaml'
+  'python-xlib'
+  'python-cryptography'
+  'python-zeroconf'
+  'librsvg'
+  # Synced covers are WebP, which gdk-pixbuf cannot decode on its own
+  # (issue #251).
+  'webp-pixbuf-loader'
+  'adwaita-icon-theme'
+  'hicolor-icon-theme'
+  # Not bundled here, see above.
+  'retroarch'
+)
+makedepends=('imagemagick' 'desktop-file-utils' 'appstream')
+optdepends=('python-segno: QR code of the address in Share Nearby')
+
+# GitHub's archive of the release tag. Not in the release's SHA256SUMS, so
+# release.py downloads it and pins the checksum it has on the day.
+source=("$pkgname-$pkgver.tar.gz::https://github.com/guilhermefeitosa66/OpenEmux/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+# Nothing here is compiled.
+options=('!debug' '!lto' '!buildflags')
+
+package() {
+  cd "$srcdir/OpenEmux-$pkgver"
+
+  DESTDIR="$pkgdir" ROOT_DIR="$PWD" sh packaging/common/stage_tree.sh
+
+  # stage_tree.sh writes the Debian location for the licence text; Arch keeps
+  # it under /usr/share/licenses. `copyright` records the third-party terms
+  # (issue #233).
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 packaging/common/copyright \
+    "$pkgdir/usr/share/licenses/$pkgname/copyright"
+  rm -rf "$pkgdir/usr/share/doc/openemux"
+  rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
+}

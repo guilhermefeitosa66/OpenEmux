@@ -1,0 +1,73 @@
+# Maintainer: Guilherme Feitoza <guilhermefeitosa66@gmail.com>
+#
+# The AUR's openemux-bin: the Arch package attached to every OpenEmux release,
+# installed as it is (issue #991). Nothing is built -- it is the package
+# `make arch` produced and install-tested for the release, with the RetroArch
+# the release bundles under /opt/openemux/vendors. For a build from source,
+# there is `openemux`; for the development head, `openemux-git`.
+#
+# This file is a template. `pkgver`, `pkgrel`, `_srcrel` and `sha256sums` are
+# written by packaging/aur/release.py for a given release tag; the checksum is
+# the one in the release's SHA256SUMS.
+
+pkgname=openemux-bin
+_pkgname=openemux
+pkgver=0.0.0
+pkgrel=1
+# The pkgrel the release's own package was built with: part of its file name.
+_srcrel=1
+pkgdesc="Linux-native emulator frontend for RetroArch, inspired by OpenEmu (prebuilt release package)"
+# The release ships the Arch package for x86_64 only: the bundled RetroArch is
+# libretro's, and libretro publishes no ARM build.
+arch=('x86_64')
+url="https://openemux.libre-apps.org/"
+license=('MIT')
+
+# The release package's own runtime dependencies (packaging/arch/PKGBUILD).
+depends=(
+  'python>=3.10'
+  'python-gobject'
+  'python-cairo'
+  'gtk4>=4.6'
+  'libadwaita>=1.5'
+  'python-yaml'
+  'python-xlib'
+  'python-cryptography'
+  'python-zeroconf'
+  'librsvg'
+  'webp-pixbuf-loader'
+  'adwaita-icon-theme'
+  'hicolor-icon-theme'
+)
+optdepends=(
+  'python-segno: QR code of the address in Share Nearby'
+  'retroarch: use the distribution RetroArch instead of the bundled one'
+)
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+
+source=("$_pkgname-$pkgver-$_srcrel-x86_64.pkg.tar.zst::https://github.com/guilhermefeitosa66/OpenEmux/releases/download/v$pkgver/$_pkgname-$pkgver-$_srcrel-x86_64.pkg.tar.zst")
+# Unpacked straight into $pkgdir below, rather than into $srcdir by makepkg.
+noextract=("$_pkgname-$pkgver-$_srcrel-x86_64.pkg.tar.zst")
+sha256sums=('SKIP')
+
+# The bundled RetroArch must stay the bytes libretro published (the vendor
+# manifest's tree_sha256 states them), so nothing is stripped.
+options=('!strip' '!debug')
+
+package() {
+  # The payload only: .PKGINFO, .BUILDINFO and .MTREE are pacman's metadata
+  # about the *release* package and would be stale files here.
+  bsdtar -xf "$srcdir/$_pkgname-$pkgver-$_srcrel-x86_64.pkg.tar.zst" -C "$pkgdir" \
+    --exclude '.PKGINFO' --exclude '.BUILDINFO' --exclude '.MTREE' \
+    --exclude '.INSTALL' --exclude '.CHANGELOG'
+
+  # The licence directory is named after the package that owns it.
+  mv "$pkgdir/usr/share/licenses/$_pkgname" "$pkgdir/usr/share/licenses/$pkgname"
+  # The release package ships /usr/share/doc empty (stage_tree.sh's Debian
+  # copyright is moved out of it); an empty directory is a namcap finding.
+  # Guarded: a later release package without the directory must not fail here.
+  if [ -d "$pkgdir/usr/share/doc" ]; then
+    rmdir --ignore-fail-on-non-empty "$pkgdir/usr/share/doc"
+  fi
+}

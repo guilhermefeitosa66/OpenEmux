@@ -7,6 +7,9 @@
 # `aur` is the odd one out: it builds the AUR's openemux-git recipe from a clone
 # of this checkout in the Arch image, and writes the files to publish to
 # build/aur/ -- never dist/, which is what a release uploads (issue #986).
+# `aur-release` does the same for the three recipes that follow a published
+# release (openemux, -bin, -appimage), for the tag in AUR_TAG, and can push
+# them to the AUR (packaging/aur/release.sh, issue #991).
 #
 # The per-target logic lives in packaging/<target>/build.sh, which this script
 # runs *inside* the container.
@@ -14,9 +17,9 @@ set -euo pipefail
 
 TARGET="${1:-}"
 case "$TARGET" in
-  appimage|deb|rpm|arch|flatpak|windows|aur) ;;
+  appimage|deb|rpm|arch|flatpak|windows|aur|aur-release) ;;
   *)
-    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur}" >&2
+    echo "usage: $0 {appimage|deb|rpm|arch|flatpak|windows|aur|aur-release}" >&2
     exit 2
     ;;
 esac
@@ -65,7 +68,7 @@ fi
 # The check is which architectures are *supported*, then, rather than which one
 # the host is.
 case "$TARGET" in
-  appimage|deb|rpm|arch|aur)
+  appimage|deb|rpm|arch|aur|aur-release)
     # The container's architecture, which PLATFORM overrides.
     ARCH="$(uname -m)"
     case "${PLATFORM:-}" in
@@ -84,7 +87,7 @@ case "$TARGET" in
     # a container to build it in: the official `archlinux` image publishes
     # amd64 only (Arch Linux ARM is a separate distribution with its own
     # images). Said here rather than as a confusing `docker build` failure.
-    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ]; then
+    if [ "$TARGET" = "arch" ] || [ "$TARGET" = "aur" ] || [ "$TARGET" = "aur-release" ]; then
       case "$ARCH" in
         aarch64|arm64)
           echo "The Arch build image (archlinux:base-devel) is amd64-only." >&2
@@ -140,9 +143,19 @@ if [ -n "${PLATFORM:-}" ]; then
   PLATFORM_ARGS=(--platform "$PLATFORM")
 fi
 
-# The AUR recipe is an Arch package like any other, built in the same image.
+# A publish that cannot push says so before the image is built, not after.
+if [ "$TARGET" = "aur-release" ] && [ "${AUR_MODE:-check}" = "publish" ] \
+   && [ -z "${AUR_SSH_PRIVATE_KEY:-}" ]; then
+  echo "FAIL: AUR_SSH_PRIVATE_KEY is not set, so nothing can be pushed to the AUR." >&2
+  echo "Add the AUR account's SSH key as the repository secret AUR_SSH_PRIVATE_KEY," >&2
+  echo "or run with AUR_MODE=dry-run (make aur-publish DRY_RUN=1) to see the diff." >&2
+  exit 1
+fi
+
+# The AUR recipes are Arch packages like any other, built in the same image.
 IMAGE_TARGET="$TARGET"
 [ "$TARGET" = "aur" ] && IMAGE_TARGET=arch
+[ "$TARGET" = "aur-release" ] && IMAGE_TARGET=arch
 
 IMAGE="openemux-build-$IMAGE_TARGET${PLATFORM:+-$(echo "$PLATFORM" | tr '/' '-')}"
 echo "==> building image $IMAGE"
@@ -162,8 +175,14 @@ DOCKER_ARGS=("${PLATFORM_ARGS[@]}" --rm -t -v "$ROOT_DIR:/work" -w /work
 # local .env sourced above, or the shell environment). Unset/empty means no
 # embedded credential -- the injection step is then a no-op and ScreenScraper
 # stays opt-in, so a build without a .env needs nothing here.
-DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
-              -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+# Not for aur-release: it builds code downloaded from a published release,
+# which has no business seeing the credential (nor the AUR key, see below).
+if [ "$TARGET" = "aur-release" ]; then
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID= -e SCREENSCRAPER_DEVPASSWORD=)
+else
+  DOCKER_ARGS+=(-e SCREENSCRAPER_DEVID="${SCREENSCRAPER_DEVID:-}"
+                -e SCREENSCRAPER_DEVPASSWORD="${SCREENSCRAPER_DEVPASSWORD:-}")
+fi
 # Two builds have to mount a filesystem, and --privileged is how they used to
 # get to: full host root, every capability and every device, in a container
 # that also bind-mounts the repository and carries SCREENSCRAPER_DEVPASSWORD --
@@ -205,5 +224,19 @@ if [ "$TARGET" = "aur" ]; then
   DOCKER_ARGS+=(-v "$AUR_SRC:/src:ro")
 fi
 
-echo "==> running packaging/$TARGET/build.sh in $IMAGE"
-docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "packaging/$TARGET/build.sh"
+# The release recipes download the published release, so what they need from
+# here is the tag, the mode and -- to publish, and only then -- the AUR key.
+# Passed by name (`-e VAR`), so the key's value never appears on a command
+# line; a check or a dry run never sees it at all.
+SCRIPT="packaging/$TARGET/build.sh"
+if [ "$TARGET" = "aur-release" ]; then
+  SCRIPT=packaging/aur/release.sh
+  export AUR_TAG="${AUR_TAG:-}" AUR_MODE="${AUR_MODE:-check}" AUR_PKGREL="${AUR_PKGREL:-1}"
+  DOCKER_ARGS+=(-e AUR_TAG -e AUR_MODE -e AUR_PKGREL)
+  if [ "$AUR_MODE" = "publish" ]; then
+    DOCKER_ARGS+=(-e AUR_SSH_PRIVATE_KEY)
+  fi
+fi
+
+echo "==> running $SCRIPT in $IMAGE"
+docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash "$SCRIPT"

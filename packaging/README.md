@@ -13,7 +13,9 @@ make flatpak         # or: ./packaging/build.sh flatpak
 make windows         # or: ./packaging/build.sh windows    (needs `make vendor-retroarch`)
 make packages        # all five, then `make checksums` over the result
 make packages-clean  # wipe dist/ artifacts
-make aur-git         # the AUR's openemux-git recipe; see "The AUR package" below
+make aur-git         # the AUR's openemux-git recipe; see "The AUR packages" below
+make aur-release TAG=v1.24.0           # the three release AUR recipes, built and swap-tested
+make aur-publish TAG=v1.24.0 DRY_RUN=1 # ...and the diff they would push to the AUR
 ```
 
 Artifacts land in `dist/`. `make packages` finishes with `checksums`, which
@@ -37,6 +39,9 @@ after it and it ships unverifiable, which is why `windows` comes before
 | `arch/PKGBUILD` | Arch recipe; unpacks the same source tarball and installs via `common/stage_tree.sh` |
 | `aur/openemux-git/PKGBUILD` | The AUR's `openemux-git`: built from a git clone, same install layout, the distribution's RetroArch |
 | `aur/build.sh` | Builds that recipe from this checkout, install-tests it and writes the files to publish |
+| `aur/openemux/PKGBUILD`, `aur/openemux-bin/PKGBUILD`, `aur/openemux-appimage/PKGBUILD` | The AUR's release packages: templates for `aur/release.py` to fill in for a tag |
+| `aur/release.py` | Writes the three release recipes for a tag: version, `pkgrel`, checksums |
+| `aur/release.sh` | Builds, namcap-checks, install- and swap-tests them, then diffs or pushes them to the AUR |
 | `deb/changelog_from_spec.py` | Renders the Debian changelog from the spec's `%changelog` |
 | `flatpak/io.github.guilhermefeitosa66.OpenEmux.yaml` | The Flatpak manifest, with the `finish-args` rationale in its own comments |
 | `flatpak/python3-*.yaml` | The Python modules the runtime does not carry (PyYAML, python-xlib, cryptography, zeroconf) |
@@ -57,7 +62,52 @@ working tree's build state, and proving it),
 `io.github.guilhermefeitosa66.OpenEmux.metainfo.xml` (the AppStream data every
 format installs to `/usr/share/metainfo/`).
 
-## The AUR package (`openemux-git`)
+## The AUR packages
+
+Four packages on the AUR. `openemux` is the plain name; the other three
+`provides`/`conflicts` `openemux`, so pacman swaps any one for any other:
+
+| Package | What it installs | Pick it when |
+| --- | --- | --- |
+| `openemux` | The stable release, built from the tag's source archive; the distribution's RetroArch | You want the release and the Arch way: system libraries, system emulator |
+| `openemux-bin` | The release's own Arch package (`openemux-<v>-1-x86_64.pkg.tar.zst`), RetroArch bundled | You want the release without a build, exactly as the GitHub release ships it |
+| `openemux-appimage` | The release AppImage under `/opt/openemux-appimage`, with the desktop entry and icon | You want the self-contained build, its own GTK stack included |
+| `openemux-git` | Whatever is on `develop`, built from a clone; the distribution's RetroArch | You want the newest code and can live with it breaking |
+
+### The release packages (`openemux`, `-bin`, `-appimage`)
+
+Their recipes are templates: `pkgver=0.0.0`, `pkgrel=1` and
+`sha256sums=('SKIP')`. `aur/release.py <tag> --out <dir>` fills them in for a
+published release: the version from the tag, and the checksums of the files
+they download -- the Arch package and the AppImage from the release's own
+`SHA256SUMS`, and the tag archive (which no `SHA256SUMS` covers) hashed on
+download. A release missing a file a recipe needs is an error, not a recipe.
+Every download comes from this repository's GitHub release; the AppImage
+recipe reads its desktop entry, icon, metainfo and licence out of the
+AppImage itself.
+
+`make aur-release TAG=vX.Y.Z` runs that in the Arch image, writes `.SRCINFO`,
+builds each recipe as a user's makepkg would, runs namcap, installs
+`openemux`, swaps it for `openemux-bin`, then `openemux-appimage`, then back,
+and removes it. The files for the AUR land in `build/aur/release/<package>/`.
+`PKGREL=2` regenerates a recipe fix for the same release.
+
+**Publishing** is the `AUR` workflow (`.github/workflows/aur.yml`),
+dispatched by the release process once the GitHub release exists:
+
+```bash
+gh workflow run aur.yml -f tag=vX.Y.Z -f dry_run=false
+```
+
+It runs `make aur-publish`, which does the whole check above, then commits
+`PKGBUILD` and `.SRCINFO` to each AUR repository and pushes. It needs the AUR
+account's SSH key in the repository secret `AUR_SSH_PRIVATE_KEY`; without it, a
+publish fails before building anything and says so. A dry run (`dry_run=true`,
+the default, or `make aur-publish TAG=vX.Y.Z DRY_RUN=1` locally) needs no
+secret: it clones each AUR repository anonymously and prints the diff it would
+push. The AUR's host key is pinned in `aur/release.sh`.
+
+### `openemux-git`
 
 `aur/openemux-git/PKGBUILD` is the recipe for the AUR, so Arch users can
 install and update OpenEmux with `yay -S openemux-git` (or any AUR helper)
@@ -94,7 +144,8 @@ cd /tmp/aur-openemux-git && git add PKGBUILD .SRCINFO && git commit -m "Update t
 A `-git` package does not need a push for every commit -- AUR helpers rebuild
 from the branch on their own (`yay -Syu --devel`). Push again when the recipe
 changes: a new dependency, a change to the install layout. Keep its `depends`
-in step with `arch/PKGBUILD`; `tests/test_aur_package.py` fails when they drift.
+in step with `arch/PKGBUILD`; `tests/test_aur_package.py` fails when they drift
+(and `tests/test_aur_release.py` for the release recipes).
 
 ## Things that are easy to get wrong
 
