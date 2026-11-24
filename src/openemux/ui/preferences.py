@@ -59,7 +59,6 @@ from openemux.core.input_held import HeldKeys, key_token, lit_actions
 from openemux.core.input_tuning import INPUT_TUNING
 from openemux.core.shaders import normalize_shader_id
 from openemux.core.share.identity import default_device_name
-from openemux.ui import theming
 from openemux.ui.theme_picker import ThemePicker
 from openemux.ui.console_icons import console_icon
 from openemux.ui.controller_drawing import ControllerDrawing
