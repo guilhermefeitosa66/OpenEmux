@@ -8,7 +8,8 @@ walk; the filter chips (Favorites · N, Has save state · N, Missing artwork
 · N, Never played · N); the view's name with the Cartridges / Covers /
 List switch; and the games themselves -- the window's own page for the
 scope, borrowed while the mode is on, so its grids, its per-console
-sections in "All" and its empty states are the desktop's, at 200%.
+sections in "All" and its empty states are the desktop's -- at 200% at
+least, and grown so the columns fill the width (issue 1000).
 
 A game's details are a page of their own (``details.GameDetailsPage``),
 which A opens; B comes back here, to the same game, the scroll kept.
