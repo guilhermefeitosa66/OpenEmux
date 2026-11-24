@@ -145,7 +145,7 @@ class OneGridInPlayOrderTests(unittest.TestCase):
             width = cartridge_width_in_slot(path, slot)
             drawn = cartridge_render.load_frame(path).size_for_width(width)
             self.assertLessEqual(drawn[0], slot[0], console)
-            self.assertLessEqual(drawn[1], slot[1] + 1, console)
+            self.assertLessEqual(drawn[1], slot[1], console)
             # And it fills the slot one way or the other.
             self.assertTrue(drawn[0] == slot[0] or abs(drawn[1] - slot[1]) <= 1, console)
 
@@ -191,6 +191,15 @@ class TheUniformSlotTests(unittest.TestCase):
             self.assertEqual(cartridge_width_in_slot("/tmp/nes.svg", (200, 175)), 156)
         with unittest.mock.patch.object(cartridge_render, "load_frame", return_value=_Frame(0.64)):
             self.assertEqual(cartridge_width_in_slot("/tmp/snes.svg", (200, 175)), 200)
+
+    def test_a_width_rounded_up_never_makes_the_shell_taller_than_the_slot(self):
+        class _Frame:
+            def size_for_width(self, width):
+                return width, int(round(width * 1.5))
+
+        # 175 / 1.5 = 116.67, rounded to 117, which is 176 tall: one less.
+        with unittest.mock.patch.object(cartridge_render, "load_frame", return_value=_Frame()):
+            self.assertEqual(cartridge_width_in_slot("/tmp/tall.svg", (200, 175)), 116)
 
 
 if __name__ == "__main__":

@@ -749,8 +749,9 @@ class RomGrid(Gtk.GridView):
     def _mixed_frame_path_for_rom(self, rom):
         """The ROM's own console shell on a grid mixing consoles (issue 942).
 
-        Never the grid's base frame, which is only the tallest console's: a
-        console with no shell drawn gets ``None`` and its card shows the cover.
+        Never the grid's base frame, which is only the first console with a
+        shell (issue 996): a console with no shell drawn gets ``None`` and its
+        card shows the cover.
         """
         console = rom.get("console")
         color = self._frame_color_for_rom(rom) if self._frame_color_for_rom else None

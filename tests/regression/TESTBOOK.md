@@ -19504,7 +19504,7 @@ runner has no Android device, so this is `MANUAL`: a person runs it on a phone o
   covered by `ShelfLayoutTest` (`recentKeepsTheTwelveLastPlayedNewestFirst`,
   `recentShowsEveryPlayedGameUpToTheLimit`) in openemux-android.
 
-### RT-1226 — Recently played lines up whatever the consoles it mixes
+### RT-1228 — Recently played lines up whatever the consoles it mixes
 - **Area:** Desktop — Recently played
 - **Mode:** AUTO-SUITE
 - **Preconditions:** games played on NES, SNES, N64, GBA and PlayStation (at least one of them with

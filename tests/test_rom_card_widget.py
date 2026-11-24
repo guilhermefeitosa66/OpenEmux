@@ -895,8 +895,23 @@ class OnAPageThatMixesConsolesTests(_CardCase):
         self.assertEqual(self.card._art_host.get_halign(), Gtk.Align.CENTER)
         self.assertFalse(self.card._backdrop.has_css_class("rom-cover-backdrop"))
         pad = self.card.ctx.shadow_pad
-        self.assertEqual(self.card.cover_image.get_margin_bottom(), pad)
-        self.assertEqual(self.card.cover_image.get_margin_start(), pad)
+        # Around the art overlay, so the badges stay on the cover's corners.
+        self.assertEqual(self.card._art_host.get_margin_bottom(), pad)
+        self.assertEqual(self.card._art_host.get_margin_start(), pad)
+        self.assertEqual(self.card.cover_image.get_margin_bottom(), 0)
+
+    def test_the_margin_leaves_with_the_art_and_comes_back_with_it(self):
+        self.card._apply_cover_pixbuf(self.card._generation, self.pixbuf(30, 44), False)
+        self.card._show_placeholder()
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        # A margin set while the placeholder shows waits for the art.
+        self.card._set_art_margin(self.card.ctx.shadow_pad)
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        self.card._show_cover_image()
+        self.assertEqual(self.card._art_host.get_margin_top(), self.card.ctx.shadow_pad)
+
+    def test_the_hover_layer_follows_the_art_not_the_cell(self):
+        self.assertEqual(self.card.play_overlay.get_size_request(), (-1, -1))
 
     def test_the_badges_ride_on_the_art_not_on_the_cell(self):
         for badge in (
@@ -1025,6 +1040,9 @@ class OnASingleConsoleCoverPageTests(_CardCase):
         # The art is the cell there; nothing moves (issue 996).
         self.assertIs(self.card._art_host, self.card.cover_overlay)
         self.assertIs(self.card.favorite_button.get_parent(), self.card.cover_overlay)
+        self.assertEqual(self.card.play_overlay.get_size_request(), self.box)
+        self.apply(*self.mismatched())
+        self.assertEqual(self.card.cover_image.get_margin_top(), 0)
 
 
 @needs_display
@@ -1059,7 +1077,7 @@ class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
         self.assertEqual(self.card.cover_image.get_size_request(), (80, 50))
         self.assertEqual(self.card.cover_image._slot_size, (80, 50))
         self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
-        self.assertEqual(self.card.cover_image.get_margin_bottom(), 0)
+        self.assertEqual(self.card._art_host.get_margin_bottom(), 0)
         self.assertFalse(self.has_fill())
 
     def test_a_cover_after_a_cartridge_stands_on_the_same_line(self):
@@ -1069,7 +1087,7 @@ class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
         self.apply(self.pixbuf(30, 44), False)
         self.assertFalse(self.has_fill())
         self.assertEqual(self.card._art_host.get_valign(), Gtk.Align.END)
-        self.assertEqual(self.card.cover_image.get_margin_bottom(), self.card.ctx.shadow_pad)
+        self.assertEqual(self.card._art_host.get_margin_bottom(), self.card.ctx.shadow_pad)
         pad = self.card.ctx.shadow_pad
         slot = (self.card.cover_width - 2 * pad, self.card.cover_height - 2 * pad)
         self.assertEqual(self.card.cover_image._slot_size, fit_in_slot((30, 44), slot))
@@ -1077,8 +1095,8 @@ class ACartridgeOnAPageThatMixesConsolesTests(_CardCase):
     def test_a_cartridge_after_a_cover_drops_the_covers_margin(self):
         self.apply(self.pixbuf(30, 44), False)
         self.apply(self.pixbuf(160, 100), True)
-        self.assertEqual(self.card.cover_image.get_margin_top(), 0)
-        self.assertEqual(self.card.cover_image.get_margin_end(), 0)
+        self.assertEqual(self.card._art_host.get_margin_top(), 0)
+        self.assertEqual(self.card._art_host.get_margin_end(), 0)
 
     def test_the_shell_is_drawn_at_its_width_in_the_slot(self):
         pad = self.card.ctx.shadow_pad

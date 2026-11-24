@@ -46,6 +46,14 @@ from openemux.ui.card_layout import (
 _TEXTURE_ATTR = "_openemux_texture"
 
 
+def _set_margins(widget, margin):
+    """The same margin on all four sides of ``widget``."""
+    widget.set_margin_top(margin)
+    widget.set_margin_bottom(margin)
+    widget.set_margin_start(margin)
+    widget.set_margin_end(margin)
+
+
 def texture_for(pixbuf):
     """The one Gdk.Texture for ``pixbuf``, made on the first ask."""
     texture = getattr(pixbuf, _TEXTURE_ATTR, None)
@@ -377,6 +385,7 @@ class RomItem(Gtk.Box):
         # The cell itself, except on a page mixing consoles, where the art is
         # smaller than the cell and they follow the art (issue 996).
         self._art_host = self.cover_overlay
+        self._art_margin = 0
         self._setup_cover_host()
         self._show_placeholder()
 
@@ -414,6 +423,11 @@ class RomItem(Gtk.Box):
         self._launching = False
         self.play_overlay.append(play_center)
 
+        if self._art_host is not self.cover_overlay:
+            # It follows the art there, so it must not ask for the cell's size:
+            # an overlay child is never given less than it asks for, and the
+            # dark layer would spill past the art (issue 996).
+            self.play_overlay.set_size_request(-1, -1)
         self._art_host.add_overlay(self.play_overlay)
 
         # Favouriting is one click away, on the card itself. The star stays
@@ -981,23 +995,34 @@ class RomItem(Gtk.Box):
         slot = (max(1, self.cover_width - 2 * pad), max(1, self.cover_height - 2 * pad))
         self._backdrop.remove_css_class("rom-cover-backdrop")
         self._set_cover_valign(Gtk.Align.END)
+        # Around the art overlay, not the picture: the badges on the overlay
+        # then sit on the cover's own corners.
         self._set_art_margin(pad)
         self.cover_image.set_content_fit(Gtk.ContentFit.CONTAIN)
         self._size_cover_image(*fit_in_slot(art_size, slot))
 
     def _set_art_margin(self, margin):
-        """The transparent margin around the picture inside its slot."""
-        self.cover_image.set_margin_top(margin)
-        self.cover_image.set_margin_bottom(margin)
-        self.cover_image.set_margin_start(margin)
-        self.cover_image.set_margin_end(margin)
+        """The transparent margin around the art inside its slot.
+
+        On a page mixing consoles it goes around the art overlay, so the
+        badges riding on it stay on the art; the placeholder, which takes the
+        whole slot, gets it back when the art returns.
+        """
+        self._art_margin = margin
+        if self._art_host is self.cover_overlay:
+            target = self.cover_image
+        elif self._art_host.get_child() is self.cover_image:
+            target = self._art_host
+        else:
+            return
+        _set_margins(target, margin)
 
     def _fit_cartridge_to(self, pixbuf):
-        """Centre a cartridge in the card's cell, with nothing behind it.
+        """Stand a cartridge on the bottom of the card's slot, with nothing behind it.
 
         Only a page mixing consoles in cartridge view gets here (issue 942):
-        its cell is as tall as the tallest shell on the page, and each card
-        draws its own. The composite is rendered at the display's scale, so
+        every card has the same slot (issue 996), and each draws its own
+        console's shell, already rendered at the size that fits it. The composite is rendered at the display's scale, so
         its slot is its pixel size divided by that scale. The backdrop that
         fills the cell around a cover would draw a box around the cartridge.
         """
@@ -1098,9 +1123,11 @@ class RomItem(Gtk.Box):
         if widget is self.cover_image:
             host.set_halign(Gtk.Align.CENTER)
             host.set_valign(self._cover_valign)
+            _set_margins(host, self._art_margin)
         else:
             host.set_halign(Gtk.Align.FILL)
             host.set_valign(Gtk.Align.FILL)
+            _set_margins(host, 0)
 
     def _sync_favorite_button(self, is_favorite):
         self._is_favorite_now = bool(is_favorite)

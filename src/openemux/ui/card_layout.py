@@ -232,7 +232,13 @@ def cartridge_width_in_slot(frame_path, slot_size):
     frame = cartridge_render.load_frame(frame_path) if frame_path else None
     if frame is None:
         return slot_size[0]
-    return fit_in_slot(frame.size_for_width(slot_size[0]), slot_size)[0]
+    width = fit_in_slot(frame.size_for_width(slot_size[0]), slot_size)[0]
+    # The fit rounds, and the height is worked out again from the width: a
+    # width rounded up can make a shell a pixel taller than the slot, which
+    # would put that card off the row's line.
+    while width > 1 and frame.size_for_width(width)[1] > slot_size[1]:
+        width -= 1
+    return width
 
 
 class FixedSizePicture(Gtk.Picture):
